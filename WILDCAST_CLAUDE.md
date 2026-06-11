@@ -310,14 +310,17 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 
 - [x] Visual prototype approved — `wildcast_prototype.html`
 - [x] Repo initialised — https://github.com/IntoTheWild-Dev/wild-cast
-- [ ] React + Vite + Tailwind scaffold
-- [ ] One real Wolt template (Promo) with correct `fields.json`
-- [ ] Template picker UI (can show all 3 cards, only Promo needs to be live)
-- [ ] Field editing UI with character limits and image upload
-- [ ] Live canvas preview (PDF.js)
-- [ ] AI copy suggestions (requires corpus file from Annika)
-- [ ] PDF export — local download (CMYK via Ghostscript if spike confirms it; RGB via pdf-lib as fallback)
+- [x] React + Vite + Tailwind scaffold (`wildcast-app/`)
+- [x] Template picker — Promo Flyer Partner, Promo Flyer Generic (real PDF thumbnails), New Opening (coming soon), Upload (coming soon)
+- [x] Field editing UI — Headline (required), Offer/Promo sticker (if necessary), Sub-headline, T&C (if necessary), Brand Logo, Product Photo, QR Code (Generic only)
+- [x] Live canvas preview via PDF.js — auto-loads bundled PDF, live text overlay
+- [x] AI copy suggestions UI — DE/EN toggle inside dropdown, placeholder copy per field; **API not yet wired**
+- [x] Expandable sidebar panel, favicon updated
+- [ ] Wire pdf-lib to inject edited text/images into PDF (next)
+- [ ] Connect Anthropic API for real AI copy (`/api/ai-suggest.js`)
+- [ ] PDF export — local download (CMYK via Ghostscript spike first; RGB via pdf-lib as fallback)
 - [ ] Wolt corpus file populated from copywriting sheet
+- [ ] Upload template tile — functional PDF import + field mapping
 - [ ] Deploy to Vercel
 
 ### Phase 1 Full — Post-demo sign-off

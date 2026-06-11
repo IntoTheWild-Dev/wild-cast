@@ -103,9 +103,28 @@ function ImageUpload({ label, hint, required, optional, value, onChange, square 
 
 export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, template }) {
   const hasQr = template?.hasQr ?? false
+  const [expanded, setExpanded] = useState(false)
+  const width = expanded ? 520 : 360
 
   return (
-    <div style={{ width: 360, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ width, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative', transition: 'width 0.2s ease' }}>
+
+      {/* Expand/collapse handle */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        title={expanded ? 'Collapse panel' : 'Expand panel'}
+        style={{
+          position: 'absolute', top: '50%', left: -14, transform: 'translateY(-50%)',
+          width: 14, height: 40, background: 'var(--border)', border: 'none',
+          borderRadius: '6px 0 0 6px', cursor: 'pointer', zIndex: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--mid)', fontSize: 10, transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--primary)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'var(--border)'}
+      >
+        {expanded ? '›' : '‹'}
+      </button>
 
       {/* Panel header */}
       <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>

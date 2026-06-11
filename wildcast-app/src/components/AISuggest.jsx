@@ -1,6 +1,5 @@
 import { useState } from 'react'
 
-// Placeholder suggestions — replace with real API call in /api/ai-suggest.js
 const MOCK_SUGGESTIONS = {
   de: {
     headline: ['WIE WÄR\'S MIT MEHR UMSATZ?', 'DEIN BURGER WARTET.', 'JETZT 2FÜR1 SICHERN'],
@@ -18,13 +17,17 @@ const MOCK_SUGGESTIONS = {
 
 export default function AISuggest({ field, lang, onApply }) {
   const [open, setOpen] = useState(false)
+  const [dropLang, setDropLang] = useState(lang)
 
-  const suggestions = MOCK_SUGGESTIONS[lang]?.[field] ?? []
+  // Sync dropdown language when panel language changes (unless user overrode it)
+  const activeLang = dropLang
+
+  const suggestions = MOCK_SUGGESTIONS[activeLang]?.[field] ?? []
 
   return (
     <div style={{ position: 'relative' }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setDropLang(lang); setOpen(o => !o) }}
         style={{
           display: 'flex', alignItems: 'center', gap: 5,
           fontSize: 11, fontWeight: 600, color: 'var(--primary)',
@@ -36,34 +39,61 @@ export default function AISuggest({ field, lang, onApply }) {
       </button>
 
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          minWidth: 280, overflow: 'hidden',
-        }}>
-          <div style={{ padding: '10px 12px 6px', fontSize: 11, fontWeight: 600, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Suggestions ({lang.toUpperCase()})
-          </div>
-          {suggestions.map((s, i) => (
-            <div
-              key={i}
-              onClick={() => { onApply(s); setOpen(false) }}
-              style={{
-                padding: '10px 14px', fontSize: 13, color: 'var(--dark)',
-                cursor: 'pointer', borderTop: '1px solid var(--border)',
-                transition: 'background 0.1s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#F9F8F5'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              {s}
+        <>
+          {/* Backdrop to close */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            minWidth: 300, overflow: 'hidden',
+          }}>
+            {/* Header with language toggle */}
+            <div style={{ padding: '10px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Suggestions
+              </span>
+              <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 6, padding: 2, gap: 1 }}>
+                {['de', 'en'].map(l => (
+                  <button
+                    key={l}
+                    onClick={e => { e.stopPropagation(); setDropLang(l) }}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
+                      border: 'none', cursor: 'pointer',
+                      background: activeLang === l ? 'var(--primary)' : 'transparent',
+                      color: activeLang === l ? '#fff' : 'var(--mid)',
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
-          <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--light)', borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
-            AI copy — review before publishing
+
+            {suggestions.map((s, i) => (
+              <div
+                key={i}
+                onClick={() => { onApply(s); setOpen(false) }}
+                style={{
+                  padding: '10px 14px', fontSize: 13, color: 'var(--dark)',
+                  cursor: 'pointer', borderTop: '1px solid var(--border)',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F9F8F5'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {s}
+              </div>
+            ))}
+
+            <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--light)', borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
+              AI copy — review before publishing
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
