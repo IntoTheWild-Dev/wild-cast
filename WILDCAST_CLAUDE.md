@@ -129,6 +129,18 @@ This file tells the app what is editable, where it sits on the template, and wha
 - Bleed boundary (dashed) and safe zone boundary can be toggled on/off
 - Font rendering in preview is approximate if the original Figma fonts are not web-loadable. Wolt brand fonts should be loaded via FontFace API if available.
 
+### Multi-page PDF support
+
+**Key discovery:** the Wolt template PDFs are multi-page. Both Partner and Generic variants live in the same file (V1 Bamberg = page 1 McDonald's partner, V2 DessauRoßlau = page 2 generic with QR). Some PDFs will be 1 page, some 2+.
+
+**Required behaviour:**
+- On load, detect total page count (`pdf.numPages`)
+- Show a page navigator (← Page 1 of 2 →) below the preview canvas when `numPages > 1`
+- Edit fields apply to the **currently selected page** (each page may have different editable text)
+- On export, ALL pages are output in the final PDF (not just the edited page)
+- Text scanning (like the InDesign plugin pattern): scan all text items across all pages using `page.getTextContent()`, identify editable placeholder strings by convention (e.g. `{{headline}}`, `{{offer}}` or by bounding-box position from `fields.json`), surface them as the field list automatically
+- This replaces the hardcoded field list — fields are derived from the PDF itself
+
 ---
 
 ## AI Copy Assistant
@@ -316,7 +328,9 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 - [x] Live canvas preview via PDF.js — auto-loads bundled PDF, live text overlay
 - [x] AI copy suggestions UI — DE/EN toggle inside dropdown, placeholder copy per field; **API not yet wired**
 - [x] Expandable sidebar panel, favicon updated
-- [ ] Wire pdf-lib to inject edited text/images into PDF (next)
+- [ ] **Multi-page PDF support** — detect page count, page navigator UI, per-page editing
+- [ ] **Text scanning** — use `page.getTextContent()` to find editable fields across all pages (ID plugin pattern), replace hardcoded field list
+- [ ] Wire pdf-lib to inject edited text/images into PDF across all pages
 - [ ] Connect Anthropic API for real AI copy (`/api/ai-suggest.js`)
 - [ ] PDF export — local download (CMYK via Ghostscript spike first; RGB via pdf-lib as fallback)
 - [ ] Wolt corpus file populated from copywriting sheet
