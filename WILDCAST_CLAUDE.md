@@ -1,6 +1,6 @@
 # WildCast — Build Spec
 
-> **Status: 🟢 Phase 1 MVP in progress — multi-page preview done, text scanning done, category filter interactive, upload + category tagging live.**
+> **Status: 🟢 Phase 1 MVP in progress — multi-page preview ✓, text scan ✓, category filter ✓, upload + category tag ✓, UI polish ✓. Next: wire pdf-lib.**
 > Repo: https://github.com/IntoTheWild-Dev/wild-cast
 
 ---
@@ -331,9 +331,10 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 - [x] **Text scanning** — `page.getTextContent()` runs on all pages at load, raw items logged to console (Promo Flyer Partner: 8 items p.1, 24 items p.2 including promo code `X7NPHG` and T&C block)
 - [x] **Category filter interactive** — Restaurant / Retail toggle filters template grid
 - [x] **Upload card** — file import functional; "Tag as Restaurant / Retail" selector before upload; navigates to editor with correct category on file select
+- [x] **UI fixes** — "If necessary" badge layout fixed (flex wraps correctly beside long labels); expand/collapse panel button works (moved inside header, was being clipped by overflow:hidden)
 
-**Next up:**
-- [ ] Wire pdf-lib to inject edited text/images into PDF — overlay approach (white rect + new text at scanned coordinates)
+**Next up (in order):**
+- [ ] **Wire pdf-lib** — install pdf-lib, load template PDF, draw white rect over original text at scanned coordinates, write partner's field values on top, output modified PDF for download
 - [ ] Connect Anthropic API for real AI copy (`/api/ai-suggest.js`)
 - [ ] PDF export — local download (RGB via pdf-lib first; CMYK Ghostscript spike after)
 - [ ] Wolt corpus file populated from copywriting sheet
