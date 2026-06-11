@@ -17,13 +17,13 @@ function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, 
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{label}</span>
           {required && <RequiredBadge />}
           {optional && <OptionalBadge />}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
           {limit && (
             <span style={{ fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
@@ -107,34 +107,33 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
   const width = expanded ? 520 : 360
 
   return (
-    <div style={{ width, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative', transition: 'width 0.2s ease' }}>
-
-      {/* Expand/collapse handle */}
-      <button
-        onClick={() => setExpanded(e => !e)}
-        title={expanded ? 'Collapse panel' : 'Expand panel'}
-        style={{
-          position: 'absolute', top: '50%', left: -14, transform: 'translateY(-50%)',
-          width: 14, height: 40, background: 'var(--border)', border: 'none',
-          borderRadius: '6px 0 0 6px', cursor: 'pointer', zIndex: 10,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--mid)', fontSize: 10, transition: 'background 0.15s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = 'var(--primary)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'var(--border)'}
-      >
-        {expanded ? '›' : '‹'}
-      </button>
+    <div style={{ width, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', transition: 'width 0.2s ease' }}>
 
       {/* Panel header */}
-      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Expand/collapse toggle — inside the panel, never clipped */}
+          <button
+            onClick={() => setExpanded(e => !e)}
+            title={expanded ? 'Collapse panel' : 'Expand panel'}
+            style={{
+              width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+              border: '1px solid var(--border)', background: 'transparent',
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', color: 'var(--mid)', fontSize: 13,
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+          >
+            {expanded ? '›' : '‹'}
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)' }}>Edit content</div>
-            <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 2 }}>{template?.name ?? 'Promo Flyer'} · A6</div>
+            <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{template?.name ?? 'Promo Flyer'} · A6</div>
           </div>
           {/* Language toggle */}
-          <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
+          <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2, flexShrink: 0 }}>
             {['de', 'en'].map(l => (
               <button key={l} onClick={() => onLangChange(l)} style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: lang === l ? 'var(--primary)' : 'transparent', color: lang === l ? '#fff' : 'var(--mid)', transition: 'all 0.15s' }}>
                 {l.toUpperCase()}
