@@ -1,7 +1,6 @@
 # WildCast — Build Spec
 
-> **Status: 🟢 Build started — Phase 1 MVP in progress.**
-> Prototype approved. Moving to React + Vite build.
+> **Status: 🟢 Phase 1 MVP in progress — multi-page preview done, text scanning done, category filter interactive, upload + category tagging live.**
 > Repo: https://github.com/IntoTheWild-Dev/wild-cast
 
 ---
@@ -318,23 +317,26 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 ## Build Phases
 
 ### Phase 1 — Demo MVP
-*🟢 In progress. React + Vite scaffold next.*
+*🟢 In progress.*
 
 - [x] Visual prototype approved — `wildcast_prototype.html`
 - [x] Repo initialised — https://github.com/IntoTheWild-Dev/wild-cast
 - [x] React + Vite + Tailwind scaffold (`wildcast-app/`)
-- [x] Template picker — Promo Flyer Partner, Promo Flyer Generic (real PDF thumbnails), New Opening (coming soon), Upload (coming soon)
+- [x] Template picker — Promo Flyer Partner, Promo Flyer Generic (real PDF thumbnails), New Opening (coming soon), Upload card
 - [x] Field editing UI — Headline (required), Offer/Promo sticker (if necessary), Sub-headline, T&C (if necessary), Brand Logo, Product Photo, QR Code (Generic only)
 - [x] Live canvas preview via PDF.js — auto-loads bundled PDF, live text overlay
 - [x] AI copy suggestions UI — DE/EN toggle inside dropdown, placeholder copy per field; **API not yet wired**
 - [x] Expandable sidebar panel, favicon updated
-- [ ] **Multi-page PDF support** — detect page count, page navigator UI, per-page editing
-- [ ] **Text scanning** — use `page.getTextContent()` to find editable fields across all pages (ID plugin pattern), replace hardcoded field list
-- [ ] Wire pdf-lib to inject edited text/images into PDF across all pages
+- [x] **Multi-page PDF support** — detects `pdf.numPages`, `← Page 1 of 2 →` navigator, per-page render
+- [x] **Text scanning** — `page.getTextContent()` runs on all pages at load, raw items logged to console (Promo Flyer Partner: 8 items p.1, 24 items p.2 including promo code `X7NPHG` and T&C block)
+- [x] **Category filter interactive** — Restaurant / Retail toggle filters template grid
+- [x] **Upload card** — file import functional; "Tag as Restaurant / Retail" selector before upload; navigates to editor with correct category on file select
+
+**Next up:**
+- [ ] Wire pdf-lib to inject edited text/images into PDF — overlay approach (white rect + new text at scanned coordinates)
 - [ ] Connect Anthropic API for real AI copy (`/api/ai-suggest.js`)
-- [ ] PDF export — local download (CMYK via Ghostscript spike first; RGB via pdf-lib as fallback)
+- [ ] PDF export — local download (RGB via pdf-lib first; CMYK Ghostscript spike after)
 - [ ] Wolt corpus file populated from copywriting sheet
-- [ ] Upload template tile — functional PDF import + field mapping
 - [ ] Deploy to Vercel
 
 ### Phase 1 Full — Post-demo sign-off
@@ -379,7 +381,6 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 ## Out of Scope — Phase 1
 
 - InDesign / IDML ingestion
-- Multi-page templates
 - User accounts or saved sessions
 - Team collaboration / commenting
 - Fine-tuning or custom model training

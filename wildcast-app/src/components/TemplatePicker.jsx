@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react'
 import PdfThumbnail from './PdfThumbnail'
 
 const TEMPLATES = [
@@ -49,7 +50,31 @@ const STEPS = [
 ]
 
 export default function TemplatePicker({ onSelect }) {
-  const [activeCats, setActiveCats] = [['restaurant', 'retail'], () => {}]
+  const [activeCats, setActiveCats] = useState(['restaurant', 'retail'])
+  const [uploadCat, setUploadCat] = useState('restaurant')
+  const fileInputRef = useRef(null)
+
+  function toggleCat(cat) {
+    setActiveCats(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    )
+  }
+
+  function handleUploadFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    onSelect({
+      id: 'custom-upload',
+      name: file.name.replace(/\.pdf$/i, ''),
+      desc: 'Custom uploaded template',
+      tags: [uploadCat.charAt(0).toUpperCase() + uploadCat.slice(1), 'PDF'],
+      cat: uploadCat,
+      pdfPath: URL.createObjectURL(file),
+      hasQr: false,
+      live: true,
+    })
+    e.target.value = ''
+  }
 
   const visible = TEMPLATES.filter(t => !t.cat || activeCats.includes(t.cat))
 
@@ -79,12 +104,26 @@ export default function TemplatePicker({ onSelect }) {
       {/* Category filter */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Category</span>
-        {['restaurant', 'retail'].map(cat => (
-          <button key={cat} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 100, fontSize: 13, fontWeight: 500, cursor: 'default', border: '1.5px solid var(--primary)', background: 'var(--primary-glow)', color: 'var(--primary-dark)', transition: 'all 0.15s' }}>
-            <span style={{ fontSize: 10 }}>✓</span>
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
-          </button>
-        ))}
+        {['restaurant', 'retail'].map(cat => {
+          const active = activeCats.includes(cat)
+          return (
+            <button
+              key={cat}
+              onClick={() => toggleCat(cat)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', borderRadius: 100, fontSize: 13, fontWeight: 500,
+                cursor: 'pointer', transition: 'all 0.15s',
+                border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+                background: active ? 'var(--primary-glow)' : 'transparent',
+                color: active ? 'var(--primary-dark)' : 'var(--mid)',
+              }}
+            >
+              {active && <span style={{ fontSize: 10 }}>✓</span>}
+              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            </button>
+          )
+        })}
       </div>
 
       {/* Template grid */}
@@ -106,14 +145,18 @@ export default function TemplatePicker({ onSelect }) {
             {/* Thumbnail */}
             <div style={{ height: 220, overflow: 'hidden', position: 'relative', background: '#f3f4f6' }}>
               {t.upload ? (
-                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#FAFAF8' }}>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#FAFAF8', cursor: 'pointer' }}
+                >
+                  <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleUploadFile} />
                   <div style={{ width: 52, height: 52, background: 'var(--dark)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--mid)' }}>Drag &amp; drop or <span style={{ color: 'var(--primary)', fontWeight: 600 }}>browse files</span></div>
-                  <div style={{ fontSize: 11, color: 'var(--light)' }}>PDF, AI · Up to 50MB</div>
+                  <div style={{ fontSize: 11, color: 'var(--light)' }}>PDF · Up to 50MB</div>
                 </div>
               ) : t.pdfPath ? (
                 <PdfThumbnail pdfPath={t.pdfPath} />
@@ -132,14 +175,37 @@ export default function TemplatePicker({ onSelect }) {
             <div style={{ padding: '18px 20px 20px' }}>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{t.name}</div>
               <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 14, lineHeight: 1.45 }}>{t.desc}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {t.tags.map(tag => (
-                    <span key={tag} style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 8px', borderRadius: 100 }}>{tag}</span>
-                  ))}
+              {t.upload ? (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Tag as</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['restaurant', 'retail'].map(cat => (
+                      <button
+                        key={cat}
+                        onClick={e => { e.stopPropagation(); setUploadCat(cat) }}
+                        style={{
+                          padding: '5px 12px', borderRadius: 100, fontSize: 12, fontWeight: 600,
+                          cursor: 'pointer', transition: 'all 0.15s',
+                          border: uploadCat === cat ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+                          background: uploadCat === cat ? 'var(--primary-glow)' : 'transparent',
+                          color: uploadCat === cat ? 'var(--primary-dark)' : 'var(--mid)',
+                        }}
+                      >
+                        {uploadCat === cat && '✓ '}{cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {t.live && <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', flexShrink: 0, marginLeft: 8 }}>Use ↗</span>}
-              </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {t.tags.map(tag => (
+                      <span key={tag} style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 8px', borderRadius: 100 }}>{tag}</span>
+                    ))}
+                  </div>
+                  {t.live && <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', flexShrink: 0, marginLeft: 8 }}>Use ↗</span>}
+                </div>
+              )}
             </div>
           </div>
         ))}

@@ -1,26 +1,56 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { pdfjsLib } from '../lib/pdfSetup'
 
 export default function PreviewCanvas({ fields, pdfUrl }) {
   const canvasRef = useRef(null)
+  const [pageNum, setPageNum] = useState(1)
+  const [numPages, setNumPages] = useState(1)
+  const pdfRef = useRef(null)
 
+  // Load PDF and get page count whenever URL changes
   useEffect(() => {
-    if (!pdfUrl) return
+    if (!pdfUrl) { pdfRef.current = null; setNumPages(1); setPageNum(1); return }
     let cancelled = false
 
-    async function renderPdf() {
+    async function loadPdf() {
       try {
         const pdf = await pdfjsLib.getDocument({ url: pdfUrl }).promise
-        const page = await pdf.getPage(1)
+        if (cancelled) return
+        pdfRef.current = pdf
+        setNumPages(pdf.numPages)
+        setPageNum(1)
+
+        // Scan all pages for text content — used to discover placeholder strings
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i)
+          const content = await page.getTextContent()
+          console.log(`[TextScan] Page ${i}:`, content.items.map(it => it.str).filter(s => s.trim()))
+        }
+      } catch (e) {
+        console.error('PreviewCanvas load error:', e)
+      }
+    }
+
+    loadPdf()
+    return () => { cancelled = true }
+  }, [pdfUrl])
+
+  // Render the current page whenever page number changes (after pdf is loaded)
+  useEffect(() => {
+    if (!pdfRef.current) return
+    let cancelled = false
+
+    async function renderPage() {
+      try {
+        const page = await pdfRef.current.getPage(pageNum)
         if (cancelled) return
 
         const canvas = canvasRef.current
         if (!canvas) return
 
-        const container = canvas.parentElement
+        const container = canvas.parentElement?.parentElement
         const containerWidth = container?.clientWidth ?? 400
         const viewport = page.getViewport({ scale: 1 })
-        // Fit to container width, max ~480px
         const scale = Math.min(containerWidth / viewport.width, 480 / viewport.width)
         const scaled = page.getViewport({ scale })
 
@@ -33,12 +63,12 @@ export default function PreviewCanvas({ fields, pdfUrl }) {
       }
     }
 
-    renderPdf()
+    renderPage()
     return () => { cancelled = true }
-  }, [pdfUrl])
+  }, [pageNum, numPages])
 
   return (
-    <div style={{ flex: 1, background: '#2a2a2a', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 40, overflowY: 'auto' }}>
+    <div style={{ flex: 1, background: '#2a2a2a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: 40, overflowY: 'auto', gap: 16 }}>
       <div style={{ position: 'relative', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', borderRadius: 3 }}>
         {pdfUrl ? (
           <canvas ref={canvasRef} style={{ display: 'block', borderRadius: 3 }} />
@@ -69,6 +99,37 @@ export default function PreviewCanvas({ fields, pdfUrl }) {
           </div>
         )}
       </div>
+
+      {/* Page navigator — only shown for multi-page PDFs */}
+      {pdfUrl && numPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '8px 16px' }}>
+          <button
+            onClick={() => setPageNum(p => Math.max(1, p - 1))}
+            disabled={pageNum === 1}
+            style={{
+              background: 'none', border: 'none', cursor: pageNum === 1 ? 'default' : 'pointer',
+              color: pageNum === 1 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.8)',
+              fontSize: 18, lineHeight: 1, padding: '0 4px', transition: 'color 0.15s',
+            }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: 600, minWidth: 80, textAlign: 'center' }}>
+            Page {pageNum} of {numPages}
+          </span>
+          <button
+            onClick={() => setPageNum(p => Math.min(numPages, p + 1))}
+            disabled={pageNum === numPages}
+            style={{
+              background: 'none', border: 'none', cursor: pageNum === numPages ? 'default' : 'pointer',
+              color: pageNum === numPages ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.8)',
+              fontSize: 18, lineHeight: 1, padding: '0 4px', transition: 'color 0.15s',
+            }}
+          >
+            →
+          </button>
+        </div>
+      )}
     </div>
   )
 }
