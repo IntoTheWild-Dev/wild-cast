@@ -1,8 +1,8 @@
 # WildCast — Build Spec
 
-> **Status: Awaiting client sign-off before build starts.**
-> This spec is complete enough to begin the moment we get the green light.
-> Everything described here is technically possible.
+> **Status: 🟢 Build started — Phase 1 MVP in progress.**
+> Prototype approved. Moving to React + Vite build.
+> Repo: https://github.com/IntoTheWild-Dev/wild-cast
 
 ---
 
@@ -306,15 +306,19 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 ## Build Phases
 
 ### Phase 1 — Demo MVP
-*Start after client sign-off. Target: working demo.*
+*🟢 In progress. React + Vite scaffold next.*
 
+- [x] Visual prototype approved — `wildcast_prototype.html`
+- [x] Repo initialised — https://github.com/IntoTheWild-Dev/wild-cast
+- [ ] React + Vite + Tailwind scaffold
 - [ ] One real Wolt template (Promo) with correct `fields.json`
 - [ ] Template picker UI (can show all 3 cards, only Promo needs to be live)
 - [ ] Field editing UI with character limits and image upload
-- [ ] Live canvas preview
+- [ ] Live canvas preview (PDF.js)
 - [ ] AI copy suggestions (requires corpus file from Annika)
 - [ ] PDF export — local download (CMYK via Ghostscript if spike confirms it; RGB via pdf-lib as fallback)
 - [ ] Wolt corpus file populated from copywriting sheet
+- [ ] Deploy to Vercel
 
 ### Phase 1 Full — Post-demo sign-off
 - [ ] All 3 templates live (New Opening, Seasonal)
