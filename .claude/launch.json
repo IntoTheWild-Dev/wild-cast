@@ -6,6 +6,14 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "-p", "3737", "."],
       "port": 3737
+    },
+    {
+      "name": "wildcast-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "wildcast-app",
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }
