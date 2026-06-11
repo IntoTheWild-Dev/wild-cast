@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WildCast Deck Review v2.1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #f3f4f6;
+      color: #050b0f;
+      padding: 48px 32px;
+      min-height: 100vh;
+    }
+
+    .page { max-width: 880px; margin: 0 auto; }
+
+    /* Header */
+    .page-header { margin-bottom: 36px; }
+    .page-header .eyebrow {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #9ca3af; margin-bottom: 8px;
+    }
+    .page-header h1 {
+      font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: #050b0f;
+      margin-bottom: 6px;
+    }
+    .page-header .meta { font-size: 14px; color: #6b7280; }
+
+    /* Verdict */
+    .verdict {
+      background: #fff; border-radius: 14px; padding: 24px 28px;
+      margin-bottom: 28px;
+      display: flex; align-items: flex-start; gap: 16px;
+      border: 1px solid #e5e7eb;
+    }
+    .verdict-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #22c55e; flex-shrink: 0; margin-top: 6px;
+    }
+    .verdict strong { font-size: 16px; font-weight: 700; display: block; margin-bottom: 4px; }
+    .verdict p { font-size: 14px; color: #4b5563; line-height: 1.55; }
+
+    /* Status columns */
+    .status-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+      margin-bottom: 28px;
+    }
+    .status-col {
+      background: #fff; border-radius: 14px; padding: 20px 22px;
+      border: 1px solid #e5e7eb;
+    }
+    .status-col-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    }
+    .status-icon {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+    .si-green { background: #dcfce7; color: #15803d; }
+    .si-amber { background: #fef9c3; color: #a16207; }
+    .si-purple { background: #ede9fe; color: #6d28d9; }
+    .status-col-header h3 { font-size: 13px; font-weight: 700; color: #050b0f; }
+    .status-col-header span { font-size: 11px; color: #9ca3af; }
+    .slide-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .slide-list li {
+      font-size: 13px; color: #374151; padding: 6px 10px;
+      background: #f9fafb; border-radius: 8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .slide-list li .num {
+      font-size: 10px; font-weight: 700; color: #9ca3af; width: 16px; flex-shrink: 0;
+    }
+    .slide-note { font-size: 11px; color: #9ca3af; margin-top: 2px; display: block; }
+
+    /* Corrections */
+    .section { margin-bottom: 24px; }
+    .section-title {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; color: #9ca3af; margin-bottom: 12px;
+    }
+    .correction-list { display: flex; flex-direction: column; gap: 10px; }
+    .correction {
+      background: #fff; border-radius: 12px; padding: 16px 20px;
+      border: 1px solid #e5e7eb;
+      display: grid; grid-template-columns: 160px 24px 160px 1fr; align-items: center; gap: 12px;
+    }
+    .c-from { font-size: 13px; font-weight: 600; color: #c0392b; background: #fff1f0; padding: 4px 10px; border-radius: 6px; text-align: center; }
+    .c-arrow { font-size: 14px; color: #9ca3af; text-align: center; }
+    .c-to { font-size: 13px; font-weight: 600; color: #15803d; background: #dcfce7; padding: 4px 10px; border-radius: 6px; text-align: center; }
+    .c-why { font-size: 12px; color: #6b7280; }
+
+    /* Scope */
+    .scope-table {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      border: 1px solid #e5e7eb;
+    }
+    .scope-row {
+      display: grid; grid-template-columns: 1fr 120px 120px;
+      gap: 0; border-bottom: 1px solid #f3f4f6;
+    }
+    .scope-row:last-child { border-bottom: none; }
+    .scope-row.header { background: #f9fafb; }
+    .scope-cell {
+      padding: 12px 18px;
+      font-size: 13px; color: #374151;
+    }
+    .scope-row.header .scope-cell {
+      font-size: 11px; font-weight: 700; color: #9ca3af;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .scope-pill {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 100px;
+    }
+    .sp-red    { background: #fff1f0; color: #c0392b; }
+    .sp-green  { background: #dcfce7; color: #15803d; }
+    .sp-blue   { background: #dbeafe; color: #1d4ed8; }
+
+    /* New slide */
+    .new-slide-card {
+      background: #fff; border-radius: 14px; padding: 24px 28px;
+      border: 1px solid #e5e7eb;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+    .new-slide-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .new-slide-card p { font-size: 13px; color: #6b7280; line-height: 1.55; margin-bottom: 12px; }
+    .step-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+    .step-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: #8b5cf6; color: #fff;
+      font-size: 10px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-row p { font-size: 12px; color: #374151; margin: 0; }
+
+    /* Actions */
+    .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .actions-col {
+      background: #fff; border-radius: 14px; padding: 20px 24px;
+      border: 1px solid #e5e7eb;
+    }
+    .actions-col h4 { font-size: 14px; font-weight: 700; color: #050b0f; margin-bottom: 4px; }
+    .actions-col .role { font-size: 12px; color: #9ca3af; margin-bottom: 14px; }
+    .action-item { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+    .action-item .arr { color: #df6f6d; font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .action-item p { font-size: 13px; color: #374151; }
+    .done { font-size: 10px; font-weight: 600; background: #dcfce7; color: #15803d; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+
+    .blocker-banner {
+      margin-top: 20px;
+      background: #fff7ed; border-radius: 10px; padding: 12px 18px;
+      border: 1px solid #fed7aa;
+    }
+    .blocker-banner p { font-size: 12px; color: #c2410c; font-weight: 500; }
+    .blocker-banner strong { font-weight: 700; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div class="eyebrow">Wild Stack · June 2026</div>
+    <h1>WildCast Deck Review</h1>
+    <div class="meta">v2.1 · Prepared by Julia · 9 slides reviewed</div>
+  </div>
+
+  <!-- Verdict -->
+  <div class="verdict">
+    <div class="verdict-dot"></div>
+    <div>
+      <strong>Solid foundation — 3 things to fix before resharing</strong>
+      <p>The problem/solution framing is strong and the structure holds. Two slides need corrections (tech stack + scope) and one new slide is required for the AI copy feature, which is now a headline selling point.</p>
+    </div>
+  </div>
+
+  <!-- Status columns -->
+  <div class="status-grid">
+    <div class="status-col">
+      <div class="status-col-header">
+        <div class="status-icon si-green">✓</div>
+        <div><h3>Keep</h3><span>No changes needed</span></div>
+      </div>
+      <ul class="slide-list">
+        <li><span class="num">1</span> Cover / Hero</li>
+        <li><span class="num">2</span> The Problem
+          <span class="slide-note">Best slide in the deck</span>
+        </li>
+        <li><span class="num">3</span> How WildCast Works
+          <span class="slide-note">Minor: note templates pre-loaded in step 2</span>
+        </li>
+        <li><span class="num">5</span> Data Privacy / GDPR</li>
+        <li><span class="num">6</span> Figma Readiness</li>
+        <li><span class="num">8</span> Next Steps</li>
+        <li><span class="num">9</span> Closing</li>
+      </ul>
+    </div>
+
+    <div class="status-col">
+      <div class="status-col-header">
+        <div class="status-icon si-amber">↻</div>
+        <div><h3>Update</h3><span>Corrections required</span></div>
+      </div>
+      <ul class="slide-list">
+        <li><span class="num">4</span> Architecture
+          <span class="slide-note">Puppeteer → Ghostscript · Netlify → Vercel · expand AI layer</span>
+        </li>
+        <li><span class="num">7</span> Build Plan
+          <span class="slide-note">Templates-in-tool → Phase 1 · Figma API stays Phase 2</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="status-col">
+      <div class="status-col-header">
+        <div class="status-icon si-purple">✦</div>
+        <div><h3>New</h3><span>Missing from deck</span></div>
+      </div>
+      <ul class="slide-list">
+        <li><span class="num">★</span> AI Copy Assistant
+          <span class="slide-note">Insert after Architecture · needs full dedicated slide</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tech corrections -->
+  <div class="section">
+    <div class="section-title">Tech Stack Corrections</div>
+    <div class="correction-list">
+      <div class="correction">
+        <div class="c-from">Puppeteer</div>
+        <div class="c-arrow">→</div>
+        <div class="c-to">Ghostscript via Vercel</div>
+        <div class="c-why">Puppeteer renders HTML→PDF in RGB only. Ghostscript does true CMYK conversion with ICC embed.</div>
+      </div>
+      <div class="correction">
+        <div class="c-from">Netlify</div>
+        <div class="c-arrow">→</div>
+        <div class="c-to">Vercel Serverless</div>
+        <div class="c-why">Ghostscript cannot run on Netlify — no binary execution. Vercel Serverless Functions support it.</div>
+      </div>
+      <div class="correction">
+        <div class="c-from">AI badge on card</div>
+        <div class="c-arrow">→</div>
+        <div class="c-to">Full dedicated slide</div>
+        <div class="c-why">AI copy is now a headline selling point — it needs its own architecture slide, not a badge.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scope update -->
+  <div class="section">
+    <div class="section-title">MVP Scope Shift</div>
+    <div class="scope-table">
+      <div class="scope-row header">
+        <div class="scope-cell">Feature</div>
+        <div class="scope-cell">Was</div>
+        <div class="scope-cell">Now</div>
+      </div>
+      <div class="scope-row">
+        <div class="scope-cell">Single Promo template pre-loaded</div>
+        <div class="scope-cell"><span class="scope-pill sp-green">Phase 1</span></div>
+        <div class="scope-cell"><span class="scope-pill sp-green">Phase 1</span></div>
+      </div>
+      <div class="scope-row">
+        <div class="scope-cell">All template types pre-loaded (New Opening, Seasonal)</div>
+        <div class="scope-cell"><span class="scope-pill sp-red">Phase 2</span></div>
+        <div class="scope-cell"><span class="scope-pill sp-green">Phase 1 ✓</span></div>
+      </div>
+      <div class="scope-row">
+        <div class="scope-cell">Figma API — live template pulling + auto field detect</div>
+        <div class="scope-cell"><span class="scope-pill sp-red">Phase 2</span></div>
+        <div class="scope-cell"><span class="scope-pill sp-blue">Phase 2</span></div>
+      </div>
+      <div class="scope-row">
+        <div class="scope-cell">Admin dashboard + multi-template library</div>
+        <div class="scope-cell"><span class="scope-pill sp-red">Phase 2</span></div>
+        <div class="scope-cell"><span class="scope-pill sp-blue">Phase 2</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New slide preview -->
+  <div class="section">
+    <div class="section-title">New Slide — AI Copy Assistant</div>
+    <div class="new-slide-card">
+      <div>
+        <h3>What this slide covers</h3>
+        <p>The AI feature isn't a third-party chatbot or fine-tuned model. It's the Anthropic API already provisioned, paired with a plain <code>.txt</code> corpus of Wolt's best copy — no new cost, no new vendor.</p>
+        <p>The slide should show the 5-step flow from corpus → suggestion, plus cost and GDPR note at the bottom.</p>
+      </div>
+      <div>
+        <h3>Slide structure</h3>
+        <div class="step-row"><div class="step-num">1</div><p><strong>Build corpus</strong> — collect all past Wolt headlines and CTAs into a .txt file</p></div>
+        <div class="step-row"><div class="step-num">2</div><p><strong>System prompt</strong> — corpus + tone guidelines sent to Claude</p></div>
+        <div class="step-row"><div class="step-num">3</div><p><strong>Partner types</strong> — field values (name, offer, occasion) sent as context</p></div>
+        <div class="step-row"><div class="step-num">4</div><p><strong>3 suggestions</strong> — on-brand options returned in under 2 seconds</p></div>
+        <div class="step-row"><div class="step-num">5</div><p><strong>Quarterly update</strong> — Julia pastes new lines, no retraining ever needed</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Next actions -->
+  <div class="section">
+    <div class="section-title">Next Actions</div>
+    <div class="actions-grid">
+      <div class="actions-col">
+        <h4>Julia</h4>
+        <div class="role">Build + Design</div>
+        <div class="action-item"><span class="arr">→</span><p>Update CLAUDE.md spec <span class="done">done</span></p></div>
+        <div class="action-item"><span class="arr">→</span><p>Rebuild slide deck with corrected stack + AI Copy slide</p></div>
+        <div class="action-item"><span class="arr">→</span><p>Figma template audit: layer naming, field count, character limits</p></div>
+        <div class="action-item"><span class="arr">→</span><p>Collect Wolt corpus file from Annika</p></div>
+      </div>
+      <div class="actions-col">
+        <h4>Annika</h4>
+        <div class="role">Strategy + Client</div>
+        <div class="action-item"><span class="arr">→</span><p>Send full Wolt copy corpus (headlines, promo lines, CTAs)</p></div>
+        <div class="action-item"><span class="arr">→</span><p>Confirm Wolt printer ICC profile (likely ISOcoated_v2_300)</p></div>
+        <div class="action-item"><span class="arr">→</span><p>Start DPA conversation with Wolt legal</p></div>
+        <div class="action-item"><span class="arr">→</span><p>Validate demand: pitch WildCast to Wolt Germany contact</p></div>
+      </div>
+    </div>
+    <div class="blocker-banner">
+      <p><strong>Hard blockers:</strong> DPA signed before any code touches partner data · Figma audit complete before build starts</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

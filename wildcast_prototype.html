@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WildCast — Print Templates for Wolt Partners</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #F4F3EF;
+      --surface:      #FFFFFF;
+      --primary:      #df6f6d;
+      --primary-dark: #c85a58;
+      --primary-glow: rgba(223,111,109,0.12);
+      --accent:       #FF5733;
+      --dark:         #020618;
+      --mid:          #6B7280;
+      --light:        #9CA3AF;
+      --border:       #E5E7EB;
+      --border-mid:   #D1D5DB;
+      --warn:         #F59E0B;
+      --error:        #EF4444;
+      --success:      #10B981;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═══════════════════════════════
+       HEADER
+    ═══════════════════════════════ */
+    .header {
+      height: 58px;
+      background: var(--dark);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 32px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .logo-img {
+      height: 30px;
+      border-radius: 6px;
+      display: block;
+    }
+
+    .logo-wordmark {
+      font-size: 15px; font-weight: 700; color: #fff;
+      letter-spacing: -0.03em;
+    }
+
+    .logo-wordmark em { color: var(--primary); font-style: normal; }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .nav-link {
+      font-size: 13px; font-weight: 500;
+      color: rgba(255,255,255,0.5);
+      text-decoration: none;
+      padding: 6px 12px; border-radius: 6px;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+
+    .nav-link:hover, .nav-link.active {
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* ═══════════════════════════════
+       SCREENS
+    ═══════════════════════════════ */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ═══════════════════════════════
+       SCREEN 1 — TEMPLATE PICKER
+    ═══════════════════════════════ */
+    .picker-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 52px 32px 64px;
+    }
+
+    .picker-eyebrow {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+
+    .picker-heading {
+      font-size: 34px; font-weight: 900;
+      letter-spacing: -0.035em; line-height: 1.05;
+      color: var(--dark);
+      margin-bottom: 8px;
+    }
+
+    .picker-sub {
+      font-size: 15px; color: var(--mid);
+      margin-bottom: 40px;
+      max-width: 520px;
+      line-height: 1.6;
+    }
+
+    /* How it works bar */
+    .how-it-works {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 40px;
+      overflow: hidden;
+    }
+
+    .hiw-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .hiw-num {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .hiw-text {
+      font-size: 13px; font-weight: 500; color: var(--dark);
+      line-height: 1.3;
+    }
+
+    .hiw-text strong { font-weight: 700; }
+
+    .hiw-arrow {
+      color: var(--dark);
+      font-size: 16px;
+      margin: 0 12px;
+    }
+
+    /* Upload card */
+    .upload-card {
+      border: 1.5px dashed var(--border-mid) !important;
+      cursor: default;
+    }
+
+    .upload-card:hover {
+      border-color: var(--primary) !important;
+      border-style: dashed !important;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .upload-zone {
+      height: 210px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      background: #FAFAF8;
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .upload-icon-wrap {
+      width: 54px; height: 54px;
+      background: var(--dark);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .upload-title {
+      font-size: 14px; font-weight: 600;
+      color: var(--dark); text-align: center;
+      line-height: 1.35;
+    }
+
+    .upload-browse {
+      font-size: 13px; color: var(--mid);
+    }
+
+    .upload-browse span {
+      color: var(--primary);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .upload-hint {
+      font-size: 11px; color: var(--light);
+      text-align: center; margin-top: 2px;
+    }
+
+    /* Category filter */
+    .cat-filter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .cat-filter-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--light);
+      margin-right: 4px;
+    }
+
+    .cat-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 100px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mid);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .cat-pill.active {
+      border-color: var(--primary);
+      background: var(--primary-glow);
+      color: var(--dark);
+      font-weight: 600;
+    }
+
+    .cat-pill svg { flex-shrink: 0; }
+
+    .cat-pill.active .pill-check { opacity: 1; }
+    .cat-pill .pill-check { opacity: 0; transition: opacity 0.15s; }
+
+    /* Template thumbnail real images */
+    .tcard-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
+    }
+
+    /* Template cards */
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .tcard {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+    }
+
+    .tcard:not(.disabled):hover {
+      border-color: var(--primary);
+      box-shadow: 0 8px 40px rgba(11,201,168,0.14);
+      transform: translateY(-3px);
+    }
+
+    .tcard.disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    /* Template thumbnails — styled flyers */
+    .tcard-thumb {
+      height: 210px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .flyer-promo {
+      width: 100%; height: 100%;
+      background: linear-gradient(140deg, #00C5A5 0%, #0182C8 100%);
+      padding: 26px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+    }
+
+    .flyer-promo::after {
+      content: '';
+      position: absolute;
+      bottom: -28px; right: -28px;
+      width: 130px; height: 130px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.07);
+    }
+
+    .flyer-promo::before {
+      content: '';
+      position: absolute;
+      top: -24px; right: 48px;
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .flyer-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 100px;
+      font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #fff;
+      background: #FF5733;
+      margin-bottom: 10px;
+      position: relative; z-index: 1;
+      width: fit-content;
+    }
+
+    .flyer-h {
+      font-size: 17px; font-weight: 900;
+      color: #fff; letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      position: relative; z-index: 1;
+    }
+
+    .flyer-s {
+      font-size: 10px; color: rgba(255,255,255,0.75);
+      line-height: 1.4;
+      position: relative; z-index: 1;
+    }
+
+    .flyer-product-circle {
+      position: absolute; right: 20px; top: 50%;
+      transform: translateY(-50%);
+      width: 76px; height: 76px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      z-index: 1;
+    }
+
+    .flyer-opening {
+      width: 100%; height: 100%;
+      background: linear-gradient(150deg, #141428 0%, #1a2540 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .flyer-opening .flyer-badge { background: var(--primary); }
+
+    .flyer-seasonal {
+      width: 100%; height: 100%;
+      background: linear-gradient(150deg, #7B3F1A 0%, #D4870C 100%);
+      padding: 24px;
+      display: flex; flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .flyer-seasonal .flyer-badge { background: #fff; color: #7B3F1A; }
+
+    .cs-tag {
+      position: absolute; top: 12px; right: 12px;
+      background: rgba(0,0,0,0.65);
+      color: rgba(255,255,255,0.8);
+      font-size: 10px; font-weight: 600;
+      padding: 4px 10px; border-radius: 100px;
+      backdrop-filter: blur(4px);
+    }
+
+    .tcard-body {
+      padding: 18px 20px 20px;
+    }
+
+    .tcard-name {
+      font-size: 15px; font-weight: 700; color: var(--dark);
+      margin-bottom: 5px;
+    }
+
+    .tcard-desc {
+      font-size: 12px; color: var(--mid);
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+
+    .tcard-footer {
+      display: flex; align-items: center;
+      justify-content: space-between;
+    }
+
+    .tcard-tags { display: flex; gap: 6px; }
+
+    .tag {
+      font-size: 10px; font-weight: 600;
+      padding: 3px 8px; border-radius: 100px;
+      background: #F3F4F6; color: var(--mid);
+    }
+
+    .tcard-cta {
+      font-size: 12px; font-weight: 600;
+      color: var(--primary);
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ═══════════════════════════════
+       SCREEN 2 — EDITOR
+    ═══════════════════════════════ */
+    #screen-editor {
+      height: calc(100vh - 58px);
+      display: none;
+      flex-direction: column;
+    }
+
+    #screen-editor.active {
+      display: flex;
+    }
+
+    /* Editor top bar */
+    .editor-bar {
+      height: 50px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      flex-shrink: 0;
+    }
+
+    .editor-bar-left {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: var(--mid);
+      background: none; border: none; cursor: pointer;
+      padding: 6px 8px; border-radius: 6px;
+      transition: all 0.15s; font-family: inherit;
+    }
+
+    .back-btn:hover { color: var(--dark); background: var(--bg); }
+
+    .breadcrumb-sep { color: var(--border-mid); font-size: 16px; }
+
+    .editor-tname {
+      font-size: 14px; font-weight: 600; color: var(--dark);
+    }
+
+    .editor-bar-right {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .btn-ghost {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 13px;
+      font-size: 12px; font-weight: 500; color: var(--mid);
+      cursor: pointer; transition: all 0.15s; font-family: inherit;
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    .btn-ghost:hover { border-color: var(--dark); color: var(--dark); }
+    .btn-ghost.active { border-color: var(--primary); color: var(--primary); background: var(--primary-glow); }
+
+    /* Editor columns */
+    .editor-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 370px;
+      overflow: hidden;
+    }
+
+    /* ── Left: preview ── */
+    .preview-pane {
+      background: #1E1E1E;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      position: relative;
+      overflow: auto;
+    }
+
+    .preview-pane-label {
+      position: absolute;
+      bottom: 18px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px; color: rgba(255,255,255,0.25);
+      white-space: nowrap; font-weight: 500;
+    }
+
+    /* The A5 flyer preview */
+    .flyer-preview {
+      width: 360px; height: 520px;
+      border-radius: 3px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
+      background: #fff;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .flyer-base-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center top;
+      display: block;
+    }
+
+    .bleed-ring {
+      position: absolute; inset: 9px;
+      border: 1px dashed rgba(255,255,255,0.3);
+      pointer-events: none; z-index: 10;
+      display: none;
+    }
+    .bleed-ring.on { display: block; }
+
+    .safezone-ring {
+      position: absolute; inset: 20px;
+      border: 1px dashed rgba(255,255,255,0.15);
+      pointer-events: none; z-index: 10;
+      display: none;
+    }
+    .safezone-ring.on { display: block; }
+
+    .flyer-preview-inner {
+      width: 100%; height: 100%;
+      padding: 40px 34px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      visibility: hidden;
+    }
+
+
+    .fp-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255,255,255,0.12);
+      border: 1px dashed rgba(255,255,255,0.3);
+      border-radius: 6px;
+      padding: 5px 10px;
+      margin-bottom: 12px;
+      font-size: 10px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.55);
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative; z-index: 1;
+    }
+
+    .fp-logo:hover {
+      background: rgba(255,255,255,0.2);
+      border-color: rgba(255,255,255,0.6);
+    }
+
+    .fp-logo.has-logo {
+      background: rgba(255,255,255,0.2);
+      border-style: solid;
+      border-color: rgba(255,255,255,0.5);
+      color: #fff;
+    }
+
+    .fp-logo img {
+      height: 18px;
+      width: auto;
+      border-radius: 2px;
+    }
+
+    .fp-badge {
+      display: inline-block;
+      background: #FF5733;
+      color: #fff;
+      font-size: 11px; font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 5px 12px; border-radius: 100px;
+      margin-bottom: 14px;
+      align-self: flex-start;
+      position: relative; z-index: 1;
+      transition: all 0.15s;
+    }
+
+    .fp-headline {
+      font-size: 26px; font-weight: 900;
+      color: #fff; letter-spacing: -0.03em;
+      line-height: 1.05; margin-bottom: 10px;
+      position: relative; z-index: 1;
+      transition: all 0.1s;
+      min-height: 32px;
+    }
+
+    .fp-sub {
+      font-size: 12px; color: rgba(255,255,255,0.78);
+      line-height: 1.45; max-width: 200px;
+      position: relative; z-index: 1;
+      transition: all 0.1s;
+      min-height: 18px;
+    }
+
+    .fp-product {
+      position: absolute; right: 30px; top: 50%;
+      transform: translateY(-50%);
+      width: 130px; height: 130px;
+      border-radius: 50%;
+      border: 2px dashed rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.1);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 5px;
+      cursor: pointer; z-index: 1;
+      transition: all 0.15s;
+    }
+
+    .fp-product:hover {
+      background: rgba(255,255,255,0.18);
+      border-color: rgba(255,255,255,0.6);
+    }
+
+    .fp-product.has-img {
+      border-style: solid;
+      background: rgba(255,255,255,0.15);
+    }
+
+    .fp-product-icon { display: block; opacity: 0.85; }
+    .fp-product-hint {
+      font-size: 9px; color: rgba(255,255,255,0.65);
+      text-align: center; font-weight: 500;
+    }
+
+    .fp-footer {
+      position: absolute; bottom: 26px; left: 34px; right: 34px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 1;
+    }
+
+    .wolt-brand {
+      display: flex; align-items: center; gap: 7px;
+    }
+
+    .wolt-circle {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #fff; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; color: #009DE0;
+    }
+
+    .wolt-name {
+      font-size: 15px; font-weight: 800; color: #fff;
+      letter-spacing: -0.02em;
+    }
+
+    .fp-qr {
+      width: 34px; height: 34px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 4px;
+    }
+
+    /* ── Right: fields ── */
+    .field-pane {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .fp-head {
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .fp-head-title {
+      font-size: 14px; font-weight: 700; color: var(--dark);
+      margin-bottom: 2px;
+    }
+
+    .fp-head-sub {
+      font-size: 12px; color: var(--mid);
+    }
+
+    .fp-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 16px 22px;
+    }
+
+    .fp-scroll::-webkit-scrollbar { width: 3px; }
+    .fp-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Field row */
+    .frow { margin-bottom: 18px; }
+
+    .flabel {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .flabel-text { font-size: 12px; font-weight: 600; color: var(--dark); }
+
+    .flabel-req { font-size: 10px; color: var(--error); font-weight: 600; }
+    .flabel-opt { font-size: 10px; color: var(--light); font-weight: 500; }
+
+    .finput {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 14px; color: var(--dark);
+      font-family: inherit; outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      background: var(--surface);
+      resize: none;
+    }
+
+    .finput:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    .finput.over { border-color: var(--error); }
+
+    .frow-foot {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-top: 5px;
+    }
+
+    .fcount {
+      font-size: 11px; color: var(--light); font-weight: 500;
+    }
+    .fcount.warn { color: var(--warn); }
+    .fcount.err  { color: var(--error); font-weight: 600; }
+
+    .ai-btn {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; color: var(--primary);
+      background: none; border: none; cursor: pointer;
+      padding: 3px 7px; border-radius: 5px;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .ai-btn:hover { background: var(--primary-glow); }
+
+    /* AI dropdown */
+    .ai-drop {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 6px;
+      margin-top: 6px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .ai-drop.open { display: block; }
+
+    .ai-drop-head {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--light); padding: 4px 8px 6px;
+    }
+
+    .ai-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 7px;
+      font-size: 13px; color: var(--dark);
+      cursor: pointer; transition: all 0.1s;
+    }
+    .ai-item:hover { background: var(--primary-glow); color: var(--primary-dark); }
+    .ai-item::before { content: '✦'; font-size: 8px; color: var(--primary); flex-shrink: 0; }
+
+    /* Image upload */
+    .img-upload {
+      border: 1.5px dashed var(--border);
+      border-radius: 10px; padding: 18px;
+      text-align: center; cursor: pointer;
+      background: #FAFAFA;
+      transition: all 0.15s;
+    }
+    .img-upload:hover { border-color: var(--primary); background: var(--primary-glow); }
+
+    .img-icon { display: block; margin: 0 auto 8px; }
+    .img-label { font-size: 12px; font-weight: 600; color: var(--dark); margin-bottom: 2px; }
+    .img-hint  { font-size: 11px; color: var(--light); }
+
+    .img-dpi {
+      margin-top: 8px; font-size: 11px; color: var(--mid);
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+
+    /* Section divider */
+    .fsep { height: 1px; background: var(--border); margin: 4px 0 18px; }
+    .fsec { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--light); margin-bottom: 14px; }
+
+    /* Export footer */
+    .export-bar {
+      border-top: 1px solid var(--border);
+      padding: 14px 22px;
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+
+    .icc-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 11px;
+    }
+
+    .icc-lbl { font-size: 12px; color: var(--mid); font-weight: 500; }
+
+    .icc-sel {
+      border: 1.5px solid var(--border); border-radius: 6px;
+      padding: 5px 10px; font-size: 12px; font-weight: 500;
+      color: var(--dark); font-family: inherit;
+      background: var(--surface); cursor: pointer; outline: none;
+      transition: border-color 0.15s;
+    }
+    .icc-sel:focus { border-color: var(--primary); }
+
+    .export-row { display: flex; gap: 8px; }
+
+    .btn-export {
+      flex: 1;
+      background: var(--dark); color: #fff;
+      border: none; border-radius: 9px;
+      padding: 12px 16px;
+      font-size: 13px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-export:hover { background: #1a1f2e; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+
+    .btn-drive {
+      background: none;
+      border: 1.5px solid var(--border); border-radius: 9px;
+      padding: 12px 14px;
+      font-size: 12px; font-weight: 600; color: var(--mid);
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+      display: flex; align-items: center; gap: 5px;
+      white-space: nowrap;
+    }
+    .btn-drive:hover { border-color: var(--dark); color: var(--dark); }
+
+    /* ═══════════════════════════════
+       EXPORT SUCCESS OVERLAY
+    ═══════════════════════════════ */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .overlay.open { display: flex; }
+
+    .overlay-card {
+      background: var(--surface);
+      border-radius: 20px; padding: 44px 52px;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.25), 0 0 0 1px var(--border);
+      max-width: 360px; width: 100%;
+      animation: popIn 0.2s ease;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+
+    .ov-icon {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: rgba(16,185,129,0.1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; margin: 0 auto 18px;
+    }
+
+    .ov-title {
+      font-size: 21px; font-weight: 800; color: var(--dark);
+      letter-spacing: -0.025em; margin-bottom: 7px;
+    }
+
+    .ov-sub {
+      font-size: 13px; color: var(--mid);
+      line-height: 1.6; margin-bottom: 22px;
+    }
+
+    .ov-filename {
+      background: var(--bg); border-radius: 8px;
+      padding: 10px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px; color: var(--mid);
+      margin-bottom: 24px;
+    }
+
+    .btn-primary {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 9px;
+      padding: 12px 24px; width: 100%;
+      font-size: 14px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+    }
+    .btn-primary:hover { background: var(--primary-dark); }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Header ─── -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo" onclick="goToPicker()">
+        <img class="logo-img" src="assets/Logo (Only Font) PNG 4.png" alt="Wild Stack logo" style="height:28px;border-radius:0;">
+      </div>
+      <nav class="header-nav">
+        <span class="nav-link active" id="nav-templates">Templates</span>
+        <span class="nav-link">Help</span>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 1 — TEMPLATE PICKER
+  ══════════════════════════════════════ -->
+  <div class="screen active" id="screen-picker">
+    <div class="picker-wrap">
+      <div class="picker-eyebrow">Wolt Partner Tools</div>
+      <h1 class="picker-heading">Pick your template.</h1>
+      <p class="picker-sub">Choose a design, fill in your content, and download a print-ready PDF in minutes — no designer needed.</p>
+
+      <!-- How it works -->
+      <div class="how-it-works">
+        <div class="hiw-step">
+          <div class="hiw-num">1</div>
+          <div class="hiw-text"><strong>Pick a template</strong><br>Promo, Opening, Seasonal</div>
+        </div>
+        <div class="hiw-arrow">→</div>
+        <div class="hiw-step">
+          <div class="hiw-num">2</div>
+          <div class="hiw-text"><strong>Fill in your content</strong><br>Headline, offer, photo</div>
+        </div>
+        <div class="hiw-arrow">→</div>
+        <div class="hiw-step">
+          <div class="hiw-num">3</div>
+          <div class="hiw-text"><strong>Export PDF</strong><br>CMYK, print-ready, instant</div>
+        </div>
+        <div class="hiw-arrow">→</div>
+        <div class="hiw-step">
+          <div class="hiw-num">4</div>
+          <div class="hiw-text"><strong>Send to your printer</strong><br>Done — no back-and-forth</div>
+        </div>
+      </div>
+
+      <!-- Category filter -->
+      <div class="cat-filter">
+        <span class="cat-filter-label">Category</span>
+        <button class="cat-pill active" data-cat="restaurant" onclick="toggleCat(this)">
+          <svg class="pill-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Restaurant
+        </button>
+        <button class="cat-pill active" data-cat="retail" onclick="toggleCat(this)">
+          <svg class="pill-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Retail
+        </button>
+      </div>
+
+      <!-- Template cards -->
+      <div class="template-grid">
+
+        <!-- Promo Flyer -->
+        <div class="tcard" data-cat="restaurant" onclick="goToEditor()">
+          <div class="tcard-thumb">
+            <img src="Example templates/Catalogue Restaurant flyer/Restaurant flyer option B.png" alt="Restaurant promo flyer">
+          </div>
+          <div class="tcard-body">
+            <div class="tcard-name">Promo Flyer</div>
+            <div class="tcard-desc">Discount campaigns, 2-for-1 deals, and limited-time offers. Drive orders with a punchy single message.</div>
+            <div class="tcard-footer">
+              <div class="tcard-tags">
+                <span class="tag">A5</span>
+                <span class="tag">CMYK</span>
+                <span class="tag">3mm bleed</span>
+              </div>
+              <div class="tcard-cta">Use ↗</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- New Opening -->
+        <div class="tcard disabled" data-cat="restaurant">
+          <div class="tcard-thumb">
+            <img src="Example templates/Catalogue Restaurant POster/250827_WEN-CHENG-Hamburg_A1_3mm-bleed_WILDPOSTER-A.png" alt="New opening poster">
+            <span class="cs-tag">Coming soon</span>
+          </div>
+          <div class="tcard-body">
+            <div class="tcard-name">New Opening</div>
+            <div class="tcard-desc">Announce your Wolt launch to the neighbourhood. Drive those first orders in your delivery zone.</div>
+            <div class="tcard-footer">
+              <div class="tcard-tags">
+                <span class="tag">A5</span>
+                <span class="tag">CMYK</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload your own -->
+        <div class="tcard upload-card">
+          <div class="upload-zone">
+            <div class="upload-icon-wrap">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="upload-title">Drag &amp; drop your PDF template</div>
+            <div class="upload-browse">or <span>browse files</span></div>
+            <div class="upload-hint">Supports PDF, AI &nbsp;·&nbsp; Up to 50MB per file</div>
+          </div>
+          <div class="tcard-body">
+            <div class="tcard-name">Upload Template</div>
+            <div class="tcard-desc">Bring your own Figma export or press-ready PDF. Map your editable fields and go.</div>
+            <div class="tcard-footer">
+              <div class="tcard-tags">
+                <span class="tag">PDF</span>
+                <span class="tag">AI</span>
+                <span class="tag">Any size</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 2 — EDITOR
+  ══════════════════════════════════════ -->
+  <div class="screen" id="screen-editor">
+
+    <!-- Editor bar -->
+    <div class="editor-bar">
+      <div class="editor-bar-left">
+        <button class="back-btn" onclick="goToPicker()">← Templates</button>
+        <span class="breadcrumb-sep">/</span>
+        <span class="editor-tname">Promo Flyer</span>
+      </div>
+      <div class="editor-bar-right">
+        <button class="btn-ghost" id="bleed-btn" onclick="toggleBleed()">⊞ Bleed guides</button>
+      </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div class="editor-body">
+
+      <!-- Left: Preview -->
+      <div class="preview-pane">
+        <div class="flyer-preview" id="flyer">
+          <img class="flyer-base-img" src="Example templates/Catalogue Restaurant flyer/Restaurant flyer option B.png" alt="Promo flyer template">
+          <div class="bleed-ring" id="bleed-ring"></div>
+          <div class="safezone-ring" id="safezone-ring"></div>
+          <div class="flyer-preview-inner">
+            <div class="fp-logo" id="fp-logo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Your logo</span>
+            </div>
+            <span class="fp-badge" id="fp-badge">2FÜR1</span>
+            <div class="fp-headline" id="fp-headline">POTSDAM,<br>DEIN BURGER WARTET.</div>
+            <div class="fp-sub" id="fp-sub">Saftig. Frisch. In Minuten bei dir.</div>
+            <div class="fp-product" id="fp-product">
+              <svg class="fp-product-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.65)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <div class="fp-product-hint">Upload photo</div>
+            </div>
+            <div class="fp-footer">
+              <div class="wolt-brand">
+                <div class="wolt-circle">W</div>
+                <div class="wolt-name">wolt</div>
+              </div>
+              <div class="fp-qr"></div>
+            </div>
+          </div>
+        </div>
+        <div class="preview-pane-label">Screen preview · print quality rendered on export</div>
+      </div>
+
+      <!-- Right: Fields -->
+      <div class="field-pane">
+        <div class="fp-head">
+          <div class="fp-head-title">Edit your content</div>
+          <div class="fp-head-sub">Changes appear live in the preview</div>
+        </div>
+
+        <div class="fp-scroll">
+
+          <div class="fsec">Text fields</div>
+
+          <!-- Headline -->
+          <div class="frow">
+            <div class="flabel">
+              <span class="flabel-text">Main Headline</span>
+              <span class="flabel-req">Required</span>
+            </div>
+            <input
+              type="text"
+              class="finput"
+              id="f-headline"
+              value="POTSDAM, DEIN BURGER WARTET."
+              maxlength="30"
+              placeholder="e.g. BERLIN, DEIN BOWL WARTET."
+              oninput="onHeadline(this)"
+            >
+            <div class="frow-foot">
+              <span class="fcount" id="c-headline">30 / 30</span>
+              <button class="ai-btn" onclick="toggleAI('ai-headline')">✦ Suggest copy</button>
+            </div>
+            <div class="ai-drop" id="ai-headline">
+              <div class="ai-drop-head">AI suggestions</div>
+              <div class="ai-item" onclick="pickAI('f-headline','c-headline',30,this,'headline')">BERLIN, DEIN BOWL WARTET.</div>
+              <div class="ai-item" onclick="pickAI('f-headline','c-headline',30,this,'headline')">MÜNCHEN, DEIN SMASHBURGER.</div>
+              <div class="ai-item" onclick="pickAI('f-headline','c-headline',30,this,'headline')">PHO REAL, DÜSSELDORF.</div>
+            </div>
+          </div>
+
+          <!-- Offer -->
+          <div class="frow">
+            <div class="flabel">
+              <span class="flabel-text">Offer / Promo Sticker</span>
+              <span class="flabel-req">Required</span>
+            </div>
+            <input
+              type="text"
+              class="finput"
+              id="f-offer"
+              value="2FÜR1"
+              maxlength="20"
+              placeholder="e.g. 2FÜR1 or 30% Rabatt"
+              oninput="onOffer(this)"
+            >
+            <div class="frow-foot">
+              <span class="fcount" id="c-offer">5 / 20</span>
+              <button class="ai-btn" onclick="toggleAI('ai-offer')">✦ Suggest copy</button>
+            </div>
+            <div class="ai-drop" id="ai-offer">
+              <div class="ai-drop-head">AI suggestions</div>
+              <div class="ai-item" onclick="pickAI('f-offer','c-offer',20,this,'offer')">2FÜR1</div>
+              <div class="ai-item" onclick="pickAI('f-offer','c-offer',20,this,'offer')">26% RABATT</div>
+              <div class="ai-item" onclick="pickAI('f-offer','c-offer',20,this,'offer')">WOLTREX10</div>
+            </div>
+          </div>
+
+          <!-- Sub-headline -->
+          <div class="frow">
+            <div class="flabel">
+              <span class="flabel-text">Sub-headline</span>
+              <span class="flabel-opt">Optional</span>
+            </div>
+            <textarea
+              class="finput"
+              id="f-sub"
+              rows="2"
+              maxlength="60"
+              placeholder="e.g. Saftig. Frisch. In Minuten bei dir."
+              oninput="onSub(this)"
+            >Saftig. Frisch. In Minuten bei dir.</textarea>
+            <div class="frow-foot">
+              <span class="fcount" id="c-sub">36 / 60</span>
+              <button class="ai-btn" onclick="toggleAI('ai-sub')">✦ Suggest copy</button>
+            </div>
+            <div class="ai-drop" id="ai-sub">
+              <div class="ai-drop-head">AI suggestions</div>
+              <div class="ai-item" onclick="pickAI('f-sub','c-sub',60,this,'sub')">Saftig. Frisch. In Minuten bei dir.</div>
+              <div class="ai-item" onclick="pickAI('f-sub','c-sub',60,this,'sub')">OB Smashburger oder Veggie — einen gibt's dazu.</div>
+              <div class="ai-item" onclick="pickAI('f-sub','c-sub',60,this,'sub')">Jetzt bestellen. In Minuten geliefert.</div>
+            </div>
+          </div>
+
+          <div class="fsep"></div>
+          <div class="fsec">Brand logo</div>
+
+          <!-- Logo upload -->
+          <div class="frow">
+            <div class="flabel">
+              <span class="flabel-text">Restaurant Logo</span>
+              <span class="flabel-req">Required</span>
+            </div>
+            <div class="img-upload" id="logo-upload-area" onclick="fakeLogoUpload()">
+              <svg class="img-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--light)"><circle cx="12" cy="8" r="4"/><path d="M3 20c0-4 4-7 9-7s9 3 9 7"/></svg>
+              <div class="img-label">Drop logo here or click to upload</div>
+              <div class="img-hint">PNG with transparent background · SVG ideal</div>
+            </div>
+          </div>
+
+          <div class="fsep"></div>
+          <div class="fsec">Product photo</div>
+
+          <!-- Image upload -->
+          <div class="frow">
+            <div class="flabel">
+              <span class="flabel-text">Product Photo</span>
+              <span class="flabel-req">Required</span>
+            </div>
+            <div class="img-upload" onclick="fakeImageUpload()">
+              <svg class="img-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--light)"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <div class="img-label">Drop photo here or click to upload</div>
+              <div class="img-hint">JPG, PNG, TIFF · Square crop</div>
+            </div>
+            <div class="img-dpi">⚡ Min 150 dpi for print · Below 72 dpi blocked</div>
+          </div>
+
+        </div>
+
+        <!-- Export -->
+        <div class="export-bar">
+          <div class="icc-row">
+            <span class="icc-lbl">ICC colour profile</span>
+            <select class="icc-sel">
+              <option>FOGRA39 (recommended)</option>
+              <option>GRACoL 2013</option>
+              <option>SWOP</option>
+              <option>Japan Color 2001</option>
+            </select>
+          </div>
+          <div class="export-row">
+            <button class="btn-export" onclick="showSuccess()">↓ Export PDF</button>
+            <button class="btn-drive">⬡ Drive</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── Export success overlay ─── -->
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <div class="ov-icon">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <div class="ov-title">PDF ready</div>
+      <div class="ov-sub">Your print-ready CMYK file is downloading. Send it straight to your print shop — bleed and crop marks included.</div>
+      <div class="ov-filename">WoltPromo_2026-06-09_143022.pdf</div>
+      <button class="btn-primary" onclick="closeSuccess()">Done</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Navigation ──────────────────────────
+    function goToEditor() {
+      document.getElementById('screen-picker').classList.remove('active');
+      const ed = document.getElementById('screen-editor');
+      ed.classList.add('active');
+      initCounts();
+    }
+
+    function goToPicker() {
+      document.getElementById('screen-editor').classList.remove('active');
+      document.getElementById('screen-picker').classList.add('active');
+    }
+
+    // ── Bleed guides ────────────────────────
+    let bleedOn = false;
+    function toggleBleed() {
+      bleedOn = !bleedOn;
+      document.getElementById('bleed-ring').classList.toggle('on', bleedOn);
+      document.getElementById('safezone-ring').classList.toggle('on', bleedOn);
+      document.getElementById('bleed-btn').classList.toggle('active', bleedOn);
+    }
+
+    // ── Live preview ────────────────────────
+    function onHeadline(el) {
+      const v = el.value.toUpperCase() || 'DEINE HEADLINE';
+      document.getElementById('fp-headline').textContent = v;
+      setCount('c-headline', el.value.length, 30);
+      el.classList.toggle('over', el.value.length >= 30);
+    }
+
+    function onOffer(el) {
+      const v = el.value.toUpperCase() || 'PROMO';
+      document.getElementById('fp-badge').textContent = v;
+      setCount('c-offer', el.value.length, 20);
+      el.classList.toggle('over', el.value.length >= 20);
+    }
+
+    function onSub(el) {
+      document.getElementById('fp-sub').textContent = el.value;
+      setCount('c-sub', el.value.length, 60);
+      el.classList.toggle('over', el.value.length >= 60);
+    }
+
+    function setCount(id, len, max) {
+      const el = document.getElementById(id);
+      el.textContent = len + ' / ' + max;
+      el.className = 'fcount';
+      if (len >= max)             el.classList.add('err');
+      else if (len >= max * 0.8)  el.classList.add('warn');
+    }
+
+    function initCounts() {
+      setCount('c-headline', document.getElementById('f-headline').value.length, 30);
+      setCount('c-offer',    document.getElementById('f-offer').value.length, 20);
+      setCount('c-sub',      document.getElementById('f-sub').value.length, 60);
+    }
+
+    // ── AI suggestions ───────────────────────
+    let activeAI = null;
+    function toggleAI(id) {
+      if (activeAI && activeAI !== id) {
+        document.getElementById(activeAI).classList.remove('open');
+      }
+      const el = document.getElementById(id);
+      el.classList.toggle('open');
+      activeAI = el.classList.contains('open') ? id : null;
+    }
+
+    function pickAI(fieldId, countId, max, item, type) {
+      const text = item.textContent.trim();
+      const field = document.getElementById(fieldId);
+      field.value = text;
+      if (type === 'headline') onHeadline(field);
+      if (type === 'offer')    onOffer(field);
+      if (type === 'sub')      onSub(field);
+      // close all dropdowns
+      document.querySelectorAll('.ai-drop').forEach(d => d.classList.remove('open'));
+      activeAI = null;
+    }
+
+    // ── Fake image upload ────────────────────
+    function fakeImageUpload() {
+      const area = document.querySelector('.img-upload');
+      area.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div class="img-label" style="color:var(--success)">burger_hero.jpg</div><div class="img-hint">1200 × 1200 px · 220 dpi · Good to go</div>';
+      area.style.borderColor = 'var(--success)';
+      area.style.background = 'rgba(16,185,129,0.06)';
+      document.getElementById('fp-product').classList.add('has-img');
+      document.getElementById('fp-product').innerHTML = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="2" x2="18" y2="22"/><path d="M15 2v4a3 3 0 0 0 6 0V2"/><line x1="6" y1="2" x2="6" y2="8"/><path d="M3 8h6v4a3 3 0 0 1-6 0V8z"/><line x1="6" y1="12" x2="6" y2="22"/></svg>';
+    }
+
+    // ── Export overlay ───────────────────────
+    function showSuccess() {
+      document.getElementById('overlay').classList.add('open');
+    }
+
+    function closeSuccess() {
+      document.getElementById('overlay').classList.remove('open');
+    }
+
+    // ── Category filter ──────────────────────
+    function toggleCat(btn) {
+      btn.classList.toggle('active');
+      const cat = btn.dataset.cat;
+      const isActive = btn.classList.contains('active');
+      document.querySelectorAll(`.tcard[data-cat="${cat}"]`).forEach(card => {
+        card.style.display = isActive ? '' : 'none';
+      });
+    }
+
+    // ── Fake logo upload ─────────────────────
+    function fakeLogoUpload() {
+      const area = document.getElementById('logo-upload-area');
+      area.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div class="img-label" style="color:var(--success)">burgermeister_logo.png</div><div class="img-hint">Transparent PNG · 240 × 80 px</div>';
+      area.style.borderColor = 'var(--success)';
+      area.style.background = 'rgba(16,185,129,0.06)';
+      // Update preview logo spot
+      const fpLogo = document.getElementById('fp-logo');
+      fpLogo.classList.add('has-logo');
+      fpLogo.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>burgermeister_logo.png</span>';
+    }
+
+    // ── Close AI on outside click ─────────────
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.ai-btn') && !e.target.closest('.ai-drop')) {
+        document.querySelectorAll('.ai-drop').forEach(d => d.classList.remove('open'));
+        activeAI = null;
+      }
+    });
+  </script>
+
+  <footer style="background:var(--dark);border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="max-width:1100px;margin:0 auto;padding:20px 32px;display:flex;justify-content:space-between;align-items:center;color:rgba(255,255,255,0.45);font-size:13px;">
+      <span>WildCast — Print templates for Wolt partners.</span>
+      <span>Built by Wild Stack</span>
+    </div>
+  </footer>
+</body>
+</html>

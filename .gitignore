@@ -1,0 +1,5 @@
+.DS_Store
+*.key
+*.pptx
+generate_pptx.py
+.claude/projects/

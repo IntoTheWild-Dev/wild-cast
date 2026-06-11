@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WildCast — Presentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 1280px; height: 720px;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #111;
+    }
+
+    /* ─── Slide shell ─── */
+    .slide {
+      position: absolute; inset: 0;
+      width: 1280px; height: 720px;
+      background: #fff;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .slide.active { display: flex; }
+
+    /* ─── Shared layout ─── */
+    .s-inner {
+      padding: 52px 64px 44px;
+      display: flex; flex-direction: column;
+      height: 100%;
+    }
+    .s-header { margin-bottom: 24px; }
+
+    /* ─── Pills ─── */
+    .pill {
+      display: inline-flex; align-items: center;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; padding: 5px 12px; border-radius: 100px;
+      margin-bottom: 10px;
+    }
+    .p-coral  { background: #fde8e7; color: #c0392b; }
+    .p-teal   { background: #ccfbf1; color: #0f766e; }
+    .p-purple { background: #ede9fe; color: #6d28d9; }
+    .p-blue   { background: #dbeafe; color: #1d4ed8; }
+    .p-green  { background: #dcfce7; color: #15803d; }
+    .p-amber  { background: #fef9c3; color: #92400e; }
+
+    /* ─── Type ─── */
+    .h2 {
+      font-size: 42px; font-weight: 800; color: #050b0f;
+      letter-spacing: -0.025em; line-height: 1.05;
+    }
+
+    /* ─── Number circles ─── */
+    .nc {
+      width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .nc-t { background: #14b8a6; }
+    .nc-c { background: #df6f6d; }
+    .nc-p { background: #8b5cf6; }
+    .nc-b { background: #3b82f6; }
+
+    /* ─── Generic cards ─── */
+    .card {
+      background: #f9fafb; border-radius: 12px; padding: 18px 22px;
+    }
+    .card h4 { font-size: 14px; font-weight: 600; color: #050b0f; margin-bottom: 3px; }
+    .card p  { font-size: 12px; color: #6b7280; line-height: 1.4; }
+
+    .card-red {
+      background: #fff1f0; border-radius: 12px; padding: 14px 18px;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .card-red p { font-size: 13px; font-weight: 500; color: #b91c1c; line-height: 1.4; }
+
+    .x-ring {
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 2px solid #df6f6d; color: #df6f6d;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 800; flex-shrink: 0; margin-top: 1px;
+    }
+
+    /* ─── Tag chips ─── */
+    .tag {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 6px 12px; font-size: 12px; font-weight: 500; color: #374151;
+      display: inline-block;
+    }
+    .tag-green { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+    .updated-badge {
+      font-size: 9px; font-weight: 700; background: #dcfce7; color: #15803d;
+      padding: 2px 7px; border-radius: 100px; margin-left: 6px;
+    }
+    .ai-badge {
+      font-size: 9px; font-weight: 700; background: #ede9fe; color: #6d28d9;
+      padding: 2px 7px; border-radius: 100px; margin-left: 6px;
+    }
+
+    /* ─── Nav ─── */
+    #nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 42px;
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      background: rgba(5,11,15,0.85); backdrop-filter: blur(8px);
+      z-index: 100;
+    }
+    #nav button {
+      background: none; border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; font-size: 13px; font-weight: 500;
+      padding: 5px 14px; border-radius: 6px; cursor: pointer;
+      font-family: inherit;
+    }
+    #nav button:hover { background: rgba(255,255,255,0.1); }
+    #nav button:disabled { opacity: 0.3; cursor: default; }
+    #counter { font-size: 12px; color: rgba(255,255,255,0.5); min-width: 48px; text-align: center; }
+
+    /* ══════════════════════════════════════
+       SLIDE 1 — COVER
+    ══════════════════════════════════════ */
+    #s1 {
+      background: #050b0f;
+      padding: 68px 80px;
+      justify-content: space-between;
+    }
+    #s1 .top { display: flex; align-items: center; justify-content: space-between; }
+    #s1 .wordmark { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    #s1 .wordmark em { color: #df6f6d; font-style: normal; }
+    #s1 .top-tag {
+      font-size: 12px; color: #4b5563; background: #111827;
+      padding: 6px 14px; border-radius: 100px;
+    }
+    #s1 .center { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    #s1 .eyebrow {
+      font-size: 12px; font-weight: 700; color: #14b8a6;
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 18px;
+    }
+    #s1 .title {
+      font-size: 70px; font-weight: 800; color: #fff;
+      letter-spacing: -0.03em; line-height: 1.0; margin-bottom: 22px;
+      max-width: 760px;
+    }
+    #s1 .title em { color: #df6f6d; font-style: normal; }
+    #s1 .sub {
+      font-size: 18px; color: #6b7280; max-width: 540px; line-height: 1.6;
+    }
+    #s1 .bottom { font-size: 13px; color: #374151; display: flex; justify-content: space-between; }
+
+    /* ══════════════════════════════════════
+       SLIDE 2 — THE PROBLEM
+    ══════════════════════════════════════ */
+    #s2 .body {
+      display: grid; grid-template-columns: 1fr 364px; gap: 28px; flex: 1;
+    }
+    #s2 .steps { display: flex; flex-direction: column; gap: 10px; }
+    #s2 .sc {
+      background: #f9fafb; border-radius: 12px; padding: 15px 20px;
+      display: flex; align-items: flex-start; gap: 14px; flex: 1;
+    }
+    #s2 .sc h4 { font-size: 14px; font-weight: 600; color: #050b0f; margin-bottom: 3px; }
+    #s2 .sc p  { font-size: 12px; color: #6b7280; }
+    #s2 .results { display: flex; flex-direction: column; gap: 0; }
+    #s2 .rlabel {
+      font-size: 10px; font-weight: 700; color: #9ca3af;
+      letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 10px;
+    }
+    #s2 .rc-list { display: flex; flex-direction: column; gap: 9px; }
+
+    /* ══════════════════════════════════════
+       SLIDE 3 — HOW IT WORKS
+    ══════════════════════════════════════ */
+    #s3 .grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr 1fr; gap: 12px; flex: 1;
+    }
+    #s3 .gc {
+      background: #f9fafb; border-radius: 12px; padding: 16px 20px;
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    #s3 .gc h4 {
+      font-size: 14px; font-weight: 600; color: #050b0f; margin-bottom: 4px;
+    }
+    #s3 .gc p { font-size: 12px; color: #6b7280; }
+
+    /* ══════════════════════════════════════
+       SLIDE 4 — ARCHITECTURE
+    ══════════════════════════════════════ */
+    #s4 .layers { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+    #s4 .layer {
+      background: #f9fafb; border-radius: 12px; padding: 18px 24px;
+      display: grid; grid-template-columns: 192px 1fr; gap: 24px; align-items: center;
+      flex: 1;
+    }
+    #s4 .lname { font-size: 12px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px; }
+    #s4 .ltitle { font-size: 17px; font-weight: 700; color: #050b0f; }
+    #s4 .ltags { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ══════════════════════════════════════
+       SLIDE 5 — AI COPY ASSISTANT
+    ══════════════════════════════════════ */
+    #s5 .body {
+      display: grid; grid-template-columns: 1fr 320px; gap: 22px; flex: 1;
+    }
+    #s5 .steps { display: flex; flex-direction: column; gap: 9px; }
+    #s5 .step {
+      background: #f9fafb; border-radius: 12px; padding: 13px 18px;
+      display: flex; align-items: flex-start; gap: 12px; flex: 1;
+    }
+    #s5 .step h4 { font-size: 13px; font-weight: 600; color: #050b0f; margin-bottom: 2px; }
+    #s5 .step p  { font-size: 11px; color: #6b7280; line-height: 1.4; }
+    #s5 .meta { display: flex; flex-direction: column; gap: 10px; }
+    #s5 .meta-card {
+      background: #f9fafb; border-radius: 12px; padding: 16px 18px;
+    }
+    #s5 .meta-card h5 { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+    #s5 .mrow { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+    #s5 .mrow:last-child { margin-bottom: 0; }
+    #s5 .mk { font-size: 12px; color: #6b7280; }
+    #s5 .mv { font-size: 12px; font-weight: 600; color: #050b0f; }
+    #s5 .gdpr-card {
+      background: #f0fdf4; border-radius: 12px; padding: 14px 18px;
+    }
+    #s5 .gdpr-card p { font-size: 12px; color: #15803d; font-weight: 500; line-height: 1.45; }
+
+    /* ══════════════════════════════════════
+       SLIDE 6 — GDPR
+    ══════════════════════════════════════ */
+    #s6 .grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr; gap: 14px; flex: 1;
+    }
+    #s6 .gc {
+      background: #f9fafb; border-radius: 12px; padding: 22px 26px;
+    }
+    #s6 .gc-icon { font-size: 24px; margin-bottom: 10px; }
+    #s6 .gc h4  { font-size: 15px; font-weight: 600; color: #050b0f; margin-bottom: 6px; }
+    #s6 .gc p   { font-size: 13px; color: #6b7280; line-height: 1.5; }
+
+    /* ══════════════════════════════════════
+       SLIDE 7 — FIGMA READINESS
+    ══════════════════════════════════════ */
+    #s7 .grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr 1fr; gap: 11px; flex: 1;
+    }
+    #s7 .cr {
+      background: #f9fafb; border-radius: 12px; padding: 14px 18px;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    #s7 .cr-check {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #dcfce7; color: #15803d;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; flex-shrink: 0; margin-top: 1px;
+    }
+    #s7 .cr h4 { font-size: 13px; font-weight: 600; color: #050b0f; margin-bottom: 3px; }
+    #s7 .cr p  { font-size: 11px; color: #6b7280; line-height: 1.4; }
+
+    /* ══════════════════════════════════════
+       SLIDE 8 — BUILD PLAN
+    ══════════════════════════════════════ */
+    #s8 .phases { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
+    #s8 .phase { border-radius: 16px; padding: 24px 28px; }
+    #s8 .ph1 { background: #f0fdf4; }
+    #s8 .ph2 { background: #eff6ff; }
+    #s8 .phase-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    #s8 .phase-title { font-size: 18px; font-weight: 700; color: #050b0f; }
+    #s8 .pbadge {
+      font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 100px;
+    }
+    #s8 .pb-g { background: #dcfce7; color: #15803d; }
+    #s8 .pb-b { background: #bfdbfe; color: #1d4ed8; }
+    #s8 .items { display: flex; flex-direction: column; gap: 9px; }
+    #s8 .item { display: flex; align-items: flex-start; gap: 8px; }
+    #s8 .item-dot {
+      width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; margin-top: 2px;
+    }
+    #s8 .id-g { background: #dcfce7; color: #15803d; }
+    #s8 .id-b { background: #bfdbfe; color: #1d4ed8; }
+    #s8 .item p { font-size: 13px; color: #374151; line-height: 1.4; }
+
+    /* ══════════════════════════════════════
+       SLIDE 9 — NEXT STEPS
+    ══════════════════════════════════════ */
+    #s9 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    #s9 .col { background: #f9fafb; border-radius: 16px; padding: 22px 26px; }
+    #s9 .col-name { font-size: 16px; font-weight: 700; color: #050b0f; margin-bottom: 2px; }
+    #s9 .col-role { font-size: 12px; color: #9ca3af; margin-bottom: 14px; }
+    #s9 .al { display: flex; flex-direction: column; gap: 9px; }
+    #s9 .ai { display: flex; align-items: flex-start; gap: 8px; }
+    #s9 .arr { color: #df6f6d; font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    #s9 .ai p { font-size: 13px; color: #374151; }
+    #s9 .done { font-size: 10px; font-weight: 600; background: #dcfce7; color: #15803d; padding: 1px 6px; border-radius: 4px; margin-left: 5px; }
+    #s9 .blockers {
+      margin-top: 16px; background: #fff7ed; border-radius: 10px;
+      padding: 12px 18px; border: 1px solid #fed7aa;
+    }
+    #s9 .blockers p { font-size: 12px; color: #c2410c; font-weight: 500; }
+
+    /* ══════════════════════════════════════
+       SLIDE 10 — CLOSE
+    ══════════════════════════════════════ */
+    #s10 {
+      background: #050b0f;
+      padding: 72px 80px;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    #s10 .top { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    #s10 .wm  { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+    #s10 .wm em { color: #df6f6d; font-style: normal; }
+    #s10 .center { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    #s10 .ey {
+      font-size: 12px; font-weight: 700; color: #14b8a6;
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px;
+    }
+    #s10 .big {
+      font-size: 80px; font-weight: 800; color: #fff;
+      letter-spacing: -0.04em; line-height: 0.95; margin-bottom: 28px;
+    }
+    #s10 .big em { color: #df6f6d; font-style: normal; }
+    #s10 .sub {
+      font-size: 16px; color: #6b7280; max-width: 600px; line-height: 1.65;
+    }
+    #s10 .cta {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #df6f6d; color: #fff; font-size: 14px; font-weight: 600;
+      padding: 12px 24px; border-radius: 10px; margin-top: 28px; cursor: default;
+    }
+    #s10 .bottom { font-size: 12px; color: #374151; width: 100%; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     SLIDE 1 — COVER
+══════════════════════════════════════ -->
+<div class="slide active" id="s1">
+  <div class="top">
+    <div class="wordmark">Wild<em>Cast</em></div>
+    <div class="top-tag">Browser-based print template tool</div>
+  </div>
+  <div class="center">
+    <div class="eyebrow">For Wolt restaurant partners · Wild Stack 2026</div>
+    <div class="title">Print assets without<br>the <em>bottleneck.</em></div>
+    <div class="sub">Partners edit pre-approved templates and export print-ready PDFs in minutes — no designer, no Figma, no back-and-forth.</div>
+  </div>
+  <div class="bottom">
+    <span>Prepared for Annika · June 2026</span>
+    <span>Confidential</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 2 — THE PROBLEM
+══════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-coral">The Problem</div>
+      <div class="h2">What's broken today</div>
+    </div>
+    <div class="body">
+      <div class="steps">
+        <div class="sc">
+          <div class="nc nc-c">1</div>
+          <div><h4>Partner fills a form</h4><p>Monday.com or Google Sheets briefing — manual, inconsistent</p></div>
+        </div>
+        <div class="sc">
+          <div class="nc nc-c">2</div>
+          <div><h4>Designer opens Figma</h4><p>Creates or edits the template — takes hours per asset</p></div>
+        </div>
+        <div class="sc">
+          <div class="nc nc-c">3</div>
+          <div><h4>Asset sent for review</h4><p>Email or Slack, feedback rounds, revisions — 1–3 days</p></div>
+        </div>
+        <div class="sc">
+          <div class="nc nc-c">4</div>
+          <div><h4>Print-ready export</h4><p>Designer manually converts CMYK, adds bleed &amp; crop marks</p></div>
+        </div>
+      </div>
+      <div class="results">
+        <div class="rlabel">Result</div>
+        <div class="rc-list">
+          <div class="card-red"><div class="x-ring">✕</div><p>Every small copy change routes through a designer</p></div>
+          <div class="card-red"><div class="x-ring">✕</div><p>Wolt team is the bottleneck, not the creative</p></div>
+          <div class="card-red"><div class="x-ring">✕</div><p>No brand consistency check on partner copy</p></div>
+          <div class="card-red"><div class="x-ring">✕</div><p>Print errors from wrong colour profiles</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 3 — HOW WILDCAST WORKS
+══════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-teal">The Solution</div>
+      <div class="h2">How WildCast works</div>
+    </div>
+    <div class="grid">
+      <div class="gc">
+        <div class="nc nc-t">1</div>
+        <div><h4>Magic link</h4><p>No login, no install — opens in Chrome</p></div>
+      </div>
+      <div class="gc">
+        <div class="nc nc-t">4</div>
+        <div>
+          <h4>AI copy help <span class="ai-badge">AI layer</span></h4>
+          <p>3 suggestions in Wolt's voice</p>
+        </div>
+      </div>
+      <div class="gc">
+        <div class="nc nc-t">2</div>
+        <div><h4>Pick template</h4><p>New Opening / Promo / Seasonal</p></div>
+      </div>
+      <div class="gc">
+        <div class="nc nc-t">5</div>
+        <div><h4>Export</h4><p>CMYK + bleed + crop marks auto-applied</p></div>
+      </div>
+      <div class="gc">
+        <div class="nc nc-t">3</div>
+        <div><h4>Fill 4–6 fields</h4><p>Headline, offer, image — limits enforced</p></div>
+      </div>
+      <div class="gc">
+        <div class="nc nc-t">6</div>
+        <div><h4>Review queue</h4><p>PDF lands in Wolt's Google Drive for sign-off</p></div>
+      </div>
+    </div>
+    <p style="font-size:12px; color:#9ca3af; margin-top:14px;">Six steps — but the partner only experiences three: open link, fill fields, hit export. Steps 4–6 are invisible to them.</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 4 — ARCHITECTURE
+══════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-blue">Architecture</div>
+      <div class="h2">Three layers under the hood</div>
+    </div>
+    <div class="layers">
+      <div class="layer">
+        <div>
+          <div class="lname">Layer 1</div>
+          <div class="ltitle">Partner (Browser)</div>
+        </div>
+        <div class="ltags">
+          <span class="tag">React + Vite</span>
+          <span class="tag">Tailwind CSS</span>
+          <span class="tag">Vercel (hosting)</span>
+          <span class="tag">Magic link access</span>
+          <span class="tag">No install required</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div>
+          <div class="lname">Layer 2</div>
+          <div class="ltitle">Template (Pre-loaded)</div>
+        </div>
+        <div class="ltags">
+          <span class="tag">Figma exports bundled</span>
+          <span class="tag">JSON field maps</span>
+          <span class="tag">Phase 1: static templates</span>
+          <span class="tag tag-green">Phase 2: Figma API</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div>
+          <div class="lname">Layer 3</div>
+          <div class="ltitle">Export (Serverless)</div>
+        </div>
+        <div class="ltags">
+          <span class="tag tag-green">Ghostscript via Vercel <span class="updated-badge">updated</span></span>
+          <span class="tag">ICC embed (GRACoL / FOGRA39)</span>
+          <span class="tag">3mm bleed + crop marks</span>
+          <span class="tag">Google Drive upload</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 5 — AI COPY ASSISTANT (NEW)
+══════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-purple">AI Layer ✦ New</div>
+      <div class="h2">On-brand copy in 2 seconds</div>
+    </div>
+    <div class="body">
+      <div class="steps">
+        <div class="step">
+          <div class="nc nc-p">1</div>
+          <div><h4>Build corpus</h4><p>All past Wolt headlines, promo lines and CTAs saved as a plain .txt file</p></div>
+        </div>
+        <div class="step">
+          <div class="nc nc-p">2</div>
+          <div><h4>System prompt</h4><p>Corpus + 2–3 sentences of tone-of-voice guidance injected into Claude's context</p></div>
+        </div>
+        <div class="step">
+          <div class="nc nc-p">3</div>
+          <div><h4>Partner types</h4><p>Field values (restaurant name, offer, occasion) sent as context on each keystroke</p></div>
+        </div>
+        <div class="step">
+          <div class="nc nc-p">4</div>
+          <div><h4>3 suggestions</h4><p>Claude returns 3 on-brand headline options in under 2 seconds</p></div>
+        </div>
+        <div class="step">
+          <div class="nc nc-p">5</div>
+          <div><h4>Quarterly update</h4><p>Julia pastes new campaign lines into the .txt file — no retraining, ever</p></div>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="meta-card">
+          <h5>At a glance</h5>
+          <div class="mrow"><span class="mk">Cost per export</span><span class="mv">~R0.02 – R0.05</span></div>
+          <div class="mrow"><span class="mk">Who maintains corpus</span><span class="mv">Julia (quarterly)</span></div>
+          <div class="mrow"><span class="mk">API</span><span class="mv">Anthropic (already live)</span></div>
+          <div class="mrow"><span class="mk">Fine-tuning needed</span><span class="mv">None</span></div>
+          <div class="mrow"><span class="mk">New vendor</span><span class="mv">None</span></div>
+        </div>
+        <div class="gdpr-card">
+          <p>🛡 No partner images ever sent to the API. Corpus is text-only. GDPR safe by design.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 6 — GDPR
+══════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-green">Compliance</div>
+      <div class="h2">How we stay GDPR compliant</div>
+    </div>
+    <div class="grid">
+      <div class="gc">
+        <div class="gc-icon">📄</div>
+        <h4>Text-only API calls</h4>
+        <p>No partner images are ever sent to the Claude API. The corpus is a plain .txt file — no personal data, no images.</p>
+      </div>
+      <div class="gc">
+        <div class="gc-icon">✍️</div>
+        <h4>DPA required</h4>
+        <p>A Data Processing Agreement must be signed with Wolt before any partner data flows through the system.</p>
+      </div>
+      <div class="gc">
+        <div class="gc-icon">🗑</div>
+        <h4>No data retention</h4>
+        <p>Partner content is processed at export and discarded. Nothing is stored server-side after the PDF is delivered.</p>
+      </div>
+      <div class="gc">
+        <div class="gc-icon">🔐</div>
+        <h4>Scoped Drive access</h4>
+        <p>Google Drive OAuth scoped to <code style="font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;">drive.file</code> only. Write to partner folder — nothing else is readable.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 7 — FIGMA READINESS
+══════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-amber">Pre-Build</div>
+      <div class="h2">What to audit before we build</div>
+    </div>
+    <div class="grid">
+      <div class="cr">
+        <div class="cr-check">✓</div>
+        <div><h4>Layer naming</h4><p>Fields named for use: <code style="font-size:10px">headline</code>, <code style="font-size:10px">offer_text</code>, <code style="font-size:10px">product_image</code> — not Figma jargon</p></div>
+      </div>
+      <div class="cr">
+        <div class="cr-check">✓</div>
+        <div><h4>Bleed setup</h4><p>3mm bleed on all sides, crop marks placed outside the bleed area</p></div>
+      </div>
+      <div class="cr">
+        <div class="cr-check">✓</div>
+        <div><h4>Field count</h4><p>4–6 editable fields per template — test with non-designers before build</p></div>
+      </div>
+      <div class="cr">
+        <div class="cr-check">✓</div>
+        <div><h4>Image placeholders</h4><p>Aspect ratio locked. Min 150dpi warning, blocks below 72dpi</p></div>
+      </div>
+      <div class="cr">
+        <div class="cr-check">✓</div>
+        <div><h4>Character limits</h4><p>Define max chars per text field based on bounding box dimensions + print size</p></div>
+      </div>
+      <div class="cr">
+        <div class="cr-check">✓</div>
+        <div><h4>ICC profile confirmed</h4><p>Confirm Wolt printer ICC profile — likely ISOcoated_v2_300 for EU print</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 8 — BUILD PLAN (UPDATED)
+══════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-teal">Roadmap</div>
+      <div class="h2">Build plan</div>
+    </div>
+    <div class="phases">
+      <div class="phase ph1">
+        <div class="phase-top">
+          <div class="phase-title">Phase 1 — Core MVP</div>
+          <div class="pbadge pb-g">6–8 weeks</div>
+        </div>
+        <div class="items">
+          <div class="item"><div class="item-dot id-g">✓</div><p>All templates pre-loaded: Promo, New Opening, Seasonal</p></div>
+          <div class="item"><div class="item-dot id-g">✓</div><p>Field editing UI with character limits + image upload</p></div>
+          <div class="item"><div class="item-dot id-g">✓</div><p>Live canvas preview with bleed + safe zone overlays</p></div>
+          <div class="item"><div class="item-dot id-g">✓</div><p>AI copy suggestions — corpus-based, Anthropic API</p></div>
+          <div class="item"><div class="item-dot id-g">✓</div><p>CMYK export via Ghostscript on Vercel Serverless</p></div>
+          <div class="item"><div class="item-dot id-g">✓</div><p>Google Drive upload + Slack notification ping</p></div>
+          <div class="item"><div class="item-dot id-g">✓</div><p>DPA signed before any partner data flows</p></div>
+        </div>
+      </div>
+      <div class="phase ph2">
+        <div class="phase-top">
+          <div class="phase-title">Phase 2 — Scale</div>
+          <div class="pbadge pb-b">Post-validation</div>
+        </div>
+        <div class="items">
+          <div class="item"><div class="item-dot id-b">→</div><p>Figma API: live template pulling + auto field detect</p></div>
+          <div class="item"><div class="item-dot id-b">→</div><p>Admin dashboard: review queue + usage stats</p></div>
+          <div class="item"><div class="item-dot id-b">→</div><p>Per-partner magic links + dedicated Drive folders</p></div>
+          <div class="item"><div class="item-dot id-b">→</div><p>Multi-template library with admin management UI</p></div>
+          <div class="item"><div class="item-dot id-b">→</div><p>Billing: monthly SaaS or per-export pricing</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 9 — NEXT STEPS
+══════════════════════════════════════ -->
+<div class="slide" id="s9">
+  <div class="s-inner">
+    <div class="s-header">
+      <div class="pill p-coral">Next Steps</div>
+      <div class="h2">What happens next</div>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="col-name">Julia</div>
+        <div class="col-role">Build + Design</div>
+        <div class="al">
+          <div class="ai"><span class="arr">→</span><p>Update CLAUDE.md spec <span class="done">done</span></p></div>
+          <div class="ai"><span class="arr">→</span><p>Rebuild deck with corrected stack + AI Copy slide</p></div>
+          <div class="ai"><span class="arr">→</span><p>Figma template audit: layer naming, field count, char limits</p></div>
+          <div class="ai"><span class="arr">→</span><p>Collect Wolt corpus file from Annika</p></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-name">Annika</div>
+        <div class="col-role">Strategy + Client</div>
+        <div class="al">
+          <div class="ai"><span class="arr">→</span><p>Send full Wolt copy corpus (headlines, promo lines, CTAs)</p></div>
+          <div class="ai"><span class="arr">→</span><p>Confirm Wolt printer ICC profile (likely ISOcoated_v2_300)</p></div>
+          <div class="ai"><span class="arr">→</span><p>Start DPA conversation with Wolt legal — hard blocker</p></div>
+          <div class="ai"><span class="arr">→</span><p>Validate demand: pitch WildCast to Wolt Germany contact</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="blockers">
+      <p><strong>Hard blockers:</strong> DPA signed before any code touches partner data · Figma audit complete before build starts</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SLIDE 10 — CLOSE
+══════════════════════════════════════ -->
+<div class="slide" id="s10">
+  <div class="top">
+    <div class="wm">Wild<em>Cast</em></div>
+    <div style="font-size:12px;color:#374151;">Wild Stack · June 2026</div>
+  </div>
+  <div class="center">
+    <div class="ey">Ready to build</div>
+    <div class="big">Let's build <em>it.</em></div>
+    <div class="sub">The foundation is solid — templates are pre-loaded, the stack is correct, and AI copy runs on infrastructure already provisioned. First partner demo is within reach.</div>
+    <div class="cta">Next: Figma audit + corpus file from Annika → kick-off call →</div>
+  </div>
+  <div class="bottom">
+    <span>julia@wildstack.co</span>
+    <span>Confidential · Not for distribution</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     NAVIGATION
+══════════════════════════════════════ -->
+<div id="nav">
+  <button id="prev" onclick="move(-1)" disabled>← Prev</button>
+  <span id="counter">1 / 10</span>
+  <button id="next" onclick="move(1)">Next →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let cur = 0;
+
+  function show(n) {
+    slides[cur].classList.remove('active');
+    cur = Math.max(0, Math.min(n, slides.length - 1));
+    slides[cur].classList.add('active');
+    document.getElementById('counter').textContent = (cur + 1) + ' / ' + slides.length;
+    document.getElementById('prev').disabled = cur === 0;
+    document.getElementById('next').disabled = cur === slides.length - 1;
+  }
+
+  function move(d) { show(cur + d); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') move(1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   move(-1);
+  });
+</script>
+</body>
+</html>
