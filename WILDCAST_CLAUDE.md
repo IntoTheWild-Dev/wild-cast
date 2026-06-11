@@ -1,6 +1,6 @@
 # WildCast — Build Spec
 
-> **Status: 🟢 Phase 1 MVP in progress — multi-page preview ✓, text scan ✓, category filter ✓, upload + category tag ✓, UI polish ✓. Next: wire pdf-lib.**
+> **Status: 🟢 Phase 1 MVP in progress — pdf-lib wired ✓, font embedding ✓, field injection live ✓, multi-page export ✓. Known issues: font visual quality, teal rect overlapping product photos, page 2 text carry-over. Next: fix those 3, then backend (AI API + CMYK).**
 > Repo: https://github.com/IntoTheWild-Dev/wild-cast
 
 ---
@@ -333,11 +333,25 @@ GHOSTSCRIPT_PATH=./bin/gs                        # path to bundled static binary
 - [x] **Upload card** — file import functional; "Tag as Restaurant / Retail" selector before upload; navigates to editor with correct category on file select
 - [x] **UI fixes** — "If necessary" badge layout fixed (flex wraps correctly beside long labels); expand/collapse panel button works (moved inside header, was being clipped by overflow:hidden)
 
+**Completed this sprint:**
+- [x] **pdf-lib wired** — `PDFDocument.load`, `doc.save()`, `@pdf-lib/fontkit` registered for custom font embedding
+- [x] **Omnes fonts embedded** — Bold, Black, Regular loaded from `/Wild Cast/fonts/` (copied from system), served via Vite `publicDir: ..`
+- [x] **PROMO_PARTNER_MAP** — hardcoded injection map for `promo-partner` template with exact coordinates for all 5 slots: headline (p.1), sub_headline (p.1+p.2), T&C footer (p.1), offer amount (p.2)
+- [x] **Multi-page export fixed** — `removePage` loop trims 117-page batch PDF to PDF.js-visible page count (2 pages) before saving
+- [x] **Fields pre-populated from scan** — `handleScan` maps fs≥30→headline, 14≤fs<30→sub_headline, fs<14→tc from p.1; largest-fs item from p.2→offer
+- [x] **Two-pass injection** — all teal rects drawn first (pass 1), all partner text drawn on top (pass 2) to prevent text being covered by later rects
+- [x] **CSS overlay hidden on preview** — `!isPreview` guard prevents double-text confusion when preview blob is active
+
+**Known issues to fix next session (in priority order):**
+- [ ] **Fonts not rendering correctly** — Omnes fonts are embedded but visual output may not match brand spec; need to verify cap-height and weight rendering against original template
+- [ ] **Teal rect overlapping product photos** — the cover rects (especially headline at y:252, h:76) may be painting over product food images; rect coordinates need to be made narrower to only cover text areas
+- [ ] **Page 2 text carry-over** — page 2 preview appears to show page 1 text in some cases; likely a `pdfPageCount` closure issue or PreviewCanvas re-scan triggering on preview blob URL change
+
 **Next up (in order):**
-- [ ] **Wire pdf-lib** — install pdf-lib, load template PDF, draw white rect over original text at scanned coordinates, write partner's field values on top, output modified PDF for download
-- [ ] Connect Anthropic API for real AI copy (`/api/ai-suggest.js`)
-- [ ] PDF export — local download (RGB via pdf-lib first; CMYK Ghostscript spike after)
-- [ ] Wolt corpus file populated from copywriting sheet
+- [ ] Fix the 3 known issues above (fonts, photo overlap, page 2 carry-over)
+- [ ] Connect Anthropic API for real AI copy suggestions (`/api/ai-suggest.js` serverless route)
+- [ ] CMYK export pipeline — Ghostscript serverless function on Vercel (spike needed; static binary bundling is non-trivial)
+- [ ] Wolt corpus file populated from copywriting sheet (`/corpus/wolt.txt`)
 - [ ] Deploy to Vercel
 
 ### Phase 1 Full — Post-demo sign-off

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { pdfjsLib } from '../lib/pdfSetup'
 
-export default function PreviewCanvas({ fields, pdfUrl }) {
+export default function PreviewCanvas({ fields, pdfUrl, onNumPages, onScan, isPreview }) {
   const canvasRef = useRef(null)
   const [pageNum, setPageNum] = useState(1)
   const [numPages, setNumPages] = useState(1)
@@ -19,13 +19,19 @@ export default function PreviewCanvas({ fields, pdfUrl }) {
         pdfRef.current = pdf
         setNumPages(pdf.numPages)
         setPageNum(1)
+        onNumPages?.(pdf.numPages)
 
-        // Scan all pages for text content — used to discover placeholder strings
+        // Scan all pages for text content
+        const allPageItems = []
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i)
           const content = await page.getTextContent()
-          console.log(`[TextScan] Page ${i}:`, content.items.map(it => it.str).filter(s => s.trim()))
+          const items = content.items.filter(it => it.str.trim())
+          console.log(`[TextScan] Page ${i}:`, items.map(it => it.str))
+          allPageItems.push(items)
         }
+        // Only populate fields from the original template, not from a preview blob
+        if (!isPreview) onScan?.(allPageItems)
       } catch (e) {
         console.error('PreviewCanvas load error:', e)
       }
@@ -81,8 +87,8 @@ export default function PreviewCanvas({ fields, pdfUrl }) {
           </div>
         )}
 
-        {/* Live text overlay */}
-        {pdfUrl && (
+        {/* Live text overlay — only shown before preview is generated */}
+        {pdfUrl && !isPreview && (
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', padding: '10% 8% 6%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 4 }}>
             {fields.headline && (
               <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.6)', lineHeight: 1.1 }}>{fields.headline}</div>

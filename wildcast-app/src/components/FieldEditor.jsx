@@ -101,7 +101,7 @@ function ImageUpload({ label, hint, required, optional, value, onChange, square 
   )
 }
 
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, template }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onPreview, onExport, template }) {
   const hasQr = template?.hasQr ?? false
   const [expanded, setExpanded] = useState(false)
   const width = expanded ? 520 : 360
@@ -183,7 +183,15 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       </div>
 
       {/* Export footer */}
-      <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+      <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button
+          onClick={onPreview}
+          style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 600, background: 'transparent', color: 'var(--primary)', border: '1.5px solid var(--primary)', borderRadius: 10, cursor: 'pointer', transition: 'background 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-glow)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >
+          Preview
+        </button>
         <button
           onClick={onExport}
           style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', transition: 'background 0.15s' }}
@@ -192,7 +200,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         >
           Export PDF
         </button>
-        <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center', marginTop: 8 }}>CMYK · 3mm bleed · print-ready</div>
+        <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center' }}>CMYK · 3mm bleed · print-ready</div>
       </div>
 
     </div>
