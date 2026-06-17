@@ -3,3 +3,11 @@
 *.pptx
 generate_pptx.py
 .claude/projects/
+
+# Large print-ready PDFs — stored in cloud storage, not in git
+Example templates/*.pdf
+Example templates/Test 1/*.pdf
+files/*.pdf
+
+# Internal tooling
+wildcast-app/.claude/

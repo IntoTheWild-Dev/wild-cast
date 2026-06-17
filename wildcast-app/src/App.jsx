@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { PDFDocument, rgb, cmyk } from 'pdf-lib'
+import { PDFDocument, rgb, cmyk, degrees } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import Header from './components/Header'
 import TemplatePicker from './components/TemplatePicker'
@@ -49,6 +49,36 @@ const PROMO_PARTNER_MAP = [
     fontKey: 'black' },
 ]
 
+// Injection map for the Wen Cheng Potsdam flyers (Flyer 1 & Flyer 2).
+// Page: 314.6 × 438 pts. Coordinates in pdf-lib bottom-left origin.
+// Teal background matches Wolt teal (CMYK 75/0/10/0) throughout the design.
+const WEN_CHENG_POTSDAM_MAP = [
+  // City tagline line: "POTSDAMS NEUES" (OmnesCondBlack size 35, top of page)
+  // pdfplumber: top=82.9, bottom=117.9 → pdf-lib: y=320, height=38
+  { field: 'sub_headline', page: 0,
+    rect:  { x: 14,  y: 318, width: 288, height: 42 },
+    text:  { x: 22,  y: 325, size: 30,  maxWidth: 276 },
+    fontKey: 'condBlack' },
+  // Main tagline: "DREAMTEAM" (OmnesCondBlack size 51)
+  // pdfplumber: top=114.2, bottom=165.2 → pdf-lib: y=272, height=54
+  { field: 'headline', page: 0,
+    rect:  { x: 14,  y: 270, width: 288, height: 56 },
+    text:  { x: 22,  y: 276, size: 44,  maxWidth: 276 },
+    fontKey: 'condBlack' },
+  // Offer badge: "30% SPAREN*" (OmnesVF/Black size 31)
+  // pdfplumber: top=327, bottom=358 → pdf-lib: y=80, height=33
+  { field: 'offer', page: 0,
+    rect:  { x: 68,  y: 78,  width: 184, height: 35 },
+    text:  { x: 76,  y: 84,  size: 26,  maxWidth: 172 },
+    fontKey: 'black' },
+  // T&C — vertical text strip on the left edge, rotated 90°
+  // pdfplumber: x=14–50, top=287–414 → pdf-lib: x=14, y=24, rotated up
+  { field: 'tc', page: 0,
+    rect:  { x: 14,  y: 22,  width: 38,  height: 130 },
+    text:  { x: 46,  y: 26,  size: 5.5, maxWidth: 126, rotate: 90 },
+    fontKey: 'regular' },
+]
+
 export default function App() {
   const [screen, setScreen] = useState('picker')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -76,23 +106,35 @@ export default function App() {
     const page1 = allPageItems[0] || []
     const page2 = allPageItems[1] || []
 
-    // Deduplicate page 1 — "McDonald's" is drawn 4× for a visual layering effect
+    // Deduplicate — some elements are drawn multiple times for visual layering
     const seen = new Set()
     const unique1 = page1.filter(it => seen.has(it.str) ? false : seen.add(it.str))
 
-    // Map by font size: large = headline, medium = sub_headline, small = tc
-    const headline    = unique1.find(it => it.transform[0] >= 30)?.str ?? ''
-    const sub_headline = unique1.find(it => it.transform[0] >= 14 && it.transform[0] < 30)?.str ?? ''
+    // Sort by font size descending so picks are stable regardless of stream order
+    const bySize = [...unique1].sort((a, b) => b.transform[0] - a.transform[0])
+
+    // headline = LARGEST text block (≥30pt)
+    const headline = bySize.find(it => it.transform[0] >= 30)?.str ?? ''
+    // sub_headline = second-largest distinct item (≥14pt, not already headline)
+    const sub_headline = bySize.find(
+      it => it.transform[0] >= 14 && it.str !== headline
+    )?.str ?? ''
+    // tc = small text (7–13pt)
     const tc = unique1
       .filter(it => it.transform[0] >= 7 && it.transform[0] < 14)
       .map(it => it.str).join(' ').trim()
 
-    // Page 2: offer = the largest text item (typically the promo amount e.g. "3x10€")
-    const seen2 = new Set()
-    const unique2 = page2.filter(it => seen2.has(it.str) ? false : seen2.add(it.str))
-    const offer = unique2.reduce(
-      (best, it) => (!best || it.transform[0] > best.transform[0]) ? it : best, null
-    )?.str ?? ''
+    // offer: page 2 for multi-page; third-largest distinct block for single-page
+    let offer = ''
+    if (page2.length > 0) {
+      const seen2 = new Set()
+      const unique2 = page2.filter(it => seen2.has(it.str) ? false : seen2.add(it.str))
+      offer = unique2.reduce(
+        (best, it) => (!best || it.transform[0] > best.transform[0]) ? it : best, null
+      )?.str ?? ''
+    } else {
+      offer = bySize.find(it => it.str !== headline && it.str !== sub_headline)?.str ?? ''
+    }
 
     setFields(prev => ({ ...prev, headline, sub_headline, tc, offer }))
   }
@@ -117,23 +159,30 @@ export default function App() {
       doc.removePage(doc.getPageCount() - 1)
     }
 
-    // Load all three Omnes weights in parallel
-    const [boldBytes, blackBytes, regularBytes] = await Promise.all([
+    // Load all Omnes weights in parallel (condBlack needed for Wen Cheng headlines)
+    const [boldBytes, blackBytes, regularBytes, condBlackBytes] = await Promise.all([
       fetch('/fonts/Omnes Bold.ttf').then(r => r.arrayBuffer()),
       fetch('/fonts/Omnes Black.ttf').then(r => r.arrayBuffer()),
       fetch('/fonts/Omnes Regular.ttf').then(r => r.arrayBuffer()),
+      fetch('/fonts/Omnes Cond Black.ttf').then(r => r.arrayBuffer()),
     ])
     const fonts = {
-      bold:    await doc.embedFont(boldBytes),
-      black:   await doc.embedFont(blackBytes),
-      regular: await doc.embedFont(regularBytes),
+      bold:      await doc.embedFont(boldBytes),
+      black:     await doc.embedFont(blackBytes),
+      regular:   await doc.embedFont(regularBytes),
+      condBlack: await doc.embedFont(condBlackBytes),
     }
 
     // Exact Wolt teal (CMYK 75/0/10/0) — rect blends with the template background
     const teal  = cmyk(0.75, 0, 0.10, 0)
     const white = rgb(1, 1, 1)
 
-    const map = selectedTemplate?.id === 'promo-partner' ? PROMO_PARTNER_MAP : []
+    const wenChengIds = ['wen-cheng-flyer1', 'wen-cheng-flyer2']
+    const map = selectedTemplate?.id === 'promo-partner'
+      ? PROMO_PARTNER_MAP
+      : wenChengIds.includes(selectedTemplate?.id)
+        ? WEN_CHENG_POTSDAM_MAP
+        : []
 
     // Pass 1: draw all cover rects so no text gets painted over by a later rect
     for (const entry of map) {
@@ -145,7 +194,7 @@ export default function App() {
     for (const entry of map) {
       const value = fields[entry.field]
       if (!value || entry.page >= doc.getPageCount()) continue
-      doc.getPage(entry.page).drawText(value, {
+      const textOpts = {
         x:          entry.text.x,
         y:          entry.text.y,
         size:       entry.text.size,
@@ -153,7 +202,9 @@ export default function App() {
         color:      white,
         maxWidth:   entry.text.maxWidth,
         lineHeight: entry.text.lineHeight,
-      })
+      }
+      if (entry.text.rotate) textOpts.rotate = degrees(entry.text.rotate)
+      doc.getPage(entry.page).drawText(value, textOpts)
     }
 
     return doc.save()
