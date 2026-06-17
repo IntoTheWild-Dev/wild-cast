@@ -59,10 +59,10 @@ const WEN_CHENG_POTSDAM_MAP = [
     rect:  { x: 14,  y: 318, width: 288, height: 42 },
     text:  { x: 22,  y: 325, size: 30,  maxWidth: 276 },
     fontKey: 'condBlack' },
-  // Main tagline: "DREAMTEAM" (OmnesCondBlack size 51)
-  // pdfplumber: top=114.2, bottom=165.2 → pdf-lib: y=272, height=54
+  // Main tagline: "DREAMTEAM" (OmnesCondBlack size 51) — rect extended down to cover
+  // the "WEN CHENG × WOLT" subtitle line below it
   { field: 'headline', page: 0,
-    rect:  { x: 14,  y: 270, width: 288, height: 56 },
+    rect:  { x: 14,  y: 255, width: 288, height: 85 },
     text:  { x: 22,  y: 276, size: 44,  maxWidth: 276 },
     fontKey: 'condBlack' },
   // Offer badge: "30% SPAREN*" (OmnesVF/Black size 31)

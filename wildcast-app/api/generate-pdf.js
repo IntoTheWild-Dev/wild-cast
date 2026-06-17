@@ -38,7 +38,7 @@ const WEN_CHENG_POTSDAM_MAP = [
     text:  { x: 22,  y: 325, size: 30,  maxWidth: 276 },
     fontKey: 'condBlack' },
   { field: 'headline', page: 0,
-    rect:  { x: 14,  y: 270, width: 288, height: 56 },
+    rect:  { x: 14,  y: 255, width: 288, height: 85 },
     text:  { x: 22,  y: 276, size: 44,  maxWidth: 276 },
     fontKey: 'condBlack' },
   { field: 'offer', page: 0,
