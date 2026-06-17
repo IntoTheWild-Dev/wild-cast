@@ -1,0 +1,161 @@
+import { PDFDocument, rgb, cmyk, degrees } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
+import { list, put } from '@vercel/blob'
+import { readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// ── Injection maps (mirrors App.jsx) ─────────────────────────────────────────
+
+const PROMO_PARTNER_MAP = [
+  { field: 'sub_headline', page: 0,
+    rect: { x: 22, y: 306, width: 272, height: 42 },
+    text: { x: 89, y: 316, size: 18, maxWidth: 148 },
+    fontKey: 'bold' },
+  { field: 'headline', page: 0,
+    rect: { x: 22, y: 252, width: 272, height: 76 },
+    text: { x: 29, y: 268, size: 38, maxWidth: 256 },
+    fontKey: 'bold' },
+  { field: 'tc', page: 0,
+    rect: { x: 65, y: 108, width: 188, height: 36 },
+    text: { x: 70, y: 132, size: 8, maxWidth: 178, lineHeight: 11 },
+    fontKey: 'regular' },
+  { field: 'sub_headline', page: 1,
+    rect: { x: 22, y: 357, width: 272, height: 42 },
+    text: { x: 89, y: 367, size: 18, maxWidth: 148 },
+    fontKey: 'bold' },
+  { field: 'offer', page: 1,
+    rect: { x: 58, y: 294, width: 204, height: 66 },
+    text: { x: 66, y: 302, size: 55, maxWidth: 200 },
+    fontKey: 'black' },
+]
+
+const WEN_CHENG_POTSDAM_MAP = [
+  { field: 'sub_headline', page: 0,
+    rect:  { x: 14,  y: 318, width: 288, height: 42 },
+    text:  { x: 22,  y: 325, size: 30,  maxWidth: 276 },
+    fontKey: 'condBlack' },
+  { field: 'headline', page: 0,
+    rect:  { x: 14,  y: 270, width: 288, height: 56 },
+    text:  { x: 22,  y: 276, size: 44,  maxWidth: 276 },
+    fontKey: 'condBlack' },
+  { field: 'offer', page: 0,
+    rect:  { x: 68,  y: 78,  width: 184, height: 35 },
+    text:  { x: 76,  y: 84,  size: 26,  maxWidth: 172 },
+    fontKey: 'black' },
+  { field: 'tc', page: 0,
+    rect:  { x: 14,  y: 22,  width: 38,  height: 130 },
+    text:  { x: 46,  y: 26,  size: 5.5, maxWidth: 126, rotate: 90 },
+    fontKey: 'regular' },
+]
+
+const TEMPLATE_CONFIG = {
+  'wen-cheng-flyer1': {
+    blobFilename: '260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_1.pdf',
+    map: WEN_CHENG_POTSDAM_MAP,
+  },
+  'wen-cheng-flyer2': {
+    blobFilename: '260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_2.pdf',
+    map: WEN_CHENG_POTSDAM_MAP,
+  },
+  'promo-partner': {
+    blobFilename: null, // not yet uploaded
+    map: PROMO_PARTNER_MAP,
+  },
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { templateId, fields, pageCount = 1 } = req.body
+  const config = TEMPLATE_CONFIG[templateId]
+
+  if (!config || !config.blobFilename) {
+    return res.status(400).json({ error: 'Unknown or unsupported template' })
+  }
+
+  // ── 1. Fetch template PDF from Vercel Blob ──────────────────────────────────
+  const { blobs } = await list({
+    prefix: config.blobFilename,
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  })
+
+  if (!blobs.length) {
+    return res.status(404).json({ error: 'Template PDF not found in blob storage' })
+  }
+
+  const pdfResponse = await fetch(blobs[0].url, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+  })
+
+  if (!pdfResponse.ok) {
+    return res.status(502).json({ error: 'Failed to fetch template from storage' })
+  }
+
+  const pdfBytes = await pdfResponse.arrayBuffer()
+
+  // ── 2. Load and inject via pdf-lib ─────────────────────────────────────────
+  const doc = await PDFDocument.load(pdfBytes)
+  doc.registerFontkit(fontkit)
+
+  // Trim to the visible page count
+  while (doc.getPageCount() > Math.max(1, pageCount)) {
+    doc.removePage(doc.getPageCount() - 1)
+  }
+
+  const fontsDir = join(__dirname, 'fonts')
+  const fonts = {
+    bold:      await doc.embedFont(readFileSync(join(fontsDir, 'Omnes Bold.ttf'))),
+    black:     await doc.embedFont(readFileSync(join(fontsDir, 'Omnes Black.ttf'))),
+    regular:   await doc.embedFont(readFileSync(join(fontsDir, 'Omnes Regular.ttf'))),
+    condBlack: await doc.embedFont(readFileSync(join(fontsDir, 'Omnes Cond Black.ttf'))),
+  }
+
+  const teal  = cmyk(0.75, 0, 0.10, 0)
+  const white = rgb(1, 1, 1)
+  const map   = config.map
+
+  // Pass 1: cover rects
+  for (const entry of map) {
+    if (!entry.rect || entry.page >= doc.getPageCount()) continue
+    doc.getPage(entry.page).drawRectangle({ ...entry.rect, color: teal })
+  }
+
+  // Pass 2: partner text
+  for (const entry of map) {
+    const value = fields[entry.field]
+    if (!value || entry.page >= doc.getPageCount()) continue
+    const textOpts = {
+      x:          entry.text.x,
+      y:          entry.text.y,
+      size:       entry.text.size,
+      font:       fonts[entry.fontKey],
+      color:      white,
+      maxWidth:   entry.text.maxWidth,
+      lineHeight: entry.text.lineHeight,
+    }
+    if (entry.text.rotate) textOpts.rotate = degrees(entry.text.rotate)
+    doc.getPage(entry.page).drawText(value, textOpts)
+  }
+
+  const outputBytes = await doc.save()
+
+  // ── 3. Upload modified PDF to blob and return public URL ────────────────────
+  const outputFilename = `exports/${templateId}-${Date.now()}.pdf`
+  const blob = await put(outputFilename, outputBytes, {
+    access: 'public',
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+    contentType: 'application/pdf',
+  })
+
+  return res.status(200).json({
+    url: blob.url,
+    filename: `wildcast-${templateId}.pdf`,
+  })
+}

@@ -226,6 +226,37 @@ export default function App() {
 
   async function handleExport() {
     if (!pdfUrl) { alert('No template loaded.'); return }
+
+    // Use the serverless API for named templates (production path)
+    if (selectedTemplate?.id && selectedTemplate.id !== 'custom-upload') {
+      try {
+        const res = await fetch('/api/generate-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateId: selectedTemplate.id,
+            fields,
+            pageCount: pdfPageCount,
+          }),
+        })
+        if (!res.ok) {
+          const { error } = await res.json().catch(() => ({}))
+          throw new Error(error ?? `Server error ${res.status}`)
+        }
+        const { url, filename } = await res.json()
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+        return
+      } catch (err) {
+        console.error('API export error:', err)
+        alert('Export error: ' + err.message)
+        return
+      }
+    }
+
+    // Fallback: client-side export for custom uploaded PDFs
     try {
       const pdfBytes = await buildModifiedPdf()
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
