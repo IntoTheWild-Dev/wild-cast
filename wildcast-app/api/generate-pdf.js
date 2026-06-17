@@ -35,15 +35,15 @@ const PROMO_PARTNER_MAP = [
 const WEN_CHENG_POTSDAM_MAP = [
   { field: 'sub_headline', page: 0,
     rect:  { x: 14,  y: 318, width: 288, height: 42 },
-    text:  { x: 22,  y: 325, size: 30,  maxWidth: 276 },
+    text:  { x: 14,  y: 325, size: 30,  maxWidth: 288, align: 'center' },
     fontKey: 'condBlack' },
   { field: 'headline', page: 0,
     rect:  { x: 14,  y: 255, width: 288, height: 85 },
-    text:  { x: 22,  y: 276, size: 44,  maxWidth: 276 },
+    text:  { x: 14,  y: 283, size: 44,  maxWidth: 288, align: 'center' },
     fontKey: 'condBlack' },
   { field: 'offer', page: 0,
     rect:  { x: 68,  y: 78,  width: 184, height: 35 },
-    text:  { x: 76,  y: 84,  size: 26,  maxWidth: 172 },
+    text:  { x: 68,  y: 84,  size: 26,  maxWidth: 184, align: 'center' },
     fontKey: 'black' },
   { field: 'tc', page: 0,
     rect:  { x: 14,  y: 22,  width: 38,  height: 130 },
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { templateId, fields, pageCount = 1 } = req.body
+  const { templateId, fields, pageCount = 1, photoBase64, photoType } = req.body
   const config = TEMPLATE_CONFIG[templateId]
 
   if (!config || !config.blobFilename) {
@@ -127,12 +127,18 @@ export default async function handler(req, res) {
     doc.getPage(entry.page).drawRectangle({ ...entry.rect, color: teal })
   }
 
-  // Pass 2: partner text
+  // Pass 2: partner text with optional center alignment
   for (const entry of map) {
     const value = fields[entry.field]
     if (!value || entry.page >= doc.getPageCount()) continue
+    let drawX = entry.text.x
+    if (entry.text.align === 'center' && !entry.text.rotate) {
+      const textWidth = fonts[entry.fontKey].widthOfTextAtSize(value, entry.text.size)
+      drawX = entry.rect.x + (entry.rect.width - textWidth) / 2
+      if (drawX < entry.rect.x) drawX = entry.rect.x
+    }
     const textOpts = {
-      x:          entry.text.x,
+      x:          drawX,
       y:          entry.text.y,
       size:       entry.text.size,
       font:       fonts[entry.fontKey],
@@ -144,6 +150,26 @@ export default async function handler(req, res) {
     doc.getPage(entry.page).drawText(value, textOpts)
   }
 
+  // Pass 3: product photo — cover three-circles area and draw uploaded image
+  if (photoBase64) {
+    const imgBuffer = Buffer.from(photoBase64, 'base64')
+    const image = photoType === 'image/png'
+      ? await doc.embedPng(imgBuffer)
+      : await doc.embedJpg(imgBuffer)
+
+    const PHOTO_AREA = { x: 14, y: 140, width: 288, height: 118 }
+    const dims = image.scale(1)
+    const scale = Math.min(PHOTO_AREA.width / dims.width, PHOTO_AREA.height / dims.height)
+    const drawW = dims.width * scale
+    const drawH = dims.height * scale
+    const drawX = PHOTO_AREA.x + (PHOTO_AREA.width - drawW) / 2
+    const drawY = PHOTO_AREA.y + (PHOTO_AREA.height - drawH) / 2
+
+    doc.getPage(0).drawRectangle({ ...PHOTO_AREA, color: teal })
+    doc.getPage(0).drawImage(image, { x: drawX, y: drawY, width: drawW, height: drawH })
+  }
+
+  // Also update the map to use center alignment
   const outputBytes = await doc.save()
 
   // ── 3. Stream the modified PDF directly back to the browser ────────────────

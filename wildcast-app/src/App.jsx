@@ -57,22 +57,16 @@ const WEN_CHENG_POTSDAM_MAP = [
   // pdfplumber: top=82.9, bottom=117.9 → pdf-lib: y=320, height=38
   { field: 'sub_headline', page: 0,
     rect:  { x: 14,  y: 318, width: 288, height: 42 },
-    text:  { x: 22,  y: 325, size: 30,  maxWidth: 276 },
+    text:  { x: 14,  y: 325, size: 30,  maxWidth: 288, align: 'center' },
     fontKey: 'condBlack' },
-  // Main tagline: "DREAMTEAM" (OmnesCondBlack size 51) — rect extended down to cover
-  // the "WEN CHENG × WOLT" subtitle line below it
   { field: 'headline', page: 0,
     rect:  { x: 14,  y: 255, width: 288, height: 85 },
-    text:  { x: 22,  y: 276, size: 44,  maxWidth: 276 },
+    text:  { x: 14,  y: 283, size: 44,  maxWidth: 288, align: 'center' },
     fontKey: 'condBlack' },
-  // Offer badge: "30% SPAREN*" (OmnesVF/Black size 31)
-  // pdfplumber: top=327, bottom=358 → pdf-lib: y=80, height=33
   { field: 'offer', page: 0,
     rect:  { x: 68,  y: 78,  width: 184, height: 35 },
-    text:  { x: 76,  y: 84,  size: 26,  maxWidth: 172 },
+    text:  { x: 68,  y: 84,  size: 26,  maxWidth: 184, align: 'center' },
     fontKey: 'black' },
-  // T&C — vertical text strip on the left edge, rotated 90°
-  // pdfplumber: x=14–50, top=287–414 → pdf-lib: x=14, y=24, rotated up
   { field: 'tc', page: 0,
     rect:  { x: 14,  y: 22,  width: 38,  height: 130 },
     text:  { x: 46,  y: 26,  size: 5.5, maxWidth: 126, rotate: 90 },
@@ -194,8 +188,14 @@ export default function App() {
     for (const entry of map) {
       const value = fields[entry.field]
       if (!value || entry.page >= doc.getPageCount()) continue
+      let drawX = entry.text.x
+      if (entry.text.align === 'center' && !entry.text.rotate) {
+        const textWidth = fonts[entry.fontKey].widthOfTextAtSize(value, entry.text.size)
+        drawX = entry.rect.x + (entry.rect.width - textWidth) / 2
+        if (drawX < entry.rect.x) drawX = entry.rect.x
+      }
       const textOpts = {
-        x:          entry.text.x,
+        x:          drawX,
         y:          entry.text.y,
         size:       entry.text.size,
         font:       fonts[entry.fontKey],
@@ -230,6 +230,16 @@ export default function App() {
     // Use the serverless API for named templates (production path)
     if (selectedTemplate?.id && selectedTemplate.id !== 'custom-upload') {
       try {
+        // Convert photo blob URL to base64 if one was uploaded
+        let photoBase64 = null, photoType = null
+        if (fields.photoUrl) {
+          const imgRes = await fetch(fields.photoUrl)
+          const imgBlob = await imgRes.blob()
+          photoType = imgBlob.type
+          const buffer = await imgBlob.arrayBuffer()
+          photoBase64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        }
+
         const res = await fetch('/api/generate-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -237,6 +247,8 @@ export default function App() {
             templateId: selectedTemplate.id,
             fields,
             pageCount: pdfPageCount,
+            photoBase64,
+            photoType,
           }),
         })
         if (!res.ok) {
