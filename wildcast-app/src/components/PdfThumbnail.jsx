@@ -9,10 +9,12 @@ export default function PdfThumbnail({ pdfPath }) {
   useEffect(() => {
     if (!pdfPath) return
     let cancelled = false
+    let loadingTask = null
 
     async function render() {
       try {
-        const pdf = await pdfjsLib.getDocument({ url: pdfPath }).promise
+        loadingTask = pdfjsLib.getDocument({ url: pdfPath })
+        const pdf = await loadingTask.promise
         const page = await pdf.getPage(1)
         if (cancelled) return
 
@@ -31,13 +33,19 @@ export default function PdfThumbnail({ pdfPath }) {
         await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaled }).promise
         if (!cancelled) setLoading(false)
       } catch (e) {
-        console.error('PdfThumbnail error:', e)
-        if (!cancelled) setError(true)
+        loadingTask?.destroy()
+        if (!cancelled) {
+          setLoading(false)
+          setError(true)
+        }
       }
     }
 
     render()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      loadingTask?.destroy()
+    }
   }, [pdfPath])
 
   if (error) return (
