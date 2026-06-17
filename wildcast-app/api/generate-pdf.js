@@ -53,11 +53,11 @@ const WEN_CHENG_POTSDAM_MAP = [
 
 const TEMPLATE_CONFIG = {
   'wen-cheng-flyer1': {
-    blobFilename: '260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_1.pdf',
+    blobFilename: 'Flyer_1_reduced.pdf',
     map: WEN_CHENG_POTSDAM_MAP,
   },
   'wen-cheng-flyer2': {
-    blobFilename: '260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_2.pdf',
+    blobFilename: 'Flyer_2_reduced.pdf',
     map: WEN_CHENG_POTSDAM_MAP,
   },
   'promo-partner': {
