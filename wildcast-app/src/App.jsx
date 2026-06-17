@@ -22,17 +22,23 @@ export default function App() {
   const [lang, setLang] = useState('de')
   const [exporting, setExporting] = useState(false)
   const [fontSizes, setFontSizes] = useState({})
+  const [alignments, setAlignments] = useState({})
   const exportRef = useRef(null)
 
   function handleSelectTemplate(template) {
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
+    setAlignments({})
     setScreen('editor')
   }
 
   function handleFontSizeChange(key, size) {
     setFontSizes(prev => ({ ...prev, [key]: Math.max(6, Math.min(120, size)) }))
+  }
+
+  function handleAlignChange(key, align) {
+    setAlignments(prev => ({ ...prev, [key]: align }))
   }
 
   function handleFieldChange(key, value) {
@@ -87,6 +93,7 @@ export default function App() {
               onFieldChange={handleFieldChange}
               exportRef={exportRef}
               fontSizes={fontSizes}
+              alignments={alignments}
             />
           </div>
 
@@ -101,6 +108,8 @@ export default function App() {
             templateConfig={templateConfig}
             fontSizes={fontSizes}
             onFontSizeChange={handleFontSizeChange}
+            alignments={alignments}
+            onAlignChange={handleAlignChange}
           />
         </div>
       )}

@@ -1,45 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { fabric } from 'fabric'
 
-// Inject CSS @font-face for Omnes Cond Black with a restricted unicode-range that
-// excludes U+0025 (%). The font ships with a blank % glyph, so without this, Canvas
-// silently "uses" the glyph but draws nothing. CSS unicode-range forces the fallback.
-function injectFontOverrides() {
-  if (document.getElementById('wc-font-overrides')) return
-  const style = document.createElement('style')
-  style.id = 'wc-font-overrides'
-  style.textContent = `
-    @font-face {
-      font-family: 'Omnes Cond Black';
-      src: url('/fonts/Omnes Cond Black.ttf') format('truetype');
-      unicode-range: U+0000-0024, U+0026-FFFF;
-    }
-  `
-  document.head.appendChild(style)
-}
-
 async function loadFonts() {
-  injectFontOverrides()
-
-  // Remove any previously-loaded unrestricted Omnes Cond Black JS faces so the
-  // CSS-restricted face above is the sole authority for that family.
-  const stale = []
-  document.fonts.forEach(f => { if (f.family === 'Omnes Cond Black') stale.push(f) })
-  stale.forEach(f => document.fonts.delete(f))
-
-  const faces = [
-    new FontFace('Omnes Bold',    'url(/fonts/Omnes Bold.ttf)'),
-    new FontFace('Omnes Black',   'url(/fonts/Omnes Black.ttf)'),
-    new FontFace('Omnes Regular', 'url(/fonts/Omnes Regular.ttf)'),
-    new FontFace('Omnes Cond Black', 'url(/fonts/Omnes Cond Black.ttf)', {
-      unicodeRange: 'U+0000-0024, U+0026-FFFF',
-    }),
-  ]
-  faces.forEach(f => document.fonts.add(f))
-  await Promise.all(faces.map(f => f.load().catch(() => null)))
+  // Fonts are served via Adobe Fonts (typekit link in index.html).
+  // Wait for the browser to finish loading them before rendering.
+  await document.fonts.ready
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -89,9 +57,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               originY: isRotated ? 'center' : 'top',
               width:   textW,
               fontSize:   fontSizes?.[zone.id] ?? zone.fontSize,
-              fontFamily: '"' + zone.fontFamily + '", Arial, sans-serif',
+              fontFamily: zone.fontFamily,
+              fontWeight: zone.fontWeight ? String(zone.fontWeight) : 'normal',
               fill:    zone.color || '#FFFFFF',
-              textAlign: zone.align || 'left',
+              textAlign: alignments?.[zone.id] ?? zone.align ?? 'left',
               angle:   zone.rotate || 0,
               editable:       true,
               selectable:     true,
@@ -196,6 +165,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     canvas.renderAll()
   }, [fontSizes, config])
+
+  // ── Sync alignment overrides → canvas ──────────────────────────────────────
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !config) return
+    config.zones.forEach(zone => {
+      const obj = zoneObjsRef.current[zone.id]
+      if (!obj || obj.type !== 'textbox') return
+      const align = alignments?.[zone.id] ?? zone.align ?? 'left'
+      if (obj.textAlign !== align) obj.set('textAlign', align)
+    })
+    canvas.renderAll()
+  }, [alignments, config])
 
   // ── Sync photo upload → canvas ──────────────────────────────────────────────
   useEffect(() => {
