@@ -53,13 +53,13 @@ const WEN_CHENG_ZONES = [
   {
     id: 'tc',
     type: 'text',
-    // Rotated -90° along left edge, spanning full text area height
-    x: 5, y: 73,
-    width: 15, height: 258,
-    textWidth: 252,
-    fontSize: 5,
+    // Rotated -90° in lower-left area (67.59%–94.53% top, 7.31%–13.03% left in Figma)
+    x: 23, y: 298,
+    width: 18, height: 119,
+    textWidth: 119,
+    fontSize: 4.5,
     fontFamily: 'omnes-pro',
-    fontWeight: 400,
+    fontWeight: 500,
     color: '#FFFFFF',
     align: 'left',
     rotate: -90,
