@@ -237,7 +237,12 @@ export default function App() {
           const imgBlob = await imgRes.blob()
           photoType = imgBlob.type
           const buffer = await imgBlob.arrayBuffer()
-          photoBase64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+          const bytes = new Uint8Array(buffer)
+          let binary = ''
+          for (let i = 0; i < bytes.length; i += 8192) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
+          }
+          photoBase64 = btoa(binary)
         }
 
         const res = await fetch('/api/generate-pdf', {
