@@ -154,16 +154,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional />
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Media</div>
-
-        <ImageUpload label="Brand Logo" hint="PNG with transparent background · SVG ideal" required value={fields.logoUrl} onChange={(url) => onChange('logoUrl', url)} />
-        <ImageUpload label="Product Photo" hint="JPG/PNG · min 150dpi · 1:1 ratio ideal" required value={fields.photoUrl} onChange={(url) => onChange('photoUrl', url)} />
-
-        {hasQr && (
-          <ImageUpload label="QR Code" hint="PNG · square · transparent background ideal" optional square value={fields.qrUrl} onChange={(url) => onChange('qrUrl', url)} />
-        )}
-
-        <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
 
         <div style={{ marginBottom: 20 }}>
