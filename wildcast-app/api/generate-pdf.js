@@ -38,9 +38,14 @@ const WEN_CHENG_POTSDAM_MAP = [
     text:  { x: 14,  y: 325, size: 30,  maxWidth: 288, align: 'center' },
     fontKey: 'condBlack' },
   { field: 'headline', page: 0,
-    rect:  { x: 14,  y: 255, width: 288, height: 85 },
+    rect:  { x: 14,  y: 270, width: 288, height: 70 },
     text:  { x: 14,  y: 283, size: 44,  maxWidth: 288, align: 'center' },
     fontKey: 'condBlack' },
+  // Static branding line always redrawn in white after headline rect covers it
+  { static: 'WEN CHENG × WOLT', page: 0,
+    rect:  { x: 14,  y: 255, width: 288, height: 16 },
+    text:  { x: 14,  y: 257, size: 13,  maxWidth: 288, align: 'center' },
+    fontKey: 'bold' },
   { field: 'offer', page: 0,
     rect:  { x: 68,  y: 78,  width: 184, height: 35 },
     text:  { x: 68,  y: 84,  size: 26,  maxWidth: 184, align: 'center' },
@@ -121,26 +126,36 @@ export default async function handler(req, res) {
   const white = rgb(1, 1, 1)
   const map   = config.map
 
-  // Pass 1: cover rects
+  // Pass 1: cover rects (field entries only — static entries have no cover rect)
   for (const entry of map) {
+    if (entry.static) continue
     if (!entry.rect || entry.page >= doc.getPageCount()) continue
     doc.getPage(entry.page).drawRectangle({ ...entry.rect, color: teal })
   }
 
-  // Pass 2: partner text with optional center alignment
+  // Pass 2: draw text (both field values and static strings)
   for (const entry of map) {
-    const value = fields[entry.field]
+    const value = entry.static ?? fields[entry.field]
     if (!value || entry.page >= doc.getPageCount()) continue
+
+    // Auto-shrink font size if text is too wide for the box
+    let size = entry.text.size
+    if (!entry.text.rotate) {
+      while (size > 6 && fonts[entry.fontKey].widthOfTextAtSize(value, size) > entry.text.maxWidth) {
+        size -= 0.5
+      }
+    }
+
     let drawX = entry.text.x
     if (entry.text.align === 'center' && !entry.text.rotate) {
-      const textWidth = fonts[entry.fontKey].widthOfTextAtSize(value, entry.text.size)
+      const textWidth = fonts[entry.fontKey].widthOfTextAtSize(value, size)
       drawX = entry.rect.x + (entry.rect.width - textWidth) / 2
       if (drawX < entry.rect.x) drawX = entry.rect.x
     }
     const textOpts = {
       x:          drawX,
       y:          entry.text.y,
-      size:       entry.text.size,
+      size,
       font:       fonts[entry.fontKey],
       color:      white,
       maxWidth:   entry.text.maxWidth,
