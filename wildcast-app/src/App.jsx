@@ -1,99 +1,31 @@
 import { useState, useRef } from 'react'
-import { PDFDocument, rgb, cmyk, degrees } from 'pdf-lib'
-import fontkit from '@pdf-lib/fontkit'
 import Header from './components/Header'
 import TemplatePicker from './components/TemplatePicker'
 import FieldEditor from './components/FieldEditor'
-import PreviewCanvas from './components/PreviewCanvas'
+import TemplateCanvas from './components/TemplateCanvas'
+import { TEMPLATE_ZONES } from './data/templateZones'
 
 const DEFAULT_FIELDS = {
-  headline: '',
-  offer: '',
+  headline:     '',
+  offer:        '',
   sub_headline: '',
-  tc: '',
-  logoUrl: null,
-  photoUrl: null,
-  qrUrl: null,
+  tc:           '',
+  logoUrl:      null,
+  photoUrl:     null,
+  qrUrl:        null,
 }
-
-// Injection map for the Promo Flyer Partner (promo-partner) template.
-// Each entry covers the original text with a teal rect, then draws partner text on top.
-// Coordinates are PDF points, bottom-left origin (matches PDF.js scan output).
-const PROMO_PARTNER_MAP = [
-  // ── Page 1 ──────────────────────────────────────────────────────
-  // Sub-headline tagline above the restaurant name ("WIE WÄR'S MIT", y:312, fs:22)
-  { field: 'sub_headline', page: 0,
-    rect: { x: 22, y: 306, width: 272, height: 42 },
-    text: { x: 89, y: 316, size: 18, maxWidth: 148 },
-    fontKey: 'bold' },
-  // Headline — restaurant name ("McDonald's", y:263, fs:54)
-  { field: 'headline', page: 0,
-    rect: { x: 22, y: 252, width: 272, height: 76 },
-    text: { x: 29, y: 268, size: 38, maxWidth: 256 },
-    fontKey: 'bold' },
-  // T&C footer CTA ("Jetzt Wolt App downloaden...", y:121-132, fs:9)
-  { field: 'tc', page: 0,
-    rect: { x: 65, y: 108, width: 188, height: 36 },
-    text: { x: 70, y: 132, size: 8, maxWidth: 178, lineHeight: 11 },
-    fontKey: 'regular' },
-  // ── Page 2 ──────────────────────────────────────────────────────
-  // Sub-headline tagline at top of offer page ("WIE WÄR'S MIT", y:364, fs:22)
-  { field: 'sub_headline', page: 1,
-    rect: { x: 22, y: 357, width: 272, height: 42 },
-    text: { x: 89, y: 367, size: 18, maxWidth: 148 },
-    fontKey: 'bold' },
-  // Offer amount — the big promo number ("3x10€", y:306, fs:74)
-  { field: 'offer', page: 1,
-    rect: { x: 58, y: 294, width: 204, height: 66 },
-    text: { x: 66, y: 302, size: 55, maxWidth: 200 },
-    fontKey: 'black' },
-]
-
-// Injection map for the Wen Cheng Potsdam flyers (Flyer 1 & Flyer 2).
-// Page: 314.6 × 438 pts. Coordinates in pdf-lib bottom-left origin.
-// Teal background matches Wolt teal (CMYK 75/0/10/0) throughout the design.
-const WEN_CHENG_POTSDAM_MAP = [
-  // City tagline line: "POTSDAMS NEUES" (OmnesCondBlack size 35, top of page)
-  // pdfplumber: top=82.9, bottom=117.9 → pdf-lib: y=320, height=38
-  { field: 'sub_headline', page: 0,
-    rect:  { x: 14,  y: 318, width: 288, height: 42 },
-    text:  { x: 14,  y: 325, size: 30,  maxWidth: 288, align: 'center' },
-    fontKey: 'condBlack' },
-  { field: 'headline', page: 0,
-    rect:  { x: 14,  y: 270, width: 288, height: 70 },
-    text:  { x: 14,  y: 283, size: 44,  maxWidth: 288, align: 'center' },
-    fontKey: 'condBlack' },
-  // Static branding line always redrawn in white after headline rect covers it
-  { static: 'WEN CHENG × WOLT', page: 0,
-    rect:  { x: 14,  y: 255, width: 288, height: 16 },
-    text:  { x: 14,  y: 257, size: 13,  maxWidth: 288, align: 'center' },
-    fontKey: 'bold' },
-  { field: 'offer', page: 0,
-    rect:  { x: 68,  y: 78,  width: 184, height: 35 },
-    text:  { x: 68,  y: 84,  size: 26,  maxWidth: 184, align: 'center' },
-    fontKey: 'black' },
-  { field: 'tc', page: 0,
-    rect:  { x: 14,  y: 22,  width: 38,  height: 130 },
-    text:  { x: 46,  y: 26,  size: 5.5, maxWidth: 126, rotate: 90 },
-    fontKey: 'regular' },
-]
 
 export default function App() {
   const [screen, setScreen] = useState('picker')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [fields, setFields] = useState(DEFAULT_FIELDS)
   const [lang, setLang] = useState('de')
-  const [pdfUrl, setPdfUrl] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(null)
-  const [pdfPageCount, setPdfPageCount] = useState(1)
-  const previewBlobRef = useRef(null)
-  const fileInputRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
+  const exportRef = useRef(null)
 
   function handleSelectTemplate(template) {
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
-    setPdfUrl(template.pdfPath ?? null)
-    setPreviewUrl(null)
     setScreen('editor')
   }
 
@@ -101,210 +33,27 @@ export default function App() {
     setFields(prev => ({ ...prev, [key]: value }))
   }
 
-  function handleScan(allPageItems) {
-    const page1 = allPageItems[0] || []
-    const page2 = allPageItems[1] || []
-
-    // Deduplicate — some elements are drawn multiple times for visual layering
-    const seen = new Set()
-    const unique1 = page1.filter(it => seen.has(it.str) ? false : seen.add(it.str))
-
-    // Sort by font size descending so picks are stable regardless of stream order
-    const bySize = [...unique1].sort((a, b) => b.transform[0] - a.transform[0])
-
-    // headline = LARGEST text block (≥30pt)
-    const headline = bySize.find(it => it.transform[0] >= 30)?.str ?? ''
-    // sub_headline = second-largest distinct item (≥14pt, not already headline)
-    const sub_headline = bySize.find(
-      it => it.transform[0] >= 14 && it.str !== headline
-    )?.str ?? ''
-    // tc = small text (7–13pt)
-    const tc = unique1
-      .filter(it => it.transform[0] >= 7 && it.transform[0] < 14)
-      .map(it => it.str).join(' ').trim()
-
-    // offer: page 2 for multi-page; third-largest distinct block for single-page
-    let offer = ''
-    if (page2.length > 0) {
-      const seen2 = new Set()
-      const unique2 = page2.filter(it => seen2.has(it.str) ? false : seen2.add(it.str))
-      offer = unique2.reduce(
-        (best, it) => (!best || it.transform[0] > best.transform[0]) ? it : best, null
-      )?.str ?? ''
-    } else {
-      offer = bySize.find(it => it.str !== headline && it.str !== sub_headline)?.str ?? ''
-    }
-
-    setFields(prev => ({ ...prev, headline, sub_headline, tc, offer }))
-  }
-
-  function handlePdfImport(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPdfUrl(URL.createObjectURL(file))
-    setPreviewUrl(null)
-  }
-
-  // Shared pdf-lib work — used by both Preview and Export
-  async function buildModifiedPdf() {
-    const res = await fetch(pdfUrl)
-    const bytes = await res.arrayBuffer()
-    const doc = await PDFDocument.load(bytes)
-    doc.registerFontkit(fontkit)
-
-    // Remove extra pages from multi-restaurant batch source file.
-    // PDF.js reports 2 visible pages; the raw file has many more hidden ones.
-    while (doc.getPageCount() > Math.max(1, pdfPageCount)) {
-      doc.removePage(doc.getPageCount() - 1)
-    }
-
-    // Load all Omnes weights in parallel (condBlack needed for Wen Cheng headlines)
-    const [boldBytes, blackBytes, regularBytes, condBlackBytes] = await Promise.all([
-      fetch('/fonts/Omnes Bold.ttf').then(r => r.arrayBuffer()),
-      fetch('/fonts/Omnes Black.ttf').then(r => r.arrayBuffer()),
-      fetch('/fonts/Omnes Regular.ttf').then(r => r.arrayBuffer()),
-      fetch('/fonts/Omnes Cond Black.ttf').then(r => r.arrayBuffer()),
-    ])
-    const fonts = {
-      bold:      await doc.embedFont(boldBytes),
-      black:     await doc.embedFont(blackBytes),
-      regular:   await doc.embedFont(regularBytes),
-      condBlack: await doc.embedFont(condBlackBytes),
-    }
-
-    // Exact Wolt teal (CMYK 75/0/10/0) — rect blends with the template background
-    const teal  = cmyk(0.75, 0, 0.10, 0)
-    const white = rgb(1, 1, 1)
-
-    const wenChengIds = ['wen-cheng-flyer1', 'wen-cheng-flyer2']
-    const map = selectedTemplate?.id === 'promo-partner'
-      ? PROMO_PARTNER_MAP
-      : wenChengIds.includes(selectedTemplate?.id)
-        ? WEN_CHENG_POTSDAM_MAP
-        : []
-
-    // Pass 1: draw all cover rects so no text gets painted over by a later rect
-    for (const entry of map) {
-      if (entry.static) continue
-      if (!entry.rect || entry.page >= doc.getPageCount()) continue
-      doc.getPage(entry.page).drawRectangle({ ...entry.rect, color: teal })
-    }
-
-    // Pass 2: draw all partner text on top of the clean teal surface
-    for (const entry of map) {
-      const value = entry.static ?? fields[entry.field]
-      if (!value || entry.page >= doc.getPageCount()) continue
-
-      // Auto-shrink font size if text is too wide for the box
-      let size = entry.text.size
-      if (!entry.text.rotate) {
-        while (size > 6 && fonts[entry.fontKey].widthOfTextAtSize(value, size) > entry.text.maxWidth) {
-          size -= 0.5
-        }
-      }
-
-      let drawX = entry.text.x
-      if (entry.text.align === 'center' && !entry.text.rotate) {
-        const textWidth = fonts[entry.fontKey].widthOfTextAtSize(value, size)
-        drawX = entry.rect.x + (entry.rect.width - textWidth) / 2
-        if (drawX < entry.rect.x) drawX = entry.rect.x
-      }
-      const textOpts = {
-        x:          drawX,
-        y:          entry.text.y,
-        size,
-        font:       fonts[entry.fontKey],
-        color:      white,
-        maxWidth:   entry.text.maxWidth,
-        lineHeight: entry.text.lineHeight,
-      }
-      if (entry.text.rotate) textOpts.rotate = degrees(entry.text.rotate)
-      doc.getPage(entry.page).drawText(value, textOpts)
-    }
-
-    return doc.save()
-  }
-
-  async function handlePreview() {
-    if (!pdfUrl) return
-    try {
-      const pdfBytes = await buildModifiedPdf()
-      if (previewBlobRef.current) URL.revokeObjectURL(previewBlobRef.current)
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      previewBlobRef.current = url
-      setPreviewUrl(url)
-    } catch (err) {
-      console.error('Preview error:', err)
-    }
-  }
-
   async function handleExport() {
-    if (!pdfUrl) { alert('No template loaded.'); return }
-
-    // Use the serverless API for named templates (production path)
-    if (selectedTemplate?.id && selectedTemplate.id !== 'custom-upload') {
-      try {
-        // Convert photo blob URL to base64 if one was uploaded
-        let photoBase64 = null, photoType = null
-        if (fields.photoUrl) {
-          const imgRes = await fetch(fields.photoUrl)
-          const imgBlob = await imgRes.blob()
-          photoType = imgBlob.type
-          const buffer = await imgBlob.arrayBuffer()
-          const bytes = new Uint8Array(buffer)
-          let binary = ''
-          for (let i = 0; i < bytes.length; i += 8192) {
-            binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
-          }
-          photoBase64 = btoa(binary)
-        }
-
-        const res = await fetch('/api/generate-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            templateId: selectedTemplate.id,
-            fields,
-            pageCount: pdfPageCount,
-            photoBase64,
-            photoType,
-          }),
-        })
-        if (!res.ok) {
-          const { error } = await res.json().catch(() => ({}))
-          throw new Error(error ?? `Server error ${res.status}`)
-        }
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `wildcast-${selectedTemplate.id}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
-        return
-      } catch (err) {
-        console.error('API export error:', err)
-        alert('Export error: ' + err.message)
-        return
-      }
+    if (!exportRef.current?.getPng) {
+      alert('Canvas not ready — please wait a moment and try again.')
+      return
     }
-
-    // Fallback: client-side export for custom uploaded PDFs
+    setExporting(true)
     try {
-      const pdfBytes = await buildModifiedPdf()
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
+      const png = exportRef.current.getPng()
       const a = document.createElement('a')
-      a.href = url
-      a.download = `wildcast-${selectedTemplate?.id ?? 'export'}.pdf`
+      a.href = png
+      a.download = `wildcast-${selectedTemplate?.id ?? 'export'}.png`
       a.click()
-      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Export error:', err)
-      alert('Error: ' + err.message)
+      alert('Export failed: ' + err.message)
+    } finally {
+      setExporting(false)
     }
   }
+
+  const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? null
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -317,34 +66,20 @@ export default function App() {
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
-          {/* Left: breadcrumb + PDF preview */}
+          {/* Left panel: canvas */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Breadcrumb */}
             <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <span onClick={() => setScreen('picker')} style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer' }}>Templates</span>
               <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 7, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                  </svg>
-                  Replace PDF
-                </button>
-                <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={handlePdfImport} />
-              </div>
             </div>
 
-            {/* previewUrl shows the modified PDF; falls back to the original template */}
-            <PreviewCanvas
+            <TemplateCanvas
+              config={templateConfig}
               fields={fields}
-              pdfUrl={previewUrl ?? pdfUrl}
-              onNumPages={setPdfPageCount}
-              onScan={handleScan}
-              isPreview={!!previewUrl}
+              onFieldChange={handleFieldChange}
+              exportRef={exportRef}
             />
           </div>
 
@@ -353,8 +88,8 @@ export default function App() {
             onChange={handleFieldChange}
             lang={lang}
             onLangChange={setLang}
-            onPreview={handlePreview}
             onExport={handleExport}
+            exporting={exporting}
             template={selectedTemplate}
           />
         </div>
