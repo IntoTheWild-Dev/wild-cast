@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, cmyk, degrees } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
-import { list, put } from '@vercel/blob'
+import { list } from '@vercel/blob'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -146,16 +146,8 @@ export default async function handler(req, res) {
 
   const outputBytes = await doc.save()
 
-  // ── 3. Upload modified PDF to blob and return public URL ────────────────────
-  const outputFilename = `exports/${templateId}-${Date.now()}.pdf`
-  const blob = await put(outputFilename, outputBytes, {
-    access: 'public',
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-    contentType: 'application/pdf',
-  })
-
-  return res.status(200).json({
-    url: blob.url,
-    filename: `wildcast-${templateId}.pdf`,
-  })
+  // ── 3. Stream the modified PDF directly back to the browser ────────────────
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="wildcast-${templateId}.pdf"`)
+  return res.send(Buffer.from(outputBytes))
 }

@@ -243,11 +243,13 @@ export default function App() {
           const { error } = await res.json().catch(() => ({}))
           throw new Error(error ?? `Server error ${res.status}`)
         }
-        const { url, filename } = await res.json()
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = filename
+        a.download = `wildcast-${selectedTemplate.id}.pdf`
         a.click()
+        URL.revokeObjectURL(url)
         return
       } catch (err) {
         console.error('API export error:', err)
