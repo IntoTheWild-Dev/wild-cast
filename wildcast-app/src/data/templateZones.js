@@ -11,13 +11,15 @@
 
 const BG_FLYER1 = 'https://nd2c9p2q8as8wmla.private.blob.vercel-storage.com/Flyer%201_test%201_text%20only.png?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfbkQyQzlQMlE4QXM4d21MYSIsIm93bmVySWQiOiJ0ZWFtX1FHWDdFQzM2S3lDWFhsdXpKNklCTWhrcCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzgxNzM1MjkxOTYwLCJpYXQiOjE3ODE2OTIwOTIyODB9.JKeU6KjnY1L7Qrz18O0APUbSnX_lkBMQCf-U1so94GY&vercel-blob-signature=y5j3W_Glia481mjQviyOUNi1NE3yTz3GbaY7tYfP-EQ'
 
+// Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
+// Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
 const WEN_CHENG_ZONES = [
   {
     id: 'sub_headline',
     type: 'text',
-    x: 10, y: 95,
-    width: 296, height: 90,
-    fontSize: 30,
+    x: 10, y: 73,
+    width: 296, height: 30,
+    fontSize: 20,
     fontFamily: 'Omnes Cond Black',
     color: '#FFFFFF',
     align: 'center',
@@ -26,9 +28,9 @@ const WEN_CHENG_ZONES = [
   {
     id: 'headline',
     type: 'text',
-    x: 10, y: 175,
-    width: 296, height: 90,
-    fontSize: 55,
+    x: 10, y: 103,
+    width: 296, height: 52,
+    fontSize: 50,
     fontFamily: 'Omnes Cond Black',
     color: '#FFFFFF',
     align: 'center',
@@ -37,10 +39,10 @@ const WEN_CHENG_ZONES = [
   {
     id: 'offer',
     type: 'text',
-    x: 60, y: 355,
-    width: 200, height: 55,
-    fontSize: 30,
-    fontFamily: 'Omnes Black',
+    x: 60, y: 330,
+    width: 200, height: 50,
+    fontSize: 36,
+    fontFamily: 'Omnes Cond Black',
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -48,10 +50,10 @@ const WEN_CHENG_ZONES = [
   {
     id: 'tc',
     type: 'text',
-    // Rotated -90° — x/y/width/height define the visual bounding box
-    x: 0, y: 100,
-    width: 18, height: 250,
-    textWidth: 240,
+    // Rotated -90° along left edge, spanning full text area height
+    x: 5, y: 73,
+    width: 15, height: 258,
+    textWidth: 252,
     fontSize: 5,
     fontFamily: 'Omnes Regular',
     color: '#FFFFFF',

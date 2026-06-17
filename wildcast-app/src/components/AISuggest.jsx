@@ -2,16 +2,16 @@ import { useState } from 'react'
 
 const MOCK_SUGGESTIONS = {
   de: {
-    headline: ['WIE WÄR\'S MIT MEHR UMSATZ?', 'DEIN BURGER WARTET.', 'JETZT 2FÜR1 SICHERN'],
-    offer: ['2FÜR1 auf alles', '26% Rabatt heute', 'WOLTREX10 — 10€ Rabatt'],
-    sub_headline: ['Nur für kurze Zeit. Jetzt bestellen auf Wolt.', 'Saftig. Frisch. In Minuten bei dir.', 'Bestell jetzt — In Minuten geliefert.'],
-    tc: ['*Angebot gültig bis 31.12.2026. Nicht kombinierbar.', '*Nur über Wolt. Solange der Vorrat reicht.', '*Gilt für ausgewählte Gerichte. Details in der App.'],
+    headline: ['DREAMTEAM', 'NUR HEUTE', 'JETZT NEU'],
+    sub_headline: ['POTSDAMS NEUES', 'EXKLUSIV AUF WOLT', 'NEU IN DEINER STADT'],
+    offer: ['30% SPAREN', '2FÜR1 HEUTE', 'GRATIS LIEFERUNG'],
+    tc: ['*Gültig für Neukunden ohne bisherige Bestellungen auf Wolt. 14 Tage ab Kontoerstellung. Gilt für die erste Bestellung mit Lieferung ab 15 €. Nicht kombinierbar.', '*Nur über Wolt App. Solange der Vorrat reicht. Details in der App.'],
   },
   en: {
-    headline: ['HOW ABOUT MORE ORDERS?', 'YOUR BURGER IS WAITING.', 'GET 2FOR1 NOW'],
-    offer: ['2FOR1 on everything', '26% off today', 'WOLTREX10 — €10 off'],
-    sub_headline: ['Limited time only. Order now on Wolt.', 'Juicy. Fresh. At your door in minutes.', 'Order now — delivered in minutes.'],
-    tc: ['*Offer valid until 31.12.2026. Cannot be combined.', '*Wolt only. While stocks last.', '*Valid on selected items. See app for details.'],
+    headline: ['DREAMTEAM', 'TODAY ONLY', 'BRAND NEW'],
+    sub_headline: ['POTSDAM\'S NEWEST', 'EXCLUSIVELY ON WOLT', 'NEW IN YOUR CITY'],
+    offer: ['SAVE 30%', '2FOR1 TODAY', 'FREE DELIVERY'],
+    tc: ['*Valid for new customers with no previous Wolt orders. 14 days from account creation. First delivery order of €15+. Cannot be combined.', '*Wolt app only. While stocks last. See app for details.'],
   },
 }
 
