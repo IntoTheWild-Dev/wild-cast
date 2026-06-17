@@ -61,22 +61,23 @@ function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, 
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{label}</span>
-          {required && <RequiredBadge />}
-          {optional && <OptionalBadge />}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          {align != null && <AlignControl align={align} onAlign={onAlign} />}
-          {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
-          {limit && (
-            <span style={{ fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
-              {value.length}/{limit}
-            </span>
-          )}
-        </div>
+      {/* Label row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{label}</span>
+        {required && <RequiredBadge />}
+        {optional && <OptionalBadge />}
+        {limit && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
+            {value.length}/{limit}
+          </span>
+        )}
+      </div>
+      {/* Controls row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        {align != null && <AlignControl align={align} onAlign={onAlign} />}
+        {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
+        <div style={{ flex: 1 }} />
+        <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
       </div>
       {multiline ? (
         <textarea

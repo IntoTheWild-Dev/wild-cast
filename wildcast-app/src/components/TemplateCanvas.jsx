@@ -113,8 +113,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           if (destroyed) { canvas.dispose(); return }
           img.set({
             left: 0, top: 0,
-            scaleX: config.canvasW / img.width,
-            scaleY: config.canvasH / img.height,
+            scaleX: canvas.getWidth()  / img.width,
+            scaleY: canvas.getHeight() / img.height,
             selectable: false,
             evented:    false,
           })
