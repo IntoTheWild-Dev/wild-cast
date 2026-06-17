@@ -1,22 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
 import { fabric } from 'fabric'
 
-const FONTS = [
-  ['Omnes Bold',       '/fonts/Omnes Bold.ttf'],
-  ['Omnes Black',      '/fonts/Omnes Black.ttf'],
-  ['Omnes Regular',    '/fonts/Omnes Regular.ttf'],
-  ['Omnes Cond Black', '/fonts/Omnes Cond Black.ttf'],
-]
-
-async function loadFonts() {
-  await Promise.all(FONTS.map(([name, url]) => {
-    const face = new FontFace(name, `url(${url})`)
-    document.fonts.add(face)
-    return face.load().catch(() => null) // non-fatal if font fails
-  }))
+// Inject CSS @font-face for Omnes Cond Black with a restricted unicode-range that
+// excludes U+0025 (%). The font ships with a blank % glyph, so without this, Canvas
+// silently "uses" the glyph but draws nothing. CSS unicode-range forces the fallback.
+function injectFontOverrides() {
+  if (document.getElementById('wc-font-overrides')) return
+  const style = document.createElement('style')
+  style.id = 'wc-font-overrides'
+  style.textContent = `
+    @font-face {
+      font-family: 'Omnes Cond Black';
+      src: url('/fonts/Omnes Cond Black.ttf') format('truetype');
+      unicode-range: U+0000-0024, U+0026-FFFF;
+    }
+  `
+  document.head.appendChild(style)
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef }) {
+async function loadFonts() {
+  injectFontOverrides()
+
+  // Remove any previously-loaded unrestricted Omnes Cond Black JS faces so the
+  // CSS-restricted face above is the sole authority for that family.
+  const stale = []
+  document.fonts.forEach(f => { if (f.family === 'Omnes Cond Black') stale.push(f) })
+  stale.forEach(f => document.fonts.delete(f))
+
+  const faces = [
+    new FontFace('Omnes Bold',    'url(/fonts/Omnes Bold.ttf)'),
+    new FontFace('Omnes Black',   'url(/fonts/Omnes Black.ttf)'),
+    new FontFace('Omnes Regular', 'url(/fonts/Omnes Regular.ttf)'),
+    new FontFace('Omnes Cond Black', 'url(/fonts/Omnes Cond Black.ttf)', {
+      unicodeRange: 'U+0000-0024, U+0026-FFFF',
+    }),
+  ]
+  faces.forEach(f => document.fonts.add(f))
+  await Promise.all(faces.map(f => f.load().catch(() => null)))
+}
+
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -65,8 +88,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               originX: isRotated ? 'center' : 'left',
               originY: isRotated ? 'center' : 'top',
               width:   textW,
-              fontSize:   zone.fontSize,
-              fontFamily: zone.fontFamily,
+              fontSize:   fontSizes?.[zone.id] ?? zone.fontSize,
+              fontFamily: '"' + zone.fontFamily + '", Arial, sans-serif',
               fill:    zone.color || '#FFFFFF',
               textAlign: zone.align || 'left',
               angle:   zone.rotate || 0,
@@ -160,6 +183,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       }
     })
   }, [fields])
+
+  // ── Sync font size overrides → canvas ──────────────────────────────────────
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !config) return
+    config.zones.forEach(zone => {
+      const obj = zoneObjsRef.current[zone.id]
+      if (!obj || obj.type !== 'textbox') return
+      const size = fontSizes?.[zone.id] ?? zone.fontSize
+      if (obj.fontSize !== size) obj.set('fontSize', size)
+    })
+    canvas.renderAll()
+  }, [fontSizes, config])
 
   // ── Sync photo upload → canvas ──────────────────────────────────────────────
   useEffect(() => {

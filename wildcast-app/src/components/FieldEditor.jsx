@@ -11,7 +11,27 @@ function RequiredBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '2px 7px', borderRadius: 100 }}>Required</span>
 }
 
-function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, multiline }) {
+function SizeControl({ size, onSize }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
+      <button
+        onClick={() => onSize(size - 1)}
+        style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+        onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      >−</button>
+      <span style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 26, textAlign: 'center', color: 'var(--mid)', fontWeight: 600 }}>{size}pt</span>
+      <button
+        onClick={() => onSize(size + 1)}
+        style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+        onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      >+</button>
+    </div>
+  )
+}
+
+function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, multiline, fontSize, onFontSize }) {
   const limit = CHAR_LIMITS[fieldKey]
   const over = limit && value.length > limit
 
@@ -23,7 +43,8 @@ function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, 
           {required && <RequiredBadge />}
           {optional && <OptionalBadge />}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
           <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
           {limit && (
             <span style={{ fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
@@ -101,9 +122,16 @@ function ImageUpload({ label, hint, required, optional, value, onChange, square 
   )
 }
 
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange }) {
   const hasQr = template?.hasQr ?? false
   const [expanded, setExpanded] = useState(false)
+
+  // Resolve effective font size for a zone: override → template default → fallback
+  function effectiveFontSize(zoneId, fallback) {
+    if (fontSizes?.[zoneId] != null) return fontSizes[zoneId]
+    const zone = templateConfig?.zones?.find(z => z.id === zoneId)
+    return zone?.fontSize ?? fallback
+  }
   const width = expanded ? 520 : 360
 
   return (
@@ -148,10 +176,10 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Text fields</div>
 
-        <FieldRow label="Headline" fieldKey="headline" value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required />
-        <FieldRow label="Offer / Promo sticker" fieldKey="offer" value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional />
-        <FieldRow label="Sub-headline" fieldKey="sub_headline" value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang} />
-        <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional />
+        <FieldRow label="Headline" fieldKey="headline" value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)} />
+        <FieldRow label="Offer" fieldKey="offer" value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)} />
+        <FieldRow label="Sub-headline" fieldKey="sub_headline" value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang} fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)} />
+        <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)} />
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>

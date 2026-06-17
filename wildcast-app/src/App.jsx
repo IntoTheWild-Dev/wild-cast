@@ -21,12 +21,18 @@ export default function App() {
   const [fields, setFields] = useState(DEFAULT_FIELDS)
   const [lang, setLang] = useState('de')
   const [exporting, setExporting] = useState(false)
+  const [fontSizes, setFontSizes] = useState({})
   const exportRef = useRef(null)
 
   function handleSelectTemplate(template) {
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
+    setFontSizes({})
     setScreen('editor')
+  }
+
+  function handleFontSizeChange(key, size) {
+    setFontSizes(prev => ({ ...prev, [key]: Math.max(6, Math.min(120, size)) }))
   }
 
   function handleFieldChange(key, value) {
@@ -80,6 +86,7 @@ export default function App() {
               fields={fields}
               onFieldChange={handleFieldChange}
               exportRef={exportRef}
+              fontSizes={fontSizes}
             />
           </div>
 
@@ -91,6 +98,9 @@ export default function App() {
             onExport={handleExport}
             exporting={exporting}
             template={selectedTemplate}
+            templateConfig={templateConfig}
+            fontSizes={fontSizes}
+            onFontSizeChange={handleFontSizeChange}
           />
         </div>
       )}
