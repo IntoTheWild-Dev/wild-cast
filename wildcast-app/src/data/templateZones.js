@@ -9,7 +9,7 @@
 // [edit] fineprint       → tc
 // Food + logo layers are baked into the background PNG for now.
 
-const BG_FLYER1 = 'https://nd2c9p2q8as8wmla.private.blob.vercel-storage.com/Flyer%201_test%201_text%20only.png?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfbkQyQzlQMlE4QXM4d21MYSIsIm93bmVySWQiOiJ0ZWFtX1FHWDdFQzM2S3lDWFhsdXpKNklCTWhrcCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzgxNzM1MjkxOTYwLCJpYXQiOjE3ODE2OTIwOTIyODB9.JKeU6KjnY1L7Qrz18O0APUbSnX_lkBMQCf-U1so94GY&vercel-blob-signature=y5j3W_Glia481mjQviyOUNi1NE3yTz3GbaY7tYfP-EQ'
+const BG_FLYER1 = '/templates/Flyer 1-updated with CMYK images.png'
 
 // Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
 // Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
