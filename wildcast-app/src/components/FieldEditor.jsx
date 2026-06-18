@@ -109,7 +109,7 @@ function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, 
   )
 }
 
-function ImageUpload({ label, hint, required, optional, value, onChange, square }) {
+function ImageUpload({ label, hint, required, optional, value, onChange, square, onResetPosition }) {
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -127,6 +127,15 @@ function ImageUpload({ label, hint, required, optional, value, onChange, square 
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{label}</span>
         {required && <RequiredBadge />}
         {optional && <OptionalBadge />}
+        {value && onResetPosition && (
+          <button
+            onClick={e => { e.stopPropagation(); onResetPosition() }}
+            title="Reset image position"
+            style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
+          >↺</button>
+        )}
       </div>
       <div
         onClick={handleClick}
@@ -231,6 +240,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 value={fields[`${zone.id}Url`]}
                 onChange={(url) => onChange(`${zone.id}Url`, url)}
                 square={zone.id === 'logo'}
+                onResetPosition={() => onResetZone?.(zone.id)}
               />
             ))}
           </>
