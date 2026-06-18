@@ -14,6 +14,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const zoneObjsRef = useRef({})
   const syncing = useRef(false)
   const [loading, setLoading] = useState(true)
+  const [zoom, setZoom] = useState(100)
 
   // ── Initialise canvas when template config changes ──────────────────────────
   useEffect(() => {
@@ -31,6 +32,26 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     fabricRef.current = canvas
     zoneObjsRef.current = {}
+
+    // Smart centre guide — show while dragging, hide otherwise (Figma-style)
+    canvas.on('object:moving', () => {
+      const g = zoneObjsRef.current['_centre-guide']
+      if (g) { g.set('visible', true); canvas.requestRenderAll() }
+    })
+    canvas.on('mouse:up', () => {
+      const g = zoneObjsRef.current['_centre-guide']
+      if (g) { g.set('visible', false); canvas.requestRenderAll() }
+    })
+
+    // Scroll / trackpad pinch zoom
+    canvas.on('mouse:wheel', (opt) => {
+      let z = canvas.getZoom() * (0.999 ** opt.e.deltaY)
+      z = Math.max(0.4, Math.min(4, z))
+      canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, z)
+      opt.e.preventDefault()
+      opt.e.stopPropagation()
+      setZoom(Math.round(z * 100))
+    })
 
     // Wire export + reset handles
     if (exportRef) {
@@ -59,7 +80,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.setCoords()
       }
       exportRef.current = {
-        getPng: () => canvas.toDataURL({ format: 'png', multiplier: 4 }),
+        getPng: () => {
+          const g = zoneObjsRef.current['_centre-guide']
+          if (g) g.set('visible', false)
+          canvas.renderAll()
+          return canvas.toDataURL({ format: 'png', multiplier: 4 })
+        },
         resetLayout: () => {
           zones.forEach(snapZone)
           canvas.renderAll()
@@ -78,12 +104,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Guide goes in first so it renders below all text and image zones
         const guideX = canvasW / 2
         const guide = new fabric.Line([guideX, 0, guideX, canvasH], {
-          stroke: 'rgba(255,255,255,0.6)',
+          stroke: '#FF3182',
           strokeWidth: 1.5,
-          strokeDashArray: [6, 5],
+          strokeDashArray: [4, 4],
           selectable: false,
           evented: false,
-          excludeFromExport: true,
+          visible: false,
         })
         canvas.add(guide)
         zoneObjsRef.current['_centre-guide'] = guide
@@ -111,8 +137,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               selectable:     true,
               hasControls:    true,
               hasBorders:     true,
-              borderColor:    'rgba(0,194,203,0.7)',
-              cornerColor:    'rgba(0,194,203,0.9)',
+              borderColor:    '#FF3182',
+              cornerColor:    '#FF3182',
               cornerStyle:    'circle',
               cornerSize:     10,
               splitByGrapheme: false,
@@ -183,6 +209,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       fabricRef.current = null
       zoneObjsRef.current = {}
       setLoading(true)
+      setZoom(100)
     }
   }, [config]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -264,8 +291,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           evented:      true,
           hasControls:  true,
           hasBorders:   true,
-          borderColor:  'rgba(0,194,203,0.7)',
-          cornerColor:  'rgba(0,194,203,0.9)',
+          borderColor:  '#FF3182',
+          cornerColor:  '#FF3182',
           cornerStyle:  'circle',
           cornerSize:   10,
           lockUniScaling: true,
@@ -316,13 +343,29 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading canvas…</span>
         </div>
       )}
-      <div style={{
-        boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-        borderRadius: 3,
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}>
-        <canvas ref={canvasElRef} />
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6)', borderRadius: 3, overflow: 'hidden' }}>
+          <canvas ref={canvasElRef} />
+        </div>
+        <div style={{
+          position: 'absolute', bottom: -30, left: '50%', transform: 'translateX(-50%)',
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'rgba(0,0,0,0.45)', borderRadius: 20, padding: '4px 12px',
+          fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap', userSelect: 'none',
+        }}>
+          {zoom}%
+          {zoom !== 100 && (
+            <button
+              onClick={() => {
+                const c = fabricRef.current
+                if (c) { c.setZoom(1); c.setViewportTransform([1, 0, 0, 1, 0, 0]); setZoom(100) }
+              }}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: 11, padding: 0, marginLeft: 2 }}
+            >
+              · Reset
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
