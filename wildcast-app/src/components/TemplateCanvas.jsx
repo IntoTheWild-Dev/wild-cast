@@ -265,6 +265,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const url = fields[urlField]
 
       const existing = zoneObjsRef.current[`${zone.id}-image`]
+
+      // URL unchanged — image already on canvas, don't touch it (preserves user resize/move)
+      if (existing && existing._wcUrl === url) return
+
       if (existing) {
         canvas.remove(existing)
         delete zoneObjsRef.current[`${zone.id}-image`]
@@ -302,6 +306,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
         img._wcZoneId = zone.id
         img._wcScale = scale
+        img._wcUrl = url
         canvas.add(img)
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o.type === 'textbox') canvas.bringToFront(o)
