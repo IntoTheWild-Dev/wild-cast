@@ -32,10 +32,25 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     fabricRef.current = canvas
     zoneObjsRef.current = {}
 
-    // Wire export handle
+    // Wire export + reset handles
     if (exportRef) {
       exportRef.current = {
         getPng: () => canvas.toDataURL({ format: 'png', multiplier: 4 }),
+        resetLayout: () => {
+          zones.forEach(zone => {
+            const obj = zoneObjsRef.current[zone.id]
+            if (!obj || obj.type !== 'textbox') return
+            const isRotated = !!zone.rotate
+            const cx = zone.x + zone.width / 2
+            const cy = zone.y + zone.height / 2
+            obj.set({
+              left: isRotated ? cx : zone.x,
+              top:  isRotated ? cy : zone.y,
+            })
+            obj.setCoords()
+          })
+          canvas.renderAll()
+        },
       }
     }
 
@@ -65,9 +80,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               editable:       true,
               selectable:     true,
               hasControls:    false,
-              hasBorders:     false,
-              lockMovementX:  true,
-              lockMovementY:  true,
+              hasBorders:     true,
+              borderColor:    'rgba(0,194,203,0.7)',
               splitByGrapheme: false,
               _wcZoneId: zone.id,
             })

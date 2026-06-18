@@ -85,6 +85,16 @@ export default function App() {
               <span onClick={() => setScreen('picker')} style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer' }}>Templates</span>
               <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={() => exportRef.current?.resetLayout?.()}
+                title="Reset all text zones to their original positions"
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+              >
+                Reset layout
+              </button>
             </div>
 
             <TemplateCanvas
