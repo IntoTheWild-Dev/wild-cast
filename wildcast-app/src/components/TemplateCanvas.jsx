@@ -15,6 +15,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const syncing = useRef(false)
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
+  const zoomRef = useRef(100)
 
   // ── Initialise canvas when template config changes ──────────────────────────
   useEffect(() => {
@@ -41,16 +42,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     canvas.on('mouse:up', () => {
       const g = zoneObjsRef.current['_centre-guide']
       if (g) { g.set('visible', false); canvas.requestRenderAll() }
-    })
-
-    // Scroll / trackpad pinch zoom
-    canvas.on('mouse:wheel', (opt) => {
-      let z = canvas.getZoom() * (0.999 ** opt.e.deltaY)
-      z = Math.max(0.4, Math.min(4, z))
-      canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, z)
-      opt.e.preventDefault()
-      opt.e.stopPropagation()
-      setZoom(Math.round(z * 100))
     })
 
     // Wire export + reset handles
@@ -210,6 +201,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       zoneObjsRef.current = {}
       setLoading(true)
       setZoom(100)
+      zoomRef.current = 100
     }
   }, [config]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -254,6 +246,29 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     canvas.renderAll()
   }, [alignments, config])
+
+  // ── CSS-level zoom via scroll wheel ────────────────────────────────────────
+  // Fabric.js viewport stays at 1:1; we scale the wrapper div with CSS transform.
+  // getBoundingClientRect() accounts for CSS transforms, so Fabric pointer math stays correct.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const handleWheel = (e) => {
+      if (!fabricRef.current) return
+      e.preventDefault()
+      let z = zoomRef.current * (0.999 ** e.deltaY)
+      z = Math.max(40, Math.min(400, z))
+      zoomRef.current = z
+      setZoom(Math.round(z))
+    }
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container.removeEventListener('wheel', handleWheel)
+  }, [])
+
+  // After zoom re-renders, recalculate canvas offset so pointer events map correctly
+  useEffect(() => {
+    requestAnimationFrame(() => { fabricRef.current?.calcOffset() })
+  }, [zoom])
 
   // ── Sync image uploads → canvas (handles any image zone: photo, logo, etc.) ──
   useEffect(() => {
@@ -325,17 +340,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     )
   }
 
+  const canvasW = config?.canvasW ?? 316
+  const canvasH = config?.canvasH ?? 441
+  const scale = zoom / 100
+
   return (
     <div
       ref={containerRef}
       style={{
         flex: 1,
         background: '#2a2a2a',
+        overflow: 'auto',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 40,
-        overflow: 'auto',
         position: 'relative',
       }}
     >
@@ -348,10 +367,26 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading canvas…</span>
         </div>
       )}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
-        <div style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6)', borderRadius: 3, overflow: 'hidden' }}>
-          <canvas ref={canvasElRef} />
+      {/* Space-holder: takes up the zoomed canvas size so the container scrolls correctly */}
+      <div style={{
+        position: 'relative',
+        flexShrink: 0,
+        width: canvasW * scale,
+        height: canvasH * scale,
+        marginBottom: 36,
+      }}>
+        {/* CSS transform scales the actual canvas element */}
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0,
+          transformOrigin: 'top left',
+          transform: `scale(${scale})`,
+        }}>
+          <div style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6)', borderRadius: 3, overflow: 'hidden' }}>
+            <canvas ref={canvasElRef} />
+          </div>
         </div>
+        {/* Zoom badge sits below the space-holder */}
         <div style={{
           position: 'absolute', bottom: -30, left: '50%', transform: 'translateX(-50%)',
           display: 'flex', alignItems: 'center', gap: 6,
@@ -361,10 +396,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           {zoom}%
           {zoom !== 100 && (
             <button
-              onClick={() => {
-                const c = fabricRef.current
-                if (c) { c.setZoom(1); c.setViewportTransform([1, 0, 0, 1, 0, 0]); setZoom(100) }
-              }}
+              onClick={() => { setZoom(100); zoomRef.current = 100 }}
               style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: 11, padding: 0, marginLeft: 2 }}
             >
               · Reset
