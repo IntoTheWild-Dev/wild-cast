@@ -9,9 +9,8 @@
 // [edit] fineprint       → tc
 // Food + logo layers are baked into the background PNG for now.
 
-const BG_FLYER1 = '/templates/Flyer 1-updated with CMYK images.png'
-// BG_FLYER2: clean version without baked-in food photos — swap in when exported from Figma
-const BG_FLYER2 = '/templates/Flyer 1-updated with CMYK images.png'
+const BG_FLYER1 = '/templates/A6 _ text_swap_wildcast.png'
+const BG_FLYER2 = '/templates/A6 _ text&image_swap_wildcast.png'
 
 // Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
 // Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
