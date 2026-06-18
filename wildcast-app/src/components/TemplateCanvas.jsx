@@ -35,6 +35,18 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     // Wire export + reset handles
     if (exportRef) {
       const snapZone = (zone) => {
+        if (zone.type === 'image') {
+          const img = zoneObjsRef.current[`${zone.id}-image`]
+          if (!img) return
+          const s = img._wcScale
+          img.set({
+            left: zone.x + (zone.width  - img.width  * s) / 2,
+            top:  zone.y + (zone.height - img.height * s) / 2,
+            scaleX: s, scaleY: s,
+          })
+          img.setCoords()
+          return
+        }
         const obj = zoneObjsRef.current[zone.id]
         if (!obj || obj.type !== 'textbox') return
         const isRotated = !!zone.rotate
@@ -63,6 +75,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (destroyed) return
 
       function addZones() {
+        // Guide goes in first so it renders below all text and image zones
+        const guideX = canvasW / 2
+        const guide = new fabric.Line([guideX, 0, guideX, canvasH], {
+          stroke: 'rgba(255,255,255,0.6)',
+          strokeWidth: 1.5,
+          strokeDashArray: [6, 5],
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+        })
+        canvas.add(guide)
+        zoneObjsRef.current['_centre-guide'] = guide
+
         zones.forEach(zone => {
           if (zone.type === 'text') {
             const isRotated = !!zone.rotate
@@ -84,12 +109,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               angle:   zone.rotate || 0,
               editable:       true,
               selectable:     true,
-              hasControls:    false,
+              hasControls:    true,
               hasBorders:     true,
               borderColor:    'rgba(0,194,203,0.7)',
+              cornerColor:    'rgba(0,194,203,0.9)',
+              cornerStyle:    'circle',
+              cornerSize:     10,
               splitByGrapheme: false,
               _wcZoneId: zone.id,
             })
+            // Show only the right-edge handle — dragging it reflows text width (Fabric.js Textbox built-in)
+            tb.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mtr: false })
 
             tb.on('changed', () => {
               if (syncing.current) return
@@ -226,13 +256,25 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         if (!fabricRef.current) return
         const scale = Math.min(zone.width / img.width, zone.height / img.height)
         img.set({
-          left: zone.x + (zone.width  - img.width  * scale) / 2,
-          top:  zone.y + (zone.height - img.height * scale) / 2,
-          scaleX: scale,
-          scaleY: scale,
-          selectable: false,
-          evented:    false,
+          left:    zone.x + (zone.width  - img.width  * scale) / 2,
+          top:     zone.y + (zone.height - img.height * scale) / 2,
+          scaleX:  scale,
+          scaleY:  scale,
+          selectable:   true,
+          evented:      true,
+          hasControls:  true,
+          hasBorders:   true,
+          borderColor:  'rgba(0,194,203,0.7)',
+          cornerColor:  'rgba(0,194,203,0.9)',
+          cornerStyle:  'circle',
+          cornerSize:   10,
+          lockUniScaling: true,
+          lockRotation:   true,
         })
+        // Corner handles only — no edge or rotation handles
+        img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
+        img._wcZoneId = zone.id
+        img._wcScale = scale
         canvas.add(img)
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o.type === 'textbox') canvas.bringToFront(o)
