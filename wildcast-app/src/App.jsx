@@ -41,6 +41,10 @@ export default function App() {
     setAlignments(prev => ({ ...prev, [key]: align }))
   }
 
+  function handleResetZone(zoneId) {
+    exportRef.current?.resetZone?.(zoneId)
+  }
+
   function handleFieldChange(key, value) {
     setFields(prev => ({ ...prev, [key]: value }))
   }
@@ -120,6 +124,7 @@ export default function App() {
             onFontSizeChange={handleFontSizeChange}
             alignments={alignments}
             onAlignChange={handleAlignChange}
+            onResetZone={handleResetZone}
           />
         </div>
       )}

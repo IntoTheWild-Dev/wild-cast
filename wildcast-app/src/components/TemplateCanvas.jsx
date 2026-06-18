@@ -34,22 +34,27 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
     // Wire export + reset handles
     if (exportRef) {
+      const snapZone = (zone) => {
+        const obj = zoneObjsRef.current[zone.id]
+        if (!obj || obj.type !== 'textbox') return
+        const isRotated = !!zone.rotate
+        const cx = zone.x + zone.width / 2
+        const cy = zone.y + zone.height / 2
+        obj.set({
+          left: isRotated ? cx : zone.x,
+          top:  isRotated ? cy : zone.y,
+        })
+        obj.setCoords()
+      }
       exportRef.current = {
         getPng: () => canvas.toDataURL({ format: 'png', multiplier: 4 }),
         resetLayout: () => {
-          zones.forEach(zone => {
-            const obj = zoneObjsRef.current[zone.id]
-            if (!obj || obj.type !== 'textbox') return
-            const isRotated = !!zone.rotate
-            const cx = zone.x + zone.width / 2
-            const cy = zone.y + zone.height / 2
-            obj.set({
-              left: isRotated ? cx : zone.x,
-              top:  isRotated ? cy : zone.y,
-            })
-            obj.setCoords()
-          })
+          zones.forEach(snapZone)
           canvas.renderAll()
+        },
+        resetZone: (zoneId) => {
+          const zone = zones.find(z => z.id === zoneId)
+          if (zone) { snapZone(zone); canvas.renderAll() }
         },
       }
     }

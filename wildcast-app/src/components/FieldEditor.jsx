@@ -55,7 +55,7 @@ function SizeControl({ size, onSize }) {
   )
 }
 
-function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, multiline, fontSize, onFontSize, align, onAlign }) {
+function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, multiline, fontSize, onFontSize, align, onAlign, onResetPosition }) {
   const limit = CHAR_LIMITS[fieldKey]
   const over = limit && value.length > limit
 
@@ -76,6 +76,13 @@ function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         {align != null && <AlignControl align={align} onAlign={onAlign} />}
         {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
+        <button
+          onClick={onResetPosition}
+          title="Reset position to default"
+          style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
+        >↺</button>
         <div style={{ flex: 1 }} />
         <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
       </div>
@@ -148,7 +155,7 @@ function ImageUpload({ label, hint, required, optional, value, onChange, square 
   )
 }
 
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone }) {
   const hasQr = template?.hasQr ?? false
   const [expanded, setExpanded] = useState(false)
 
@@ -207,10 +214,10 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Text fields</div>
 
-        <FieldRow label="Headline" fieldKey="headline" value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)} align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)} />
-        <FieldRow label="Offer" fieldKey="offer" value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)} align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)} />
-        <FieldRow label="Sub-headline" fieldKey="sub_headline" value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang} fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)} align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)} />
-        <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)} align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)} />
+        <FieldRow label="Headline" fieldKey="headline" value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)} align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)} onResetPosition={() => onResetZone?.('headline')} />
+        <FieldRow label="Offer" fieldKey="offer" value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)} align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)} onResetPosition={() => onResetZone?.('offer')} />
+        <FieldRow label="Sub-headline" fieldKey="sub_headline" value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang} fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)} align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)} onResetPosition={() => onResetZone?.('sub_headline')} />
+        <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)} align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)} onResetPosition={() => onResetZone?.('tc')} />
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
