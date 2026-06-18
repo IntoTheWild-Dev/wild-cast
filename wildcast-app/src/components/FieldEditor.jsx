@@ -156,8 +156,8 @@ function ImageUpload({ label, hint, required, optional, value, onChange, square 
 }
 
 export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone }) {
-  const hasQr = template?.hasQr ?? false
   const [expanded, setExpanded] = useState(false)
+  const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
 
   function effectiveFontSize(zoneId, fallback) {
     if (fontSizes?.[zoneId] != null) return fontSizes[zoneId]
@@ -218,6 +218,23 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <FieldRow label="Offer" fieldKey="offer" value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)} align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)} onResetPosition={() => onResetZone?.('offer')} />
         <FieldRow label="Sub-headline" fieldKey="sub_headline" value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang} fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)} align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)} onResetPosition={() => onResetZone?.('sub_headline')} />
         <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)} align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)} onResetPosition={() => onResetZone?.('tc')} />
+
+        {imageZones.length > 0 && (
+          <>
+            <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Images</div>
+            {imageZones.map(zone => (
+              <ImageUpload
+                key={zone.id}
+                label={zone.label ?? zone.id}
+                hint={zone.hint ?? 'JPG or PNG'}
+                value={fields[`${zone.id}Url`]}
+                onChange={(url) => onChange(`${zone.id}Url`, url)}
+                square={zone.id === 'logo'}
+              />
+            ))}
+          </>
+        )}
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>

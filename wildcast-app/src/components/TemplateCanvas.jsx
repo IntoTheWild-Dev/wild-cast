@@ -198,55 +198,50 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     canvas.renderAll()
   }, [alignments, config])
 
-  // ── Sync photo upload → canvas ──────────────────────────────────────────────
+  // ── Sync image uploads → canvas (handles any image zone: photo, logo, etc.) ──
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !config) return
-    const photoZone = config.zones.find(z => z.id === 'photo')
-    if (!photoZone) return
 
-    // Remove existing photo
-    const existing = zoneObjsRef.current['photo-image']
-    if (existing) {
-      canvas.remove(existing)
-      delete zoneObjsRef.current['photo-image']
-    }
+    config.zones.filter(z => z.type === 'image').forEach(zone => {
+      const urlField = `${zone.id}Url`
+      const url = fields[urlField]
 
-    if (!fields.photoUrl) {
-      // Restore placeholder
-      const ph = zoneObjsRef.current['photo-placeholder']
-      if (ph) { ph.set('visible', true); canvas.renderAll() }
-      return
-    }
+      const existing = zoneObjsRef.current[`${zone.id}-image`]
+      if (existing) {
+        canvas.remove(existing)
+        delete zoneObjsRef.current[`${zone.id}-image`]
+      }
 
-    // Hide placeholder, load and draw photo
-    const ph = zoneObjsRef.current['photo-placeholder']
-    if (ph) ph.set('visible', false)
+      const ph = zoneObjsRef.current[`${zone.id}-placeholder`]
 
-    fabric.Image.fromURL(fields.photoUrl, img => {
-      if (!fabricRef.current) return
-      const scaleX = photoZone.width  / img.width
-      const scaleY = photoZone.height / img.height
-      const scale  = Math.min(scaleX, scaleY)
+      if (!url) {
+        if (ph) { ph.set('visible', true); canvas.renderAll() }
+        return
+      }
 
-      img.set({
-        left: photoZone.x + (photoZone.width  - img.width  * scale) / 2,
-        top:  photoZone.y + (photoZone.height - img.height * scale) / 2,
-        scaleX: scale,
-        scaleY: scale,
-        selectable: false,
-        evented:    false,
-      })
+      if (ph) ph.set('visible', false)
 
-      canvas.add(img)
-      // Keep text zones on top
-      Object.values(zoneObjsRef.current).forEach(o => {
-        if (o.type === 'textbox') canvas.bringToFront(o)
-      })
-      zoneObjsRef.current['photo-image'] = img
-      canvas.renderAll()
-    }, { crossOrigin: 'anonymous' })
-  }, [fields.photoUrl, config]) // eslint-disable-line react-hooks/exhaustive-deps
+      fabric.Image.fromURL(url, img => {
+        if (!fabricRef.current) return
+        const scale = Math.min(zone.width / img.width, zone.height / img.height)
+        img.set({
+          left: zone.x + (zone.width  - img.width  * scale) / 2,
+          top:  zone.y + (zone.height - img.height * scale) / 2,
+          scaleX: scale,
+          scaleY: scale,
+          selectable: false,
+          evented:    false,
+        })
+        canvas.add(img)
+        Object.values(zoneObjsRef.current).forEach(o => {
+          if (o.type === 'textbox') canvas.bringToFront(o)
+        })
+        zoneObjsRef.current[`${zone.id}-image`] = img
+        canvas.renderAll()
+      }, { crossOrigin: 'anonymous' })
+    })
+  }, [fields, config]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!config) {
     return (

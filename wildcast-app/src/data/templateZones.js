@@ -10,6 +10,8 @@
 // Food + logo layers are baked into the background PNG for now.
 
 const BG_FLYER1 = '/templates/Flyer 1-updated with CMYK images.png'
+// BG_FLYER2: clean version without baked-in food photos — swap in when exported from Figma
+const BG_FLYER2 = '/templates/Flyer 1-updated with CMYK images.png'
 
 // Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
 // Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
@@ -66,6 +68,26 @@ const WEN_CHENG_ZONES = [
   },
 ]
 
+const WEN_CHENG_FLYER2_ZONES = [
+  ...WEN_CHENG_ZONES,
+  {
+    id: 'logo',
+    type: 'image',
+    label: 'Restaurant logo',
+    hint: 'PNG with transparency preferred',
+    x: 95, y: 15,
+    width: 126, height: 55,
+  },
+  {
+    id: 'photo',
+    type: 'image',
+    label: 'Food photo',
+    hint: 'JPG or PNG, min 800×600px',
+    x: 48, y: 155,
+    width: 220, height: 160,
+  },
+]
+
 export const TEMPLATE_ZONES = {
   'wen-cheng-flyer1': {
     canvasW: 316,
@@ -77,8 +99,8 @@ export const TEMPLATE_ZONES = {
   'wen-cheng-flyer2': {
     canvasW: 316,
     canvasH: 441,
-    backgroundUrl: BG_FLYER1,
+    backgroundUrl: BG_FLYER2,
     backgroundFill: '#00C2CB',
-    zones: WEN_CHENG_ZONES,
+    zones: WEN_CHENG_FLYER2_ZONES,
   },
 }

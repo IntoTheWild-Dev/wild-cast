@@ -7,6 +7,7 @@ const TEMPLATES = [
     name: 'Flyer 1',
     desc: 'Wen Cheng × Wolt Potsdam — discount campaign flyer. Headline, city tagline and offer are editable.',
     tags: ['A6', 'CMYK', '3mm bleed'],
+    type: 'text-only',
     cat: 'restaurant',
     pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_1.pdf',
     hasQr: false,
@@ -15,11 +16,12 @@ const TEMPLATES = [
   {
     id: 'wen-cheng-flyer2',
     name: 'Flyer 2',
-    desc: 'Wen Cheng × Wolt Potsdam — discount campaign flyer with QR code.',
-    tags: ['A6', 'CMYK', '3mm bleed', 'QR'],
+    desc: 'Wen Cheng × Wolt Potsdam — upload your own food photo and logo alongside all text fields.',
+    tags: ['A6', 'CMYK', '3mm bleed'],
+    type: 'text-image',
     cat: 'restaurant',
     pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_2.pdf',
-    hasQr: true,
+    hasQr: false,
     live: true,
   },
 ]
@@ -116,8 +118,10 @@ export default function TemplatePicker({ onSelect }) {
               {!t.live && (
                 <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(2,6,24,0.75)', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 100 }}>Coming soon</div>
               )}
-              {t.hasQr && (
-                <div style={{ position: 'absolute', bottom: 10, left: 10, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 100 }}>QR</div>
+              {t.type && (
+                <div style={{ position: 'absolute', bottom: 10, left: 10, background: t.type === 'text-image' ? 'var(--dark)' : 'rgba(2,6,24,0.55)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 100 }}>
+                  {t.type === 'text-image' ? 'Text + Image' : 'Text only'}
+                </div>
               )}
             </div>
 
