@@ -357,6 +357,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading canvas…</span>
         </div>
       )}
+
+      {mode === 'non-designer' && !loading && (
+        <div style={{
+          position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--primary)', color: '#fff',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+          padding: '5px 14px', borderRadius: 20,
+          display: 'flex', alignItems: 'center', gap: 6,
+          whiteSpace: 'nowrap', zIndex: 5, pointerEvents: 'none',
+        }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Guided mode · canvas locked
+        </div>
+      )}
       {/* Space-holder: takes up the zoomed canvas size so the container scrolls correctly */}
       <div style={{
         position: 'relative',
