@@ -3,6 +3,13 @@ import AISuggest from './AISuggest'
 
 const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120 }
 
+const FIELD_HINTS = {
+  headline:    "Your main line, e.g. 'DREAMTEAM'",
+  sub_headline:"City or location line, e.g. 'POTSDAMS NEUES'",
+  offer:       "Your promotion, e.g. '30% SPAREN'",
+  tc:          'Small-print terms, rotated vertically on the flyer',
+}
+
 function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
 }
@@ -55,62 +62,11 @@ function SizeControl({ size, onSize }) {
   )
 }
 
-// ── Designer mode field row ─────────────────────────────────────────────────
-function FieldRow({ label, fieldKey, value, onChange, lang, required, optional, multiline, fontSize, onFontSize, align, onAlign, onResetPosition }) {
+// ── Unified numbered field row (both modes) ─────────────────────────────────
+// showControls=true adds font-size, alignment and reset position (designer mode only)
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, fontSize, onFontSize, align, onAlign, onResetPosition }) {
   const limit = CHAR_LIMITS[fieldKey]
-  const over = limit && value.length > limit
-
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{label}</span>
-        {required && <RequiredBadge />}
-        {optional && <OptionalBadge />}
-        {limit && (
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
-            {value.length}/{limit}
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        {align != null && <AlignControl align={align} onAlign={onAlign} />}
-        {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
-        <button
-          onClick={onResetPosition}
-          title="Reset position to default"
-          style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
-        >↺</button>
-        <div style={{ flex: 1 }} />
-        <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
-      </div>
-      {multiline ? (
-        <textarea
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          maxLength={limit}
-          rows={3}
-          placeholder={`Enter ${label.toLowerCase()}…`}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5 }}
-        />
-      ) : (
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          maxLength={limit}
-          placeholder={`Enter ${label.toLowerCase()}…`}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit' }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Non-designer mode: numbered step field row ──────────────────────────────
-function StepFieldRow({ step, label, hint, fieldKey, value, onChange, lang, required, optional, multiline }) {
-  const limit = CHAR_LIMITS[fieldKey]
+  const hint = FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
 
   return (
@@ -134,6 +90,22 @@ function StepFieldRow({ step, label, hint, fieldKey, value, onChange, lang, requ
           {hint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{hint}</div>}
         </div>
       </div>
+
+      {/* Designer controls row */}
+      {showControls && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 34 }}>
+          {align != null && <AlignControl align={align} onAlign={onAlign} />}
+          {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
+          <button
+            onClick={onResetPosition}
+            title="Reset position to default"
+            style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
+          >↺</button>
+        </div>
+      )}
+
       {/* Input */}
       {multiline ? (
         <textarea
@@ -161,64 +133,8 @@ function StepFieldRow({ step, label, hint, fieldKey, value, onChange, lang, requ
   )
 }
 
-// ── Image upload (shared by both modes) ─────────────────────────────────────
-function ImageUpload({ label, hint, required, optional, value, onChange, square, onResetPosition }) {
-  const handleClick = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.onchange = e => {
-      const file = e.target.files[0]
-      if (file) onChange(URL.createObjectURL(file), file.name)
-    }
-    input.click()
-  }
-
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{label}</span>
-        {required && <RequiredBadge />}
-        {optional && <OptionalBadge />}
-        {value && onResetPosition && (
-          <button
-            onClick={e => { e.stopPropagation(); onResetPosition() }}
-            title="Reset image position"
-            style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
-          >↺</button>
-        )}
-      </div>
-      <div
-        onClick={handleClick}
-        style={{ border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '16px', cursor: 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}
-      >
-        {value ? (
-          <>
-            <img src={value} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: square ? 4 : 6 }} />
-            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>Uploaded ✓ — click to replace</span>
-          </>
-        ) : (
-          <>
-            <div style={{ width: 40, height: 40, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Drop file or click to upload</div>
-              <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{hint}</div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Non-designer image upload with step number ───────────────────────────────
-function StepImageUpload({ step, label, hint, value, onChange, square }) {
+// ── Image upload ─────────────────────────────────────────────────────────────
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition }) {
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -232,12 +148,26 @@ function StepImageUpload({ step, label, hint, value, onChange, square }) {
 
   return (
     <div style={{ marginBottom: 24 }}>
+      {/* Step header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
         <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--dark)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
           {step}
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{label}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{label}</span>
+            {required && <RequiredBadge />}
+            {optional && <OptionalBadge />}
+            {value && onResetPosition && (
+              <button
+                onClick={e => { e.stopPropagation(); onResetPosition() }}
+                title="Reset image position"
+                style={{ marginLeft: 4, fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
+              >↺</button>
+            )}
+          </div>
           {hint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{hint}</div>}
         </div>
       </div>
@@ -273,6 +203,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
+  const showControls = !isNonDesigner
 
   function effectiveFontSize(zoneId, fallback) {
     if (fontSizes?.[zoneId] != null) return fontSizes[zoneId]
@@ -329,74 +260,62 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       {/* Scrollable fields */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
-        {isNonDesigner ? (
-          // ── Non-designer: numbered steps ──────────────────────────────────
+        {/* Intro banner for non-designer */}
+        {isNonDesigner && (
+          <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
+            Fill in each step below — your text will appear on the preview automatically.
+          </div>
+        )}
+
+        {/* Text fields — same numbered layout for both modes */}
+        <StepFieldRow
+          step={1} label="Headline" fieldKey="headline"
+          value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
+          showControls={showControls}
+          fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
+          align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
+          onResetPosition={() => onResetZone?.('headline')}
+        />
+        <StepFieldRow
+          step={2} label="Sub-headline" fieldKey="sub_headline"
+          value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
+          showControls={showControls}
+          fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
+          align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
+          onResetPosition={() => onResetZone?.('sub_headline')}
+        />
+        <StepFieldRow
+          step={3} label="Offer" fieldKey="offer"
+          value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
+          showControls={showControls}
+          fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
+          align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
+          onResetPosition={() => onResetZone?.('offer')}
+        />
+        <StepFieldRow
+          step={4} label="T&amp;Cs" fieldKey="tc"
+          value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
+          showControls={showControls}
+          fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
+          align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
+          onResetPosition={() => onResetZone?.('tc')}
+        />
+
+        {imageZones.length > 0 && (
           <>
-            <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
-              Fill in each step below — your text will appear on the preview automatically.
-            </div>
-
-            <StepFieldRow
-              step={1} label="Headline" hint="Your main line, e.g. 'DREAMTEAM'" fieldKey="headline"
-              value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-            />
-            <StepFieldRow
-              step={2} label="Sub-headline" hint="City or location line, e.g. 'POTSDAMS NEUES'" fieldKey="sub_headline"
-              value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
-            />
-            <StepFieldRow
-              step={3} label="Offer" hint="Your promotion, e.g. '30% SPAREN'" fieldKey="offer"
-              value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-            />
-            <StepFieldRow
-              step={4} label="T&amp;Cs" hint="Small-print terms, rotated vertically on the flyer" fieldKey="tc"
-              value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
-            />
-
-            {imageZones.length > 0 && (
-              <>
-                <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 24px' }} />
-                {imageZones.map((zone, i) => (
-                  <StepImageUpload
-                    key={zone.id}
-                    step={5 + i}
-                    label={zone.label ?? zone.id}
-                    hint={zone.hint ?? 'JPG or PNG'}
-                    value={fields[`${zone.id}Url`]}
-                    onChange={url => onChange(`${zone.id}Url`, url)}
-                    square={zone.id === 'logo'}
-                  />
-                ))}
-              </>
-            )}
-          </>
-        ) : (
-          // ── Designer: free-form controls ──────────────────────────────────
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Text fields</div>
-
-            <FieldRow label="Headline" fieldKey="headline" value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)} align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)} onResetPosition={() => onResetZone?.('headline')} />
-            <FieldRow label="Offer" fieldKey="offer" value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)} align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)} onResetPosition={() => onResetZone?.('offer')} />
-            <FieldRow label="Sub-headline" fieldKey="sub_headline" value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang} fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)} align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)} onResetPosition={() => onResetZone?.('sub_headline')} />
-            <FieldRow label="T&amp;C" fieldKey="tc" value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)} align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)} onResetPosition={() => onResetZone?.('tc')} />
-
-            {imageZones.length > 0 && (
-              <>
-                <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Images</div>
-                {imageZones.map(zone => (
-                  <ImageUpload
-                    key={zone.id}
-                    label={zone.label ?? zone.id}
-                    hint={zone.hint ?? 'JPG or PNG'}
-                    value={fields[`${zone.id}Url`]}
-                    onChange={url => onChange(`${zone.id}Url`, url)}
-                    square={zone.id === 'logo'}
-                    onResetPosition={() => onResetZone?.(zone.id)}
-                  />
-                ))}
-              </>
-            )}
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 24px' }} />
+            {imageZones.map((zone, i) => (
+              <ImageUpload
+                key={zone.id}
+                step={5 + i}
+                label={zone.label ?? zone.id}
+                hint={zone.hint ?? 'JPG or PNG'}
+                value={fields[`${zone.id}Url`]}
+                onChange={url => onChange(`${zone.id}Url`, url)}
+                square={zone.id === 'logo'}
+                onResetPosition={showControls ? () => onResetZone?.(zone.id) : null}
+              />
+            ))}
           </>
         )}
 
@@ -413,11 +332,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           </select>
         </div>
 
-        {!isNonDesigner && (
-          <div style={{ background: '#FAFAF8', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: 'var(--mid)', lineHeight: 1.5 }}>
-            <strong style={{ color: 'var(--dark)' }}>* If necessary</strong> — fields marked this way are optional. Leave blank if not applicable to this campaign.
-          </div>
-        )}
       </div>
 
       {/* Export footer */}
