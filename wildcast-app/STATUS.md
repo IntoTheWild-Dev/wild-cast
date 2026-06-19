@@ -16,13 +16,14 @@
 
 ### Canvas Editor
 - Fabric.js canvas with background PNG loaded from Vercel Blob
-- Figma-style CSS-level zoom (scroll wheel, Reset button, scrollable workspace)
+- Zoom via +/− magnifying glass buttons (no scroll wheel)
 - Editable text zones: Headline, Sub-headline, Offer, T&Cs (rotated −90°)
 - Per-field font size (− / + pt) and alignment (L / C / R) controls
 - Drag to reposition text zones, drag right edge to reflow text width
 - Per-field reset position (↺) + Reset layout button
 - Pink (#FF3182) handles, Figma-style centre guide (drag only, hidden on export)
 - Image upload: logo + food photo zones (Flyer 2), URL guard prevents interference
+- **Guided mode:** teal "🔒 Guided mode · canvas locked" badge visible above canvas
 
 ### Field Editor (right panel)
 - Numbered step layout for BOTH modes (same clean UI)
@@ -74,4 +75,4 @@ Move to public Vercel Blob store (current private URL may expire)
 
 ---
 
-*Last updated: 2026-06-19*
+*Last updated: 2026-06-19 — Guided mode lock badge added, all catalogue routing confirmed working*
