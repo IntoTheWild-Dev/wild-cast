@@ -53,7 +53,8 @@ const TEMPLATES = [
 ]
 
 // ── Catalogue data (browse-first view) ───────────────────────────────────────
-// Each option can map to a specific templateId (non-designer by default)
+// templateId = guided text+image, templateIdTextOnly = guided text only
+// designerTemplateId = designer text+image, designerTemplateIdTextOnly = designer text only
 const CATALOGUE = [
   {
     category: 'Restaurant',
@@ -64,9 +65,10 @@ const CATALOGUE = [
           {
             label: 'Option A',
             thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
-            altThumb: '/catalogue/flyer1-preview.png',
-            templateId: 'wen-cheng-flyer2-simple',
-            designerTemplateId: 'wen-cheng-flyer2',
+            templateId:                 'wen-cheng-flyer2-simple',
+            templateIdTextOnly:         'wen-cheng-flyer1-simple',
+            designerTemplateId:         'wen-cheng-flyer2',
+            designerTemplateIdTextOnly: 'wen-cheng-flyer1',
             live: true,
           },
           { label: 'Option B', live: false },
@@ -134,8 +136,108 @@ function FilterChip({ label, active, onClick, comingSoon }) {
   )
 }
 
+// ── Layout picker modal ───────────────────────────────────────────────────────
+function LayoutModal({ opt, mode, onPick, onClose }) {
+  const isGuided = mode === 'guided'
+  const options = [
+    {
+      key: 'text-only',
+      label: 'Text only',
+      desc: 'Headline, sub-headline, offer and T&Cs — no image upload needed.',
+      templateId: isGuided ? opt.templateIdTextOnly : opt.designerTemplateIdTextOnly,
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="15" x2="18" y2="15"/><line x1="4" y1="19" x2="12" y2="19"/>
+        </svg>
+      ),
+    },
+    {
+      key: 'text-image',
+      label: 'Text + Image',
+      desc: 'Headline, sub-headline, offer, plus a food photo and your logo.',
+      templateId: isGuided ? opt.templateId : opt.designerTemplateId,
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+          <line x1="4" y1="21" x2="20" y2="21"/>
+        </svg>
+      ),
+    },
+  ]
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#fff', borderRadius: 18, padding: '36px 32px 32px',
+          width: '100%', maxWidth: 480,
+          boxShadow: '0 24px 80px rgba(0,0,0,0.2)',
+        }}
+      >
+        <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          {isGuided ? 'Guided' : 'Designer'} mode
+        </div>
+        <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--dark)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+          Choose your layout
+        </h3>
+        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 28px' }}>
+          Both use the same design — the difference is whether you include a food photo and logo.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {options.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => onPick(opt.templateId)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 18,
+                padding: '18px 20px', borderRadius: 12, textAlign: 'left',
+                border: '1.5px solid var(--border)', background: 'var(--surface)',
+                cursor: 'pointer', transition: 'all 0.15s', width: '100%',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surface)' }}
+            >
+              <div style={{ color: 'var(--primary)', flexShrink: 0 }}>{opt.icon}</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{opt.label}</div>
+                <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.45 }}>{opt.desc}</div>
+              </div>
+              <svg style={{ marginLeft: 'auto', flexShrink: 0, color: 'var(--light)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{ marginTop: 20, width: '100%', padding: '10px 0', fontSize: 13, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Catalogue view ────────────────────────────────────────────────────────────
 function CatalogueView({ onSelect, onClose }) {
+  const [modal, setModal] = useState(null) // { opt, mode: 'guided'|'designer' }
+
+  function handlePick(templateId) {
+    const template = TEMPLATES.find(t => t.id === templateId)
+    if (template) onSelect(template)
+    setModal(null)
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
       {/* Header */}
@@ -153,6 +255,15 @@ function CatalogueView({ onSelect, onClose }) {
           <p style={{ fontSize: 13, color: 'var(--mid)', margin: '4px 0 0' }}>Browse all available template designs and select the one you want to edit.</p>
         </div>
       </div>
+
+      {modal && (
+        <LayoutModal
+          opt={modal.opt}
+          mode={modal.mode}
+          onPick={handlePick}
+          onClose={() => setModal(null)}
+        />
+      )}
 
       {/* Categories */}
       {CATALOGUE.map(cat => (
@@ -206,7 +317,7 @@ function CatalogueView({ onSelect, onClose }) {
                         {/* Mode buttons */}
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
-                            onClick={() => onSelect(TEMPLATES.find(t => t.id === opt.templateId))}
+                            onClick={() => setModal({ opt, mode: 'guided' })}
                             style={{ flex: 1, padding: '9px 0', fontSize: 12, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }}
                             onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
                             onMouseLeave={e => e.currentTarget.style.background = 'var(--primary)'}
@@ -214,7 +325,7 @@ function CatalogueView({ onSelect, onClose }) {
                             Guided ↗
                           </button>
                           <button
-                            onClick={() => onSelect(TEMPLATES.find(t => t.id === opt.designerTemplateId))}
+                            onClick={() => setModal({ opt, mode: 'designer' })}
                             style={{ flex: 1, padding: '9px 0', fontSize: 12, fontWeight: 700, background: 'transparent', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s' }}
                             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--dark)'; e.currentTarget.style.background = '#F3F4F6' }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent' }}
