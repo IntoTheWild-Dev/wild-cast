@@ -16,21 +16,33 @@ const DEFAULT_FIELDS = {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState('picker')
+  const [screen, setScreen]                 = useState('picker')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
-  const [fields, setFields] = useState(DEFAULT_FIELDS)
-  const [lang, setLang] = useState('de')
-  const [exporting, setExporting] = useState(false)
-  const [fontSizes, setFontSizes] = useState({})
-  const [alignments, setAlignments] = useState({})
+  const [fields, setFields]                 = useState(DEFAULT_FIELDS)
+  const [lang, setLang]                     = useState('de')
+  const [exporting, setExporting]           = useState(false)
+  const [fontSizes, setFontSizes]           = useState({})
+  const [alignments, setAlignments]         = useState({})
+  const [showCatalogue, setShowCatalogue]   = useState(false)
+  const [fromCatalogue, setFromCatalogue]   = useState(false)
   const exportRef = useRef(null)
 
-  function handleSelectTemplate(template) {
+  function handleSelectTemplate(template, source) {
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
     setAlignments({})
+    setFromCatalogue(source === 'catalogue')
     setScreen('editor')
+  }
+
+  function handleBack() {
+    if (fromCatalogue) {
+      setShowCatalogue(true)
+    } else {
+      setShowCatalogue(false)
+    }
+    setScreen('picker')
   }
 
   function handleFontSizeChange(key, size) {
@@ -73,20 +85,31 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header onLogoClick={() => setScreen('picker')} />
+      <Header onLogoClick={() => { setScreen('picker'); setShowCatalogue(false) }} />
 
       {screen === 'picker' && (
-        <TemplatePicker onSelect={handleSelectTemplate} />
+        <TemplatePicker
+          onSelect={(t) => handleSelectTemplate(t, 'picker')}
+          onSelectFromCatalogue={(t) => handleSelectTemplate(t, 'catalogue')}
+          showCatalogue={showCatalogue}
+          onShowCatalogueChange={setShowCatalogue}
+        />
       )}
 
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
-          {/* Left panel: canvas */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Breadcrumb */}
             <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <span onClick={() => setScreen('picker')} style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer' }}>Templates</span>
+              <span
+                onClick={handleBack}
+                style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+              >
+                ← {fromCatalogue ? 'Catalogue' : 'Templates'}
+              </span>
               <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>
               <div style={{ flex: 1 }} />

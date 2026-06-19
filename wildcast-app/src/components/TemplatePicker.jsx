@@ -236,10 +236,9 @@ function CatalogueView({ onSelect, onClose }) {
 }
 
 // ── Main picker ───────────────────────────────────────────────────────────────
-export default function TemplatePicker({ onSelect }) {
+export default function TemplatePicker({ onSelect, onSelectFromCatalogue, showCatalogue, onShowCatalogueChange }) {
   const [activeCats,    setActiveCats]    = useState(['restaurant', 'retail'])
   const [activeFormats, setActiveFormats] = useState(['Flyer', 'Poster', 'Wild Poster'])
-  const [showCatalogue, setShowCatalogue] = useState(false)
 
   function toggleCat(cat) {
     setActiveCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
@@ -252,8 +251,8 @@ export default function TemplatePicker({ onSelect }) {
     return (
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <CatalogueView
-          onSelect={t => { setShowCatalogue(false); onSelect(t) }}
-          onClose={() => setShowCatalogue(false)}
+          onSelect={t => { onShowCatalogueChange(false); (onSelectFromCatalogue ?? onSelect)(t) }}
+          onClose={() => onShowCatalogueChange(false)}
         />
       </div>
     )
@@ -291,7 +290,7 @@ export default function TemplatePicker({ onSelect }) {
         {/* View Catalogue button */}
         <div style={{ marginBottom: 20 }}>
           <button
-            onClick={() => setShowCatalogue(true)}
+            onClick={() => onShowCatalogueChange(true)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '10px 20px', fontSize: 13, fontWeight: 700,

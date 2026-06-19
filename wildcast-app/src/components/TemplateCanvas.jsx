@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 
 async function loadFonts() {
@@ -15,7 +15,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const syncing = useRef(false)
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
-  const zoomRef = useRef(100)
 
   // ── Initialise canvas when template config changes ──────────────────────────
   useEffect(() => {
@@ -205,7 +204,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       zoneObjsRef.current = {}
       setLoading(true)
       setZoom(100)
-      zoomRef.current = 100
     }
   }, [config]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -251,23 +249,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     canvas.renderAll()
   }, [alignments, config])
 
-  // ── CSS-level zoom via scroll wheel ────────────────────────────────────────
-  // Fabric.js viewport stays at 1:1; we scale the wrapper div with CSS transform.
-  // getBoundingClientRect() accounts for CSS transforms, so Fabric pointer math stays correct.
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    const handleWheel = (e) => {
-      if (!fabricRef.current) return
-      e.preventDefault()
-      let z = zoomRef.current * (0.999 ** e.deltaY)
-      z = Math.max(40, Math.min(400, z))
-      zoomRef.current = z
-      setZoom(Math.round(z))
-    }
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => container.removeEventListener('wheel', handleWheel)
-  }, [])
+  // ── Zoom controls (button-driven only — no scroll wheel) ───────────────────
+  const handleZoomIn  = useCallback(() => setZoom(z => Math.min(400, Math.round(z / 10) * 10 + 10)), [])
+  const handleZoomOut = useCallback(() => setZoom(z => Math.max(40,  Math.round(z / 10) * 10 - 10)), [])
+  const handleZoomReset = useCallback(() => setZoom(100), [])
 
   // After zoom re-renders, recalculate canvas offset so pointer events map correctly
   useEffect(() => {
@@ -391,21 +376,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             <canvas ref={canvasElRef} />
           </div>
         </div>
-        {/* Zoom badge sits below the space-holder */}
+        {/* Zoom controls */}
         <div style={{
-          position: 'absolute', bottom: -30, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'rgba(0,0,0,0.45)', borderRadius: 20, padding: '4px 12px',
-          fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap', userSelect: 'none',
+          position: 'absolute', bottom: -38, left: '50%', transform: 'translateX(-50%)',
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: 'rgba(0,0,0,0.55)', borderRadius: 20, padding: '5px 10px',
+          userSelect: 'none', whiteSpace: 'nowrap',
         }}>
-          {zoom}%
+          <button onClick={handleZoomOut} title="Zoom out" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', padding: '0 4px', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', minWidth: 32, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
+          <button onClick={handleZoomIn} title="Zoom in" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', padding: '0 4px', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
           {zoom !== 100 && (
-            <button
-              onClick={() => { setZoom(100); zoomRef.current = 100 }}
-              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: 11, padding: 0, marginLeft: 2 }}
-            >
-              · Reset
-            </button>
+            <button onClick={handleZoomReset} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 10, padding: '0 2px', marginLeft: 2 }}>· Reset</button>
           )}
         </div>
       </div>
