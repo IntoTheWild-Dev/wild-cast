@@ -11,7 +11,7 @@ const TEMPLATES = [
     mode: 'non-designer',
     cat: 'restaurant',
     format: 'Flyer',
-    thumb: '/catalogue/flyer1-preview.png',
+    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
     live: true,
   },
   {
@@ -35,7 +35,7 @@ const TEMPLATES = [
     mode: 'designer',
     cat: 'restaurant',
     format: 'Flyer',
-    thumb: '/catalogue/flyer1-preview.png',
+    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
     live: true,
   },
   {
