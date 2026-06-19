@@ -73,7 +73,7 @@ const WEN_CHENG_FLYER2_ZONES = [
     id: 'logo',
     type: 'image',
     label: 'Restaurant logo',
-    hint: 'PNG with transparency preferred',
+    hint: 'PNG with transparent background · min 500×500px',
     x: 95, y: 15,
     width: 126, height: 55,
   },
@@ -81,7 +81,7 @@ const WEN_CHENG_FLYER2_ZONES = [
     id: 'photo',
     type: 'image',
     label: 'Food photo',
-    hint: 'JPG or PNG, min 800×600px',
+    hint: 'JPG or PNG · min 800×600px',
     x: 48, y: 155,
     width: 220, height: 160,
   },
@@ -96,6 +96,14 @@ export const TEMPLATE_ZONES = {
     zones: WEN_CHENG_ZONES,
   },
   'wen-cheng-flyer2': {
+    canvasW: 316,
+    canvasH: 441,
+    backgroundUrl: BG_FLYER2,
+    backgroundFill: '#00C2CB',
+    zones: WEN_CHENG_FLYER2_ZONES,
+  },
+  // Same layout as flyer2 but used with mode='non-designer' — canvas objects locked, guided right panel
+  'wen-cheng-flyer2-simple': {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_FLYER2,

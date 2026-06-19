@@ -7,7 +7,7 @@ async function loadFonts() {
   await document.fonts.ready
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, mode }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -34,15 +34,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     fabricRef.current = canvas
     zoneObjsRef.current = {}
 
-    // Smart centre guide — show while dragging, hide otherwise (Figma-style)
-    canvas.on('object:moving', () => {
-      const g = zoneObjsRef.current['_centre-guide']
-      if (g) { g.set('visible', true); canvas.requestRenderAll() }
-    })
-    canvas.on('mouse:up', () => {
-      const g = zoneObjsRef.current['_centre-guide']
-      if (g) { g.set('visible', false); canvas.requestRenderAll() }
-    })
+    // Smart centre guide — show while dragging, hide otherwise (Figma-style). Not needed in non-designer mode.
+    if (mode !== 'non-designer') {
+      canvas.on('object:moving', () => {
+        const g = zoneObjsRef.current['_centre-guide']
+        if (g) { g.set('visible', true); canvas.requestRenderAll() }
+      })
+      canvas.on('mouse:up', () => {
+        const g = zoneObjsRef.current['_centre-guide']
+        if (g) { g.set('visible', false); canvas.requestRenderAll() }
+      })
+    }
 
     // Wire export + reset handles
     if (exportRef) {
@@ -92,6 +94,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (destroyed) return
 
       function addZones() {
+        const locked = mode === 'non-designer'
+
         // Guide goes in first so it renders below all text and image zones
         const guideX = canvasW / 2
         const guide = new fabric.Line([guideX, 0, guideX, canvasH], {
@@ -124,10 +128,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               fill:    zone.color || '#FFFFFF',
               textAlign: alignments?.[zone.id] ?? zone.align ?? 'left',
               angle:   zone.rotate || 0,
-              editable:       true,
-              selectable:     true,
-              hasControls:    true,
-              hasBorders:     true,
+              editable:       !locked,
+              selectable:     !locked,
+              hasControls:    !locked,
+              hasBorders:     !locked,
               borderColor:    '#FF3182',
               cornerColor:    '#FF3182',
               cornerStyle:    'circle',
@@ -136,7 +140,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               _wcZoneId: zone.id,
             })
             // Show only the right-edge handle — dragging it reflows text width (Fabric.js Textbox built-in)
-            tb.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mtr: false })
+            if (!locked) tb.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mtr: false })
 
             tb.on('changed', () => {
               if (syncing.current) return
@@ -301,15 +305,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       fabric.Image.fromURL(url, img => {
         if (!fabricRef.current) return
         const scale = Math.min(zone.width / img.width, zone.height / img.height)
+        const imgLocked = !fabricRef.current || mode === 'non-designer'
         img.set({
           left:    zone.x + (zone.width  - img.width  * scale) / 2,
           top:     zone.y + (zone.height - img.height * scale) / 2,
           scaleX:  scale,
           scaleY:  scale,
-          selectable:   true,
-          evented:      true,
-          hasControls:  true,
-          hasBorders:   true,
+          selectable:   !imgLocked,
+          evented:      !imgLocked,
+          hasControls:  !imgLocked,
+          hasBorders:   !imgLocked,
           borderColor:  '#FF3182',
           cornerColor:  '#FF3182',
           cornerStyle:  'circle',
@@ -318,7 +323,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           lockRotation:   true,
         })
         // Corner handles only — no edge or rotation handles
-        img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
+        if (!imgLocked) img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
         img._wcZoneId = zone.id
         img._wcScale = scale
         img._wcUrl = url
