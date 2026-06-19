@@ -108,6 +108,7 @@ export default function App() {
               exportRef={exportRef}
               fontSizes={fontSizes}
               alignments={alignments}
+              mode={selectedTemplate?.mode ?? 'designer'}
             />
           </div>
 
@@ -125,6 +126,7 @@ export default function App() {
             alignments={alignments}
             onAlignChange={handleAlignChange}
             onResetZone={handleResetZone}
+            mode={selectedTemplate?.mode ?? 'designer'}
           />
         </div>
       )}
