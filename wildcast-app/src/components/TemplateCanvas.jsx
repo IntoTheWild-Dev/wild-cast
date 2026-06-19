@@ -12,6 +12,9 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
   const zoneObjsRef = useRef({})
+  const zoneCfgRef = useRef({})   // zone.id → zone config, for use in sync effects
+  const modeRef    = useRef(mode) // always current, safe to read inside effects
+  modeRef.current  = mode
   const syncing = useRef(false)
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
@@ -94,6 +97,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
       function addZones() {
         const locked = mode === 'non-designer'
+        zoneCfgRef.current = {}
+
+        // Shrink a textbox's fontSize until its rendered height fits within the zone.
+        // Resets to the base size first so it can grow back if text is deleted.
+        function shrinkToFit(tb, zone) {
+          if (!zone.autoShrink || zone.rotate) return
+          const base = fontSizes?.[zone.id] ?? zone.fontSize
+          let size = base
+          tb.set('fontSize', size)
+          tb.initDimensions()
+          while (tb.height > zone.height + 2 && size > 6) {
+            size -= 0.5
+            tb.set('fontSize', size)
+            tb.initDimensions()
+          }
+        }
 
         // Guide goes in first so it renders below all text and image zones
         const guideX = canvasW / 2
@@ -109,6 +128,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         zoneObjsRef.current['_centre-guide'] = guide
 
         zones.forEach(zone => {
+          zoneCfgRef.current[zone.id] = zone
+
           if (zone.type === 'text') {
             const isRotated = !!zone.rotate
             const cx = zone.x + zone.width / 2
@@ -172,6 +193,23 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         })
 
+        // Shrink text zones with pre-filled content on initial load (guided mode only)
+        if (locked) {
+          zones.forEach(zone => {
+            if (zone.type !== 'text' || !zone.autoShrink || zone.rotate) return
+            const tb = zoneObjsRef.current[zone.id]
+            if (!tb || !tb.text) return
+            let size = zone.fontSize
+            tb.set('fontSize', size)
+            tb.initDimensions()
+            while (tb.height > zone.height + 2 && size > 6) {
+              size -= 0.5
+              tb.set('fontSize', size)
+              tb.initDimensions()
+            }
+          })
+        }
+
         canvas.renderAll()
         if (!destroyed) setLoading(false)
       }
@@ -207,20 +245,36 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     }
   }, [config]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Sync right-panel text → canvas ─────────────────────────────────────────
+  // ── Sync right-panel text → canvas (with auto-shrink) ─────────────────────
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas) return
+    let changed = false
     Object.entries(fields).forEach(([id, value]) => {
       const obj = zoneObjsRef.current[id]
-      if (obj && obj.type === 'textbox' && obj.text !== (value || '')) {
-        if (syncing.current) return
-        syncing.current = true
+      if (!obj || obj.type !== 'textbox') return
+      if (syncing.current) return
+      syncing.current = true
+      if (obj.text !== (value || '')) {
         obj.set('text', value || '')
-        canvas.renderAll()
-        syncing.current = false
+        changed = true
       }
+      // Auto-shrink in guided mode — keeps text within its zone as user types
+      const zone = zoneCfgRef.current[id]
+      if (zone?.autoShrink && !zone.rotate && modeRef.current === 'non-designer') {
+        let size = zone.fontSize
+        obj.set('fontSize', size)
+        obj.initDimensions()
+        while (obj.height > zone.height + 2 && size > 6) {
+          size -= 0.5
+          obj.set('fontSize', size)
+          obj.initDimensions()
+        }
+        changed = true
+      }
+      syncing.current = false
     })
+    if (changed) canvas.renderAll()
   }, [fields])
 
   // ── Sync font size overrides → canvas ──────────────────────────────────────
@@ -289,11 +343,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
       fabric.Image.fromURL(url, img => {
         if (!fabricRef.current) return
-        const scale = Math.min(zone.width / img.width, zone.height / img.height)
+        // Photos use cover (fill zone, crop center); logos use contain (full logo visible)
+        const isCover = zone.fit === 'cover'
+        const scale = isCover
+          ? Math.max(zone.width / img.width, zone.height / img.height)
+          : Math.min(zone.width / img.width, zone.height / img.height)
+        const scaledW = img.width  * scale
+        const scaledH = img.height * scale
         const imgLocked = !fabricRef.current || mode === 'non-designer'
         img.set({
-          left:    zone.x + (zone.width  - img.width  * scale) / 2,
-          top:     zone.y + (zone.height - img.height * scale) / 2,
+          left:    zone.x + (zone.width  - scaledW) / 2,
+          top:     zone.y + (zone.height - scaledH) / 2,
           scaleX:  scale,
           scaleY:  scale,
           selectable:   !imgLocked,
@@ -306,6 +366,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           cornerSize:   10,
           lockUniScaling: true,
           lockRotation:   true,
+          // Clip to zone boundaries so images never bleed outside their zone
+          clipPath: new fabric.Rect({
+            left: zone.x,
+            top:  zone.y,
+            width:  zone.width,
+            height: zone.height,
+            absolutePositioned: true,
+          }),
         })
         // Corner handles only — no edge or rotation handles
         if (!imgLocked) img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
