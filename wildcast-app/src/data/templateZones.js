@@ -110,4 +110,12 @@ export const TEMPLATE_ZONES = {
     backgroundFill: '#00C2CB',
     zones: WEN_CHENG_FLYER2_ZONES,
   },
+  // Same layout as flyer1 but used with mode='non-designer'
+  'wen-cheng-flyer1-simple': {
+    canvasW: 316,
+    canvasH: 441,
+    backgroundUrl: BG_FLYER1,
+    backgroundFill: '#00C2CB',
+    zones: WEN_CHENG_ZONES,
+  },
 }

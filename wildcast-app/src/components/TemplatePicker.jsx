@@ -2,30 +2,17 @@ import { useState } from 'react'
 import PdfThumbnail from './PdfThumbnail'
 
 const TEMPLATES = [
+  // ── Non-Designer tiles first ─────────────────────────────────────────────
   {
-    id: 'wen-cheng-flyer1',
+    id: 'wen-cheng-flyer1-simple',
     name: 'Flyer 1',
-    desc: 'Wen Cheng × Wolt Potsdam — full control over headline, city tagline and offer. Move, resize and restyle any element.',
+    desc: 'Step-by-step guided editing — fill in your headline, sub-headline and offer. Layout is locked so your flyer always looks on-brand.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-only',
-    mode: 'designer',
+    mode: 'non-designer',
     cat: 'restaurant',
     format: 'Flyer',
     pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_1.pdf',
-    hasQr: false,
-    live: true,
-  },
-  {
-    id: 'wen-cheng-flyer2',
-    name: 'Flyer 2',
-    desc: 'Wen Cheng × Wolt Potsdam — full control over food photo, logo and all text fields. Drag, resize and restyle anything.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-image',
-    mode: 'designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_2.pdf',
-    hasQr: false,
     live: true,
   },
   {
@@ -38,7 +25,31 @@ const TEMPLATES = [
     cat: 'restaurant',
     format: 'Flyer',
     pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_2.pdf',
-    hasQr: false,
+    live: true,
+  },
+  // ── Designer tiles ────────────────────────────────────────────────────────
+  {
+    id: 'wen-cheng-flyer1',
+    name: 'Flyer 1',
+    desc: 'Wen Cheng × Wolt Potsdam — full control over headline, city tagline and offer. Move, resize and restyle any element.',
+    tags: ['A6', 'CMYK', '3mm bleed'],
+    type: 'text-only',
+    mode: 'designer',
+    cat: 'restaurant',
+    format: 'Flyer',
+    pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_1.pdf',
+    live: true,
+  },
+  {
+    id: 'wen-cheng-flyer2',
+    name: 'Flyer 2',
+    desc: 'Wen Cheng × Wolt Potsdam — full control over food photo, logo and all text fields. Drag, resize and restyle anything.',
+    tags: ['A6', 'CMYK', '3mm bleed'],
+    type: 'text-image',
+    mode: 'designer',
+    cat: 'restaurant',
+    format: 'Flyer',
+    pdfPath: '/Example templates/260527_WEN-CHENG-Potsdam_A6_3mm-bleed_FLYER_2.pdf',
     live: true,
   },
 ]
@@ -51,20 +62,48 @@ const STEPS = [
 ]
 
 const MODE_BADGE = {
-  designer: { label: 'Designer Mode', bg: 'rgba(2,6,24,0.72)', color: '#fff' },
-  'non-designer': { label: 'Non-Designer Mode', bg: 'var(--primary)', color: '#fff' },
+  designer:       { label: 'Designer Mode',     bg: 'rgba(2,6,24,0.72)', color: '#fff' },
+  'non-designer': { label: 'Non-Designer Mode', bg: 'var(--primary)',     color: '#fff' },
+}
+
+const ALL_FORMATS = ['Flyer', 'Poster', 'Wild Poster']
+
+function FilterChip({ label, active, onClick, comingSoon }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '5px 13px', borderRadius: 100, fontSize: 12, fontWeight: 500,
+        cursor: 'pointer', transition: 'all 0.15s',
+        border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+        background: active ? 'var(--primary-glow)' : 'transparent',
+        color: comingSoon ? 'var(--light)' : active ? 'var(--primary-dark)' : 'var(--mid)',
+        opacity: comingSoon ? 0.7 : 1,
+      }}
+    >
+      {active && !comingSoon && <span style={{ fontSize: 9 }}>✓</span>}
+      {label}
+      {comingSoon && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--light)' }}>· soon</span>}
+    </button>
+  )
 }
 
 export default function TemplatePicker({ onSelect }) {
-  const [activeCats, setActiveCats] = useState(['restaurant', 'retail'])
+  const [activeCats,    setActiveCats]    = useState(['restaurant', 'retail'])
+  const [activeFormats, setActiveFormats] = useState(['Flyer', 'Poster', 'Wild Poster'])
 
   function toggleCat(cat) {
-    setActiveCats(prev =>
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-    )
+    setActiveCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
+  }
+  function toggleFormat(fmt) {
+    setActiveFormats(prev => prev.includes(fmt) ? prev.filter(f => f !== fmt) : [...prev, fmt])
   }
 
-  const visible = TEMPLATES.filter(t => !t.cat || activeCats.includes(t.cat))
+  const visible = TEMPLATES.filter(t =>
+    (!t.cat    || activeCats.includes(t.cat)) &&
+    (!t.format || activeFormats.includes(t.format))
+  )
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '52px 32px 64px' }}>
@@ -89,30 +128,37 @@ export default function TemplatePicker({ onSelect }) {
         ))}
       </div>
 
-      {/* Category filter */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Category</span>
-        {['restaurant', 'retail'].map(cat => {
-          const active = activeCats.includes(cat)
-          return (
-            <button
+      {/* Filters */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
+        {/* Category */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Category</span>
+          {['restaurant', 'retail'].map(cat => (
+            <FilterChip
               key={cat}
+              label={cat.charAt(0).toUpperCase() + cat.slice(1)}
+              active={activeCats.includes(cat)}
               onClick={() => toggleCat(cat)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '6px 14px', borderRadius: 100, fontSize: 13, fontWeight: 500,
-                cursor: 'pointer', transition: 'all 0.15s',
-                border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
-                background: active ? 'var(--primary-glow)' : 'transparent',
-                color: active ? 'var(--primary-dark)' : 'var(--mid)',
-              }}
-            >
-              {active && <span style={{ fontSize: 10 }}>✓</span>}
-              {cat.charAt(0).toUpperCase() + cat.slice(1)}
-            </button>
-          )
-        })}
-        <span style={{ fontSize: 12, color: 'var(--light)', marginLeft: 4 }}>· Poster, Instagram Story &amp; more coming soon</span>
+            />
+          ))}
+        </div>
+
+        {/* Format */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Format</span>
+          {ALL_FORMATS.map(fmt => {
+            const comingSoon = fmt === 'Wild Poster' || fmt === 'Poster'
+            return (
+              <FilterChip
+                key={fmt}
+                label={fmt}
+                active={activeFormats.includes(fmt)}
+                onClick={() => toggleFormat(fmt)}
+                comingSoon={comingSoon}
+              />
+            )
+          })}
+        </div>
       </div>
 
       {/* Template grid */}
@@ -135,11 +181,11 @@ export default function TemplatePicker({ onSelect }) {
             >
               {/* Thumbnail */}
               <div style={{ height: 220, overflow: 'hidden', position: 'relative', background: '#f3f4f6' }}>
-                {t.pdfPath ? (
-                  <PdfThumbnail pdfPath={t.pdfPath} />
-                ) : t.thumb ? (
-                  <img src={t.thumb} alt={t.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : null}
+                {t.pdfPath
+                  ? <PdfThumbnail pdfPath={t.pdfPath} />
+                  : t.thumb
+                    ? <img src={t.thumb} alt={t.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : null}
                 {!t.live && (
                   <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(2,6,24,0.75)', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 100 }}>Coming soon</div>
                 )}
@@ -174,6 +220,12 @@ export default function TemplatePicker({ onSelect }) {
             </div>
           )
         })}
+
+        {visible.length === 0 && (
+          <div style={{ gridColumn: '1 / -1', padding: '48px 0', textAlign: 'center', color: 'var(--light)', fontSize: 14 }}>
+            No templates yet for this selection — more coming soon.
+          </div>
+        )}
       </div>
     </div>
   )
