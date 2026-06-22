@@ -75,8 +75,8 @@ const WEN_CHENG_FLYER2_ZONES = [
     fit: 'contain',
     label: 'Restaurant logo',
     hint: 'PNG with transparent background · min 500×500px',
-    x: 83, y: 8,
-    width: 150, height: 70,
+    x: 128, y: 5,
+    width: 60, height: 63,
   },
   {
     id: 'photo',
@@ -84,8 +84,8 @@ const WEN_CHENG_FLYER2_ZONES = [
     fit: 'cover',
     label: 'Food photo',
     hint: 'JPG or PNG · min 800×600px',
-    x: 38, y: 153,
-    width: 240, height: 165,
+    x: 15, y: 160,
+    width: 286, height: 150,
   },
 ]
 
