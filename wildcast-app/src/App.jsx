@@ -23,6 +23,7 @@ export default function App() {
   const [exporting, setExporting]           = useState(false)
   const [fontSizes, setFontSizes]           = useState({})
   const [alignments, setAlignments]         = useState({})
+  const [imageScales, setImageScales]       = useState({})
   const [showCatalogue, setShowCatalogue]   = useState(false)
   const [fromCatalogue, setFromCatalogue]   = useState(false)
   const exportRef = useRef(null)
@@ -32,6 +33,7 @@ export default function App() {
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
     setAlignments({})
+    setImageScales({})
     setFromCatalogue(source === 'catalogue')
     setScreen('editor')
   }
@@ -51,6 +53,10 @@ export default function App() {
 
   function handleAlignChange(key, align) {
     setAlignments(prev => ({ ...prev, [key]: align }))
+  }
+
+  function handleImageScaleChange(zoneId, pct) {
+    setImageScales(prev => ({ ...prev, [zoneId]: Math.max(20, Math.min(300, pct)) }))
   }
 
   function handleResetZone(zoneId) {
@@ -131,6 +137,7 @@ export default function App() {
               exportRef={exportRef}
               fontSizes={fontSizes}
               alignments={alignments}
+              imageScales={imageScales}
               mode={selectedTemplate?.mode ?? 'designer'}
             />
           </div>
@@ -149,6 +156,8 @@ export default function App() {
             alignments={alignments}
             onAlignChange={handleAlignChange}
             onResetZone={handleResetZone}
+            imageScales={imageScales}
+            onImageScaleChange={handleImageScaleChange}
             mode={selectedTemplate?.mode ?? 'designer'}
           />
         </div>

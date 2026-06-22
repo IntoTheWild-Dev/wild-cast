@@ -63,8 +63,9 @@ function SizeControl({ size, onSize }) {
 }
 
 // ── Unified numbered field row (both modes) ─────────────────────────────────
-// showControls=true adds font-size, alignment and reset position (designer mode only)
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, fontSize, onFontSize, align, onAlign, onResetPosition }) {
+// showControls=true adds font-size, alignment and reset position (designer mode)
+// showSize=true adds just the font-size control (guided mode)
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition }) {
   const limit = CHAR_LIMITS[fieldKey]
   const hint = FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
@@ -91,18 +92,20 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         </div>
       </div>
 
-      {/* Designer controls row */}
-      {showControls && (
+      {/* Controls row — full (designer) or size-only (guided) */}
+      {(showControls || showSize) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 34 }}>
-          {align != null && <AlignControl align={align} onAlign={onAlign} />}
+          {showControls && align != null && <AlignControl align={align} onAlign={onAlign} />}
           {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
-          <button
-            onClick={onResetPosition}
-            title="Reset position to default"
-            style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
-          >↺</button>
+          {showControls && (
+            <button
+              onClick={onResetPosition}
+              title="Reset position to default"
+              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
+            >↺</button>
+          )}
         </div>
       )}
 
@@ -134,7 +137,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 }
 
 // ── Image upload ─────────────────────────────────────────────────────────────
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange }) {
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -194,12 +197,34 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           </>
         )}
       </div>
+
+      {/* Image scale control — shown after upload when in guided mode */}
+      {value && onScaleChange && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
+          <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Scale</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
+            <button
+              onClick={e => { e.stopPropagation(); onScaleChange(Math.max(20, (scalePercent ?? 100) - 10)) }}
+              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >−</button>
+            <span style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'center', color: 'var(--mid)', fontWeight: 600 }}>{scalePercent ?? 100}%</span>
+            <button
+              onClick={e => { e.stopPropagation(); onScaleChange(Math.min(300, (scalePercent ?? 100) + 10)) }}
+              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >+</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, mode }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -271,7 +296,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <StepFieldRow
           step={1} label="Headline" fieldKey="headline"
           value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-          showControls={showControls}
+          showControls={showControls} showSize={isNonDesigner}
           fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
           align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
           onResetPosition={() => onResetZone?.('headline')}
@@ -279,7 +304,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <StepFieldRow
           step={2} label="Sub-headline" fieldKey="sub_headline"
           value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
-          showControls={showControls}
+          showControls={showControls} showSize={isNonDesigner}
           fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
           align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
           onResetPosition={() => onResetZone?.('sub_headline')}
@@ -287,7 +312,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <StepFieldRow
           step={3} label="Offer" fieldKey="offer"
           value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-          showControls={showControls}
+          showControls={showControls} showSize={isNonDesigner}
           fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
           align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
           onResetPosition={() => onResetZone?.('offer')}
@@ -314,6 +339,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 onChange={url => onChange(`${zone.id}Url`, url)}
                 square={zone.id === 'logo'}
                 onResetPosition={showControls ? () => onResetZone?.(zone.id) : null}
+                scalePercent={isNonDesigner ? (imageScales?.[zone.id] ?? 100) : undefined}
+                onScaleChange={isNonDesigner ? (pct) => onImageScaleChange?.(zone.id, pct) : null}
               />
             ))}
           </>

@@ -7,14 +7,16 @@ async function loadFonts() {
   await document.fonts.ready
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, mode }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
   const zoneObjsRef = useRef({})
-  const zoneCfgRef = useRef({})   // zone.id → zone config, for use in sync effects
-  const modeRef    = useRef(mode) // always current, safe to read inside effects
+  const zoneCfgRef = useRef({})      // zone.id → zone config, for use in sync effects
+  const modeRef    = useRef(mode)    // always current, safe to read inside effects
   modeRef.current  = mode
+  const fontSizesRef = useRef(fontSizes) // always current, used in auto-shrink
+  fontSizesRef.current = fontSizes
   const syncing = useRef(false)
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
@@ -54,7 +56,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         if (zone.type === 'image') {
           const img = zoneObjsRef.current[`${zone.id}-image`]
           if (!img) return
-          const s = img._wcScale
+          const s = img._wcBaseScale
           img.set({
             left: zone.x + (zone.width  - img.width  * s) / 2,
             top:  zone.y + (zone.height - img.height * s) / 2,
@@ -259,10 +261,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.set('text', value || '')
         changed = true
       }
-      // Auto-shrink in guided mode — keeps text within its zone as user types
+      // Auto-shrink in guided mode — starts from user's chosen size (or zone default), shrinks to fit
       const zone = zoneCfgRef.current[id]
       if (zone?.autoShrink && !zone.rotate && modeRef.current === 'non-designer') {
-        let size = zone.fontSize
+        let size = fontSizesRef.current?.[zone.id] ?? zone.fontSize
         obj.set('fontSize', size)
         obj.initDimensions()
         while (obj.height > zone.height + 2 && size > 6) {
@@ -302,6 +304,28 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     canvas.renderAll()
   }, [alignments, config])
+
+  // ── Sync image scale adjustments → canvas ─────────────────────────────────
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !config) return
+    config.zones.filter(z => z.type === 'image').forEach(zone => {
+      const img = zoneObjsRef.current[`${zone.id}-image`]
+      if (!img || img._wcBaseScale == null) return
+      const userPct = imageScales?.[zone.id] ?? 100
+      const finalScale = img._wcBaseScale * (userPct / 100)
+      const scaledW = img.width  * finalScale
+      const scaledH = img.height * finalScale
+      img.set({
+        scaleX: finalScale,
+        scaleY: finalScale,
+        left: zone.x + (zone.width  - scaledW) / 2,
+        top:  zone.y + (zone.height - scaledH) / 2,
+      })
+      img.setCoords()
+    })
+    canvas.renderAll()
+  }, [imageScales, config])
 
   // ── Zoom controls (button-driven only — no scroll wheel) ───────────────────
   const handleZoomIn  = useCallback(() => setZoom(z => Math.min(400, Math.round(z / 10) * 10 + 10)), [])
@@ -373,12 +397,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             width:  zone.width,
             height: zone.height,
             absolutePositioned: true,
+            originX: 'left',
+            originY: 'top',
           }),
         })
         // Corner handles only — no edge or rotation handles
         if (!imgLocked) img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
         img._wcZoneId = zone.id
-        img._wcScale = scale
+        img._wcBaseScale = scale
         img._wcUrl = url
         canvas.add(img)
         Object.values(zoneObjsRef.current).forEach(o => {
