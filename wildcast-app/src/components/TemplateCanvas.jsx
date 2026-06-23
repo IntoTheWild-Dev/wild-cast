@@ -7,7 +7,7 @@ async function loadFonts() {
   await document.fonts.ready
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode, loadKey }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode, loadKey, zonePositions }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -17,6 +17,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   modeRef.current  = mode
   const fontSizesRef = useRef(fontSizes) // always current, used in auto-shrink
   fontSizesRef.current = fontSizes
+  const zonePositionsRef = useRef(zonePositions ?? {}) // saved drag positions, applied on canvas init
+  zonePositionsRef.current = zonePositions ?? {}
   const syncing = useRef(false)
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
@@ -78,6 +80,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.setCoords()
       }
       exportRef.current = {
+        getZonePositions: () => {
+          const positions = {}
+          zones.forEach(zone => {
+            if (zone.type !== 'text') return
+            const obj = zoneObjsRef.current[zone.id]
+            if (!obj) return
+            positions[zone.id] = { left: obj.left, top: obj.top, width: obj.width }
+          })
+          return positions
+        },
         getPng: () => {
           // Hide all guide rects + centre guide — save state to restore after export
           const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide)
@@ -248,6 +260,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         if (!destroyed) setLoading(false)
       }
 
+      // Restore saved drag positions for text zones (designer mode re-open)
+      function applyZonePositions() {
+        const saved = zonePositionsRef.current
+        if (!saved || !Object.keys(saved).length) return
+        zones.forEach(zone => {
+          if (zone.type !== 'text') return
+          const p = saved[zone.id]
+          if (!p) return
+          const obj = zoneObjsRef.current[zone.id]
+          if (!obj) return
+          obj.set({ left: p.left, top: p.top, width: p.width })
+          obj.setCoords()
+        })
+        canvas.renderAll()
+      }
+
       // Load background PNG, then add zones on top
       if (backgroundUrl) {
         fabric.Image.fromURL(backgroundUrl, img => {
@@ -262,10 +290,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           canvas.setBackgroundImage(img, () => {
             canvas.renderAll()
             addZones()
+            applyZonePositions()
           })
         }, { crossOrigin: 'anonymous' })
       } else {
         addZones()
+        applyZonePositions()
       }
     })
 

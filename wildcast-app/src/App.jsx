@@ -130,6 +130,7 @@ export default function App() {
   const [fontSizes, setFontSizes]             = useState({})
   const [alignments, setAlignments]           = useState({})
   const [imageScales, setImageScales]         = useState({})
+  const [zonePositions, setZonePositions]     = useState({})
   const [showCatalogue, setShowCatalogue]     = useState(false)
   const [fromCatalogue, setFromCatalogue]     = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState(null)
@@ -163,6 +164,7 @@ export default function App() {
     setFontSizes({})
     setAlignments({})
     setImageScales({})
+    setZonePositions({})
     setCurrentProjectId(null)
     setFromCatalogue(source === 'catalogue')
     setSaveStatus(null)
@@ -237,9 +239,10 @@ export default function App() {
     }
 
     const id = currentProjectId || crypto.randomUUID()
+    const currentZonePositions = exportRef.current?.getZonePositions?.() ?? {}
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
-      fields: savedFields, fontSizes, alignments, imageScales,
+      fields: savedFields, fontSizes, alignments, imageScales, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
     }
 
@@ -309,6 +312,7 @@ export default function App() {
     setFontSizes(project.fontSizes ?? {})
     setAlignments(project.alignments ?? {})
     setImageScales(project.imageScales ?? {})
+    setZonePositions(project.zonePositions ?? {})
     setCurrentProjectId(project.id)
     setComments(freshComments)
     setSaveStatus(null)
@@ -412,6 +416,7 @@ export default function App() {
               imageScales={imageScales}
               mode={selectedTemplate?.mode ?? 'designer'}
               loadKey={loadKey}
+              zonePositions={zonePositions}
             />
           </div>
 
