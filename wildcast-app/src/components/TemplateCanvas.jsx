@@ -225,13 +225,15 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         })
 
-        // Shrink text zones with pre-filled content on initial load (guided mode only)
+        // Shrink text zones with pre-filled content on initial load (guided mode only).
+        // Use the saved font size (fontSizesRef) as the starting point so re-opening
+        // a project doesn't reset text that the user intentionally sized up.
         if (locked) {
           zones.forEach(zone => {
             if (zone.type !== 'text' || !zone.autoShrink || zone.rotate) return
             const tb = zoneObjsRef.current[zone.id]
             if (!tb || !tb.text) return
-            let size = zone.fontSize
+            let size = fontSizesRef.current?.[zone.id] ?? zone.fontSize
             tb.set('fontSize', size)
             tb.initDimensions()
             while (tb.height > zone.height + 2 && size > 6) {
