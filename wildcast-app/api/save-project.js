@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     const blob = await put(`projects/${project.id}.json`, JSON.stringify(project), {
       access: 'private',
       addRandomSuffix: false,
+      allowOverwrite: true,
       contentType: 'application/json',
       token: process.env.BLOB_READ_WRITE_TOKEN,
     })

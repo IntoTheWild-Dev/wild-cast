@@ -32,6 +32,7 @@ export default async function handler(req, res) {
     await put(key, JSON.stringify(comments), {
       access: 'private',
       addRandomSuffix: false,
+      allowOverwrite: true,
       contentType: 'application/json',
       token,
     })
