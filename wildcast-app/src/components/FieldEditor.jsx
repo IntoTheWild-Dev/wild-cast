@@ -356,34 +356,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
 
-        {/* Reviewer comments — shown prominently when comments exist */}
-        {currentProjectId && comments?.length > 0 && (
-          <>
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 20px' }} />
-            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Reviewer feedback · {comments.length}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {comments.map(c => (
-                  <div key={c.id} style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', border: '1px solid #FDE68A' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                      <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--dark)' }}>{c.name}</span>
-                      <span style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap', marginLeft: 8 }}>{formatDateTime(c.createdAt)}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--dark)', lineHeight: 1.6 }}>{c.text}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
 

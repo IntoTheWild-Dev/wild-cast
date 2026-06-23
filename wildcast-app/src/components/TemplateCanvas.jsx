@@ -7,7 +7,7 @@ async function loadFonts() {
   await document.fonts.ready
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode, loadKey }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -278,6 +278,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   }, [config]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync right-panel text → canvas (with auto-shrink) ─────────────────────
+  // When a project is loaded, sync prevFieldsRef to the incoming fields BEFORE
+  // the fields effect runs so auto-shrink doesn't misread them as new typed input.
+  useEffect(() => {
+    prevFieldsRef.current = { ...fields }
+  }, [loadKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas) return

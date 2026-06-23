@@ -135,6 +135,7 @@ export default function App() {
   const [currentProjectId, setCurrentProjectId] = useState(null)
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved'
+  const [loadKey, setLoadKey]                 = useState(0)    // increments on project load to reset auto-shrink
   const [reviewUrl, setReviewUrl]             = useState(null) // share modal URL
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
@@ -165,6 +166,7 @@ export default function App() {
     setCurrentProjectId(null)
     setFromCatalogue(source === 'catalogue')
     setSaveStatus(null)
+    setLoadKey(k => k + 1)
     setScreen('editor')
   }
 
@@ -311,6 +313,7 @@ export default function App() {
     setComments(freshComments)
     setSaveStatus(null)
     setFromCatalogue(false)
+    setLoadKey(k => k + 1)
     setScreen('editor')
   }
 
@@ -343,6 +346,31 @@ export default function App() {
 
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
+
+          {/* Reviewer feedback — left panel, visible when comments exist */}
+          {comments.length > 0 && (
+            <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 7 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Feedback · {comments.length}
+                </span>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {comments.map(c => (
+                  <div key={c.id} style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', border: '1px solid #FDE68A' }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--dark)', marginBottom: 3 }}>{c.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--mid)', marginBottom: 6 }}>
+                      {new Date(c.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--dark)', lineHeight: 1.6 }}>{c.text}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Breadcrumb */}
@@ -383,6 +411,7 @@ export default function App() {
               alignments={alignments}
               imageScales={imageScales}
               mode={selectedTemplate?.mode ?? 'designer'}
+              loadKey={loadKey}
             />
           </div>
 
