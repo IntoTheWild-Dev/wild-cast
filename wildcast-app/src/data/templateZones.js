@@ -18,8 +18,8 @@ const WEN_CHENG_ZONES = [
   {
     id: 'sub_headline',
     type: 'text',
-    x: 10, y: 73,
-    width: 296, height: 30,
+    x: 15, y: 74,
+    width: 268, height: 33,
     fontSize: 20,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
@@ -30,8 +30,8 @@ const WEN_CHENG_ZONES = [
   {
     id: 'headline',
     type: 'text',
-    x: 10, y: 103,
-    width: 296, height: 52,
+    x: 15, y: 107,
+    width: 268, height: 37,
     fontSize: 50,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
@@ -42,8 +42,8 @@ const WEN_CHENG_ZONES = [
   {
     id: 'offer',
     type: 'text',
-    x: 60, y: 330,
-    width: 200, height: 50,
+    x: 53, y: 317,
+    width: 193, height: 25,
     fontSize: 36,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
@@ -75,8 +75,8 @@ const WEN_CHENG_FLYER2_ZONES = [
     fit: 'contain',
     label: 'Restaurant logo',
     hint: 'PNG with transparent background · min 500×500px',
-    x: 128, y: 5,
-    width: 60, height: 63,
+    x: 114, y: 10,
+    width: 69, height: 51,
   },
   {
     id: 'photo',
@@ -84,8 +84,8 @@ const WEN_CHENG_FLYER2_ZONES = [
     fit: 'cover',
     label: 'Food photo',
     hint: 'JPG or PNG · min 800×600px',
-    x: 15, y: 160,
-    width: 286, height: 150,
+    x: 15, y: 165,
+    width: 268, height: 137,
   },
 ]
 

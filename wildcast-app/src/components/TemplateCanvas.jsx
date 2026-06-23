@@ -18,6 +18,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const fontSizesRef = useRef(fontSizes) // always current, used in auto-shrink
   fontSizesRef.current = fontSizes
   const syncing = useRef(false)
+  const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
 
@@ -78,10 +79,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       }
       exportRef.current = {
         getPng: () => {
-          const g = zoneObjsRef.current['_centre-guide']
-          if (g) g.set('visible', false)
+          // Hide all guide/placeholder rects — save their current visibility to restore after
+          const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide)
+          const prevVis = guideObjs.map(o => o.visible !== false)
+          guideObjs.forEach(o => o.set('visible', false))
+          const cg = zoneObjsRef.current['_centre-guide']
+          if (cg) cg.set('visible', false)
           canvas.renderAll()
-          return canvas.toDataURL({ format: 'png', multiplier: 4 })
+          const data = canvas.toDataURL({ format: 'png', multiplier: 4 })
+          guideObjs.forEach((o, i) => o.set('visible', prevVis[i]))
+          canvas.renderAll()
+          return data
         },
         resetLayout: () => {
           zones.forEach(snapZone)
@@ -132,6 +140,27 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         zones.forEach(zone => {
           zoneCfgRef.current[zone.id] = zone
 
+          if (zone.type === 'text' && !zone.rotate) {
+            // Guide rect — shows the zone boundary, hidden on export
+            const guideRect = new fabric.Rect({
+              left:   zone.x,
+              top:    zone.y,
+              width:  zone.width,
+              height: zone.height,
+              fill:   'rgba(179,179,179,0.3)',
+              stroke: 'rgba(0,0,0,0.55)',
+              strokeWidth: 1.5,
+              strokeDashArray: [6, 5],
+              rx: 2, ry: 2,
+              selectable: false,
+              evented:    false,
+              _wcGuide: true,
+              _wcZoneId: `${zone.id}-guide`,
+            })
+            canvas.add(guideRect)
+            zoneObjsRef.current[`${zone.id}-guide`] = guideRect
+          }
+
           if (zone.type === 'text') {
             const isRotated = !!zone.rotate
             const cx = zone.x + zone.width / 2
@@ -175,19 +204,20 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             zoneObjsRef.current[zone.id] = tb
 
           } else if (zone.type === 'image') {
-            // Dashed placeholder shown until user uploads a photo
+            // Dashed placeholder shown until user uploads an image — hidden on export
             const rect = new fabric.Rect({
               left:   zone.x,
               top:    zone.y,
               width:  zone.width,
               height: zone.height,
-              fill:   'transparent',
-              stroke: 'rgba(255,255,255,0.45)',
+              fill:   'rgba(179,179,179,0.3)',
+              stroke: 'rgba(0,0,0,0.55)',
               strokeWidth: 1.5,
-              strokeDashArray: [6, 4],
-              rx: 4, ry: 4,
+              strokeDashArray: [6, 5],
+              rx: 2, ry: 2,
               selectable: false,
               evented:    false,
+              _wcGuide: true,
               _wcZoneId: `${zone.id}-placeholder`,
             })
             canvas.add(rect)
@@ -261,9 +291,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.set('text', value || '')
         changed = true
       }
-      // Auto-shrink in guided mode — starts from user's chosen size (or zone default), shrinks to fit
+      // Auto-shrink in guided mode — only when THIS field's text actually changed.
+      // Uploading a photo changes fields.photoUrl, not the text content, so we must
+      // not re-shrink text zones the user may have manually sized up.
+      const textChanged = prevFieldsRef.current[id] !== value
       const zone = zoneCfgRef.current[id]
-      if (zone?.autoShrink && !zone.rotate && modeRef.current === 'non-designer') {
+      if (textChanged && zone?.autoShrink && !zone.rotate && modeRef.current === 'non-designer') {
         let size = fontSizesRef.current?.[zone.id] ?? zone.fontSize
         obj.set('fontSize', size)
         obj.initDimensions()
@@ -276,6 +309,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       }
       syncing.current = false
     })
+    prevFieldsRef.current = { ...fields }
     if (changed) canvas.renderAll()
   }, [fields])
 
