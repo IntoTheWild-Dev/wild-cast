@@ -79,17 +79,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       }
       exportRef.current = {
         getPng: () => {
-          // Hide all guide/placeholder rects — save their current visibility to restore after
-          const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide)
-          const prevVis = guideObjs.map(o => o.visible !== false)
-          guideObjs.forEach(o => o.set('visible', false))
-          const cg = zoneObjsRef.current['_centre-guide']
-          if (cg) cg.set('visible', false)
+          const g = zoneObjsRef.current['_centre-guide']
+          if (g) g.set('visible', false)
           canvas.renderAll()
-          const data = canvas.toDataURL({ format: 'png', multiplier: 4 })
-          guideObjs.forEach((o, i) => o.set('visible', prevVis[i]))
-          canvas.renderAll()
-          return data
+          return canvas.toDataURL({ format: 'png', multiplier: 4 })
         },
         resetLayout: () => {
           zones.forEach(snapZone)
@@ -140,27 +133,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         zones.forEach(zone => {
           zoneCfgRef.current[zone.id] = zone
 
-          if (zone.type === 'text' && !zone.rotate) {
-            // Guide rect — shows the zone boundary, hidden on export
-            const guideRect = new fabric.Rect({
-              left:   zone.x,
-              top:    zone.y,
-              width:  zone.width,
-              height: zone.height,
-              fill:   'rgba(179,179,179,0.3)',
-              stroke: 'rgba(0,0,0,0.55)',
-              strokeWidth: 1.5,
-              strokeDashArray: [6, 5],
-              rx: 2, ry: 2,
-              selectable: false,
-              evented:    false,
-              _wcGuide: true,
-              _wcZoneId: `${zone.id}-guide`,
-            })
-            canvas.add(guideRect)
-            zoneObjsRef.current[`${zone.id}-guide`] = guideRect
-          }
-
           if (zone.type === 'text') {
             const isRotated = !!zone.rotate
             const cx = zone.x + zone.width / 2
@@ -204,20 +176,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             zoneObjsRef.current[zone.id] = tb
 
           } else if (zone.type === 'image') {
-            // Dashed placeholder shown until user uploads an image — hidden on export
+            // Dashed placeholder shown until user uploads a photo
             const rect = new fabric.Rect({
               left:   zone.x,
               top:    zone.y,
               width:  zone.width,
               height: zone.height,
-              fill:   'rgba(179,179,179,0.3)',
-              stroke: 'rgba(0,0,0,0.55)',
+              fill:   'transparent',
+              stroke: 'rgba(255,255,255,0.45)',
               strokeWidth: 1.5,
-              strokeDashArray: [6, 5],
-              rx: 2, ry: 2,
+              strokeDashArray: [6, 4],
+              rx: 4, ry: 4,
               selectable: false,
               evented:    false,
-              _wcGuide: true,
               _wcZoneId: `${zone.id}-placeholder`,
             })
             canvas.add(rect)
