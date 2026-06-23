@@ -231,7 +231,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -291,6 +291,31 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
       {/* Scrollable fields */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+
+        {/* Project name */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Project name
+          </label>
+          <input
+            type="text"
+            value={projectName ?? ''}
+            onChange={e => onProjectNameChange(e.target.value)}
+            placeholder="e.g. Wen Cheng – Wolt Promo June"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '9px 12px', fontSize: 13, fontFamily: 'inherit',
+              border: '1px solid var(--border)', borderRadius: 8,
+              background: '#fff', color: 'var(--dark)', outline: 'none',
+              transition: 'border-color 0.15s',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+          />
+          <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 5 }}>
+            Used as the PDF filename and label in your Designs tab.
+          </div>
+        </div>
 
         {/* Intro banner for non-designer */}
         {isNonDesigner && (

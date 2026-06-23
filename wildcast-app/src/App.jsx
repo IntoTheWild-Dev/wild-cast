@@ -131,6 +131,7 @@ export default function App() {
   const [alignments, setAlignments]           = useState({})
   const [imageScales, setImageScales]         = useState({})
   const [zonePositions, setZonePositions]     = useState({})
+  const [projectName, setProjectName]         = useState('')
   const [showCatalogue, setShowCatalogue]     = useState(false)
   const [fromCatalogue, setFromCatalogue]     = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState(null)
@@ -165,6 +166,7 @@ export default function App() {
     setAlignments({})
     setImageScales({})
     setZonePositions({})
+    setProjectName(template.name)
     setCurrentProjectId(null)
     setFromCatalogue(source === 'catalogue')
     setSaveStatus(null)
@@ -212,7 +214,7 @@ export default function App() {
     setExporting(true)
     try {
       const png = exportRef.current.getPng()
-      const filename = `wildcast-${selectedTemplate?.id ?? 'flyer'}`
+      const filename = (projectName.trim() || selectedTemplate?.name || 'wildcast-flyer')
 
       const response = await fetch('/api/export-cmyk', {
         method: 'POST',
@@ -256,8 +258,10 @@ export default function App() {
 
     const id = currentProjectId || crypto.randomUUID()
     const currentZonePositions = exportRef.current?.getZonePositions?.() ?? {}
+    const name = projectName.trim() || selectedTemplate.name
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
+      projectName: name,
       fields: savedFields, fontSizes, alignments, imageScales, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
     }
@@ -269,7 +273,7 @@ export default function App() {
     if (!response.ok) throw new Error(await response.text())
     const { url } = await response.json()
 
-    const meta = { id, url, templateName: selectedTemplate.name, savedAt: project.savedAt, thumbnail }
+    const meta = { id, url, templateName: selectedTemplate.name, projectName: name, savedAt: project.savedAt, thumbnail }
     const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
     localStorage.setItem(STORAGE_KEY, JSON.stringify([meta, ...existing.filter(p => p.id !== id)].slice(0, 50)))
 
@@ -329,6 +333,7 @@ export default function App() {
     setAlignments(project.alignments ?? {})
     setImageScales(project.imageScales ?? {})
     setZonePositions(project.zonePositions ?? {})
+    setProjectName(project.projectName || template.name)
     setCurrentProjectId(project.id)
     setComments(freshComments)
     setSaveStatus(null)
@@ -459,6 +464,8 @@ export default function App() {
             onSendForReview={handleSendForReview}
             comments={comments}
             currentProjectId={currentProjectId}
+            projectName={projectName}
+            onProjectNameChange={setProjectName}
           />
         </div>
       )}
