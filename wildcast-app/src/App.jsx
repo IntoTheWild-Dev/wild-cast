@@ -212,10 +212,26 @@ export default function App() {
     setExporting(true)
     try {
       const png = exportRef.current.getPng()
+      const filename = `wildcast-${selectedTemplate?.id ?? 'flyer'}`
+
+      const response = await fetch('/api/export-cmyk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ png, filename }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: response.statusText }))
+        throw new Error(err.error || 'Export failed')
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = png
-      a.download = `wildcast-${selectedTemplate?.id ?? 'export'}.png`
+      a.href = url
+      a.download = `${filename}.pdf`
       a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Export error:', err)
       alert('Export failed: ' + err.message)

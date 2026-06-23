@@ -16,7 +16,8 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.0.227",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "sharp": "^0.33.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
