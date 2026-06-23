@@ -28,12 +28,15 @@ export default function DesignsPage({ onOpenProject }) {
     setProjects(stored)
   }, [])
 
-  function handleDelete(id, e) {
+  async function handleDelete(id, e) {
     e.stopPropagation()
-    if (!window.confirm('Remove this design from your list?')) return
+    if (!window.confirm('Delete this design? This cannot be undone.')) return
+    // Remove from UI and localStorage immediately
     const updated = projects.filter(p => p.id !== id)
     setProjects(updated)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    // Delete from Vercel Blob in the background (project JSON + comments)
+    fetch(`/api/delete-project?id=${id}`, { method: 'DELETE' }).catch(() => {})
   }
 
   async function handleOpen(project) {
