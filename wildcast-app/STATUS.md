@@ -26,6 +26,7 @@
 - **Guided mode:** teal "🔒 Guided mode · canvas locked" badge visible above canvas
 - Image scale ±10% control in guided mode (appears after upload, 20–300%)
 - clipPath on all images prevents bleed outside zone bounds
+- **Zone boundary guides:** white dashed outlines on all zones (text + image), visible in both designer and guided mode, always hidden on export
 
 ### Field Editor (right panel)
 - Numbered step layout for BOTH modes (same clean UI)
@@ -35,54 +36,46 @@
 - AI Suggest buttons (mock copy, DE + EN)
 - Language toggle DE / EN
 - ICC Profile selector (FOGRA39, GRACoL, SWOP, Japan Color)
-- Export PNG button (4× multiplier)
+- **Export PDF** button (PNG 4× for now, PDF/X-4 CMYK coming next)
+- **Save button** — saves project to Vercel Blob + localStorage registry
+
+### Designs Tab
+- Header nav: Templates · Designs · Help
+- Saved projects appear as thumbnail tiles (template name + date)
+- "Continue editing" — opens editor with full state restored (text, font sizes, images)
+- Hover to reveal × delete button (removes from local list)
+- Empty state with clear onboarding copy
+- Projects stored in Vercel Blob (JSON); local registry in localStorage
 
 ---
 
-## Known issues (to fix)
+## Known issues / in progress
 
-### Text scale reset on field change (guided mode)
-When a user adjusts font size with the ±pt controls, typing in a different field triggers
-auto-shrink which resets the font size of previously edited fields back toward the zone default.
-The panel still shows the user's chosen pt value but the canvas renders at the shrunk size.
-Fix needed: auto-shrink should only apply to the field currently being typed into, not all fields.
-
-### Food photo zone calibration
-The photo zone (x:15, y:160, w:286, h:150) is closer but still not perfectly aligned with
-the background template PNG. Needs visual calibration against the actual Figma measurements
-(requires Figma Dev Mode MCP or manual pixel measurement from the Figma frame).
+### Auto-shrink (FIXED)
+~~When a user adjusts font size then uploads an image, the sub-headline shrinks back.~~  
+Fixed: auto-shrink now only fires when that field's own text changes, not on any field update.
 
 ---
 
 ## Next steps (priority order)
 
-### 1. Fix text scale reset + food photo zone (quick polish before demo)
-See Known Issues above.
+### 1. Send for Review (step 2 of save/review/export flow)
+Button below Save in the right panel. Saves the project (or updates existing save) then generates a shareable link. Reviewer opens the link and sees a read-only view of the flyer with a comment panel on the right. Comments stored in Vercel Blob alongside the project JSON.
 
-### 2. CMYK PDF export (highest priority feature)
-Vercel serverless function `/api/export-cmyk.js`:
-- `@img/sharp-linux-x64` for ICC-based RGB→CMYK conversion
-- `pdf-lib` to wrap in PDF at A6 + 3mm bleed (111×154mm)
-- Bundled FOGRA39 profile (~500KB)
-- Frontend sends PNG → function returns CMYK PDF download
-- No Ghostscript, no Railway, no extra accounts
+### 2. CMYK / PDF/X-4 export
+Vercel serverless function:
+- Canvas PNG → CMYK conversion via `sharp` + bundled FOGRA39 ICC profile (European standard, German market)
+- `pdf-lib` to wrap in PDF/X-4 at A6 + 3mm bleed (111×154mm)
+- 300 DPI pre-flight check: warns user if uploaded images are below print resolution before export
 
-### 3. Cuisine sub-filter
-Under Restaurant in the picker filter:
-- Thai · Italian · Indian · Chinese · Japanese/Sushi · Turkish · Greek · Mexican · Burger · Korean · Vietnamese · Vegan/Vegetarian
+### 3. Custom domain
+Point domain to Vercel deployment before client demo. 5-min setup in Vercel → Settings → Domains.
 
-### 4. More templates
+### 4. More templates (on hold — pending client buy-in)
 - Flyer Option B (same layout, different design)
 - Poster format (portrait A3/A2)
-- Wild Poster (landscape — distinct format, not yet designed)
+- Wild Poster (landscape)
 - Retail category templates
-- Discuss UI structure and onboarding flow for new templates
-
-### 5. Non-designer mode polish
-- Logo on white background option
-
-### 6. Background PNG
-Move to public Vercel Blob store (current private URL may expire)
 
 ---
 
@@ -91,7 +84,8 @@ Move to public Vercel Blob store (current private URL may expire)
 - Fabric.js v5 canvas editor
 - Adobe Fonts — Omnes Pro + Omnes Condensed via Typekit (uot3jfu)
 - Template backgrounds: PNG stored in Vercel Blob
+- Project saves: JSON stored in Vercel Blob, registry in localStorage
 
 ---
 
-*Last updated: 2026-06-22 — Guided mode font size + image scale controls added; zone calibration in progress*
+*Last updated: 2026-06-23 — Zone guides, Save + Designs tab, auto-shrink fix*
