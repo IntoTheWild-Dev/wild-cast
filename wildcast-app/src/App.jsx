@@ -293,12 +293,22 @@ export default function App() {
     const template = TEMPLATES.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
 
+    // Fetch comments directly — can't rely on the useEffect because the
+    // project id may not have changed (same project re-opened from Designs)
+    let freshComments = []
+    try {
+      const commRes = await fetch(`/api/get-comments?id=${project.id}`)
+      const commData = await commRes.json()
+      freshComments = commData.comments || []
+    } catch {}
+
     setSelectedTemplate(template)
     setFields(project.fields ?? DEFAULT_FIELDS)
     setFontSizes(project.fontSizes ?? {})
     setAlignments(project.alignments ?? {})
     setImageScales(project.imageScales ?? {})
     setCurrentProjectId(project.id)
+    setComments(freshComments)
     setSaveStatus(null)
     setFromCatalogue(false)
     setScreen('editor')
