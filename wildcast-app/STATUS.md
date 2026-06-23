@@ -36,15 +36,15 @@
 - AI Suggest buttons (mock copy, DE + EN)
 - Language toggle DE / EN
 - ICC Profile selector (FOGRA39, GRACoL, SWOP, Japan Color)
-- **Export PDF** button (PNG 4× for now — CMYK PDF/X-4 next)
+- **Export PDF** — CMYK PDF/X-4 via `/api/export-cmyk` (see below)
 - **Send for Review** button — saves project + generates shareable link
 - **Save button** — saves/re-saves project to Vercel Blob + localStorage registry
 
 ### Designs Tab
 - Header nav: Templates · Designs · Help
 - Saved projects appear as thumbnail tiles (template name + date)
-- "Continue editing" — opens editor with full state restored (text, font sizes, images, comments)
-- Hover to reveal × delete button (removes from local list)
+- "Continue editing" — opens editor with full state restored (text, font sizes, images, zone positions, comments)
+- Hover × delete button — removes from localStorage AND deletes from Vercel Blob (project JSON + comments)
 - Empty state with clear onboarding copy
 - Projects stored in Vercel Blob (JSON, private); local registry in localStorage
 
@@ -57,47 +57,45 @@
 - Comments show reviewer name + date/time stamp
 - Works across all 4 templates
 
+### Export PDF (CMYK / PDF/X-4)
+- "Export PDF" button sends the 4× canvas PNG to `/api/export-cmyk`
+- Server resizes to **1311×1819px** (A6 + 3mm bleed at 300 DPI)
+- Converts RGB → CMYK via `sharp` (libvips)
+- Embeds **FOGRA39 (ISOcoated_v2_eci.icc)** — European print standard (ISO 12647-2:2004)
+- Builds a **PDF/X-4** compliant document from scratch:
+  - MediaBox: 111×154mm (314.6×436.5 pt) — full with bleed
+  - TrimBox: 105×148mm (297.6×419.5 pt) — finished A6
+  - BleedBox = MediaBox
+  - OutputIntent: `/GTS_PDFIX` referencing embedded FOGRA39 ICC stream
+  - ICC stream: FlateDecode compressed (1.8 MB → ~1.3 MB in PDF)
+  - XMP metadata: `pdfx:GTS_PDFXVersion = PDF/X-4`, `pdfx:GTS_PDFXConformance = PDF/X-4`
+  - Image: CMYK JPEG with `/ICCBased` colorspace referencing FOGRA39
+- Downloads as `wildcast-<template>.pdf`
+
 ---
 
-## Known issues / fixed
+## All bugs fixed
 
-### Auto-shrink on typing (FIXED)
-~~When a user adjusts font size then uploads an image, the sub-headline shrinks back.~~
-Fixed: auto-shrink now only fires when that field's own text changes, not on any field update.
-
-### Sub-headline sizing changes on re-open (FIXED)
-~~Opening a saved design reset text zones to a different font size than when saved/sent for review.~~
-Fixed: `loadKey` prop on TemplateCanvas — increments on every project load, syncing `prevFieldsRef` to
-the incoming fields before auto-shrink can compare them. Fires on both new template selection and Designs re-open.
-
-### Blob overwrite error on re-save (FIXED)
-~~Saving an already-saved design threw "This blob already exists" error.~~
-Fixed: `allowOverwrite: true` added to both `save-project.js` and `add-comment.js`.
-
-### Comments not visible on re-open (FIXED)
-~~Reviewer comments didn't appear when re-opening the same project from Designs.~~
-Fixed: comments fetched directly in `handleOpenProject`, not via useEffect (which wouldn't re-fire for the same project ID).
+| Bug | Fix |
+|-----|-----|
+| FUNCTION_PAYLOAD_TOO_LARGE on save | Client-side image compression (max 1500px, JPEG 82%) before sending |
+| "Cannot use public access on a private store" | Changed `access: 'public'` → `access: 'private'` in save-project.js; added server-side load-project.js |
+| "This blob already exists" on re-save | Added `allowOverwrite: true` to save-project.js and add-comment.js |
+| Comments not visible on re-open | Fetch comments directly in handleOpenProject (not via useEffect) |
+| Sub-headline font size resets on re-open | `loadKey` prop resets prevFieldsRef before auto-shrink comparison fires |
+| Initial canvas shrink ignores saved font sizes | Shrink-to-fit pass now starts from `fontSizesRef.current` not `zone.fontSize` |
+| T&C position + font size resets on re-open (designer) | Zone positions (left/top/width) saved in project JSON and restored on canvas init |
+| Delete from Designs only cleared localStorage | Delete button now also calls `DELETE /api/delete-project` (removes project + comments from Blob) |
 
 ---
 
 ## Next steps (priority order)
 
-### 1. CMYK / PDF/X-4 export — NEXT UP
-**Approach: `sharp` + bundled FOGRA39 ICC + manual PDF/X-4 builder (no Ghostscript needed)**
-- Vercel function receives the 4× canvas PNG
-- `sharp` converts RGB → CMYK using ISOcoated_v2_eci.icc (FOGRA39, European standard)
-- Output size: 1311×1819px (A6 + 3mm bleed at 300 DPI)
-- Custom PDF/X-4 builder embeds the CMYK JPEG with FOGRA39 OutputIntent, correct MediaBox, XMP metadata
-- 300 DPI pre-flight: checks uploaded image pixel dimensions before export, warns if below print quality
-- "Export PDF" button wires up to new CMYK endpoint instead of current PNG download
+### 1. Custom domain
+Point your domain to the Vercel deployment before any client demo.  
+5 minutes: Vercel → Project → Settings → Domains → Add domain.
 
-**Ghostscript note:** Ghostscript is an option if the sharp approach hits any edge cases, but `sharp`
-(libvips) handles ICC-based RGB→CMYK correctly without a binary dependency, which is safer on Vercel.
-
-### 2. Custom domain
-Point domain to Vercel deployment before client demo. 5-min setup in Vercel → Settings → Domains.
-
-### 3. More templates (on hold — pending client buy-in)
+### 2. More templates (on hold — pending client buy-in)
 - Flyer Option B (same layout, different design)
 - Poster format (portrait A3/A2)
 - Wild Poster (landscape)
@@ -112,7 +110,8 @@ Point domain to Vercel deployment before client demo. 5-min setup in Vercel → 
 - Template backgrounds: PNG stored in Vercel Blob
 - Project saves: JSON stored in Vercel Blob (private), registry in localStorage
 - Comments: stored in Vercel Blob at `comments/{id}.json`
+- CMYK export: `sharp` (libvips) + bundled FOGRA39 ICC + manual PDF/X-4 builder
 
 ---
 
-*Last updated: 2026-06-23 — sub-headline fix, reviewer feedback left panel, CMYK next*
+*Last updated: 2026-06-23 — CMYK/PDF/X-4 export, zone position save/restore, delete-from-Blob, font size fix on re-open*
