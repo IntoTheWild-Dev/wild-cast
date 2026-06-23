@@ -19,15 +19,33 @@ const DEFAULT_FIELDS = {
   qrUrl:        null,
 }
 
-// Convert a blob: URL to a persistent data URL so it survives page reloads
+// Convert a blob: URL to a compressed data URL for storage.
+// Resizes to max 1500px and re-encodes as JPEG (photos) or PNG (logos with transparency).
+// Keeps base64 payload well under Vercel's 4.5MB function body limit.
 async function blobUrlToDataUrl(blobUrl) {
   const res = await fetch(blobUrl)
   const blob = await res.blob()
+  const isPng = blob.type === 'image/png'
+
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 1500
+      let w = img.naturalWidth, h = img.naturalHeight
+      if (Math.max(w, h) > MAX) {
+        const scale = MAX / Math.max(w, h)
+        w = Math.round(w * scale)
+        h = Math.round(h * scale)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      // Keep PNG for logos (preserves transparency); JPEG for photos
+      resolve(canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82))
+    }
+    img.onerror = reject
+    img.src = URL.createObjectURL(blob)
   })
 }
 
