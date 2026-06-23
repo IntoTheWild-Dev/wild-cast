@@ -1,4 +1,11 @@
 import { useState } from 'react'
+
+function formatDateTime(ts) {
+  return new Date(ts).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
 import AISuggest from './AISuggest'
 
 const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120 }
@@ -224,7 +231,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode, onSave, saving, saveStatus }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -359,6 +366,27 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           </select>
         </div>
 
+        {/* Reviewer comments — visible once project is saved and comments exist */}
+        {currentProjectId && comments?.length > 0 && (
+          <>
+            <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
+              Reviewer comments ({comments.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {comments.map(c => (
+                <div key={c.id} style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--dark)' }}>{c.name}</span>
+                    <span style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap', marginLeft: 6 }}>{formatDateTime(c.createdAt)}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--dark)', lineHeight: 1.55 }}>{c.text}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
       </div>
 
       {/* Action footer: Export PDF → Send for Review → Save */}
@@ -373,7 +401,24 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           {exporting ? 'Exporting…' : 'Export PDF'}
         </button>
 
-        {/* Send for Review — coming in step 2 */}
+        <button
+          onClick={onSendForReview}
+          disabled={saving}
+          style={{
+            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+            background: '#fff', color: 'var(--dark)',
+            border: '1.5px solid var(--border)',
+            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
+          onMouseEnter={e => { if (!saving) e.currentTarget.style.borderColor = 'var(--dark)' }}
+          onMouseLeave={e => { if (!saving) e.currentTarget.style.borderColor = 'var(--border)' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+          Send for Review
+        </button>
 
         <button
           onClick={onSave}

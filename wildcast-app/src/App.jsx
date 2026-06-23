@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
 import TemplatePicker from './components/TemplatePicker'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
+import ReviewPage from './components/ReviewPage'
 import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 
@@ -17,6 +18,21 @@ const DEFAULT_FIELDS = {
   logoUrl:      null,
   photoUrl:     null,
   qrUrl:        null,
+}
+
+// Generate a medium-res preview image (2× canvas) for the review page
+async function makePreview(fullPng) {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const w = 632, h = 882
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.88))
+    }
+    img.src = fullPng
+  })
 }
 
 // Convert a blob: URL to a compressed data URL for storage.
@@ -65,6 +81,46 @@ async function makeThumbnail(fullPng) {
   })
 }
 
+function ReviewModal({ url, onClose }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Ready to share</div>
+        <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
+          Send this link to your client or team. They can view the design and leave comments.
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input
+            value={url} readOnly
+            style={{ flex: 1, padding: '10px 12px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, background: '#F9FAFB', color: 'var(--dark)', fontFamily: 'inherit' }}
+            onClick={e => e.target.select()}
+          />
+          <button
+            onClick={copy}
+            style={{ padding: '10px 16px', background: copied ? '#16a34a' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, flexShrink: 0, transition: 'background 0.2s', minWidth: 70 }}
+          >
+            {copied ? '✓ Copied' : 'Copy'}
+          </button>
+        </div>
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: 'var(--mid)', fontFamily: 'inherit' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--dark)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [screen, setScreen]                   = useState('picker')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -79,7 +135,26 @@ export default function App() {
   const [currentProjectId, setCurrentProjectId] = useState(null)
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved'
+  const [reviewUrl, setReviewUrl]             = useState(null) // share modal URL
+  const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
+  const [comments, setComments]               = useState([])
   const exportRef = useRef(null)
+
+  // Detect ?review=<id> in URL and switch to review screen
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const rid = params.get('review')
+    if (rid) { setReviewProjectId(rid); setScreen('review') }
+  }, [])
+
+  // Fetch comments whenever the open project changes
+  useEffect(() => {
+    if (!currentProjectId) { setComments([]); return }
+    fetch(`/api/get-comments?id=${currentProjectId}`)
+      .then(r => r.json())
+      .then(d => setComments(d.comments || []))
+      .catch(() => {})
+  }, [currentProjectId])
 
   function handleSelectTemplate(template, source) {
     setSelectedTemplate(template)
@@ -145,59 +220,66 @@ export default function App() {
     }
   }
 
-  async function handleSave() {
-    if (!exportRef.current?.getPng) {
-      alert('Canvas not ready — please wait a moment and try again.')
-      return
+  // Core save — returns the project id. Used by both handleSave and handleSendForReview.
+  async function doSave() {
+    if (!exportRef.current?.getPng) throw new Error('Canvas not ready — please wait a moment and try again.')
+
+    const fullPng = exportRef.current.getPng()
+    const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
+
+    const savedFields = { ...fields }
+    for (const key of ['logoUrl', 'photoUrl', 'qrUrl']) {
+      if (savedFields[key]?.startsWith('blob:')) {
+        savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+      }
     }
+
+    const id = currentProjectId || crypto.randomUUID()
+    const project = {
+      id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
+      fields: savedFields, fontSizes, alignments, imageScales,
+      mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
+    }
+
+    const response = await fetch('/api/save-project', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    })
+    if (!response.ok) throw new Error(await response.text())
+    const { url } = await response.json()
+
+    const meta = { id, url, templateName: selectedTemplate.name, savedAt: project.savedAt, thumbnail }
+    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([meta, ...existing.filter(p => p.id !== id)].slice(0, 50)))
+
+    setCurrentProjectId(id)
+    return id
+  }
+
+  async function handleSave() {
     setSaving(true)
     try {
-      // Thumbnail from canvas (guides already hidden by getPng)
-      const fullPng = exportRef.current.getPng()
-      const thumbnail = await makeThumbnail(fullPng)
-
-      // Convert any ephemeral blob: URLs to persistent data URLs
-      const savedFields = { ...fields }
-      for (const key of ['logoUrl', 'photoUrl', 'qrUrl']) {
-        if (savedFields[key]?.startsWith('blob:')) {
-          savedFields[key] = await blobUrlToDataUrl(savedFields[key])
-        }
-      }
-
-      const id = currentProjectId || crypto.randomUUID()
-      const project = {
-        id,
-        templateId:   selectedTemplate.id,
-        templateName: selectedTemplate.name,
-        fields:       savedFields,
-        fontSizes,
-        alignments,
-        imageScales,
-        mode:         selectedTemplate.mode,
-        savedAt:      Date.now(),
-        thumbnail,
-      }
-
-      const response = await fetch('/api/save-project', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(project),
-      })
-      if (!response.ok) throw new Error(await response.text())
-      const { url } = await response.json()
-
-      // Update localStorage registry (most recent first, cap at 50)
-      const meta = { id, url, templateName: selectedTemplate.name, savedAt: project.savedAt, thumbnail }
-      const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-      const updated = [meta, ...existing.filter(p => p.id !== id)].slice(0, 50)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-
-      setCurrentProjectId(id)
+      await doSave()
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (err) {
       console.error('Save error:', err)
       alert('Save failed: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSendForReview() {
+    setSaving(true)
+    try {
+      const id = await doSave()
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 3000)
+      setReviewUrl(`${window.location.origin}/?review=${id}`)
+    } catch (err) {
+      console.error('Send for Review error:', err)
+      alert('Send for Review failed: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -243,6 +325,10 @@ export default function App() {
 
       {screen === 'designs' && (
         <DesignsPage onOpenProject={handleOpenProject} />
+      )}
+
+      {screen === 'review' && reviewProjectId && (
+        <ReviewPage projectId={reviewProjectId} />
       )}
 
       {screen === 'editor' && (
@@ -310,9 +396,15 @@ export default function App() {
             onSave={handleSave}
             saving={saving}
             saveStatus={saveStatus}
+            onSendForReview={handleSendForReview}
+            comments={comments}
+            currentProjectId={currentProjectId}
           />
         </div>
       )}
+
+      {/* Share / Send for Review modal */}
+      {reviewUrl && <ReviewModal url={reviewUrl} onClose={() => setReviewUrl(null)} />}
 
       <footer style={{ background: 'var(--dark)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
