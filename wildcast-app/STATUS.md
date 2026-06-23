@@ -37,32 +37,49 @@
 - Language toggle DE / EN
 - ICC Profile selector (FOGRA39, GRACoL, SWOP, Japan Color)
 - **Export PDF** button (PNG 4× for now, PDF/X-4 CMYK coming next)
-- **Save button** — saves project to Vercel Blob + localStorage registry
+- **Send for Review** button — saves project + generates shareable link
+- **Save button** — saves/re-saves project to Vercel Blob + localStorage registry
+- **Reviewer feedback panel** — amber card above Print Settings shows reviewer comments with name + timestamp when comments exist
 
 ### Designs Tab
 - Header nav: Templates · Designs · Help
 - Saved projects appear as thumbnail tiles (template name + date)
-- "Continue editing" — opens editor with full state restored (text, font sizes, images)
+- "Continue editing" — opens editor with full state restored (text, font sizes, images, comments)
 - Hover to reveal × delete button (removes from local list)
 - Empty state with clear onboarding copy
-- Projects stored in Vercel Blob (JSON); local registry in localStorage
+- Projects stored in Vercel Blob (JSON, private); local registry in localStorage
+
+### Send for Review
+- "Send for Review" button saves the project then shows a modal with a copyable share link
+- Share link format: `wild-cast-psi.vercel.app/?review=<projectId>`
+- Reviewer opens link → sees read-only flyer preview + comment panel
+- Reviewer leaves name + comment → stored in Vercel Blob at `comments/<id>.json`
+- Editor re-opens project from Designs → reviewer comments load automatically
+- Works across all 4 templates
 
 ---
 
 ## Known issues / in progress
 
 ### Auto-shrink (FIXED)
-~~When a user adjusts font size then uploads an image, the sub-headline shrinks back.~~  
+~~When a user adjusts font size then uploads an image, the sub-headline shrinks back.~~
 Fixed: auto-shrink now only fires when that field's own text changes, not on any field update.
+
+### Blob overwrite error on re-save (FIXED)
+~~Saving an already-saved design threw "This blob already exists" error.~~
+Fixed: `allowOverwrite: true` added to both `save-project.js` and `add-comment.js`.
+
+### Comments not visible on re-open (FIXED)
+~~Reviewer comments didn't appear when re-opening the same project from Designs.~~
+Fixed: comments are fetched directly in `handleOpenProject` rather than relying on a useEffect that wouldn't re-fire for the same project ID.
 
 ---
 
 ## Next steps (priority order)
 
-### 1. Send for Review (step 2 of save/review/export flow)
-Button below Save in the right panel. Saves the project (or updates existing save) then generates a shareable link. Reviewer opens the link and sees a read-only view of the flyer with a comment panel on the right. Comments stored in Vercel Blob alongside the project JSON.
+### ~~1. Send for Review~~ (DONE)
 
-### 2. CMYK / PDF/X-4 export
+### 1. CMYK / PDF/X-4 export — NEXT UP
 Vercel serverless function:
 - Canvas PNG → CMYK conversion via `sharp` + bundled FOGRA39 ICC profile (European standard, German market)
 - `pdf-lib` to wrap in PDF/X-4 at A6 + 3mm bleed (111×154mm)
@@ -88,4 +105,4 @@ Point domain to Vercel deployment before client demo. 5-min setup in Vercel → 
 
 ---
 
-*Last updated: 2026-06-23 — Zone guides, Save + Designs tab, auto-shrink fix*
+*Last updated: 2026-06-23 — Zone guides, Save + Designs, Send for Review + comments, all bugs fixed*
