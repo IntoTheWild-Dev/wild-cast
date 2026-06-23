@@ -1,56 +1,5 @@
 import { useState } from 'react'
-
-// ── Template data ────────────────────────────────────────────────────────────
-const TEMPLATES = [
-  {
-    id: 'wen-cheng-flyer1-simple',
-    name: 'Flyer 1',
-    desc: 'Step-by-step guided editing — fill in your headline, sub-headline and offer. Layout is locked so your flyer always looks on-brand.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-only',
-    mode: 'non-designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
-    live: true,
-  },
-  {
-    id: 'wen-cheng-flyer2-simple',
-    name: 'Flyer 2',
-    desc: 'Step-by-step guided editing — upload your logo and food photo, fill in your text. Layout is locked so your flyer always looks on-brand.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-image',
-    mode: 'non-designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
-    live: true,
-  },
-  {
-    id: 'wen-cheng-flyer1',
-    name: 'Flyer 1',
-    desc: 'Full control over headline, city tagline and offer. Move, resize and restyle any element.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-only',
-    mode: 'designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
-    live: true,
-  },
-  {
-    id: 'wen-cheng-flyer2',
-    name: 'Flyer 2',
-    desc: 'Full control over food photo, logo and all text fields. Drag, resize and restyle anything.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-image',
-    mode: 'designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
-    live: true,
-  },
-]
+import { TEMPLATES } from '../data/templates'
 
 // ── Catalogue data (browse-first view) ───────────────────────────────────────
 // templateId = guided text+image, templateIdTextOnly = guided text only

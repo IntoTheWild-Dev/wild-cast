@@ -3,7 +3,11 @@ import Header from './components/Header'
 import TemplatePicker from './components/TemplatePicker'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
+import DesignsPage from './components/DesignsPage'
 import { TEMPLATE_ZONES } from './data/templateZones'
+import { TEMPLATES } from './data/templates'
+
+const STORAGE_KEY = 'wildcast_projects'
 
 const DEFAULT_FIELDS = {
   headline:     '',
@@ -15,17 +19,48 @@ const DEFAULT_FIELDS = {
   qrUrl:        null,
 }
 
+// Convert a blob: URL to a persistent data URL so it survives page reloads
+async function blobUrlToDataUrl(blobUrl) {
+  const res = await fetch(blobUrl)
+  const blob = await res.blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+// Resize the full-res canvas PNG to a small JPEG thumbnail for the Designs grid
+async function makeThumbnail(fullPng) {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const w = 158, h = 221
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.82))
+    }
+    img.src = fullPng
+  })
+}
+
 export default function App() {
-  const [screen, setScreen]                 = useState('picker')
+  const [screen, setScreen]                   = useState('picker')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
-  const [fields, setFields]                 = useState(DEFAULT_FIELDS)
-  const [lang, setLang]                     = useState('de')
-  const [exporting, setExporting]           = useState(false)
-  const [fontSizes, setFontSizes]           = useState({})
-  const [alignments, setAlignments]         = useState({})
-  const [imageScales, setImageScales]       = useState({})
-  const [showCatalogue, setShowCatalogue]   = useState(false)
-  const [fromCatalogue, setFromCatalogue]   = useState(false)
+  const [fields, setFields]                   = useState(DEFAULT_FIELDS)
+  const [lang, setLang]                       = useState('de')
+  const [exporting, setExporting]             = useState(false)
+  const [fontSizes, setFontSizes]             = useState({})
+  const [alignments, setAlignments]           = useState({})
+  const [imageScales, setImageScales]         = useState({})
+  const [showCatalogue, setShowCatalogue]     = useState(false)
+  const [fromCatalogue, setFromCatalogue]     = useState(false)
+  const [currentProjectId, setCurrentProjectId] = useState(null)
+  const [saving, setSaving]                   = useState(false)
+  const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved'
   const exportRef = useRef(null)
 
   function handleSelectTemplate(template, source) {
@@ -34,17 +69,21 @@ export default function App() {
     setFontSizes({})
     setAlignments({})
     setImageScales({})
+    setCurrentProjectId(null)
     setFromCatalogue(source === 'catalogue')
+    setSaveStatus(null)
     setScreen('editor')
   }
 
   function handleBack() {
-    if (fromCatalogue) {
-      setShowCatalogue(true)
-    } else {
-      setShowCatalogue(false)
-    }
+    if (fromCatalogue) setShowCatalogue(true)
+    else setShowCatalogue(false)
     setScreen('picker')
+  }
+
+  function handleNavigate(target) {
+    if (target === 'picker') { setScreen('picker'); setShowCatalogue(false) }
+    else if (target === 'designs') setScreen('designs')
   }
 
   function handleFontSizeChange(key, size) {
@@ -65,6 +104,7 @@ export default function App() {
 
   function handleFieldChange(key, value) {
     setFields(prev => ({ ...prev, [key]: value }))
+    setSaveStatus(null) // unsaved changes
   }
 
   async function handleExport() {
@@ -87,11 +127,92 @@ export default function App() {
     }
   }
 
+  async function handleSave() {
+    if (!exportRef.current?.getPng) {
+      alert('Canvas not ready — please wait a moment and try again.')
+      return
+    }
+    setSaving(true)
+    try {
+      // Thumbnail from canvas (guides already hidden by getPng)
+      const fullPng = exportRef.current.getPng()
+      const thumbnail = await makeThumbnail(fullPng)
+
+      // Convert any ephemeral blob: URLs to persistent data URLs
+      const savedFields = { ...fields }
+      for (const key of ['logoUrl', 'photoUrl', 'qrUrl']) {
+        if (savedFields[key]?.startsWith('blob:')) {
+          savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+        }
+      }
+
+      const id = currentProjectId || crypto.randomUUID()
+      const project = {
+        id,
+        templateId:   selectedTemplate.id,
+        templateName: selectedTemplate.name,
+        fields:       savedFields,
+        fontSizes,
+        alignments,
+        imageScales,
+        mode:         selectedTemplate.mode,
+        savedAt:      Date.now(),
+        thumbnail,
+      }
+
+      const response = await fetch('/api/save-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(project),
+      })
+      if (!response.ok) throw new Error(await response.text())
+      const { url } = await response.json()
+
+      // Update localStorage registry (most recent first, cap at 50)
+      const meta = { id, url, templateName: selectedTemplate.name, savedAt: project.savedAt, thumbnail }
+      const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+      const updated = [meta, ...existing.filter(p => p.id !== id)].slice(0, 50)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+
+      setCurrentProjectId(id)
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 3000)
+    } catch (err) {
+      console.error('Save error:', err)
+      alert('Save failed: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleOpenProject(projectMeta) {
+    const response = await fetch(projectMeta.url)
+    if (!response.ok) throw new Error('Could not load project')
+    const project = await response.json()
+
+    const template = TEMPLATES.find(t => t.id === project.templateId)
+    if (!template) throw new Error(`Template "${project.templateId}" not found`)
+
+    setSelectedTemplate(template)
+    setFields(project.fields ?? DEFAULT_FIELDS)
+    setFontSizes(project.fontSizes ?? {})
+    setAlignments(project.alignments ?? {})
+    setImageScales(project.imageScales ?? {})
+    setCurrentProjectId(project.id)
+    setSaveStatus(null)
+    setFromCatalogue(false)
+    setScreen('editor')
+  }
+
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? null
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header onLogoClick={() => { setScreen('picker'); setShowCatalogue(false) }} />
+      <Header
+        onLogoClick={() => { setScreen('picker'); setShowCatalogue(false) }}
+        screen={screen}
+        onNavigate={handleNavigate}
+      />
 
       {screen === 'picker' && (
         <TemplatePicker
@@ -100,6 +221,10 @@ export default function App() {
           showCatalogue={showCatalogue}
           onShowCatalogueChange={setShowCatalogue}
         />
+      )}
+
+      {screen === 'designs' && (
+        <DesignsPage onOpenProject={handleOpenProject} />
       )}
 
       {screen === 'editor' && (
@@ -118,6 +243,11 @@ export default function App() {
               </span>
               <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>
+              {currentProjectId && (
+                <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 8px', borderRadius: 100, marginLeft: 4 }}>
+                  Saved
+                </span>
+              )}
               <div style={{ flex: 1 }} />
               <button
                 onClick={() => exportRef.current?.resetLayout?.()}
@@ -159,6 +289,9 @@ export default function App() {
             imageScales={imageScales}
             onImageScaleChange={handleImageScaleChange}
             mode={selectedTemplate?.mode ?? 'designer'}
+            onSave={handleSave}
+            saving={saving}
+            saveStatus={saveStatus}
           />
         </div>
       )}

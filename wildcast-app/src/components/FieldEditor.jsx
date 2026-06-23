@@ -224,7 +224,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode, onSave, saving, saveStatus }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -361,7 +361,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
       </div>
 
-      {/* Export footer */}
+      {/* Action footer: Export PDF → Send for Review → Save */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button
           onClick={onExport}
@@ -372,6 +372,24 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         >
           {exporting ? 'Exporting…' : 'Export PDF'}
         </button>
+
+        {/* Send for Review — coming in step 2 */}
+
+        <button
+          onClick={onSave}
+          disabled={saving}
+          style={{
+            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+            background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
+            border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
+            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
+          onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
+        >
+          {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
+        </button>
+
         <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center' }}>CMYK · 3mm bleed · print-ready</div>
       </div>
 
