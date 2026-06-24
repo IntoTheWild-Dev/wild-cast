@@ -69,7 +69,7 @@
   - OutputIntent: `/GTS_PDFIX` referencing embedded FOGRA39 ICC stream
   - ICC stream: FlateDecode compressed (1.8 MB → ~1.3 MB in PDF)
   - XMP metadata: `pdfx:GTS_PDFXVersion = PDF/X-4`, `pdfx:GTS_PDFXConformance = PDF/X-4`
-  - Image: CMYK JPEG with `/ICCBased` colorspace referencing FOGRA39
+  - Image: raw CMYK bytes (FlateDecode compressed) with `/ICCBased` colorspace referencing FOGRA39 — avoids CMYK JPEG APP14 byte-inversion bug
 - Downloads as `<project-name>.pdf` (uses project name field)
 
 ---
@@ -86,7 +86,8 @@
 | Initial canvas shrink ignores saved font sizes | Shrink-to-fit pass now starts from `fontSizesRef.current` not `zone.fontSize` |
 | T&C position + font size resets on re-open (designer) | Zone positions (left/top/width) saved in project JSON and restored on canvas init |
 | Delete from Designs only cleared localStorage | Delete button now also calls `DELETE /api/delete-project` (removes project + comments from Blob) |
-| **PDF colors completely wrong (near-black)** | Fixed CMYK conversion order: `.toColourspace('cmyk')` before `.withIccProfile()` caused a generic non-ICC conversion to be re-tagged with FOGRA39, producing wrong values. Now `.withIccProfile(fogra39)` runs alone and does the full ICC-aware sRGB→CMYK transform correctly. |
+| **PDF colors completely wrong (near-black)** | CMYK JPEG carries an APP14 "Adobe" marker that inverts byte values (0=full ink); PDF viewers read it un-inverted, causing near-black. Fixed by converting to FOGRA39 CMYK via `withIccProfile`, extracting raw bytes, and compressing with FlateDecode — no JPEG encoding, no convention ambiguity. |
+| **Sub-headline resets slightly on re-open** | Auto-shrunk font sizes were computed at runtime but never saved — only manual +/- overrides were persisted. On each re-open font-loading timing produced slightly different shrink results. Fixed by saving the canvas's actual displayed font sizes (`getEffectiveFontSizes()`) into the project JSON. |
 | **Image scale (photo/logo) not restored on re-open** | `imageScales` effect ran before `fabric.Image.fromURL` callback completed, so `_wcBaseScale` wasn't set yet. Now applies saved scale immediately inside the image load callback. |
 | Duplicate "Print settings" heading in right panel | Removed extra copy-paste heading from FieldEditor. |
 
@@ -117,4 +118,4 @@ Point your domain to the Vercel deployment before any client demo.
 
 ---
 
-*Last updated: 2026-06-24 — CMYK color fix (ICC conversion order), image scale restore on re-open, duplicate UI section removed*
+*Last updated: 2026-06-24 — CMYK color fix (raw+FlateDecode, no JPEG APP14 inversion), sub-headline font size now saved post-auto-shrink for consistent re-opens, image scale restore on re-open, duplicate UI section removed*
