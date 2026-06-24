@@ -43,18 +43,23 @@ export default async function handler(req, res) {
     const iccPath = join(__dirname, 'icc', 'ISOcoated_v2_eci.icc')
     const iccProfile = readFileSync(iccPath)
 
-    // ── RGB → CMYK JPEG ──────────────────────────────────────────────────────
-    // withIccProfile (FOGRA39, a CMYK profile) does the ICC-aware sRGB→CMYK
-    // conversion and embeds the profile.  Calling toColourspace('cmyk') first
-    // would do a generic, non-ICC conversion that then gets re-tagged wrongly.
-    const cmykJpeg = await sharp(pngBuffer)
+    // ── sRGB → FOGRA39 CMYK (raw bytes + FlateDecode) ────────────────────────
+    // CMYK JPEG carries an APP14 "Adobe" marker that inverts byte values
+    // (0=full ink instead of 0=no ink), causing PDF viewers to render near-black.
+    // Using raw bytes + FlateDecode sidesteps that convention entirely.
+    // withIccProfile with a CMYK profile does the ICC-accurate sRGB→CMYK
+    // conversion; raw() extracts 4 bytes/px (C, M, Y, K) in standard order.
+    const rawCmyk = await sharp(pngBuffer)
       .resize(PX_W, PX_H, { fit: 'fill' })
-      .withIccProfile(iccPath)
-      .jpeg({ quality: 95 })
+      .flatten({ background: { r: 255, g: 255, b: 255 } }) // composite any alpha on white
+      .withIccProfile(iccPath)   // sRGB → FOGRA39 CMYK (4 channels, 0=no ink)
+      .raw()
       .toBuffer()
 
+    const cmykZ = deflateSync(rawCmyk)  // FlateDecode for PDF
+
     // ── Build PDF/X-4 ────────────────────────────────────────────────────────
-    const pdfBuffer = buildPdfX4({ cmykJpeg, iccProfile })
+    const pdfBuffer = buildPdfX4({ cmykZ, iccProfile })
 
     const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()
     res.setHeader('Content-Type', 'application/pdf')
@@ -68,7 +73,7 @@ export default async function handler(req, res) {
 }
 
 // ── PDF/X-4 builder ───────────────────────────────────────────────────────────
-function buildPdfX4({ cmykJpeg, iccProfile }) {
+function buildPdfX4({ cmykZ, iccProfile }) {
   const chunks  = []
   const offsets = {}
 
@@ -157,7 +162,7 @@ function buildPdfX4({ cmykJpeg, iccProfile }) {
   push(iccZ)
   push('\nendstream\nendobj\n')
 
-  // 7 — Image XObject (CMYK JPEG, ICCBased colorspace references obj 6)
+  // 7 — Image XObject (raw CMYK, FlateDecode — avoids JPEG APP14 inversion bug)
   mark(7)
   push(
     '7 0 obj\n' +
@@ -167,11 +172,11 @@ function buildPdfX4({ cmykJpeg, iccProfile }) {
     `   /Height ${PX_H}\n` +
     '   /ColorSpace [/ICCBased 6 0 R]\n' +
     '   /BitsPerComponent 8\n' +
-    '   /Filter /DCTDecode\n' +
-    `   /Length ${cmykJpeg.length}\n` +
+    '   /Filter /FlateDecode\n' +
+    `   /Length ${cmykZ.length}\n` +
     '>>\nstream\n',
   )
-  push(cmykJpeg)
+  push(cmykZ)
   push('\nendstream\nendobj\n')
 
   // 8 — Content stream: scale-to-page cm matrix, then paint image
