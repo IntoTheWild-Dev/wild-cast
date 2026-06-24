@@ -144,14 +144,34 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 }
 
 // ── Image upload ─────────────────────────────────────────────────────────────
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange }) {
+// Canvas is 316×441px = A6 105×148mm → canvas PPI ≈ 76.4
+// For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
+const CANVAS_PPI = 316 / (105 / 25.4)
+
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, minWidth, minHeight }) {
+  const [resWarning, setResWarning] = useState(null)
+
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
     input.onchange = e => {
       const file = e.target.files[0]
-      if (file) onChange(URL.createObjectURL(file), file.name)
+      if (!file) return
+      const url = URL.createObjectURL(file)
+      onChange(url, file.name)
+      if (minWidth && minHeight) {
+        const img = new Image()
+        img.onload = () => {
+          if (img.naturalWidth < minWidth || img.naturalHeight < minHeight) {
+            const effectiveDpi = Math.round((img.naturalWidth / (minWidth / 300)) )
+            setResWarning(`Low resolution — approx. ${effectiveDpi} DPI (300 DPI recommended for print). Images may appear pixelated when printed.`)
+          } else {
+            setResWarning(null)
+          }
+        }
+        img.src = url
+      }
     }
     input.click()
   }
@@ -204,6 +224,13 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           </>
         )}
       </div>
+
+      {/* Low-resolution warning — shown when uploaded image is below 300 DPI for print */}
+      {resWarning && (
+        <div style={{ marginTop: 8, padding: '8px 10px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, fontSize: 11, color: '#795548', lineHeight: 1.5 }}>
+          ⚠ {resWarning}
+        </div>
+      )}
 
       {/* Image scale control — shown after upload when in guided mode */}
       {value && onScaleChange && (
@@ -373,6 +400,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 onResetPosition={showControls ? () => onResetZone?.(zone.id) : null}
                 scalePercent={isNonDesigner ? (imageScales?.[zone.id] ?? 100) : undefined}
                 onScaleChange={isNonDesigner ? (pct) => onImageScaleChange?.(zone.id, pct) : null}
+                minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+                minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
               />
             ))}
           </>
