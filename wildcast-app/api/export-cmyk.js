@@ -44,10 +44,11 @@ export default async function handler(req, res) {
     const iccProfile = readFileSync(iccPath)
 
     // ── RGB → CMYK JPEG ──────────────────────────────────────────────────────
-    // Resize to A6 + 3 mm bleed at 300 DPI, convert to CMYK, embed FOGRA39
+    // withIccProfile (FOGRA39, a CMYK profile) does the ICC-aware sRGB→CMYK
+    // conversion and embeds the profile.  Calling toColourspace('cmyk') first
+    // would do a generic, non-ICC conversion that then gets re-tagged wrongly.
     const cmykJpeg = await sharp(pngBuffer)
       .resize(PX_W, PX_H, { fit: 'fill' })
-      .toColourspace('cmyk')
       .withIccProfile(iccPath)
       .jpeg({ quality: 95 })
       .toBuffer()

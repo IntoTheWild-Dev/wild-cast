@@ -17,6 +17,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   modeRef.current  = mode
   const fontSizesRef = useRef(fontSizes) // always current, used in auto-shrink
   fontSizesRef.current = fontSizes
+  const imageScalesRef = useRef(imageScales ?? {}) // always current, applied on image load
+  imageScalesRef.current = imageScales ?? {}
   const zonePositionsRef = useRef(zonePositions ?? {}) // saved drag positions, applied on canvas init
   zonePositionsRef.current = zonePositions ?? {}
   const syncing = useRef(false)
@@ -476,6 +478,23 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         img._wcZoneId = zone.id
         img._wcBaseScale = scale
         img._wcUrl = url
+
+        // Apply saved user scale immediately after load (the imageScales effect
+        // runs before image load completes, so it can't do this itself).
+        const userPct = imageScalesRef.current?.[zone.id] ?? 100
+        if (userPct !== 100) {
+          const finalScale = scale * (userPct / 100)
+          const scaledW = img.width  * finalScale
+          const scaledH = img.height * finalScale
+          img.set({
+            scaleX: finalScale,
+            scaleY: finalScale,
+            left: zone.x + (zone.width  - scaledW) / 2,
+            top:  zone.y + (zone.height - scaledH) / 2,
+          })
+          img.setCoords()
+        }
+
         canvas.add(img)
         // Z-order: images → guide rects (so border shows on top of image) → textboxes
         Object.values(zoneObjsRef.current).forEach(o => {
