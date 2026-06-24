@@ -60,7 +60,7 @@
 ### Export PDF (CMYK / PDF/X-4)
 - "Export PDF" button sends the 4× canvas PNG to `/api/export-cmyk`
 - Server resizes to **1311×1819px** (A6 + 3mm bleed at 300 DPI)
-- Converts RGB → CMYK via `sharp` (libvips)
+- Converts sRGB → FOGRA39 CMYK via `sharp` `.withIccProfile()` (ICC-aware, single-step conversion)
 - Embeds **FOGRA39 (ISOcoated_v2_eci.icc)** — European print standard (ISO 12647-2:2004)
 - Builds a **PDF/X-4** compliant document from scratch:
   - MediaBox: 111×154mm (314.6×436.5 pt) — full with bleed
@@ -70,7 +70,7 @@
   - ICC stream: FlateDecode compressed (1.8 MB → ~1.3 MB in PDF)
   - XMP metadata: `pdfx:GTS_PDFXVersion = PDF/X-4`, `pdfx:GTS_PDFXConformance = PDF/X-4`
   - Image: CMYK JPEG with `/ICCBased` colorspace referencing FOGRA39
-- Downloads as `wildcast-<template>.pdf`
+- Downloads as `<project-name>.pdf` (uses project name field)
 
 ---
 
@@ -86,6 +86,9 @@
 | Initial canvas shrink ignores saved font sizes | Shrink-to-fit pass now starts from `fontSizesRef.current` not `zone.fontSize` |
 | T&C position + font size resets on re-open (designer) | Zone positions (left/top/width) saved in project JSON and restored on canvas init |
 | Delete from Designs only cleared localStorage | Delete button now also calls `DELETE /api/delete-project` (removes project + comments from Blob) |
+| **PDF colors completely wrong (near-black)** | Fixed CMYK conversion order: `.toColourspace('cmyk')` before `.withIccProfile()` caused a generic non-ICC conversion to be re-tagged with FOGRA39, producing wrong values. Now `.withIccProfile(fogra39)` runs alone and does the full ICC-aware sRGB→CMYK transform correctly. |
+| **Image scale (photo/logo) not restored on re-open** | `imageScales` effect ran before `fabric.Image.fromURL` callback completed, so `_wcBaseScale` wasn't set yet. Now applies saved scale immediately inside the image load callback. |
+| Duplicate "Print settings" heading in right panel | Removed extra copy-paste heading from FieldEditor. |
 
 ---
 
@@ -114,4 +117,4 @@ Point your domain to the Vercel deployment before any client demo.
 
 ---
 
-*Last updated: 2026-06-23 — CMYK/PDF/X-4 export, zone position save/restore, delete-from-Blob, font size fix on re-open*
+*Last updated: 2026-06-24 — CMYK color fix (ICC conversion order), image scale restore on re-open, duplicate UI section removed*
