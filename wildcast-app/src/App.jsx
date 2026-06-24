@@ -258,11 +258,15 @@ export default function App() {
 
     const id = currentProjectId || crypto.randomUUID()
     const currentZonePositions = exportRef.current?.getZonePositions?.() ?? {}
+    // Merge canvas's actual (post-auto-shrink) font sizes with any manual overrides so
+    // re-opens restore the exact displayed size regardless of font-loading timing.
+    const effectiveFontSizes = exportRef.current?.getEffectiveFontSizes?.() ?? {}
+    const fontSizesToSave = { ...fontSizes, ...effectiveFontSizes }
     const name = projectName.trim() || selectedTemplate.name
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
-      fields: savedFields, fontSizes, alignments, imageScales, zonePositions: currentZonePositions,
+      fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
     }
 

@@ -92,6 +92,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           })
           return positions
         },
+        // Returns the actual displayed font size for every text zone (post auto-shrink).
+        // doSave() uses this so the saved fontSizes matches what was on screen, making
+        // re-opens deterministic regardless of font-loading timing at auto-shrink time.
+        getEffectiveFontSizes: () => {
+          const sizes = {}
+          zones.forEach(zone => {
+            if (zone.type !== 'text') return
+            const obj = zoneObjsRef.current[zone.id]
+            if (!obj) return
+            sizes[zone.id] = obj.fontSize
+          })
+          return sizes
+        },
         getPng: () => {
           // Hide all guide rects + centre guide — save state to restore after export
           const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide)
