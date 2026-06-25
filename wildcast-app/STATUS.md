@@ -90,6 +90,7 @@
 | **Sub-headline resets slightly on re-open** | Auto-shrunk font sizes were computed at runtime but never saved — only manual +/- overrides were persisted. On each re-open font-loading timing produced slightly different shrink results. Fixed by saving the canvas's actual displayed font sizes (`getEffectiveFontSizes()`) into the project JSON. |
 | **Image scale (photo/logo) not restored on re-open** | `imageScales` effect ran before `fabric.Image.fromURL` callback completed, so `_wcBaseScale` wasn't set yet. Now applies saved scale immediately inside the image load callback. |
 | Duplicate "Print settings" heading in right panel | Removed extra copy-paste heading from FieldEditor. |
+| **Text left-aligned on re-open in guided mode** | Designs saved while in designer mode stored explicit `left` alignment values in the project JSON. On re-open in guided/non-designer mode (which has no alignment controls to correct it), those stale values overrode the template's `align: 'center'` zone config. Fixed by making `addZones()` and the alignment sync effect always use `zone.align` in non-designer mode, ignoring any saved alignment overrides. Also added `alignmentsRef` so the async canvas-init closure always reads the latest alignments. |
 
 ---
 
@@ -118,4 +119,4 @@ Point your domain to the Vercel deployment before any client demo.
 
 ---
 
-*Last updated: 2026-06-24 — CMYK color fix (raw+FlateDecode, no JPEG APP14 inversion), sub-headline font size now saved post-auto-shrink for consistent re-opens, image scale restore on re-open, duplicate UI section removed*
+*Last updated: 2026-06-25 — Text alignment fix for guided mode re-opens (stale saved alignments no longer override zone config in non-designer mode)*

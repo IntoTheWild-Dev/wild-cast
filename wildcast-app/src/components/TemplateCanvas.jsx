@@ -19,6 +19,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   fontSizesRef.current = fontSizes
   const imageScalesRef = useRef(imageScales ?? {}) // always current, applied on image load
   imageScalesRef.current = imageScales ?? {}
+  const alignmentsRef = useRef(alignments ?? {}) // always current, used inside async canvas-init closure
+  alignmentsRef.current = alignments ?? {}
   const zonePositionsRef = useRef(zonePositions ?? {}) // saved drag positions, applied on canvas init
   zonePositionsRef.current = zonePositions ?? {}
   const syncing = useRef(false)
@@ -204,7 +206,9 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               fontFamily: zone.fontFamily,
               fontWeight: zone.fontWeight ? String(zone.fontWeight) : 'normal',
               fill:    zone.color || '#FFFFFF',
-              textAlign: alignments?.[zone.id] ?? zone.align ?? 'left',
+              textAlign: modeRef.current === 'non-designer'
+                ? (zone.align ?? 'left')
+                : (alignmentsRef.current?.[zone.id] ?? zone.align ?? 'left'),
               angle:   zone.rotate || 0,
               editable:       !locked,
               selectable:     !locked,
@@ -386,7 +390,9 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     config.zones.forEach(zone => {
       const obj = zoneObjsRef.current[zone.id]
       if (!obj || obj.type !== 'textbox') return
-      const align = alignments?.[zone.id] ?? zone.align ?? 'left'
+      const align = modeRef.current === 'non-designer'
+        ? (zone.align ?? 'left')
+        : (alignments?.[zone.id] ?? zone.align ?? 'left')
       if (obj.textAlign !== align) obj.set('textAlign', align)
     })
     canvas.renderAll()
