@@ -2,9 +2,20 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 
 async function loadFonts() {
-  // Fonts are served via Adobe Fonts (typekit link in index.html).
-  // Wait for the browser to finish loading them before rendering.
+  // document.fonts.ready resolves when @font-face declarations are parsed —
+  // but the actual font FILES may not be downloaded yet (especially on first
+  // production load where they aren't cached). document.fonts.load() actively
+  // fetches the specific font files and waits until they are usable.
   await document.fonts.ready
+  try {
+    await Promise.all([
+      document.fonts.load('700 16px omnes-cond'),
+      document.fonts.load('700 16px omnes-pro'),
+      document.fonts.load('500 16px omnes-pro'),
+    ])
+  } catch {
+    // Proceed if TypeKit is unavailable (ad blocker, network error, etc.)
+  }
 }
 
 export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode, loadKey, zonePositions }) {
