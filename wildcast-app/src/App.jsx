@@ -315,7 +315,7 @@ export default function App() {
   }
 
   async function handleOpenProject(projectMeta) {
-    const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}`)
+    const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
     if (!response.ok) throw new Error('Could not load project')
     const project = await response.json()
 

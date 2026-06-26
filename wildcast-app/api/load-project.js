@@ -13,6 +13,8 @@ export default async function handler(req, res) {
     })
     if (!response.ok) throw new Error(`Blob fetch failed: ${response.status}`)
     const project = await response.json()
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
     return res.status(200).json(project)
   } catch (err) {
     console.error('load-project error:', err)
