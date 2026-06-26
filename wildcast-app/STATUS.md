@@ -94,6 +94,7 @@
 | **Canvas renders with wrong fonts on first production load** | `document.fonts.ready` only signals that `@font-face` declarations are parsed — the actual Omnes font files are not yet downloaded. On first production load (no cache), the canvas rendered with system fallback fonts, causing text to appear wrong and mis-sized. Fixed by adding `document.fonts.load()` calls for each Omnes weight used on the canvas; `addZones()` now only runs after the font files are confirmed downloaded. |
 | **Re-saved project changes not reflected on re-open** | Three caching layers were all stacking: (1) browser cached `/api/load-project?url=...` since the URL never changed — fixed by adding `&_t=Date.now()` + `cache:'no-store'` to the browser fetch; (2) Vercel edge cached the API response — fixed by adding `Cache-Control: no-store` response headers in `load-project.js`; (3) Cloudflare CDN in front of Vercel Blob served stale blob content — fixed by appending `?_t=Date.now()` to the Blob URL inside the server-side fetch. Also added sessionStorage write-on-save / read-on-open to bypass the network entirely for same-session re-opens. |
 | **Font sizes revert on project re-open (same template)** | `TemplateCanvas` received `loadKey` as a regular prop, not as a React `key`. Without `key={loadKey}`, the component never remounted when reopening the same template — the canvas init effect (which depends only on `[config]`) never re-ran because `TEMPLATE_ZONES[templateId]` is a constant reference. Stale Textbox objects from the first init kept their original font sizes. The `[fontSizes,config]` sync effect ran but fought the stale canvas state. Fixed by adding `key={loadKey}` to `<TemplateCanvas>` in App.jsx, forcing a full remount on every project open or template selection. |
+| **Dead code cleanup** | Removed 4 files never imported anywhere: `PreviewCanvas.jsx`, `PdfThumbnail.jsx`, `src/lib/pdfSetup.js`, `api/generate-pdf.js` (legacy export route superseded by export-cmyk.js). Also uninstalled unused `pdfjs-dist` npm package. Build verified clean (27 modules, 0 errors). |
 
 ---
 
@@ -122,4 +123,4 @@ Point your domain to the Vercel deployment before any client demo.
 
 ---
 
-*Last updated: 2026-06-26 — Font size revert fix (key={loadKey} forces canvas remount); three-layer cache fix; sessionStorage for instant same-session re-opens*
+*Last updated: 2026-06-26 — Dead code sweep (PreviewCanvas, PdfThumbnail, pdfSetup, generate-pdf, pdfjs-dist removed); font size revert fix (key={loadKey}); three-layer cache fix; sessionStorage bypass*
