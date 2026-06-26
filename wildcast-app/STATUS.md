@@ -92,6 +92,7 @@
 | Duplicate "Print settings" heading in right panel | Removed extra copy-paste heading from FieldEditor. |
 | **Text left-aligned on re-open in guided mode** | Designs saved while in designer mode stored explicit `left` alignment values in the project JSON. On re-open in guided/non-designer mode (which has no alignment controls to correct it), those stale values overrode the template's `align: 'center'` zone config. Fixed by making `addZones()` and the alignment sync effect always use `zone.align` in non-designer mode, ignoring any saved alignment overrides. Also added `alignmentsRef` so the async canvas-init closure always reads the latest alignments. |
 | **Canvas renders with wrong fonts on first production load** | `document.fonts.ready` only signals that `@font-face` declarations are parsed — the actual Omnes font files are not yet downloaded. On first production load (no cache), the canvas rendered with system fallback fonts, causing text to appear wrong and mis-sized. Fixed by adding `document.fonts.load()` calls for each Omnes weight used on the canvas; `addZones()` now only runs after the font files are confirmed downloaded. |
+| **Re-saved project changes not reflected on re-open** | Vercel Blob uses Cloudflare CDN which caches responses. Re-saving with `allowOverwrite:true` writes fresh JSON to the origin, but `load-project.js` was fetching without bypassing the cache, so the old cached version was returned. Fixed by adding `cache: 'no-store'` to the fetch in `load-project.js`. |
 
 ---
 
@@ -120,4 +121,4 @@ Point your domain to the Vercel deployment before any client demo.
 
 ---
 
-*Last updated: 2026-06-26 — Font loading fix (document.fonts.load ensures Omnes files are downloaded before canvas renders); guided mode alignment fix (stale saved alignments no longer override zone config in non-designer mode)*
+*Last updated: 2026-06-26 — CDN cache bypass fix (re-saved projects now always load latest version); font loading fix; guided mode alignment fix*
