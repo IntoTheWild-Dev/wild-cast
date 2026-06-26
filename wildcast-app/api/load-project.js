@@ -6,6 +6,7 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch(url, {
+      cache: 'no-store',
       headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
     })
     if (!response.ok) throw new Error(`Blob fetch failed: ${response.status}`)
