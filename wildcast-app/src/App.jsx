@@ -281,6 +281,10 @@ export default function App() {
     const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
     localStorage.setItem(STORAGE_KEY, JSON.stringify([meta, ...existing.filter(p => p.id !== id)].slice(0, 50)))
 
+    // Write the full project to sessionStorage so re-opens within this session
+    // always get the exact saved state — no CDN or browser cache involved.
+    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
+
     setCurrentProjectId(id)
     return id
   }
@@ -315,9 +319,19 @@ export default function App() {
   }
 
   async function handleOpenProject(projectMeta) {
-    const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
-    if (!response.ok) throw new Error('Could not load project')
-    const project = await response.json()
+    // Check sessionStorage first — written directly on every save, so it always
+    // reflects the exact last saved state with no CDN or browser cache involved.
+    let project = null
+    try {
+      const cached = sessionStorage.getItem(`wildcast_project_${projectMeta.id}`)
+      if (cached) project = JSON.parse(cached)
+    } catch { /* corrupted or unavailable — fall through to fetch */ }
+
+    if (!project) {
+      const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
+      if (!response.ok) throw new Error('Could not load project')
+      project = await response.json()
+    }
 
     const template = TEMPLATES.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
