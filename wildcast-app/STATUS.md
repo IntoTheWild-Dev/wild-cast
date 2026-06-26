@@ -92,7 +92,7 @@
 | Duplicate "Print settings" heading in right panel | Removed extra copy-paste heading from FieldEditor. |
 | **Text left-aligned on re-open in guided mode** | Designs saved while in designer mode stored explicit `left` alignment values in the project JSON. On re-open in guided/non-designer mode (which has no alignment controls to correct it), those stale values overrode the template's `align: 'center'` zone config. Fixed by making `addZones()` and the alignment sync effect always use `zone.align` in non-designer mode, ignoring any saved alignment overrides. Also added `alignmentsRef` so the async canvas-init closure always reads the latest alignments. |
 | **Canvas renders with wrong fonts on first production load** | `document.fonts.ready` only signals that `@font-face` declarations are parsed — the actual Omnes font files are not yet downloaded. On first production load (no cache), the canvas rendered with system fallback fonts, causing text to appear wrong and mis-sized. Fixed by adding `document.fonts.load()` calls for each Omnes weight used on the canvas; `addZones()` now only runs after the font files are confirmed downloaded. |
-| **Re-saved project changes not reflected on re-open** | Vercel Blob uses Cloudflare CDN which caches responses. Re-saving with `allowOverwrite:true` writes fresh JSON to the origin, but `load-project.js` was fetching without bypassing the cache, so the old cached version was returned. Fixed by adding `cache: 'no-store'` to the fetch in `load-project.js`. |
+| **Re-saved project changes not reflected on re-open** | Three caching layers were all stacking: (1) browser cached `/api/load-project?url=...` since the URL never changed — fixed by adding `&_t=Date.now()` + `cache:'no-store'` to the browser fetch; (2) Vercel edge cached the API response — fixed by adding `Cache-Control: no-store` response headers in `load-project.js`; (3) Cloudflare CDN in front of Vercel Blob served stale blob content — fixed by appending `?_t=Date.now()` to the Blob URL inside the server-side fetch. |
 
 ---
 
@@ -121,4 +121,4 @@ Point your domain to the Vercel deployment before any client demo.
 
 ---
 
-*Last updated: 2026-06-26 — CDN cache bypass fix (re-saved projects now always load latest version); font loading fix; guided mode alignment fix*
+*Last updated: 2026-06-26 — Full three-layer cache fix (browser + Vercel edge + Cloudflare CDN) so re-saved projects always load the latest version on re-open*
