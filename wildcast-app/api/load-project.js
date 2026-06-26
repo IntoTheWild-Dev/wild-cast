@@ -5,8 +5,10 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'Missing url' })
 
   try {
-    const response = await fetch(url, {
-      cache: 'no-store',
+    // Append a timestamp so Cloudflare CDN always sees a new URL and never
+    // serves a stale cached version of an overwritten blob.
+    const cacheBustUrl = url + (url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+    const response = await fetch(cacheBustUrl, {
       headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
     })
     if (!response.ok) throw new Error(`Blob fetch failed: ${response.status}`)
