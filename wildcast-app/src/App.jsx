@@ -446,6 +446,7 @@ export default function App() {
             </div>
 
             <TemplateCanvas
+              key={loadKey}
               config={templateConfig}
               fields={fields}
               onFieldChange={handleFieldChange}
