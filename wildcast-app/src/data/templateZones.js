@@ -11,7 +11,8 @@
 
 const BG_FLYER1  = '/templates/A6 _ text_swap_wildcast.png'
 const BG_FLYER2  = '/templates/A6 _ text&image_swap_wildcast.png'
-const BG_OPT_B   = '/templates/opt-b-designer.png'
+const BG_OPT_B      = '/templates/opt-b-designer.png'   // text+image: user uploads logo+photo
+const BG_OPT_B_TEXT = '/templates/opt-b-text-bg.png'     // text-only: logo+photo baked in PNG
 
 // Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
 // Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
@@ -96,13 +97,16 @@ const WEN_CHENG_FLYER2_ZONES = [
 //   · baked body text + App Store/Play badges + Wolt bag
 // No sub_headline / offer / tc — FieldEditor hides those automatically.
 // ⚠️ Fine-tune y/h values in browser against the background PNG if needed.
+// Canvas 316×441, PNG source 1191×1679 (scale ≈ 0.265×0.263).
+// Zones calibrated from Guided PNG (text-only bg) and Designer PNG (text+image bg).
+// Headline zone sits over the dashed name box in both PNGs.
 const OPT_B_TEXT_ZONES = [
   {
     id: 'headline',
     type: 'text',
-    x: 15, y: 146,
-    width: 286, height: 75,
-    fontSize: 44,
+    x: 15, y: 118,
+    width: 286, height: 87,
+    fontSize: 50,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
@@ -113,18 +117,6 @@ const OPT_B_TEXT_ZONES = [
 
 const OPT_B_IMAGE_ZONES = [
   {
-    id: 'headline',
-    type: 'text',
-    x: 15, y: 146,
-    width: 286, height: 75,
-    fontSize: 44,
-    fontFamily: 'omnes-cond',
-    fontWeight: 700,
-    color: '#FFFFFF',
-    align: 'center',
-    autoShrink: true,
-  },
-  {
     id: 'logo',
     type: 'image',
     fit: 'contain',
@@ -134,13 +126,25 @@ const OPT_B_IMAGE_ZONES = [
     width: 60, height: 62,
   },
   {
+    id: 'headline',
+    type: 'text',
+    x: 15, y: 118,
+    width: 286, height: 87,
+    fontSize: 50,
+    fontFamily: 'omnes-cond',
+    fontWeight: 700,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
     id: 'photo',
     type: 'image',
     fit: 'cover',
     label: 'Food photo',
     hint: 'JPG or PNG · min 800×600px',
-    x: 15, y: 229,
-    width: 286, height: 97,
+    x: 15, y: 208,
+    width: 286, height: 104,
   },
 ]
 
@@ -177,20 +181,22 @@ export const TEMPLATE_ZONES = {
   },
 
   // ── Option B ────────────────────────────────────────────────────────────────
+  // text-only: Guided PNG bg (logo + photo baked, user fills name text only)
   'opt-b-flyer1': {
     canvasW: 316,
     canvasH: 441,
-    backgroundUrl: BG_OPT_B,
+    backgroundUrl: BG_OPT_B_TEXT,
     backgroundFill: '#00C2CB',
     zones: OPT_B_TEXT_ZONES,
   },
   'opt-b-flyer1-simple': {
     canvasW: 316,
     canvasH: 441,
-    backgroundUrl: BG_OPT_B,
+    backgroundUrl: BG_OPT_B_TEXT,
     backgroundFill: '#00C2CB',
     zones: OPT_B_TEXT_ZONES,
   },
+  // text+image: Designer PNG bg (user uploads logo, name text, and food photo)
   'opt-b-flyer2': {
     canvasW: 316,
     canvasH: 441,
