@@ -134,8 +134,6 @@ export default function App() {
   const [imageScales, setImageScales]         = useState({})
   const [zonePositions, setZonePositions]     = useState({})
   const [projectName, setProjectName]         = useState('')
-  const [showCatalogue, setShowCatalogue]     = useState(false)
-  const [fromCatalogue, setFromCatalogue]     = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState(null)
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved'
@@ -198,7 +196,7 @@ export default function App() {
       .catch(() => {})
   }, [currentProjectId])
 
-  function handleSelectTemplate(template, source) {
+  function handleSelectTemplate(template) {
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
@@ -207,20 +205,17 @@ export default function App() {
     setZonePositions({})
     setProjectName(template.name)
     setCurrentProjectId(null)
-    setFromCatalogue(source === 'catalogue')
     setSaveStatus(null)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
 
   function handleBack() {
-    if (fromCatalogue) setShowCatalogue(true)
-    else setShowCatalogue(false)
     setScreen('picker')
   }
 
   function handleNavigate(target) {
-    if (target === 'picker') { setScreen('picker'); setShowCatalogue(false) }
+    if (target === 'picker') setScreen('picker')
     else if (target === 'designs') setScreen('designs')
   }
 
@@ -405,7 +400,6 @@ export default function App() {
     setCurrentProjectId(project.id)
     setComments(freshComments)
     setSaveStatus(null)
-    setFromCatalogue(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -420,7 +414,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
-        onLogoClick={() => { setScreen('picker'); setShowCatalogue(false) }}
+        onLogoClick={() => setScreen('picker')}
         screen={screen}
         onNavigate={handleNavigate}
         activation={activation}
@@ -428,12 +422,7 @@ export default function App() {
       />
 
       {screen === 'picker' && (
-        <TemplatePicker
-          onSelect={(t) => handleSelectTemplate(t, 'picker')}
-          onSelectFromCatalogue={(t) => handleSelectTemplate(t, 'catalogue')}
-          showCatalogue={showCatalogue}
-          onShowCatalogueChange={setShowCatalogue}
-        />
+        <TemplatePicker onSelect={handleSelectTemplate} />
       )}
 
       {screen === 'designs' && (
@@ -481,7 +470,7 @@ export default function App() {
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
                 onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
               >
-                ← {fromCatalogue ? 'Catalogue' : 'Templates'}
+                ← Templates
               </span>
               <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>

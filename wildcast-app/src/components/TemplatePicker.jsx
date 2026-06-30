@@ -1,164 +1,86 @@
 import { useState } from 'react'
 import { TEMPLATES } from '../data/templates'
 
-// ── Catalogue data (browse-first view) ───────────────────────────────────────
-// templateId = guided text+image, templateIdTextOnly = guided text only
-// designerTemplateId = designer text+image, designerTemplateIdTextOnly = designer text only
-const CATALOGUE = [
+// All template entries — live ones map to real templates, coming-soon ones are placeholders
+const ALL_TEMPLATES = [
   {
-    category: 'Restaurant',
-    formats: [
-      {
-        name: 'Flyer',
-        options: [
-          {
-            label: 'Option A',
-            thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
-            templateId:                 'wen-cheng-flyer2-simple',
-            templateIdTextOnly:         'wen-cheng-flyer1-simple',
-            designerTemplateId:         'wen-cheng-flyer2',
-            designerTemplateIdTextOnly: 'wen-cheng-flyer1',
-            live: true,
-          },
-          { label: 'Option B', live: false },
-        ],
-      },
-      {
-        name: 'Poster',
-        options: [
-          { label: 'Option A', live: false },
-          { label: 'Option B', live: false },
-        ],
-      },
-      {
-        name: 'Wild Poster',
-        options: [
-          { label: 'Option A', live: false },
-        ],
-      },
-    ],
+    label: 'Restaurant Flyer · Option A',
+    category: 'restaurant', format: 'Flyer',
+    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
+    live: true,
+    templateIdGuided:        'wen-cheng-flyer2-simple',
+    templateIdGuidedText:    'wen-cheng-flyer1-simple',
+    templateIdDesigner:      'wen-cheng-flyer2',
+    templateIdDesignerText:  'wen-cheng-flyer1',
   },
-  {
-    category: 'Retail',
-    formats: [
-      {
-        name: 'Flyer',
-        options: [{ label: 'Option A', live: false }],
-      },
-    ],
-  },
+  { label: 'Restaurant Flyer · Option B',    category: 'restaurant', format: 'Flyer',       live: false },
+  { label: 'Restaurant Poster · Option A',   category: 'restaurant', format: 'Poster',      live: false },
+  { label: 'Restaurant Poster · Option B',   category: 'restaurant', format: 'Poster',      live: false },
+  { label: 'Restaurant Wild Poster · Option A', category: 'restaurant', format: 'Wild Poster', live: false },
+  { label: 'Retail Flyer · Option A',        category: 'retail',      format: 'Flyer',      live: false },
+  { label: 'Retail Poster · Option A',       category: 'retail',      format: 'Poster',     live: false },
 ]
 
-// ── Small helpers ─────────────────────────────────────────────────────────────
-const STEPS = [
-  { n: 1, title: 'Pick a template', sub: 'Promo, Opening, Seasonal' },
-  { n: 2, title: 'Fill in your content', sub: 'Headline, offer, photo' },
-  { n: 3, title: 'Export PDF', sub: 'CMYK, print-ready, instant' },
-  { n: 4, title: 'Send to your printer', sub: 'Done — no back-and-forth' },
-]
-
-const MODE_BADGE = {
-  designer:       { label: 'Designer Mode',     bg: 'rgba(2,6,24,0.72)', color: '#fff' },
-  'non-designer': { label: 'Non-Designer Mode', bg: 'var(--primary)',     color: '#fff' },
-}
-
-const ALL_FORMATS = ['Flyer', 'Poster', 'Wild Poster']
-
-function FilterChip({ label, active, onClick, comingSoon }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '5px 13px', borderRadius: 100, fontSize: 12, fontWeight: 500,
-        cursor: 'pointer', transition: 'all 0.15s',
-        border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
-        background: active ? 'var(--primary-glow)' : 'transparent',
-        color: comingSoon ? 'var(--light)' : active ? 'var(--primary-dark)' : 'var(--mid)',
-        opacity: comingSoon ? 0.7 : 1,
-      }}
-    >
-      {active && !comingSoon && <span style={{ fontSize: 9 }}>✓</span>}
-      {label}
-      {comingSoon && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--light)' }}>· soon</span>}
-    </button>
-  )
-}
+const CATEGORIES = ['restaurant', 'retail']
+const FORMATS    = ['Flyer', 'Poster', 'Wild Poster']
 
 // ── Layout picker modal ───────────────────────────────────────────────────────
-function LayoutModal({ opt, mode, onPick, onClose }) {
-  const isGuided = mode === 'guided'
+function LayoutModal({ entry, onPick, onClose }) {
   const options = [
     {
-      key: 'text-only',
-      label: 'Text only',
+      key: 'guided-text',
+      mode: 'guided', type: 'Text only',
       desc: 'Headline, sub-headline, offer and T&Cs — no image upload needed.',
-      templateId: isGuided ? opt.templateIdTextOnly : opt.designerTemplateIdTextOnly,
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-          <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="15" x2="18" y2="15"/><line x1="4" y1="19" x2="12" y2="19"/>
-        </svg>
-      ),
+      templateId: entry.templateIdGuidedText,
+      icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="15" x2="18" y2="15"/><line x1="4" y1="19" x2="12" y2="19"/></svg>,
     },
     {
-      key: 'text-image',
-      label: 'Text + Image',
+      key: 'guided-image',
+      mode: 'guided', type: 'Text + Image',
       desc: 'Headline, sub-headline, offer, plus a food photo and your logo.',
-      templateId: isGuided ? opt.templateId : opt.designerTemplateId,
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-          <rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-          <line x1="4" y1="21" x2="20" y2="21"/>
-        </svg>
-      ),
+      templateId: entry.templateIdGuided,
+      icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><line x1="4" y1="21" x2="20" y2="21"/></svg>,
+    },
+    {
+      key: 'designer-text',
+      mode: 'designer', type: 'Text only · Designer',
+      desc: 'Full control — move, resize and restyle any element freely.',
+      templateId: entry.templateIdDesignerText,
+      icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+    },
+    {
+      key: 'designer-image',
+      mode: 'designer', type: 'Text + Image · Designer',
+      desc: 'Full control with food photo and logo zones.',
+      templateId: entry.templateIdDesigner,
+      icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
     },
   ]
 
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(0,0,0,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 24,
-      }}
+      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{
-          background: '#fff', borderRadius: 18, padding: '36px 32px 32px',
-          width: '100%', maxWidth: 480,
-          boxShadow: '0 24px 80px rgba(0,0,0,0.2)',
-        }}
+        style={{ background: '#fff', borderRadius: 18, padding: '32px 28px 28px', width: '100%', maxWidth: 480, boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}
       >
-        <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          {isGuided ? 'Guided' : 'Designer'} mode
-        </div>
-        <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--dark)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-          Choose your layout
-        </h3>
-        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 28px' }}>
-          Both use the same design — the difference is whether you include a food photo and logo.
-        </p>
+        <h3 style={{ fontSize: 20, fontWeight: 800, color: 'var(--dark)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>Choose your mode</h3>
+        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 24px' }}>{entry.label}</p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {options.map(opt => (
             <button
               key={opt.key}
               onClick={() => onPick(opt.templateId)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 18,
-                padding: '18px 20px', borderRadius: 12, textAlign: 'left',
-                border: '1.5px solid var(--border)', background: 'var(--surface)',
-                cursor: 'pointer', transition: 'all 0.15s', width: '100%',
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 18px', borderRadius: 12, textAlign: 'left', border: '1.5px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', transition: 'all 0.15s', width: '100%' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surface)' }}
             >
               <div style={{ color: 'var(--primary)', flexShrink: 0 }}>{opt.icon}</div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{opt.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>{opt.type}</div>
                 <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.45 }}>{opt.desc}</div>
               </div>
               <svg style={{ marginLeft: 'auto', flexShrink: 0, color: 'var(--light)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -168,7 +90,7 @@ function LayoutModal({ opt, mode, onPick, onClose }) {
 
         <button
           onClick={onClose}
-          style={{ marginTop: 20, width: '100%', padding: '10px 0', fontSize: 13, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          style={{ marginTop: 16, width: '100%', padding: '10px 0', fontSize: 13, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
         >
           Cancel
         </button>
@@ -177,9 +99,35 @@ function LayoutModal({ opt, mode, onPick, onClose }) {
   )
 }
 
-// ── Catalogue view ────────────────────────────────────────────────────────────
-function CatalogueView({ onSelect, onClose }) {
-  const [modal, setModal] = useState(null) // { opt, mode: 'guided'|'designer' }
+// ── Filter chip ───────────────────────────────────────────────────────────────
+function Chip({ label, active, onClick, soon }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '5px 13px', borderRadius: 100, fontSize: 12, fontWeight: 500, cursor: soon ? 'default' : 'pointer',
+        border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+        background: active ? 'var(--primary-glow)' : 'transparent',
+        color: soon ? 'var(--light)' : active ? 'var(--primary-dark)' : 'var(--mid)',
+        transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 5,
+      }}
+    >
+      {active && !soon && <span style={{ fontSize: 9 }}>✓</span>}
+      {label}
+      {soon && <span style={{ fontSize: 9, fontWeight: 700 }}>· soon</span>}
+    </button>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function TemplatePicker({ onSelect }) {
+  const [search,     setSearch]     = useState('')
+  const [cats,       setCats]       = useState(['restaurant', 'retail'])
+  const [formats,    setFormats]    = useState(['Flyer', 'Poster', 'Wild Poster'])
+  const [modal,      setModal]      = useState(null)
+
+  function toggleCat(c)    { setCats(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]) }
+  function toggleFormat(f) { setFormats(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]) }
 
   function handlePick(templateId) {
     const template = TEMPLATES.find(t => t.id === templateId)
@@ -187,275 +135,106 @@ function CatalogueView({ onSelect, onClose }) {
     setModal(null)
   }
 
-  return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 36 }}>
-        <button
-          onClick={onClose}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
-        >
-          ← Back
-        </button>
-        <div>
-          <h2 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', margin: 0 }}>Template Catalogue</h2>
-          <p style={{ fontSize: 13, color: 'var(--mid)', margin: '4px 0 0' }}>Browse all available template designs and select the one you want to edit.</p>
-        </div>
-      </div>
-
-      {modal && (
-        <LayoutModal
-          opt={modal.opt}
-          mode={modal.mode}
-          onPick={handlePick}
-          onClose={() => setModal(null)}
-        />
-      )}
-
-      {/* Categories */}
-      {CATALOGUE.map(cat => (
-        <div key={cat.category} style={{ marginBottom: 52 }}>
-          {/* Category heading */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', margin: 0 }}>{cat.category}</h3>
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          </div>
-
-          {/* Formats */}
-          {cat.formats.map(fmt => (
-            <div key={fmt.name} style={{ marginBottom: 36 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>{fmt.name}</div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
-                {fmt.options.map((opt, i) => {
-                  if (!opt.live) {
-                    return (
-                      <div key={i} style={{ borderRadius: 14, border: '1px dashed var(--border)', overflow: 'hidden', opacity: 0.6 }}>
-                        <div style={{ height: 260, background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
-                          </div>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--light)' }}>Coming soon</span>
-                        </div>
-                        <div style={{ padding: '16px 18px 18px' }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mid)' }}>{fmt.name} · {opt.label}</div>
-                          <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>Template in progress</div>
-                        </div>
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <div
-                      key={i}
-                      style={{ borderRadius: 14, border: '1.5px solid var(--border)', overflow: 'hidden', background: 'var(--surface)', transition: 'transform 0.15s, box-shadow 0.15s' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
-                    >
-                      {/* Preview image */}
-                      <div style={{ height: 260, overflow: 'hidden', background: '#00C2CB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <img src={opt.thumb} alt={opt.label} style={{ height: '100%', width: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-                      </div>
-
-                      <div style={{ padding: '16px 18px 18px' }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 4 }}>{fmt.name} · {opt.label}</div>
-                        <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 16, lineHeight: 1.45 }}>{cat.category} · A6 · CMYK · 3mm bleed</div>
-
-                        {/* Mode buttons */}
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button
-                            onClick={() => setModal({ opt, mode: 'guided' })}
-                            style={{ flex: 1, padding: '9px 0', fontSize: 12, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'var(--primary)'}
-                          >
-                            Guided ↗
-                          </button>
-                          <button
-                            onClick={() => setModal({ opt, mode: 'designer' })}
-                            style={{ flex: 1, padding: '9px 0', fontSize: 12, fontWeight: 700, background: 'transparent', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s' }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--dark)'; e.currentTarget.style.background = '#F3F4F6' }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent' }}
-                          >
-                            Designer ↗
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Main picker ───────────────────────────────────────────────────────────────
-export default function TemplatePicker({ onSelect, onSelectFromCatalogue, showCatalogue, onShowCatalogueChange }) {
-  const [activeCats,    setActiveCats]    = useState(['restaurant', 'retail'])
-  const [activeFormats, setActiveFormats] = useState(['Flyer', 'Poster', 'Wild Poster'])
-
-  function toggleCat(cat) {
-    setActiveCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
-  }
-  function toggleFormat(fmt) {
-    setActiveFormats(prev => prev.includes(fmt) ? prev.filter(f => f !== fmt) : [...prev, fmt])
-  }
-
-  if (showCatalogue) {
-    return (
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <CatalogueView
-          onSelect={t => { onShowCatalogueChange(false); (onSelectFromCatalogue ?? onSelect)(t) }}
-          onClose={() => onShowCatalogueChange(false)}
-        />
-      </div>
-    )
-  }
-
-  const visible = TEMPLATES.filter(t =>
-    (!t.cat    || activeCats.includes(t.cat)) &&
-    (!t.format || activeFormats.includes(t.format))
+  const q = search.toLowerCase()
+  const visible = ALL_TEMPLATES.filter(t =>
+    cats.includes(t.category) &&
+    formats.includes(t.format) &&
+    (q === '' || t.label.toLowerCase().includes(q) || t.format.toLowerCase().includes(q) || t.category.includes(q))
   )
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '52px 32px 64px' }}>
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
 
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Wolt Partner Tools</div>
-        <h1 style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 10 }}>Pick your template.</h1>
-        <p style={{ fontSize: 15, color: 'var(--mid)', marginBottom: 36, maxWidth: 520 }}>Choose a design, fill in your content, and download a print-ready PDF in minutes — no designer needed.</p>
+        {/* Page title */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Wolt Partner Tools</div>
+        <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 24 }}>Pick your template.</h1>
 
-        {/* How it works */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 24px', display: 'flex', alignItems: 'center', marginBottom: 36, flexWrap: 'wrap', gap: 8 }}>
-          {STEPS.map((s, i) => (
-            <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--primary)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.n}</div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{s.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--mid)' }}>{s.sub}</div>
-                </div>
-              </div>
-              {i < STEPS.length - 1 && <span style={{ color: 'var(--dark)', fontSize: 16, margin: '0 8px' }}>→</span>}
-            </div>
-          ))}
-        </div>
-
-        {/* View Catalogue button */}
-        <div style={{ marginBottom: 20 }}>
-          <button
-            onClick={() => onShowCatalogueChange(true)}
+        {/* Search bar */}
+        <div style={{ position: 'relative', marginBottom: 20 }}>
+          <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--light)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="text"
+            placeholder="Search templates…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '10px 20px', fontSize: 13, fontWeight: 700,
-              background: 'var(--dark)', color: '#fff',
-              border: 'none', borderRadius: 10, cursor: 'pointer',
-              transition: 'background 0.15s',
+              width: '100%', padding: '12px 14px 12px 42px',
+              fontSize: 14, fontFamily: 'inherit',
+              border: '1.5px solid var(--border)', borderRadius: 12,
+              background: '#fff', color: 'var(--dark)', outline: 'none',
+              transition: 'border-color 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = '#1a1a1a'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--dark)'}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-            </svg>
-            View Catalogue
-          </button>
+            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+          />
         </div>
 
         {/* Filters */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Category</span>
-            {['restaurant', 'retail'].map(cat => (
-              <FilterChip
-                key={cat}
-                label={cat.charAt(0).toUpperCase() + cat.slice(1)}
-                active={activeCats.includes(cat)}
-                onClick={() => toggleCat(cat)}
-              />
+        <div style={{ display: 'flex', gap: 20, marginBottom: 32, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>Category</span>
+            {CATEGORIES.map(c => (
+              <Chip key={c} label={c.charAt(0).toUpperCase() + c.slice(1)} active={cats.includes(c)} onClick={() => toggleCat(c)} />
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Format</span>
-            {ALL_FORMATS.map(fmt => {
-              const comingSoon = fmt === 'Wild Poster' || fmt === 'Poster'
-              return (
-                <FilterChip
-                  key={fmt}
-                  label={fmt}
-                  active={activeFormats.includes(fmt)}
-                  onClick={() => toggleFormat(fmt)}
-                  comingSoon={comingSoon}
-                />
-              )
-            })}
+          <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>Format</span>
+            {FORMATS.map(f => (
+              <Chip key={f} label={f} active={formats.includes(f)} onClick={() => toggleFormat(f)} soon={f !== 'Flyer'} />
+            ))}
           </div>
         </div>
 
         {/* Template grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
-          {visible.map(t => {
-            const badge = MODE_BADGE[t.mode]
-            return (
-              <div
-                key={t.id}
-                onClick={() => t.live && onSelect(t)}
-                style={{
-                  background: 'var(--surface)', borderRadius: 14,
-                  border: t.mode === 'non-designer' ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                  overflow: 'hidden', cursor: t.live ? 'pointer' : 'default',
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                  opacity: t.live ? 1 : 0.75,
-                }}
-                onMouseEnter={e => { if (t.live) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' } }}
-                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
-              >
-                {/* Thumbnail */}
-                <div style={{ height: 220, overflow: 'hidden', position: 'relative', background: '#00C2CB' }}>
-                  {t.thumb && (
-                    <img src={t.thumb} alt={t.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-                  )}
-                  {badge && (
-                    <div style={{ position: 'absolute', top: 10, left: 10, background: badge.bg, color: badge.color, fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 100 }}>
-                      {badge.label}
-                    </div>
-                  )}
-                  {t.type && (
-                    <div style={{ position: 'absolute', bottom: 10, left: 10, background: t.type === 'text-image' ? 'var(--dark)' : 'rgba(2,6,24,0.55)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 100 }}>
-                      {t.type === 'text-image' ? 'Text + Image' : 'Text only'}
-                    </div>
-                  )}
-                </div>
+        {modal && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
 
-                {/* Card body */}
-                <div style={{ padding: '18px 20px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{t.name}</div>
-                    {t.format && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>{t.format}</span>}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
+          {visible.map((t, i) => t.live ? (
+            <div
+              key={i}
+              onClick={() => setModal(t)}
+              style={{ background: '#fff', borderRadius: 14, border: '1.5px solid var(--border)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
+            >
+              <div style={{ height: 240, background: '#00C2CB', overflow: 'hidden' }}>
+                <img src={t.thumb} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+              </div>
+              <div style={{ padding: '16px 18px 18px' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{t.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    {['A6', 'CMYK', '3mm bleed'].map(tag => (
+                      <span key={tag} style={{ fontSize: 10, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>{tag}</span>
+                    ))}
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 14, lineHeight: 1.45 }}>{t.desc}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {t.tags.map(tag => (
-                        <span key={tag} style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 8px', borderRadius: 100 }}>{tag}</span>
-                      ))}
-                    </div>
-                    {t.live && <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', flexShrink: 0, marginLeft: 8 }}>Use ↗</span>}
-                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>Use ↗</span>
                 </div>
               </div>
-            )
-          })}
+            </div>
+          ) : (
+            <div
+              key={i}
+              style={{ background: '#fff', borderRadius: 14, border: '1px dashed var(--border)', overflow: 'hidden', opacity: 0.6 }}
+            >
+              <div style={{ height: 240, background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Coming soon</span>
+              </div>
+              <div style={{ padding: '16px 18px 18px' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
+                <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>Template in progress</div>
+              </div>
+            </div>
+          ))}
 
           {visible.length === 0 && (
-            <div style={{ gridColumn: '1 / -1', padding: '48px 0', textAlign: 'center', color: 'var(--light)', fontSize: 14 }}>
-              No templates yet for this selection — more coming soon.
+            <div style={{ gridColumn: '1 / -1', padding: '60px 0', textAlign: 'center', color: 'var(--light)', fontSize: 14 }}>
+              No templates match your search — try different filters.
             </div>
           )}
         </div>
