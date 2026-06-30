@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
 import ActivationGate from './components/ActivationGate'
+import HelpModal from './components/HelpModal'
 import TemplatePicker from './components/TemplatePicker'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
@@ -144,6 +145,7 @@ export default function App() {
   const [comments, setComments]               = useState([])
   // activation: null = not yet validated, object = { key, clientName, credits }
   const [activation, setActivation]           = useState(null)
+  const [showHelp, setShowHelp]               = useState(false)
   const exportRef = useRef(null)
 
   // Detect ?review=<id> in URL and switch to review screen
@@ -422,6 +424,7 @@ export default function App() {
         screen={screen}
         onNavigate={handleNavigate}
         activation={activation}
+        onHelp={() => setShowHelp(true)}
       />
 
       {screen === 'picker' && (
@@ -550,6 +553,9 @@ export default function App() {
 
       {/* Share / Send for Review modal */}
       {reviewUrl && <ReviewModal url={reviewUrl} onClose={() => setReviewUrl(null)} />}
+
+      {/* Help modal */}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       <footer style={{ background: 'var(--dark)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>

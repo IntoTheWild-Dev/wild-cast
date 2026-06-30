@@ -1,4 +1,4 @@
-export default function Header({ onLogoClick, screen, onNavigate, activation }) {
+export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp }) {
   const navItem = (label, target) => {
     const active = screen === target || (target === 'picker' && screen === 'editor')
     return (
@@ -28,7 +28,12 @@ export default function Header({ onLogoClick, screen, onNavigate, activation }) 
           <nav style={{ display: 'flex', gap: 4 }}>
             {navItem('Templates', 'picker')}
             {navItem('Designs', 'designs')}
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}>Help</span>
+            <span
+              onClick={onHelp}
+              style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+            >Help</span>
           </nav>
           {activation?.clientName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
