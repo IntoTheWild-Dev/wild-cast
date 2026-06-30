@@ -130,19 +130,6 @@ const OPT_B_TEXT_ZONES = [
     align: 'center',
     autoShrink: true,
   },
-  {
-    id: 'tc',
-    type: 'text',
-    x: 10, y: 298,
-    width: 18, height: 100,
-    textWidth: 100,
-    fontSize: 4.5,
-    fontFamily: 'omnes-pro',
-    fontWeight: 500,
-    color: '#FFFFFF',
-    align: 'left',
-    rotate: -90,
-  },
 ]
 
 const OPT_B_IMAGE_ZONES = [
@@ -183,19 +170,6 @@ const OPT_B_IMAGE_ZONES = [
     color: '#0D1225',
     align: 'center',
     autoShrink: true,
-  },
-  {
-    id: 'tc',
-    type: 'text',
-    x: 10, y: 298,
-    width: 18, height: 100,
-    textWidth: 100,
-    fontSize: 4.5,
-    fontFamily: 'omnes-pro',
-    fontWeight: 500,
-    color: '#FFFFFF',
-    align: 'left',
-    rotate: -90,
   },
   {
     id: 'logo',

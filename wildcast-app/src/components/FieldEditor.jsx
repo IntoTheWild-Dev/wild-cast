@@ -376,14 +376,16 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
           onResetPosition={() => onResetZone?.('offer')}
         />
-        <StepFieldRow
-          step={4} label="T&amp;Cs" fieldKey="tc"
-          value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
-          showControls={showControls}
-          fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
-          align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
-          onResetPosition={() => onResetZone?.('tc')}
-        />
+        {templateConfig?.zones?.some(z => z.id === 'tc') && (
+          <StepFieldRow
+            step={4} label="T&amp;Cs" fieldKey="tc"
+            value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
+            showControls={showControls}
+            fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
+            align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
+            onResetPosition={() => onResetZone?.('tc')}
+          />
+        )}
 
         {imageZones.length > 0 && (
           <>
