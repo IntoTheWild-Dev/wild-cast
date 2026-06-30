@@ -9,8 +9,9 @@
 // [edit] fineprint       → tc
 // Food + logo layers are baked into the background PNG for now.
 
-const BG_FLYER1 = '/templates/A6 _ text_swap_wildcast.png'
-const BG_FLYER2 = '/templates/A6 _ text&image_swap_wildcast.png'
+const BG_FLYER1  = '/templates/A6 _ text_swap_wildcast.png'
+const BG_FLYER2  = '/templates/A6 _ text&image_swap_wildcast.png'
+const BG_OPT_B   = '/templates/opt-b-designer.png'
 
 // Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
 // Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
@@ -89,6 +90,133 @@ const WEN_CHENG_FLYER2_ZONES = [
   },
 ]
 
+// ── Option B zones ─────────────────────────────────────────────────────────
+// Canvas 316×441. Layout: dark header band (0–57px) · teal area · "WIE WÄRS MIT" baked · photo zone · light bottom strip.
+// ⚠️ Zone positions are approximate — calibrate visually in the browser after first load.
+const OPT_B_TEXT_ZONES = [
+  {
+    id: 'sub_headline',
+    type: 'text',
+    x: 10, y: 62,
+    width: 296, height: 28,
+    fontSize: 18,
+    fontFamily: 'omnes-cond',
+    fontWeight: 700,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
+    id: 'headline',
+    type: 'text',
+    x: 10, y: 168,
+    width: 296, height: 100,
+    fontSize: 46,
+    fontFamily: 'omnes-cond',
+    fontWeight: 700,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
+    id: 'offer',
+    type: 'text',
+    x: 18, y: 295,
+    width: 280, height: 52,
+    fontSize: 11,
+    fontFamily: 'omnes-pro',
+    fontWeight: 500,
+    color: '#0D1225',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
+    id: 'tc',
+    type: 'text',
+    x: 10, y: 298,
+    width: 18, height: 100,
+    textWidth: 100,
+    fontSize: 4.5,
+    fontFamily: 'omnes-pro',
+    fontWeight: 500,
+    color: '#FFFFFF',
+    align: 'left',
+    rotate: -90,
+  },
+]
+
+const OPT_B_IMAGE_ZONES = [
+  {
+    // Small tagline above WIE WÄRS MIT (e.g. "NEU BEI WOLT")
+    id: 'sub_headline',
+    type: 'text',
+    x: 10, y: 62,
+    width: 296, height: 20,
+    fontSize: 14,
+    fontFamily: 'omnes-cond',
+    fontWeight: 700,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
+    // Restaurant or product name (e.g. "MCDONALD'S")
+    id: 'headline',
+    type: 'text',
+    x: 10, y: 83,
+    width: 296, height: 38,
+    fontSize: 26,
+    fontFamily: 'omnes-cond',
+    fontWeight: 700,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
+    id: 'offer',
+    type: 'text',
+    x: 18, y: 295,
+    width: 280, height: 52,
+    fontSize: 11,
+    fontFamily: 'omnes-pro',
+    fontWeight: 500,
+    color: '#0D1225',
+    align: 'center',
+    autoShrink: true,
+  },
+  {
+    id: 'tc',
+    type: 'text',
+    x: 10, y: 298,
+    width: 18, height: 100,
+    textWidth: 100,
+    fontSize: 4.5,
+    fontFamily: 'omnes-pro',
+    fontWeight: 500,
+    color: '#FFFFFF',
+    align: 'left',
+    rotate: -90,
+  },
+  {
+    id: 'logo',
+    type: 'image',
+    fit: 'contain',
+    label: 'Restaurant logo',
+    hint: 'PNG with transparent background · min 500×500px',
+    x: 118, y: 5,
+    width: 62, height: 50,
+  },
+  {
+    id: 'photo',
+    type: 'image',
+    fit: 'cover',
+    label: 'Food photo',
+    hint: 'JPG or PNG · min 800×600px',
+    x: 10, y: 163,
+    width: 296, height: 124,
+  },
+]
+
 export const TEMPLATE_ZONES = {
   'wen-cheng-flyer1': {
     canvasW: 316,
@@ -119,5 +247,35 @@ export const TEMPLATE_ZONES = {
     backgroundUrl: BG_FLYER1,
     backgroundFill: '#00C2CB',
     zones: WEN_CHENG_ZONES,
+  },
+
+  // ── Option B ────────────────────────────────────────────────────────────────
+  'opt-b-flyer1': {
+    canvasW: 316,
+    canvasH: 441,
+    backgroundUrl: BG_OPT_B,
+    backgroundFill: '#00C2CB',
+    zones: OPT_B_TEXT_ZONES,
+  },
+  'opt-b-flyer1-simple': {
+    canvasW: 316,
+    canvasH: 441,
+    backgroundUrl: BG_OPT_B,
+    backgroundFill: '#00C2CB',
+    zones: OPT_B_TEXT_ZONES,
+  },
+  'opt-b-flyer2': {
+    canvasW: 316,
+    canvasH: 441,
+    backgroundUrl: BG_OPT_B,
+    backgroundFill: '#00C2CB',
+    zones: OPT_B_IMAGE_ZONES,
+  },
+  'opt-b-flyer2-simple': {
+    canvasW: 316,
+    canvasH: 441,
+    backgroundUrl: BG_OPT_B,
+    backgroundFill: '#00C2CB',
+    zones: OPT_B_IMAGE_ZONES,
   },
 }
