@@ -35,6 +35,14 @@ export default function Header({ onLogoClick, screen, onNavigate, activation }) 
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>
                 {activation.clientName}
               </span>
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
+                background: activation.credits <= 5 ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.08)',
+                color: activation.credits <= 5 ? '#FCA5A5' : 'rgba(255,255,255,0.5)',
+                border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`,
+              }}>
+                {activation.credits} credit{activation.credits !== 1 ? 's' : ''}
+              </span>
               <button
                 onClick={() => {
                   localStorage.removeItem('wildcast_activation_key')
