@@ -7,12 +7,17 @@
 
 ## What's working right now
 
-### Template Picker
-- View Catalogue — browse by Category → Format → Option, with live and placeholder tiles
-- 4 template tiles: Non-Designer Flyer 1 + Flyer 2 first, then Designer Flyer 1 + Flyer 2
-- PNG preview thumbnails (filled example showing real content)
-- Two-row filter: Category (Restaurant / Retail) + Format (Flyer / Poster · soon / Wild Poster · soon)
-- Mode badges, Text only / Text + Image type tags, Use ↗ CTA
+### Template Picker (redesigned 2026-06-30)
+- **Two-level browse:** homepage shows group cards (e.g. "Restaurant Flyer · 5 designs"), clicking "View all →" drills into that group's option cards (A–E)
+- **Search bar** at top of homepage — filters by format/category in real time
+- **Headline:** "Design. Export. Print."
+- 30 template slots total: 6 groups × 5 options (Restaurant + Retail × Flyer + Poster + Wild Poster)
+- 1 live template (Restaurant Flyer · Option A — both guided and designer modes)
+- Coming soon tiles clearly labelled, greyed out with dashed border
+- Group cards show live thumbnail, "X available" coral badge, "5 designs" count badge
+- Options view shows "← All templates" back button, live count subtitle
+- Mode picker modal on click: 4 options (Guided/Designer × Text-only/Text+Image)
+- Category filter (Restaurant / Retail) and Format filter (Flyer / Poster · soon / Wild Poster · soon)
 
 ### Canvas Editor
 - Fabric.js canvas with background PNG loaded from Vercel Blob
@@ -138,9 +143,12 @@ Format: `key|Client Name|credits` — comma-separated for multiple keys.
 ### 1. ⏳ IONOS DNS record (waiting on executive)
 Add CNAME for `cast.wildstack.studio` → see Custom domain section above.
 
-### 2. ⏳ Set WILDCAST_KEYS env variable in Vercel
-Vercel → Environment Variables → add `WILDCAST_KEYS` → redeploy.  
-Without this, the activation gate rejects all keys.
+### 2. ⏳ Google Drive export (waiting on executive confirmation)
+Wolt executive requested Drive export in addition to local download. Blocked on two clarification questions:
+- Does she use her @wolt.com work account or personal Gmail for Drive?
+- Does her current tool show a Google OAuth popup, or does it connect silently?
+
+Answer determines whether DoorDash/Wolt's Google Workspace security settings will allow a new OAuth app. If yes, ~1 day to build using Google Drive API v3 in-browser OAuth flow.
 
 ### 3. Production activation key system (when taking real customers)
 - Vercel KV for server-side credit tracking (credits can't be manipulated)
@@ -148,7 +156,7 @@ Without this, the activation gate rejects all keys.
 - Admin dashboard to view/manage keys and credit usage
 
 ### 4. More templates (on hold — pending client buy-in)
-- Flyer Option B (same layout, different design)
+- Flyer Option B–E (different designs, same format)
 - Poster format (portrait A3/A2)
 - Wild Poster (landscape)
 - Retail category templates
@@ -167,4 +175,4 @@ Without this, the activation gate rejects all keys.
 
 ---
 
-*Last updated: 2026-06-30 — Activation key gate added (ActivationGate.jsx, /api/validate-key.js, credit tracking on PDF export); custom domain cast.wildstack.studio added to Vercel — awaiting IONOS CNAME; WILDCAST_KEYS env var still needs to be set in Vercel dashboard*
+*Last updated: 2026-06-30 — Homepage redesigned: two-level browse (group cards → options view), search bar, "Design. Export. Print." headline, 30 template slots (5 per format per category). Google Drive export requested by Wolt executive — awaiting security clarification before building.*
