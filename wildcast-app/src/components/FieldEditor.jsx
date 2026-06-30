@@ -360,22 +360,26 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
           onResetPosition={() => onResetZone?.('headline')}
         />
-        <StepFieldRow
-          step={2} label="Sub-headline" fieldKey="sub_headline"
-          value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
-          showControls={showControls} showSize={isNonDesigner}
-          fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
-          align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
-          onResetPosition={() => onResetZone?.('sub_headline')}
-        />
-        <StepFieldRow
-          step={3} label="Offer" fieldKey="offer"
-          value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-          showControls={showControls} showSize={isNonDesigner}
-          fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
-          align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
-          onResetPosition={() => onResetZone?.('offer')}
-        />
+        {templateConfig?.zones?.some(z => z.id === 'sub_headline') && (
+          <StepFieldRow
+            step={2} label="Sub-headline" fieldKey="sub_headline"
+            value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
+            showControls={showControls} showSize={isNonDesigner}
+            fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
+            align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
+            onResetPosition={() => onResetZone?.('sub_headline')}
+          />
+        )}
+        {templateConfig?.zones?.some(z => z.id === 'offer') && (
+          <StepFieldRow
+            step={3} label="Offer" fieldKey="offer"
+            value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
+            showControls={showControls} showSize={isNonDesigner}
+            fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
+            align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
+            onResetPosition={() => onResetZone?.('offer')}
+          />
+        )}
         {templateConfig?.zones?.some(z => z.id === 'tc') && (
           <StepFieldRow
             step={4} label="T&amp;Cs" fieldKey="tc"

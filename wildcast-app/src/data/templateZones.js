@@ -91,42 +91,21 @@ const WEN_CHENG_FLYER2_ZONES = [
 ]
 
 // ── Option B zones ─────────────────────────────────────────────────────────
-// Canvas 316×441. Layout: dark header band (0–57px) · teal area · "WIE WÄRS MIT" baked · photo zone · light bottom strip.
-// ⚠️ Zone positions are approximate — calibrate visually in the browser after first load.
+// Canvas 316×441. Zones from Figma reference (node 4290-31):
+//   logo (top center) · "WIE WÄR'S MIT" baked · restaurant name text · food photo
+//   · baked body text + App Store/Play badges + Wolt bag
+// No sub_headline / offer / tc — FieldEditor hides those automatically.
+// ⚠️ Fine-tune y/h values in browser against the background PNG if needed.
 const OPT_B_TEXT_ZONES = [
-  {
-    id: 'sub_headline',
-    type: 'text',
-    x: 10, y: 62,
-    width: 296, height: 28,
-    fontSize: 18,
-    fontFamily: 'omnes-cond',
-    fontWeight: 700,
-    color: '#FFFFFF',
-    align: 'center',
-    autoShrink: true,
-  },
   {
     id: 'headline',
     type: 'text',
-    x: 10, y: 168,
-    width: 296, height: 100,
-    fontSize: 46,
+    x: 15, y: 146,
+    width: 286, height: 75,
+    fontSize: 44,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
-    align: 'center',
-    autoShrink: true,
-  },
-  {
-    id: 'offer',
-    type: 'text',
-    x: 18, y: 295,
-    width: 280, height: 52,
-    fontSize: 11,
-    fontFamily: 'omnes-pro',
-    fontWeight: 500,
-    color: '#0D1225',
     align: 'center',
     autoShrink: true,
   },
@@ -134,40 +113,14 @@ const OPT_B_TEXT_ZONES = [
 
 const OPT_B_IMAGE_ZONES = [
   {
-    // Small tagline above WIE WÄRS MIT (e.g. "NEU BEI WOLT")
-    id: 'sub_headline',
-    type: 'text',
-    x: 10, y: 62,
-    width: 296, height: 20,
-    fontSize: 14,
-    fontFamily: 'omnes-cond',
-    fontWeight: 700,
-    color: '#FFFFFF',
-    align: 'center',
-    autoShrink: true,
-  },
-  {
-    // Restaurant or product name (e.g. "MCDONALD'S")
     id: 'headline',
     type: 'text',
-    x: 10, y: 83,
-    width: 296, height: 38,
-    fontSize: 26,
+    x: 15, y: 146,
+    width: 286, height: 75,
+    fontSize: 44,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
-    align: 'center',
-    autoShrink: true,
-  },
-  {
-    id: 'offer',
-    type: 'text',
-    x: 18, y: 295,
-    width: 280, height: 52,
-    fontSize: 11,
-    fontFamily: 'omnes-pro',
-    fontWeight: 500,
-    color: '#0D1225',
     align: 'center',
     autoShrink: true,
   },
@@ -177,8 +130,8 @@ const OPT_B_IMAGE_ZONES = [
     fit: 'contain',
     label: 'Restaurant logo',
     hint: 'PNG with transparent background · min 500×500px',
-    x: 118, y: 5,
-    width: 62, height: 50,
+    x: 128, y: 8,
+    width: 60, height: 62,
   },
   {
     id: 'photo',
@@ -186,8 +139,8 @@ const OPT_B_IMAGE_ZONES = [
     fit: 'cover',
     label: 'Food photo',
     hint: 'JPG or PNG · min 800×600px',
-    x: 10, y: 163,
-    width: 296, height: 124,
+    x: 15, y: 229,
+    width: 286, height: 97,
   },
 ]
 
