@@ -99,13 +99,55 @@
 
 ---
 
+## Activation key system
+
+Keys gate access to the app. Set in Vercel Environment Variables:
+
+```
+WILDCAST_KEYS=WOLT-DE-demo-key|Wolt DE|20,WILD-Demo-KEY|Wild Stack|100
+```
+
+Format: `key|Client Name|credits` — comma-separated for multiple keys.
+
+| Key | Client | Credits | Purpose |
+|-----|--------|---------|---------|
+| `WOLT-DE-demo-key` | Wolt DE | 20 | Client demo |
+| `WILD-Demo-KEY` | Wild Stack | 100 | Internal use |
+
+**How credits work (demo):** 1 PDF export = 1 credit. Tracked client-side in localStorage. Credits shown in editor breadcrumb bar. Export blocked at 0. Sign out button in header clears the session.
+
+**Production upgrade path:** Replace localStorage credit tracking with Vercel KV (server-side Redis). Add payment integration (Stripe) → webhook auto-generates key → emails to customer. Half-day build when ready.
+
+---
+
+## Custom domain
+
+- **Target:** `cast.wildstack.studio`
+- **Vercel:** Domain added ✅ — waiting for DNS
+- **IONOS action required:** Add CNAME record to `wildstack.studio`:
+  - Type: CNAME
+  - Host: `cast`
+  - Points to: `7b09b04663fd7de5.vercel-dns-017.com`
+  - TTL: 3600
+- Once IONOS record is added: Vercel → Domains → Refresh → goes green automatically
+
+---
+
 ## Next steps (priority order)
 
-### 1. Custom domain
-Point your domain to the Vercel deployment before any client demo.  
-5 minutes: Vercel → Project → Settings → Domains → Add domain.
+### 1. ⏳ IONOS DNS record (waiting on executive)
+Add CNAME for `cast.wildstack.studio` → see Custom domain section above.
 
-### 2. More templates (on hold — pending client buy-in)
+### 2. ⏳ Set WILDCAST_KEYS env variable in Vercel
+Vercel → Environment Variables → add `WILDCAST_KEYS` → redeploy.  
+Without this, the activation gate rejects all keys.
+
+### 3. Production activation key system (when taking real customers)
+- Vercel KV for server-side credit tracking (credits can't be manipulated)
+- Stripe payment → webhook → auto-generate key → email to customer
+- Admin dashboard to view/manage keys and credit usage
+
+### 4. More templates (on hold — pending client buy-in)
 - Flyer Option B (same layout, different design)
 - Poster format (portrait A3/A2)
 - Wild Poster (landscape)
@@ -121,7 +163,8 @@ Point your domain to the Vercel deployment before any client demo.
 - Project saves: JSON stored in Vercel Blob (private), registry in localStorage
 - Comments: stored in Vercel Blob at `comments/{id}.json`
 - CMYK export: `sharp` (libvips) + bundled FOGRA39 ICC + manual PDF/X-4 builder
+- Activation keys: env var `WILDCAST_KEYS`, credits tracked in localStorage (demo); Vercel KV planned for production
 
 ---
 
-*Last updated: 2026-06-28 — Sub-headline font size not persisting on re-open: fixed locked-mode auto-shrink in addZones() to treat saved font sizes as source of truth (skips shrink loop entirely when a saved size exists — only shrinks on first-ever open with no saved state)*
+*Last updated: 2026-06-30 — Activation key gate added (ActivationGate.jsx, /api/validate-key.js, credit tracking on PDF export); custom domain cast.wildstack.studio added to Vercel — awaiting IONOS CNAME; WILDCAST_KEYS env var still needs to be set in Vercel dashboard*
