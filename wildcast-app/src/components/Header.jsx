@@ -1,4 +1,4 @@
-export default function Header({ onLogoClick, screen, onNavigate }) {
+export default function Header({ onLogoClick, screen, onNavigate, activation }) {
   const navItem = (label, target) => {
     const active = screen === target || (target === 'picker' && screen === 'editor')
     return (
@@ -24,11 +24,33 @@ export default function Header({ onLogoClick, screen, onNavigate }) {
         <div onClick={onLogoClick} style={{ cursor: 'pointer' }}>
           <img src="/assets/Logo (Only Font) PNG 4.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
-        <nav style={{ display: 'flex', gap: 4 }}>
-          {navItem('Templates', 'picker')}
-          {navItem('Designs', 'designs')}
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}>Help</span>
-        </nav>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <nav style={{ display: 'flex', gap: 4 }}>
+            {navItem('Templates', 'picker')}
+            {navItem('Designs', 'designs')}
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}>Help</span>
+          </nav>
+          {activation?.clientName && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>
+                {activation.clientName}
+              </span>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('wildcast_activation_key')
+                  localStorage.removeItem('wildcast_credits')
+                  window.location.reload()
+                }}
+                title="Sign out"
+                style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, transition: 'color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )

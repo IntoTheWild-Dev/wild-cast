@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
+import ActivationGate from './components/ActivationGate'
 import TemplatePicker from './components/TemplatePicker'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
@@ -141,6 +142,8 @@ export default function App() {
   const [reviewUrl, setReviewUrl]             = useState(null) // share modal URL
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
+  // activation: null = not yet validated, object = { key, clientName, credits }
+  const [activation, setActivation]           = useState(null)
   const exportRef = useRef(null)
 
   // Detect ?review=<id> in URL and switch to review screen
@@ -149,6 +152,40 @@ export default function App() {
     const rid = params.get('review')
     if (rid) { setReviewProjectId(rid); setScreen('review') }
   }, [])
+
+  // On mount: restore activation from localStorage (so users don't need to re-enter key on refresh)
+  useEffect(() => {
+    const savedKey = localStorage.getItem('wildcast_activation_key')
+    if (!savedKey) return
+    fetch('/api/validate-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: savedKey }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.valid) {
+          const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
+          const credits = Number.isFinite(savedCredits) ? savedCredits : data.total_credits
+          setActivation({ key: savedKey, clientName: data.client_name, credits })
+        } else {
+          localStorage.removeItem('wildcast_activation_key')
+          localStorage.removeItem('wildcast_credits')
+        }
+      })
+      .catch(() => {
+        // Network error on restore — treat as activated using cached credits so the
+        // app still works offline/slow connections after a valid prior session.
+        const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
+        if (Number.isFinite(savedCredits)) {
+          setActivation({ key: savedKey, clientName: '', credits: savedCredits })
+        }
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleActivated({ key, clientName, credits }) {
+    setActivation({ key, clientName, credits })
+  }
 
   // Fetch comments whenever the open project changes
   useEffect(() => {
@@ -211,6 +248,10 @@ export default function App() {
       alert('Canvas not ready — please wait a moment and try again.')
       return
     }
+    if (activation && activation.credits <= 0) {
+      alert('You have no export credits remaining. Contact Wild Stack to get more.')
+      return
+    }
     setExporting(true)
     try {
       const png = exportRef.current.getPng()
@@ -234,6 +275,13 @@ export default function App() {
       a.download = `${filename}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+
+      // Decrement credit after successful export
+      if (activation) {
+        const newCredits = Math.max(0, activation.credits - 1)
+        setActivation(prev => ({ ...prev, credits: newCredits }))
+        localStorage.setItem('wildcast_credits', newCredits)
+      }
     } catch (err) {
       console.error('Export error:', err)
       alert('Export failed: ' + err.message)
@@ -362,12 +410,18 @@ export default function App() {
 
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? null
 
+  // Show activation gate unless already activated or this is a shared review link
+  if (!activation && !reviewProjectId) {
+    return <ActivationGate onActivated={handleActivated} />
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
         onLogoClick={() => { setScreen('picker'); setShowCatalogue(false) }}
         screen={screen}
         onNavigate={handleNavigate}
+        activation={activation}
       />
 
       {screen === 'picker' && (
@@ -434,6 +488,11 @@ export default function App() {
                 </span>
               )}
               <div style={{ flex: 1 }} />
+              {activation && (
+                <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)' }}>
+                  {activation.credits} export{activation.credits !== 1 ? 's' : ''} remaining
+                </span>
+              )}
               <button
                 onClick={() => exportRef.current?.resetLayout?.()}
                 title="Reset all text zones to their original positions"
