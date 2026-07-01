@@ -404,8 +404,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 onChange={url => onChange(`${zone.id}Url`, url)}
                 square={zone.id === 'logo'}
                 onResetPosition={showControls ? () => onResetZone?.(zone.id) : null}
-                scalePercent={isNonDesigner ? (imageScales?.[zone.id] ?? 100) : undefined}
-                onScaleChange={isNonDesigner ? (pct) => onImageScaleChange?.(zone.id, pct) : null}
+                scalePercent={imageScales?.[zone.id] ?? 100}
+                onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
                 minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
                 minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
               />
