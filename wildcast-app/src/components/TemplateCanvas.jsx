@@ -501,12 +501,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           cornerSize:   10,
           lockUniScaling: true,
           lockRotation:   true,
-          // Clip to zone boundaries so images never bleed outside their zone
+          // Clip to zone boundaries. overlapAbove extends the clip region upward
+          // so the image can visually overlap the zone above it (e.g. food photo over headline).
           clipPath: new fabric.Rect({
-            left: zone.x,
-            top:  zone.y,
+            left:   zone.x,
+            top:    zone.y - (zone.overlapAbove ?? 0),
             width:  zone.width,
-            height: zone.height,
+            height: zone.height + (zone.overlapAbove ?? 0),
             absolutePositioned: true,
             originX: 'left',
             originY: 'top',
@@ -536,12 +537,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
         canvas.add(img)
         // Z-order: images → guide rects (so border shows on top of image) → textboxes
+        // → overlap images (float above text for layering effect)
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o._wcGuide) canvas.bringToFront(o)
         })
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o.type === 'textbox') canvas.bringToFront(o)
         })
+        if (zone.overlapAbove) canvas.bringToFront(img)
         zoneObjsRef.current[`${zone.id}-image`] = img
         canvas.renderAll()
       }, { crossOrigin: 'anonymous' })

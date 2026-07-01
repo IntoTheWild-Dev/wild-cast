@@ -141,6 +141,7 @@ const OPT_B_IMAGE_ZONES = [
     id: 'photo',
     type: 'image',
     fit: 'cover',
+    overlapAbove: 20,
     label: 'Food photo',
     hint: 'JPG or PNG · min 800×600px',
     x: 15, y: 174,
