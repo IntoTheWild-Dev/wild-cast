@@ -569,7 +569,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       style={{
         flex: 1,
         background: '#2a2a2a',
-        overflow: 'auto',
+        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

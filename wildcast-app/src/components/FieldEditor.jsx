@@ -317,7 +317,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       </div>
 
       {/* Scrollable fields */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }}>
 
         {/* Project name */}
         <div style={{ marginBottom: 20 }}>
