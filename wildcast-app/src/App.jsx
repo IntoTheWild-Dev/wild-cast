@@ -196,6 +196,17 @@ export default function App() {
     if (rid) { setReviewProjectId(rid); setScreen('review') }
   }, [])
 
+  // Lock body scroll in editor mode so the canvas never scrolls with the page
+  useEffect(() => {
+    if (screen === 'editor') {
+      window.scrollTo(0, 0)
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [screen])
+
   // On mount: restore activation from localStorage (so users don't need to re-enter key on refresh)
   useEffect(() => {
     const savedKey = localStorage.getItem('wildcast_activation_key')
@@ -461,7 +472,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Header
         onLogoClick={() => setScreen('picker')}
         screen={screen}
@@ -471,15 +482,21 @@ export default function App() {
       />
 
       {screen === 'picker' && (
-        <TemplatePicker onSelect={handleSelectTemplate} />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TemplatePicker onSelect={handleSelectTemplate} />
+        </div>
       )}
 
       {screen === 'designs' && (
-        <DesignsPage onOpenProject={handleOpenProject} />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <DesignsPage onOpenProject={handleOpenProject} />
+        </div>
       )}
 
       {screen === 'review' && reviewProjectId && (
-        <ReviewPage projectId={reviewProjectId} />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <ReviewPage projectId={reviewProjectId} />
+        </div>
       )}
 
       {screen === 'editor' && (
@@ -510,7 +527,7 @@ export default function App() {
             </div>
           )}
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Breadcrumb */}
             <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <span

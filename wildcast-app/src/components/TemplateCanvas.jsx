@@ -568,6 +568,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       ref={containerRef}
       style={{
         flex: 1,
+        minHeight: 0,
         background: '#2a2a2a',
         overflow: 'hidden',
         display: 'flex',
