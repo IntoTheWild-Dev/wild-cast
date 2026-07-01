@@ -146,6 +146,49 @@ export default function App() {
   const [showHelp, setShowHelp]               = useState(false)
   const exportRef = useRef(null)
 
+  // ── Undo history ─────────────────────────────────────────────────────────────
+  const historyRef         = useRef([])           // snapshots of { fields, fontSizes, alignments, imageScales }
+  const [canUndo, setCanUndo] = useState(false)
+  const lastTextSnapRef    = useRef({ key: null, time: 0 }) // debounce text-field snaps
+  // Live refs so snapshot captures current values regardless of closure age
+  const fieldsRef      = useRef(fields);      fieldsRef.current      = fields
+  const fontSizesRef2  = useRef(fontSizes);   fontSizesRef2.current  = fontSizes
+  const alignmentsRef2 = useRef(alignments);  alignmentsRef2.current = alignments
+  const imageScalesRef2= useRef(imageScales); imageScalesRef2.current= imageScales
+
+  function pushUndoSnapshot(textKey = null) {
+    const now = Date.now()
+    if (textKey && textKey === lastTextSnapRef.current.key && now - lastTextSnapRef.current.time < 1000) return
+    if (textKey) lastTextSnapRef.current = { key: textKey, time: now }
+    historyRef.current = [
+      ...historyRef.current.slice(-29),
+      { fields: { ...fieldsRef.current }, fontSizes: { ...fontSizesRef2.current }, alignments: { ...alignmentsRef2.current }, imageScales: { ...imageScalesRef2.current } },
+    ]
+    setCanUndo(true)
+  }
+
+  function handleUndo() {
+    const snapshot = historyRef.current.pop()
+    if (!snapshot) return
+    setFields(snapshot.fields)
+    setFontSizes(snapshot.fontSizes)
+    setAlignments(snapshot.alignments)
+    setImageScales(snapshot.imageScales)
+    setCanUndo(historyRef.current.length > 0)
+  }
+
+  // Cmd+Z / Ctrl+Z global shortcut
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        handleUndo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }) // no deps — always uses latest handleUndo via closure refresh
+
   // Detect ?review=<id> in URL and switch to review screen
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -197,6 +240,7 @@ export default function App() {
   }, [currentProjectId])
 
   function handleSelectTemplate(template) {
+    historyRef.current = []; setCanUndo(false)
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
@@ -220,14 +264,17 @@ export default function App() {
   }
 
   function handleFontSizeChange(key, size) {
+    pushUndoSnapshot()
     setFontSizes(prev => ({ ...prev, [key]: Math.max(6, Math.min(120, size)) }))
   }
 
   function handleAlignChange(key, align) {
+    pushUndoSnapshot()
     setAlignments(prev => ({ ...prev, [key]: align }))
   }
 
   function handleImageScaleChange(zoneId, pct) {
+    pushUndoSnapshot()
     setImageScales(prev => ({ ...prev, [zoneId]: Math.max(20, Math.min(300, pct)) }))
   }
 
@@ -236,6 +283,7 @@ export default function App() {
   }
 
   function handleFieldChange(key, value) {
+    pushUndoSnapshot(key)
     setFields(prev => ({ ...prev, [key]: value }))
     setSaveStatus(null) // unsaved changes
   }
@@ -390,6 +438,7 @@ export default function App() {
       freshComments = commData.comments || []
     } catch {}
 
+    historyRef.current = []; setCanUndo(false)
     setSelectedTemplate(template)
     setFields(project.fields ?? DEFAULT_FIELDS)
     setFontSizes(project.fontSizes ?? {})
@@ -485,6 +534,17 @@ export default function App() {
                   {activation.credits} export{activation.credits !== 1 ? 's' : ''} remaining
                 </span>
               )}
+              <button
+                onClick={handleUndo}
+                disabled={!canUndo}
+                title="Undo last change (⌘Z)"
+                style={{ fontSize: 12, fontWeight: 600, color: canUndo ? 'var(--mid)' : 'var(--light)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: canUndo ? 'pointer' : 'default', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4 }}
+                onMouseEnter={e => { if (canUndo) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' } }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = canUndo ? 'var(--mid)' : 'var(--light)' }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                Undo
+              </button>
               <button
                 onClick={() => exportRef.current?.resetLayout?.()}
                 title="Reset all text zones to their original positions"
