@@ -105,7 +105,7 @@ const OPT_B_TEXT_ZONES = [
     id: 'headline',
     type: 'text',
     x: 15, y: 121,
-    width: 286, height: 70,
+    width: 286, height: 50,
     fontSize: 50,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
@@ -129,7 +129,7 @@ const OPT_B_IMAGE_ZONES = [
     id: 'headline',
     type: 'text',
     x: 15, y: 121,
-    width: 286, height: 70,
+    width: 286, height: 50,
     fontSize: 50,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
@@ -143,8 +143,8 @@ const OPT_B_IMAGE_ZONES = [
     fit: 'cover',
     label: 'Food photo',
     hint: 'JPG or PNG · min 800×600px',
-    x: 15, y: 194,
-    width: 286, height: 118,
+    x: 15, y: 174,
+    width: 286, height: 120,
   },
 ]
 
