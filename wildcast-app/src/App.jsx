@@ -13,13 +13,14 @@ import { TEMPLATES } from './data/templates'
 const STORAGE_KEY = 'wildcast_projects'
 
 const DEFAULT_FIELDS = {
-  headline:     '',
-  offer:        '',
-  sub_headline: '',
-  tc:           '',
-  logoUrl:      null,
-  photoUrl:     null,
-  qrUrl:        null,
+  headline:        '',
+  offer:           '',
+  sub_headline:    '',
+  restaurant_name: '',
+  tc:              '',
+  logoUrl:         null,
+  photoUrl:        null,
+  qrUrl:           null,
 }
 
 // Generate a medium-res preview image (2× canvas) for the review page
