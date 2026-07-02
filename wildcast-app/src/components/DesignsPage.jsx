@@ -112,7 +112,7 @@ export default function DesignsPage({ onOpenProject }) {
 
               {/* Info */}
               <div style={{ padding: '12px 14px 14px' }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3 }}>{project.projectName || project.templateName}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, wordBreak: 'break-word' }}>{project.projectName || project.templateName}</div>
                 <div style={{ fontSize: 11, color: 'var(--mid)' }}>Saved {formatDate(project.savedAt)}</div>
                 <button
                   style={{
