@@ -8,13 +8,14 @@ function formatDateTime(ts) {
 }
 import AISuggest from './AISuggest'
 
-const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120 }
+const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30 }
 
 const FIELD_HINTS = {
-  headline:    "Your main line, e.g. 'DREAMTEAM'",
-  sub_headline:"City or location line, e.g. 'POTSDAMS NEUES'",
-  offer:       "Your promotion, e.g. '30% SPAREN'",
-  tc:          'Small-print terms, rotated vertically on the flyer',
+  headline:         "Your main line, e.g. 'DREAMTEAM'",
+  sub_headline:     "City or location line, e.g. 'POTSDAMS NEUES'",
+  restaurant_name:  "Your restaurant name, e.g. 'Wen Cheng'",
+  offer:            "Your promotion, e.g. '30% SPAREN'",
+  tc:               'Small-print terms, rotated vertically on the flyer',
 }
 
 function OptionalBadge() {
@@ -370,9 +371,19 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             onResetPosition={() => onResetZone?.('sub_headline')}
           />
         )}
+        {templateConfig?.zones?.some(z => z.id === 'restaurant_name') && (
+          <StepFieldRow
+            step={3} label="Restaurant name" fieldKey="restaurant_name"
+            value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
+            showControls={showControls} showSize={isNonDesigner}
+            fontSize={effectiveFontSize('restaurant_name', 20)} onFontSize={s => onFontSizeChange('restaurant_name', s)}
+            align={effectiveAlign('restaurant_name', 'left')} onAlign={a => onAlignChange('restaurant_name', a)}
+            onResetPosition={() => onResetZone?.('restaurant_name')}
+          />
+        )}
         {templateConfig?.zones?.some(z => z.id === 'offer') && (
           <StepFieldRow
-            step={3} label="Offer" fieldKey="offer"
+            step={4} label="Offer" fieldKey="offer"
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             showControls={showControls} showSize={isNonDesigner}
             fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
@@ -382,7 +393,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         )}
         {templateConfig?.zones?.some(z => z.id === 'tc') && (
           <StepFieldRow
-            step={4} label="T&amp;Cs" fieldKey="tc"
+            step={5} label="T&amp;Cs" fieldKey="tc"
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
             showControls={showControls}
             fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
@@ -397,7 +408,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             {imageZones.map((zone, i) => (
               <ImageUpload
                 key={zone.id}
-                step={5 + i}
+                step={6 + i}
                 label={zone.label ?? zone.id}
                 hint={zone.hint ?? 'JPG or PNG'}
                 value={fields[`${zone.id}Url`]}

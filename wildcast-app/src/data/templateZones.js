@@ -9,8 +9,9 @@
 // [edit] fineprint       → tc
 // Food + logo layers are baked into the background PNG for now.
 
-const BG_FLYER1  = '/templates/A6 _ text_swap_wildcast.png'
-const BG_FLYER2  = '/templates/A6 _ text&image_swap_wildcast.png'
+const BG_FLYER1     = '/templates/A6 _ text_swap_wildcast.png'
+const BG_FLYER2     = '/templates/A6 _ text&image_swap_wildcast.png'
+const BG_FLYER2_V2  = '/templates/option-a-V2 _ text&image_swap_wildcast.png'
 const BG_OPT_B      = '/templates/opt-b-designer.png'   // text+image: user uploads logo+photo
 const BG_OPT_B_TEXT = '/templates/opt-b-text-bg.png'     // text-only: logo+photo baked in PNG
 
@@ -91,6 +92,24 @@ const WEN_CHENG_FLYER2_ZONES = [
   },
 ]
 
+// ── Option A V2 zones (text+image) — adds editable restaurant name ──────────
+// Restaurant name sits left of the baked "♥ WOLT" line at y≈155 (35.09% of 441)
+const WEN_CHENG_FLYER2_V2_ZONES = [
+  ...WEN_CHENG_FLYER2_ZONES,
+  {
+    id: 'restaurant_name',
+    type: 'text',
+    x: 10, y: 148,
+    width: 165, height: 28,
+    fontSize: 20,
+    fontFamily: 'omnes-cond',
+    fontWeight: 700,
+    color: '#FFFFFF',
+    align: 'left',
+    autoShrink: true,
+  },
+]
+
 // ── Option B zones ─────────────────────────────────────────────────────────
 // Canvas 316×441. Zones from Figma reference (node 4290-31):
 //   logo (top center) · "WIE WÄR'S MIT" baked · restaurant name text · food photo
@@ -160,17 +179,17 @@ export const TEMPLATE_ZONES = {
   'wen-cheng-flyer2': {
     canvasW: 316,
     canvasH: 441,
-    backgroundUrl: BG_FLYER2,
+    backgroundUrl: BG_FLYER2_V2,
     backgroundFill: '#00C2CB',
-    zones: WEN_CHENG_FLYER2_ZONES,
+    zones: WEN_CHENG_FLYER2_V2_ZONES,
   },
   // Same layout as flyer2 but used with mode='non-designer' — canvas objects locked, guided right panel
   'wen-cheng-flyer2-simple': {
     canvasW: 316,
     canvasH: 441,
-    backgroundUrl: BG_FLYER2,
+    backgroundUrl: BG_FLYER2_V2,
     backgroundFill: '#00C2CB',
-    zones: WEN_CHENG_FLYER2_ZONES,
+    zones: WEN_CHENG_FLYER2_V2_ZONES,
   },
   // Same layout as flyer1 but used with mode='non-designer'
   'wen-cheng-flyer1-simple': {
