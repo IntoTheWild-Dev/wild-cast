@@ -1,7 +1,7 @@
 export const TEMPLATES = [
   {
     id: 'wen-cheng-flyer1-simple',
-    name: 'Flyer 1',
+    name: 'Restaurant Flyer · Option A',
     desc: 'Step-by-step guided editing — fill in your headline, sub-headline and offer. Layout is locked so your flyer always looks on-brand.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-only',
@@ -13,7 +13,7 @@ export const TEMPLATES = [
   },
   {
     id: 'wen-cheng-flyer2-simple',
-    name: 'Flyer 2',
+    name: 'Restaurant Flyer · Option A',
     desc: 'Step-by-step guided editing — upload your logo and food photo, fill in your text. Layout is locked so your flyer always looks on-brand.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-image',
@@ -25,7 +25,7 @@ export const TEMPLATES = [
   },
   {
     id: 'wen-cheng-flyer1',
-    name: 'Flyer 1',
+    name: 'Restaurant Flyer · Option A',
     desc: 'Full control over headline, city tagline and offer. Move, resize and restyle any element.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-only',
@@ -37,7 +37,7 @@ export const TEMPLATES = [
   },
   {
     id: 'wen-cheng-flyer2',
-    name: 'Flyer 2',
+    name: 'Restaurant Flyer · Option A',
     desc: 'Full control over food photo, logo and all text fields. Drag, resize and restyle anything.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-image',
