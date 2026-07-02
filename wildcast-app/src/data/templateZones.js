@@ -99,7 +99,7 @@ const WEN_CHENG_FLYER2_V2_ZONES = [
   {
     id: 'restaurant_name',
     type: 'text',
-    x: 10, y: 148,
+    x: 10, y: 151,
     width: 165, height: 28,
     fontSize: 20,
     fontFamily: 'omnes-cond',

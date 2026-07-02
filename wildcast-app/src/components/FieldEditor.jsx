@@ -375,10 +375,9 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={3} label="Restaurant name" fieldKey="restaurant_name"
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
-            showControls={showControls} showSize={isNonDesigner}
-            fontSize={effectiveFontSize('restaurant_name', 20)} onFontSize={s => onFontSizeChange('restaurant_name', s)}
-            align={effectiveAlign('restaurant_name', 'right')} onAlign={a => onAlignChange('restaurant_name', a)}
-            onResetPosition={() => onResetZone?.('restaurant_name')}
+            showControls={false} showSize={false}
+            fontSize={20}
+            align="right"
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'offer') && (
