@@ -18,7 +18,7 @@ async function loadFonts() {
   }
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, mode, loadKey, zonePositions }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -30,6 +30,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   fontSizesRef.current = fontSizes
   const imageScalesRef = useRef(imageScales ?? {}) // always current, applied on image load
   imageScalesRef.current = imageScales ?? {}
+  const imagePositionsRef = useRef(imagePositions ?? {}) // always current, applied on image load
+  imagePositionsRef.current = imagePositions ?? {}
   const alignmentsRef = useRef(alignments ?? {}) // always current, used inside async canvas-init closure
   alignmentsRef.current = alignments ?? {}
   const zonePositionsRef = useRef(zonePositions ?? {}) // saved drag positions, applied on canvas init
@@ -38,6 +40,18 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
+
+  // Clamps a user nudge offset to the crop slack the current scale allows, so an
+  // image can never be nudged far enough to reveal zone background behind it.
+  function clampOffset(zone, scaledW, scaledH, rawOffset) {
+    const slackX = Math.max(0, (scaledW - zone.width)  / 2)
+    const slackY = Math.max(0, (scaledH - zone.height) / 2)
+    const raw = rawOffset ?? { x: 0, y: 0 }
+    return {
+      x: Math.max(-slackX, Math.min(slackX, raw.x)),
+      y: Math.max(-slackY, Math.min(slackY, raw.y)),
+    }
+  }
 
   // ── Initialise canvas when template config changes ──────────────────────────
   useEffect(() => {
@@ -429,16 +443,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const finalScale = img._wcBaseScale * (userPct / 100)
       const scaledW = img.width  * finalScale
       const scaledH = img.height * finalScale
+      const offset = clampOffset(zone, scaledW, scaledH, imagePositions?.[zone.id])
       img.set({
         scaleX: finalScale,
         scaleY: finalScale,
-        left: zone.x + (zone.width  - scaledW) / 2,
-        top:  zone.y + (zone.height - scaledH) / 2,
+        left: zone.x + (zone.width  - scaledW) / 2 + offset.x,
+        top:  zone.y + (zone.height - scaledH) / 2 + offset.y,
       })
       img.setCoords()
     })
     canvas.renderAll()
-  }, [imageScales, config])
+  }, [imageScales, imagePositions, config])
 
   // ── Zoom controls (button-driven only — no scroll wheel) ───────────────────
   const handleZoomIn  = useCallback(() => setZoom(z => Math.min(400, Math.round(z / 10) * 10 + 10)), [])
@@ -486,9 +501,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         const scaledW = img.width  * scale
         const scaledH = img.height * scale
         const imgLocked = !fabricRef.current || mode === 'non-designer'
+        const offset0 = clampOffset(zone, scaledW, scaledH, imagePositionsRef.current?.[zone.id])
         img.set({
-          left:    zone.x + (zone.width  - scaledW) / 2,
-          top:     zone.y + (zone.height - scaledH) / 2,
+          left:    zone.x + (zone.width  - scaledW) / 2 + offset0.x,
+          top:     zone.y + (zone.height - scaledH) / 2 + offset0.y,
           scaleX:  scale,
           scaleY:  scale,
           selectable:   !imgLocked,
@@ -526,11 +542,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           const finalScale = scale * (userPct / 100)
           const scaledW = img.width  * finalScale
           const scaledH = img.height * finalScale
+          const offset1 = clampOffset(zone, scaledW, scaledH, imagePositionsRef.current?.[zone.id])
           img.set({
             scaleX: finalScale,
             scaleY: finalScale,
-            left: zone.x + (zone.width  - scaledW) / 2,
-            top:  zone.y + (zone.height - scaledH) / 2,
+            left: zone.x + (zone.width  - scaledW) / 2 + offset1.x,
+            top:  zone.y + (zone.height - scaledH) / 2 + offset1.y,
           })
           img.setCoords()
         }

@@ -149,7 +149,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, minWidth, minHeight }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight }) {
   const [resWarning, setResWarning] = useState(null)
 
   const handleClick = () => {
@@ -254,12 +254,37 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           </div>
         </div>
       )}
+
+      {/* Nudge control — repositions the photo within its zone. Bump Scale up first
+          if the food sits off-centre in your source photo, then nudge to recentre it. */}
+      {value && onNudge && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
+          <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Position</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
+            {[
+              { dir: '←', axis: 'x', delta: -4 },
+              { dir: '→', axis: 'x', delta: 4 },
+              { dir: '↑', axis: 'y', delta: -4 },
+              { dir: '↓', axis: 'y', delta: 4 },
+            ].map(({ dir, axis, delta }) => (
+              <button
+                key={dir}
+                onClick={e => { e.stopPropagation(); onNudge(axis, delta) }}
+                title={`Nudge ${dir === '←' ? 'left' : dir === '→' ? 'right' : dir === '↑' ? 'up' : 'down'}`}
+                style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >{dir}</button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -413,9 +438,10 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 value={fields[`${zone.id}Url`]}
                 onChange={url => onChange(`${zone.id}Url`, url)}
                 square={zone.id === 'logo'}
-                onResetPosition={showControls ? () => onResetZone?.(zone.id) : null}
+                onResetPosition={() => onResetZone?.(zone.id)}
                 scalePercent={imageScales?.[zone.id] ?? 100}
                 onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+                onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
                 minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
                 minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
               />

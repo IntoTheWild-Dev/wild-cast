@@ -133,6 +133,7 @@ export default function App() {
   const [fontSizes, setFontSizes]             = useState({})
   const [alignments, setAlignments]           = useState({})
   const [imageScales, setImageScales]         = useState({})
+  const [imagePositions, setImagePositions]   = useState({})
   const [zonePositions, setZonePositions]     = useState({})
   const [projectName, setProjectName]         = useState('')
   const [currentProjectId, setCurrentProjectId] = useState(null)
@@ -156,6 +157,7 @@ export default function App() {
   const fontSizesRef2  = useRef(fontSizes);   fontSizesRef2.current  = fontSizes
   const alignmentsRef2 = useRef(alignments);  alignmentsRef2.current = alignments
   const imageScalesRef2= useRef(imageScales); imageScalesRef2.current= imageScales
+  const imagePositionsRef2 = useRef(imagePositions); imagePositionsRef2.current = imagePositions
 
   function pushUndoSnapshot(textKey = null) {
     const now = Date.now()
@@ -163,7 +165,7 @@ export default function App() {
     if (textKey) lastTextSnapRef.current = { key: textKey, time: now }
     historyRef.current = [
       ...historyRef.current.slice(-29),
-      { fields: { ...fieldsRef.current }, fontSizes: { ...fontSizesRef2.current }, alignments: { ...alignmentsRef2.current }, imageScales: { ...imageScalesRef2.current } },
+      { fields: { ...fieldsRef.current }, fontSizes: { ...fontSizesRef2.current }, alignments: { ...alignmentsRef2.current }, imageScales: { ...imageScalesRef2.current }, imagePositions: { ...imagePositionsRef2.current } },
     ]
     setCanUndo(true)
   }
@@ -175,6 +177,7 @@ export default function App() {
     setFontSizes(snapshot.fontSizes)
     setAlignments(snapshot.alignments)
     setImageScales(snapshot.imageScales)
+    setImagePositions(snapshot.imagePositions ?? {})
     setCanUndo(historyRef.current.length > 0)
   }
 
@@ -290,8 +293,27 @@ export default function App() {
     setImageScales(prev => ({ ...prev, [zoneId]: Math.max(20, Math.min(300, pct)) }))
   }
 
+  // Nudges the photo within its zone (px, in canvas units). TemplateCanvas clamps
+  // the applied value to whatever crop slack the current scale allows, so this can't
+  // reveal background — over-nudging just has no further visible effect.
+  function handleImageOffsetChange(zoneId, axis, delta) {
+    pushUndoSnapshot()
+    setImagePositions(prev => {
+      const cur = prev[zoneId] ?? { x: 0, y: 0 }
+      return { ...prev, [zoneId]: { ...cur, [axis]: cur[axis] + delta } }
+    })
+  }
+
   function handleResetZone(zoneId) {
     exportRef.current?.resetZone?.(zoneId)
+    setImageScales(prev => {
+      if (!(zoneId in prev)) return prev
+      const next = { ...prev }; delete next[zoneId]; return next
+    })
+    setImagePositions(prev => {
+      if (!(zoneId in prev)) return prev
+      const next = { ...prev }; delete next[zoneId]; return next
+    })
   }
 
   function handleFieldChange(key, value) {
@@ -371,7 +393,7 @@ export default function App() {
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
-      fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, zonePositions: currentZonePositions,
+      fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, imagePositions, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
     }
 
@@ -456,6 +478,7 @@ export default function App() {
     setFontSizes(project.fontSizes ?? {})
     setAlignments(project.alignments ?? {})
     setImageScales(project.imageScales ?? {})
+    setImagePositions(project.imagePositions ?? {})
     setZonePositions(project.zonePositions ?? {})
     setProjectName(project.projectName || template.name)
     setCurrentProjectId(project.id)
@@ -583,6 +606,7 @@ export default function App() {
               fontSizes={fontSizes}
               alignments={alignments}
               imageScales={imageScales}
+              imagePositions={imagePositions}
               mode={selectedTemplate?.mode ?? 'designer'}
               loadKey={loadKey}
               zonePositions={zonePositions}
@@ -605,6 +629,8 @@ export default function App() {
             onResetZone={handleResetZone}
             imageScales={imageScales}
             onImageScaleChange={handleImageScaleChange}
+            imagePositions={imagePositions}
+            onImageOffsetChange={handleImageOffsetChange}
             mode={selectedTemplate?.mode ?? 'designer'}
             onSave={handleSave}
             saving={saving}
