@@ -495,8 +495,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         if (!fabricRef.current) return
         // Photos use cover (fill zone, crop center); logos use contain (full logo visible)
         const isCover = zone.fit === 'cover'
+        // Small always-on overscan so the Position nudge has a little crop room in
+        // BOTH directions from the start — otherwise whichever dimension "cover" binds
+        // to (matches the zone exactly) has zero slack until the user also bumps Scale.
+        const NUDGE_MARGIN = 1.06
         const scale = isCover
-          ? Math.max(zone.width / img.width, zone.height / img.height)
+          ? Math.max(zone.width / img.width, zone.height / img.height) * NUDGE_MARGIN
           : Math.min(zone.width / img.width, zone.height / img.height)
         const scaledW = img.width  * scale
         const scaledH = img.height * scale
