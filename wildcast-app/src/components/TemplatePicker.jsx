@@ -6,6 +6,7 @@ const ALL_TEMPLATES = [
   {
     label: 'Restaurant Flyer · Option A',
     category: 'restaurant', format: 'Flyer',
+    groupThumb: '/templates/tile-restaurant-flyer.png',
     thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
     live: true,
     templateIdGuided:        'wen-cheng-flyer2-simple',
@@ -169,65 +170,43 @@ function Chip({ label, active, onClick, soon }) {
 
 // ── Group card (homepage) ─────────────────────────────────────────────────────
 function GroupCard({ group, onViewAll }) {
-  const { format, category, members, hero, liveCount } = group
-  const total = members.length
-  const cap   = category.charAt(0).toUpperCase() + category.slice(1)
+  const { members, liveCount } = group
+  const total     = members.length
+  const groupThumb = members.find(m => m.groupThumb)?.groupThumb ?? null
 
   return (
     <div
       onClick={onViewAll}
       style={{
-        background: '#fff', borderRadius: 14, border: '1.5px solid var(--border)',
-        overflow: 'hidden', cursor: 'pointer',
+        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+        border: '1.5px solid var(--border)',
         transition: 'transform 0.15s, box-shadow 0.15s',
+        position: 'relative',
+        aspectRatio: '33 / 28',
       }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.1)' }}
       onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
     >
-      {/* Preview area */}
-      <div style={{ height: 220, position: 'relative', background: hero ? '#00C2CB' : '#F3F4F6', overflow: 'hidden' }}>
-        {hero ? (
-          <img src={hero.thumb} alt={format} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-        ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Coming soon</span>
+      {groupThumb ? (
+        <img src={groupThumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center bottom', display: 'block' }} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
           </div>
-        )}
-        {/* Count badge */}
-        <div style={{
-          position: 'absolute', top: 10, right: 10,
-          background: 'rgba(2,6,24,0.65)', backdropFilter: 'blur(4px)',
-          color: '#fff', fontSize: 11, fontWeight: 700,
-          padding: '3px 9px', borderRadius: 100,
-        }}>
-          {total} designs
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Coming soon</span>
         </div>
-        {liveCount > 0 && (
-          <div style={{
-            position: 'absolute', top: 10, left: 10,
-            background: 'var(--primary)', color: '#fff',
-            fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100,
-          }}>
-            {liveCount} available
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* Card body */}
-      <div style={{ padding: '16px 18px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>{cap} {format}</div>
-          <div style={{ fontSize: 12, color: 'var(--mid)' }}>
-            {liveCount > 0 ? `${liveCount} of ${total} available` : 'Coming soon'}
-          </div>
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', flexShrink: 0, marginLeft: 12 }}>
-          View all →
-        </span>
+      {/* Badges */}
+      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(2,6,24,0.65)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 100 }}>
+        {total} designs
       </div>
+      {liveCount > 0 && (
+        <div style={{ position: 'absolute', top: 10, left: 10, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100 }}>
+          {liveCount} available
+        </div>
+      )}
     </div>
   )
 }
