@@ -331,7 +331,7 @@ export default function TemplatePicker({ onSelect }) {
 
         {/* Page title */}
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Wolt Partner Tools</div>
-        <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 24 }}>Design. Export. Print.</h1>
+        <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 40 }}>Design. Export. Print.</h1>
 
         {/* Search */}
         <div style={{ position: 'relative', marginBottom: 20 }}>
