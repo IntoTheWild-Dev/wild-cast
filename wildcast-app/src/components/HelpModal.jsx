@@ -24,8 +24,8 @@ export default function HelpModal({ onClose }) {
         {/* Steps */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 28 }}>
           {[
-            { n: 1, title: 'Pick a template', desc: 'Choose from our pre-approved Wolt flyer designs. More formats coming soon.' },
-            { n: 2, title: 'Fill in your content', desc: 'Add your headline, offer, sub-headline and upload your photos. Everything stays on-brand automatically.' },
+            { n: 1, title: 'Pick a template', desc: 'Choose from our pre-approved Wolt flyer designs, then pick Guided (fill in the blanks) or Designer (move and resize freely). More formats coming soon.' },
+            { n: 2, title: 'Fill in your content', desc: 'Add your headline, restaurant name, offer and sub-headline, then upload your logo and food photo. Everything stays on-brand automatically.' },
             { n: 3, title: 'Export & print', desc: 'Click Export PDF to download a print-ready CMYK PDF/X-4 file. Send it straight to your printer — no designer needed.' },
           ].map(({ n, title, desc }) => (
             <div key={n} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
