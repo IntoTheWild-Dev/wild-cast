@@ -76,6 +76,9 @@ const FORMATS    = ['Flyer', 'Poster', 'Wild Poster']
 
 // ── Layout picker modal ───────────────────────────────────────────────────────
 function LayoutModal({ entry, onPick, onClose }) {
+  // Text-only modes are disabled for now (design decision — not worth maintaining
+  // both text-only and text+image variants per flyer). Kept in the list with
+  // disabled:true rather than deleted so they're easy to re-enable later.
   const options = [
     {
       key: 'guided-text',
@@ -83,10 +86,11 @@ function LayoutModal({ entry, onPick, onClose }) {
       desc: 'Headline, sub-headline, offer and T&Cs — no image upload needed.',
       templateId: entry.templateIdGuidedText,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="15" x2="18" y2="15"/><line x1="4" y1="19" x2="12" y2="19"/></svg>,
+      disabled: true,
     },
     {
       key: 'guided-image',
-      type: 'Text + Image',
+      type: 'Text + Image · Guided',
       desc: 'Headline, sub-headline, offer, plus a food photo and your logo.',
       templateId: entry.templateIdGuided,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><line x1="4" y1="21" x2="20" y2="21"/></svg>,
@@ -97,6 +101,7 @@ function LayoutModal({ entry, onPick, onClose }) {
       desc: 'Full control — move, resize and restyle any element freely.',
       templateId: entry.templateIdDesignerText,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+      disabled: true,
     },
     {
       key: 'designer-image',
@@ -105,7 +110,7 @@ function LayoutModal({ entry, onPick, onClose }) {
       templateId: entry.templateIdDesigner,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
     },
-  ]
+  ].filter(opt => !opt.disabled)
 
   return (
     <div
