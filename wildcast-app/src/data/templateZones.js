@@ -105,7 +105,7 @@ const WEN_CHENG_FLYER2_V2_ZONES = [
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
-    align: 'left',
+    align: 'right',
     autoShrink: true,
   },
 ]

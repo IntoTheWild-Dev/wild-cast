@@ -377,7 +377,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
             showControls={showControls} showSize={isNonDesigner}
             fontSize={effectiveFontSize('restaurant_name', 20)} onFontSize={s => onFontSizeChange('restaurant_name', s)}
-            align={effectiveAlign('restaurant_name', 'left')} onAlign={a => onAlignChange('restaurant_name', a)}
+            align={effectiveAlign('restaurant_name', 'right')} onAlign={a => onAlignChange('restaurant_name', a)}
             onResetPosition={() => onResetZone?.('restaurant_name')}
           />
         )}
