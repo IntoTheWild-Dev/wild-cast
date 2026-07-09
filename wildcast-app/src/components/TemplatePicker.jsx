@@ -259,8 +259,15 @@ const FEATURES = [
   },
 ]
 
+// ── Format options (briefing form) ────────────────────────────────────────────
+const FORMAT_OPTIONS = [
+  { value: 'Flyer', desc: 'A6 print flyer' },
+  { value: 'Poster', desc: 'Larger in-store poster', soon: true },
+  { value: 'Wild Poster', desc: 'Statement window poster', soon: true },
+]
+
 // ── Category option (briefing form) ───────────────────────────────────────────
-function CategoryOption({ label, desc, active, onClick }) {
+function CategoryOption({ label, desc, soon, active, onClick }) {
   return (
     <button
       type="button"
@@ -278,7 +285,10 @@ function CategoryOption({ label, desc, active, onClick }) {
         background: '#fff', transition: 'all 0.15s',
       }} />
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{label}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', display: 'flex', alignItems: 'center', gap: 7 }}>
+          {label}
+          {soon && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>· soon</span>}
+        </div>
         <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{desc}</div>
       </div>
     </button>
@@ -289,18 +299,19 @@ function CategoryOption({ label, desc, active, onClick }) {
 function BriefingForm({ onSubmit }) {
   const [businessName, setBusinessName] = useState('')
   const [category, setCategory] = useState(null)
+  const [format, setFormat] = useState(null)
   const [error, setError] = useState('')
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!category) { setError('Please select your business type to continue.'); return }
+    if (!category || !format) { setError('Please select your business type and format to continue.'); return }
     setError('')
-    onSubmit({ businessName, category })
+    onSubmit({ businessName, category, format })
   }
 
   return (
     <form onSubmit={handleSubmit} style={{ border: '1.5px dashed var(--border)', borderRadius: 16, padding: 28, background: '#FAFAF8' }}>
-      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--dark)', marginBottom: 4 }}>Tell us about your business</div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--dark)', marginBottom: 4 }}>Fill in your briefing form</div>
       <p style={{ fontSize: 12, color: 'var(--mid)', margin: '0 0 22px' }}>We'll show you the right templates to start with.</p>
 
       <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', display: 'block', marginBottom: 6 }}>Business name</label>
@@ -315,9 +326,16 @@ function BriefingForm({ onSubmit }) {
       />
 
       <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', display: 'block', marginBottom: 8 }}>Business type</label>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
         <CategoryOption label="Restaurant" desc="Menus, offers, food flyers" active={category === 'restaurant'} onClick={() => { setCategory('restaurant'); setError('') }} />
         <CategoryOption label="Retail" desc="Products, promotions, in-store flyers" active={category === 'retail'} onClick={() => { setCategory('retail'); setError('') }} />
+      </div>
+
+      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', display: 'block', marginBottom: 8 }}>Format</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {FORMAT_OPTIONS.map(f => (
+          <CategoryOption key={f.value} label={f.value} desc={f.desc} soon={f.soon} active={format === f.value} onClick={() => { setFormat(f.value); setError('') }} />
+        ))}
       </div>
 
       {error && <div style={{ fontSize: 12, color: '#EF4444', marginTop: 12 }}>{error}</div>}
@@ -349,8 +367,8 @@ export default function TemplatePicker({ onSelect }) {
     )
   }
 
-  function handleBriefSubmit({ category }) {
-    const group = ALL_GROUPS.find(g => g.category === category && g.format === 'Flyer')
+  function handleBriefSubmit({ category, format }) {
+    const group = ALL_GROUPS.find(g => g.category === category && g.format === format)
     if (group) setSelectedGroup(group)
   }
 

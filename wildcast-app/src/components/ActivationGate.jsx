@@ -126,9 +126,9 @@ export default function ActivationGate({ onActivated }) {
 
       {/* Footer */}
       <footer style={{ background: 'var(--dark)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
-          <span>Wild Cast — Print templates for Wolt partners.</span>
-          <span>Built by Wild Stack</span>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
+          <span style={{ whiteSpace: 'nowrap' }}>Wild Cast — Print templates for Wolt partners.</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Built by Wild Stack</span>
         </div>
       </footer>
     </div>

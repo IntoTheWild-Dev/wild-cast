@@ -155,6 +155,10 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
 
+  // The displayed min-resolution text always matches the real 300 DPI check below —
+  // never hardcode a pixel count in a zone's hint string, it will drift from this.
+  const fullHint = minWidth && minHeight ? `${hint} · min ${minWidth}×${minHeight}px` : hint
+
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -221,7 +225,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
               >↺</button>
             )}
           </div>
-          {hint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{hint}</div>}
+          {fullHint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{fullHint}</div>}
         </div>
       </div>
       <div
@@ -242,7 +246,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Click to upload</div>
-              <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{hint}</div>
+              <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{fullHint}</div>
             </div>
           </>
         )}
