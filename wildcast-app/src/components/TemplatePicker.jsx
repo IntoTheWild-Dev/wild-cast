@@ -71,9 +71,6 @@ const ALL_GROUPS = (() => {
   return groups
 })()
 
-const CATEGORIES = ['restaurant', 'retail']
-const FORMATS    = ['Flyer', 'Poster', 'Wild Poster']
-
 // ── Layout picker modal ───────────────────────────────────────────────────────
 function LayoutModal({ entry, onPick, onClose }) {
   // Text-only modes are disabled for now (design decision — not worth maintaining
@@ -148,70 +145,6 @@ function LayoutModal({ entry, onPick, onClose }) {
           Cancel
         </button>
       </div>
-    </div>
-  )
-}
-
-// ── Filter chip ───────────────────────────────────────────────────────────────
-function Chip({ label, active, onClick, soon }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '5px 13px', borderRadius: 100, fontSize: 12, fontWeight: 500,
-        cursor: soon ? 'default' : 'pointer',
-        border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
-        background: active ? 'var(--primary-glow)' : 'transparent',
-        color: soon ? 'var(--light)' : active ? 'var(--primary-dark)' : 'var(--mid)',
-        transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 5,
-      }}
-    >
-      {active && !soon && <span style={{ fontSize: 9 }}>✓</span>}
-      {label}
-      {soon && <span style={{ fontSize: 9, fontWeight: 700 }}>· soon</span>}
-    </button>
-  )
-}
-
-// ── Group card (homepage) ─────────────────────────────────────────────────────
-function GroupCard({ group, onViewAll }) {
-  const { members, liveCount } = group
-  const total     = members.length
-  const groupThumb = members.find(m => m.groupThumb)?.groupThumb ?? null
-
-  return (
-    <div
-      onClick={onViewAll}
-      style={{
-        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
-        border: '1.5px solid var(--border)',
-        transition: 'transform 0.15s, box-shadow 0.15s',
-        position: 'relative',
-        aspectRatio: '33 / 28',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.1)' }}
-      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
-    >
-      {groupThumb ? (
-        <img src={groupThumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center bottom', display: 'block' }} />
-      ) : (
-        <div style={{ width: '100%', height: '100%', background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Coming soon</span>
-        </div>
-      )}
-
-      {/* Badges */}
-      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(2,6,24,0.65)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 100 }}>
-        {total} designs
-      </div>
-      {liveCount > 0 && (
-        <div style={{ position: 'absolute', top: 10, left: 10, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100 }}>
-          {liveCount} available
-        </div>
-      )}
     </div>
   )
 }
@@ -302,15 +235,108 @@ function OptionsView({ group, onBack, onSelect }) {
   )
 }
 
+// ── Hero feature bullets ──────────────────────────────────────────────────────
+const FEATURES = [
+  {
+    title: 'Pre-approved templates',
+    desc: 'On-brand designs, ready to customize — no designer needed.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>,
+  },
+  {
+    title: 'Edit text & photos in minutes',
+    desc: 'Swap in your own copy, logo and food photos.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+  },
+  {
+    title: 'Print-ready CMYK export',
+    desc: 'PDF/X-4 with 3mm bleed — send straight to print.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  },
+  {
+    title: 'Logos & photos saved for reuse',
+    desc: 'Everything you upload lands in your library automatically.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+  },
+]
+
+// ── Category option (briefing form) ───────────────────────────────────────────
+function CategoryOption({ label, desc, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, width: '100%',
+        border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+        background: active ? 'var(--primary-glow)' : '#fff',
+        cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', fontFamily: 'inherit',
+      }}
+    >
+      <div style={{
+        width: 18, height: 18, borderRadius: '50%', flexShrink: 0, boxSizing: 'border-box',
+        border: active ? '5px solid var(--primary)' : '1.5px solid var(--border)',
+        background: '#fff', transition: 'all 0.15s',
+      }} />
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{label}</div>
+        <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{desc}</div>
+      </div>
+    </button>
+  )
+}
+
+// ── Briefing form (homepage, right column) ────────────────────────────────────
+function BriefingForm({ onSubmit }) {
+  const [businessName, setBusinessName] = useState('')
+  const [category, setCategory] = useState(null)
+  const [error, setError] = useState('')
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    if (!category) { setError('Please select your business type to continue.'); return }
+    setError('')
+    onSubmit({ businessName, category })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ border: '1.5px dashed var(--border)', borderRadius: 16, padding: 28, background: '#FAFAF8' }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--dark)', marginBottom: 4 }}>Tell us about your business</div>
+      <p style={{ fontSize: 12, color: 'var(--mid)', margin: '0 0 22px' }}>We'll show you the right templates to start with.</p>
+
+      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', display: 'block', marginBottom: 6 }}>Business name</label>
+      <input
+        type="text"
+        value={businessName}
+        onChange={e => setBusinessName(e.target.value)}
+        placeholder="e.g. Wen Cheng"
+        style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', marginBottom: 22, background: '#fff', color: 'var(--dark)', boxSizing: 'border-box' }}
+        onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+        onBlur={e => e.target.style.borderColor = 'var(--border)'}
+      />
+
+      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', display: 'block', marginBottom: 8 }}>Business type</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <CategoryOption label="Restaurant" desc="Menus, offers, food flyers" active={category === 'restaurant'} onClick={() => { setCategory('restaurant'); setError('') }} />
+        <CategoryOption label="Retail" desc="Products, promotions, in-store flyers" active={category === 'retail'} onClick={() => { setCategory('retail'); setError('') }} />
+      </div>
+
+      {error && <div style={{ fontSize: 12, color: '#EF4444', marginTop: 12 }}>{error}</div>}
+
+      <button
+        type="submit"
+        style={{ width: '100%', marginTop: 22, padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', transition: 'background 0.15s' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'var(--primary)'}
+      >
+        Show my templates →
+      </button>
+    </form>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TemplatePicker({ onSelect }) {
-  const [search,        setSearch]        = useState('')
-  const [cats,          setCats]          = useState(['restaurant', 'retail'])
-  const [formats,       setFormats]       = useState(['Flyer', 'Poster', 'Wild Poster'])
-  const [selectedGroup, setSelectedGroup] = useState(null)  // null = groups view
-
-  function toggleCat(c)    { setCats(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]) }
-  function toggleFormat(f) { setFormats(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]) }
+  const [selectedGroup, setSelectedGroup] = useState(null)  // null = hero/briefing view
 
   // Options view
   if (selectedGroup) {
@@ -323,62 +349,42 @@ export default function TemplatePicker({ onSelect }) {
     )
   }
 
-  const q = search.toLowerCase()
-  const visibleGroups = ALL_GROUPS.filter(g =>
-    cats.includes(g.category) &&
-    formats.includes(g.format) &&
-    (q === '' || g.format.toLowerCase().includes(q) || g.category.includes(q))
-  )
+  function handleBriefSubmit({ category }) {
+    const group = ALL_GROUPS.find(g => g.category === category && g.format === 'Flyer')
+    if (group) setSelectedGroup(group)
+  }
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'center' }}>
 
-        {/* Page title */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Wolt Partner Tools</div>
-        <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 40 }}>Design. Export. Print.</h1>
+          {/* Left: hero copy */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
+            <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0, lineHeight: 1.08 }}>Design. Export.</h1>
+            <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--primary)', margin: '0 0 20px', lineHeight: 1.08 }}>Print.</h1>
+            <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
+              Turn your menu or product updates into print-ready flyers in minutes — no designer needed.
+            </p>
 
-        {/* Search */}
-        <div style={{ position: 'relative', marginBottom: 20 }}>
-          <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--light)', pointerEvents: 'none' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input
-            type="text"
-            placeholder="Search templates…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 12, background: '#fff', color: 'var(--dark)', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
-            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
-          />
-        </div>
-
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 20, marginBottom: 32, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>Category</span>
-            {CATEGORIES.map(c => (
-              <Chip key={c} label={c.charAt(0).toUpperCase() + c.slice(1)} active={cats.includes(c)} onClick={() => toggleCat(c)} />
-            ))}
-          </div>
-          <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>Format</span>
-            {FORMATS.map(f => (
-              <Chip key={f} label={f} active={formats.includes(f)} onClick={() => toggleFormat(f)} soon={f !== 'Flyer'} />
-            ))}
-          </div>
-        </div>
-
-        {/* Group grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
-          {visibleGroups.map(g => (
-            <GroupCard key={g.key} group={g} onViewAll={() => setSelectedGroup(g)} />
-          ))}
-          {visibleGroups.length === 0 && (
-            <div style={{ gridColumn: '1 / -1', padding: '60px 0', textAlign: 'center', color: 'var(--light)', fontSize: 14 }}>
-              No templates match — try different filters.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {FEATURES.map(f => (
+                <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {f.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{f.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{f.desc}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Right: briefing form */}
+          <BriefingForm onSubmit={handleBriefSubmit} />
         </div>
       </div>
     </div>
