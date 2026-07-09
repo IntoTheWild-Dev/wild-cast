@@ -18,7 +18,7 @@ async function loadFonts() {
   }
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -36,6 +36,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   alignmentsRef.current = alignments ?? {}
   const zonePositionsRef = useRef(zonePositions ?? {}) // saved drag positions, applied on canvas init
   zonePositionsRef.current = zonePositions ?? {}
+  const onZoneDragStartRef = useRef(onZoneDragStart) // always current, read inside canvas-init closure
+  onZoneDragStartRef.current = onZoneDragStart
   const syncing = useRef(false)
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
@@ -79,6 +81,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       canvas.on('mouse:up', () => {
         const g = zoneObjsRef.current['_centre-guide']
         if (g) { g.set('visible', false); canvas.requestRenderAll() }
+      })
+      // Snapshot the pre-drag position so a text-zone move/resize is undoable —
+      // fires on mousedown (before any position change), not on the eventual
+      // object:modified, so the snapshot captures the state to undo BACK TO.
+      canvas.on('mouse:down', opt => {
+        if (opt.target?.type === 'textbox' && opt.target._wcZoneId) {
+          onZoneDragStartRef.current?.(opt.target._wcZoneId)
+        }
       })
     }
 
@@ -152,6 +162,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         resetZone: (zoneId) => {
           const zone = zones.find(z => z.id === zoneId)
           if (zone) { snapZone(zone); canvas.renderAll() }
+        },
+        // Restores text-zone positions from an undo snapshot (mirrors the saved-project
+        // restore in the canvas-init effect, but callable at any time with arbitrary data).
+        applyZonePositions: (positions) => {
+          if (!positions) return
+          zones.forEach(zone => {
+            if (zone.type !== 'text') return
+            const p = positions[zone.id]
+            if (!p) return
+            const obj = zoneObjsRef.current[zone.id]
+            if (!obj) return
+            obj.set({ left: p.left, top: p.top, width: p.width })
+            obj.setCoords()
+          })
+          canvas.renderAll()
         },
       }
     }

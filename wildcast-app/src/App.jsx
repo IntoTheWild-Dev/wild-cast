@@ -137,9 +137,25 @@ export default function App() {
     if (textKey) lastTextSnapRef.current = { key: textKey, time: now }
     historyRef.current = [
       ...historyRef.current.slice(-29),
-      { fields: { ...fieldsRef.current }, fontSizes: { ...fontSizesRef2.current }, alignments: { ...alignmentsRef2.current }, imageScales: { ...imageScalesRef2.current }, imagePositions: { ...imagePositionsRef2.current } },
+      {
+        fields: { ...fieldsRef.current },
+        fontSizes: { ...fontSizesRef2.current },
+        alignments: { ...alignmentsRef2.current },
+        imageScales: { ...imageScalesRef2.current },
+        imagePositions: { ...imagePositionsRef2.current },
+        // Text-zone drag/resize positions live only on the canvas, not in React state —
+        // read them live so a drag (see onZoneDragStart) is undoable too.
+        zonePositions: exportRef.current?.getZonePositions?.() ?? {},
+      },
     ]
     setCanUndo(true)
+  }
+
+  // Called on mousedown on a text zone, before any drag/resize moves it — captures
+  // the pre-drag position as an undo point. Debounced per-zone like text fields so
+  // repeated clicks on the same zone within a second don't spam the history.
+  function handleZoneDragStart(zoneId) {
+    pushUndoSnapshot(`zonedrag-${zoneId}`)
   }
 
   function handleUndo() {
@@ -150,6 +166,7 @@ export default function App() {
     setAlignments(snapshot.alignments)
     setImageScales(snapshot.imageScales)
     setImagePositions(snapshot.imagePositions ?? {})
+    exportRef.current?.applyZonePositions?.(snapshot.zonePositions)
     setCanUndo(historyRef.current.length > 0)
   }
 
@@ -607,6 +624,7 @@ export default function App() {
               mode={selectedTemplate?.mode ?? 'designer'}
               loadKey={loadKey}
               zonePositions={zonePositions}
+              onZoneDragStart={handleZoneDragStart}
             />
           </div>
 
