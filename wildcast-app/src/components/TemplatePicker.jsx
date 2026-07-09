@@ -149,6 +149,66 @@ function LayoutModal({ entry, onPick, onClose }) {
   )
 }
 
+// ── Group card (catalogue) ────────────────────────────────────────────────────
+function GroupCard({ group, onViewAll }) {
+  const { members, liveCount } = group
+  const total     = members.length
+  const groupThumb = members.find(m => m.groupThumb)?.groupThumb ?? null
+
+  return (
+    <div
+      onClick={onViewAll}
+      style={{
+        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+        border: '1.5px solid var(--border)',
+        transition: 'transform 0.15s, box-shadow 0.15s',
+        position: 'relative',
+        aspectRatio: '33 / 28',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.1)' }}
+      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
+    >
+      {groupThumb ? (
+        <img src={groupThumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center bottom', display: 'block' }} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Coming soon</span>
+        </div>
+      )}
+
+      {/* Badges */}
+      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(2,6,24,0.65)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 100 }}>
+        {total} designs
+      </div>
+      {liveCount > 0 && (
+        <div style={{ position: 'absolute', top: 10, left: 10, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100 }}>
+          {liveCount} available
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Catalogue view (all template groups) ──────────────────────────────────────
+function CatalogueView({ onViewGroup }) {
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Wolt Partner Tools</div>
+        <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 32 }}>All templates</h1>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+          {ALL_GROUPS.map(g => (
+            <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Options view (drilled in) ─────────────────────────────────────────────────
 function OptionsView({ group, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
@@ -353,8 +413,10 @@ function BriefingForm({ onSubmit }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function TemplatePicker({ onSelect }) {
-  const [selectedGroup, setSelectedGroup] = useState(null)  // null = hero/briefing view
+// mode="hero": marketing landing (hero copy + briefing form) — reached via the header logo.
+// mode="catalogue": full template grid — reached via the "Templates" nav link.
+export default function TemplatePicker({ onSelect, mode = 'hero' }) {
+  const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   // Options view
   if (selectedGroup) {
@@ -365,6 +427,10 @@ export default function TemplatePicker({ onSelect }) {
         onSelect={onSelect}
       />
     )
+  }
+
+  if (mode === 'catalogue') {
+    return <CatalogueView onViewGroup={setSelectedGroup} />
   }
 
   function handleBriefSubmit({ category, format }) {

@@ -242,11 +242,12 @@ export default function App() {
   }
 
   function handleBack() {
-    setScreen('picker')
+    setScreen('designs')
   }
 
   function handleNavigate(target) {
     if (target === 'picker') setScreen('picker')
+    else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
     else if (target === 'library') setScreen('library')
   }
@@ -287,6 +288,17 @@ export default function App() {
       if (!(zoneId in prev)) return prev
       const next = { ...prev }; delete next[zoneId]; return next
     })
+  }
+
+  // "Reset layout" resets every zone's position on the canvas directly — but image
+  // zones' Scale/Position are also driven by imageScales/imagePositions state, which
+  // this must clear too. Otherwise the panel keeps showing the old %/offset, and the
+  // next unrelated scale/position edit re-syncs the stale values back onto the canvas,
+  // silently undoing the reset.
+  function handleResetLayout() {
+    exportRef.current?.resetLayout?.()
+    setImageScales({})
+    setImagePositions({})
   }
 
   function handleFieldChange(key, value) {
@@ -480,7 +492,13 @@ export default function App() {
 
       {screen === 'picker' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplatePicker onSelect={handleSelectTemplate} />
+          <TemplatePicker mode="hero" onSelect={handleSelectTemplate} />
+        </div>
+      )}
+
+      {screen === 'catalogue' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TemplatePicker mode="catalogue" onSelect={handleSelectTemplate} />
         </div>
       )}
 
@@ -539,7 +557,7 @@ export default function App() {
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
                 onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
               >
-                ← Templates
+                ← Designs
               </span>
               <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>
@@ -566,7 +584,7 @@ export default function App() {
                 Undo
               </button>
               <button
-                onClick={() => exportRef.current?.resetLayout?.()}
+                onClick={handleResetLayout}
                 title="Reset all text zones to their original positions"
                 style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}

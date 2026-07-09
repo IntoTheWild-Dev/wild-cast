@@ -1,6 +1,6 @@
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp }) {
   const navItem = (label, target) => {
-    const active = screen === target || (target === 'picker' && screen === 'editor')
+    const active = screen === target || (target === 'catalogue' && screen === 'editor')
     return (
       <span
         onClick={() => onNavigate?.(target)}
@@ -26,7 +26,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <nav style={{ display: 'flex', gap: 4 }}>
-            {navItem('Templates', 'picker')}
+            {navItem('Templates', 'catalogue')}
             {navItem('Library', 'library')}
             {navItem('Designs', 'designs')}
             <span
