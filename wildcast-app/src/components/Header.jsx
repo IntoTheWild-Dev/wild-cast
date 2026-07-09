@@ -27,6 +27,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <nav style={{ display: 'flex', gap: 4 }}>
             {navItem('Templates', 'picker')}
+            {navItem('Library', 'library')}
             {navItem('Designs', 'designs')}
             <span
               onClick={onHelp}

@@ -7,6 +7,8 @@ function formatDateTime(ts) {
   })
 }
 import AISuggest from './AISuggest'
+import { hasTransparency } from '../lib/image'
+import { assetFolderForZone, saveAssetToLibrary } from '../lib/assetLibrary'
 
 const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30 }
 
@@ -149,23 +151,43 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder }) {
   const [resWarning, setResWarning] = useState(null)
+  const [bgError, setBgError] = useState(null)
 
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
-    input.onchange = e => {
+    input.onchange = async e => {
       const file = e.target.files[0]
       if (!file) return
+      setBgError(null)
+
+      if (requireTransparent && file.type !== 'image/png') {
+        setBgError('This image has a background — please upload a transparent PNG.')
+        return
+      }
+
       const url = URL.createObjectURL(file)
+
+      if (requireTransparent) {
+        const transparent = await hasTransparency(url)
+        if (!transparent) {
+          setBgError('This image has a background — please upload a transparent PNG.')
+          URL.revokeObjectURL(url)
+          return
+        }
+      }
+
       onChange(url, file.name)
+      saveAssetToLibrary(folder ?? 'other', file.name, url)
+
       if (minWidth && minHeight) {
         const img = new Image()
         img.onload = () => {
           if (img.naturalWidth < minWidth || img.naturalHeight < minHeight) {
-            const effectiveDpi = Math.round((img.naturalWidth / (minWidth / 300)) )
+            const effectiveDpi = Math.round((img.naturalWidth / (minWidth / 300)))
             setResWarning(`Low resolution — approx. ${effectiveDpi} DPI (300 DPI recommended for print). Images may appear pixelated when printed.`)
           } else {
             setResWarning(null)
@@ -219,12 +241,19 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Drop file or click to upload</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Click to upload</div>
               <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{hint}</div>
             </div>
           </>
         )}
       </div>
+
+      {/* Background rejection — shown when a transparent-PNG zone gets a flattened/promo image */}
+      {bgError && (
+        <div style={{ marginTop: 8, padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, fontSize: 11, color: '#B91C1C', lineHeight: 1.5 }}>
+          ✕ {bgError}
+        </div>
+      )}
 
       {/* Low-resolution warning — shown when uploaded image is below 300 DPI for print */}
       {resWarning && (
@@ -444,6 +473,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
                 minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
                 minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+                requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+                folder={assetFolderForZone(zone.id)}
               />
             ))}
           </>

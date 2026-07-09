@@ -6,9 +6,11 @@ import TemplatePicker from './components/TemplatePicker'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
+import LibraryPage from './components/LibraryPage'
 import ReviewPage from './components/ReviewPage'
 import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
+import { blobUrlToDataUrl } from './lib/image'
 
 const STORAGE_KEY = 'wildcast_projects'
 
@@ -35,36 +37,6 @@ async function makePreview(fullPng) {
       resolve(canvas.toDataURL('image/jpeg', 0.88))
     }
     img.src = fullPng
-  })
-}
-
-// Convert a blob: URL to a compressed data URL for storage.
-// Resizes to max 1500px and re-encodes as JPEG (photos) or PNG (logos with transparency).
-// Keeps base64 payload well under Vercel's 4.5MB function body limit.
-async function blobUrlToDataUrl(blobUrl) {
-  const res = await fetch(blobUrl)
-  const blob = await res.blob()
-  const isPng = blob.type === 'image/png'
-
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const MAX = 1500
-      let w = img.naturalWidth, h = img.naturalHeight
-      if (Math.max(w, h) > MAX) {
-        const scale = MAX / Math.max(w, h)
-        w = Math.round(w * scale)
-        h = Math.round(h * scale)
-      }
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      // Keep PNG for logos (preserves transparency); JPEG for photos
-      resolve(canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82))
-    }
-    img.onerror = reject
-    img.src = URL.createObjectURL(blob)
   })
 }
 
@@ -276,6 +248,7 @@ export default function App() {
   function handleNavigate(target) {
     if (target === 'picker') setScreen('picker')
     else if (target === 'designs') setScreen('designs')
+    else if (target === 'library') setScreen('library')
   }
 
   function handleFontSizeChange(key, size) {
@@ -514,6 +487,12 @@ export default function App() {
       {screen === 'designs' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <DesignsPage onOpenProject={handleOpenProject} />
+        </div>
+      )}
+
+      {screen === 'library' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <LibraryPage />
         </div>
       )}
 
