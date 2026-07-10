@@ -7,7 +7,7 @@ const ALL_TEMPLATES = [
     label: 'Restaurant Flyer · Option A',
     category: 'restaurant', format: 'Flyer',
     groupThumb: '/templates/tile-restaurant-flyer.png',
-    thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
+    thumb: '/templates/preview_opt-a.png',
     live: true,
     templateIdGuided:        'wen-cheng-flyer2-simple',
     templateIdGuidedText:    'wen-cheng-flyer1-simple',
@@ -17,7 +17,7 @@ const ALL_TEMPLATES = [
   {
     label: 'Restaurant Flyer · Option B',
     category: 'restaurant', format: 'Flyer',
-    thumb: '/templates/opt-b-preview.png',
+    thumb: '/templates/preview_opt-b.png',
     live: true,
     templateIdGuided:        'opt-b-flyer2-simple',
     templateIdGuidedText:    'opt-b-flyer1-simple',
