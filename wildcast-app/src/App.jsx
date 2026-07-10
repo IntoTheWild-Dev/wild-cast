@@ -318,6 +318,23 @@ export default function App() {
     setImagePositions({})
   }
 
+  // Guided mode locks the canvas — nothing can be dragged, so a position-only reset
+  // has nothing to do. There "Reset" means starting the template over from blank:
+  // clears every field/image plus all overrides, and remounts the canvas (loadKey)
+  // for a guaranteed-clean slate, same as picking the template fresh.
+  function handleResetToBlank() {
+    if (!window.confirm('Clear all fields and start over? This cannot be undone.')) return
+    historyRef.current = []; setCanUndo(false)
+    setFields(DEFAULT_FIELDS)
+    setFontSizes({})
+    setAlignments({})
+    setImageScales({})
+    setImagePositions({})
+    setZonePositions({})
+    setSaveStatus(null)
+    setLoadKey(k => k + 1)
+  }
+
   function handleFieldChange(key, value) {
     pushUndoSnapshot(key)
     setFields(prev => ({ ...prev, [key]: value }))
@@ -601,13 +618,13 @@ export default function App() {
                 Undo
               </button>
               <button
-                onClick={handleResetLayout}
-                title="Reset all text zones to their original positions"
+                onClick={selectedTemplate?.mode === 'non-designer' ? handleResetToBlank : handleResetLayout}
+                title={selectedTemplate?.mode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
                 style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
               >
-                Reset layout
+                {selectedTemplate?.mode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
               </button>
             </div>
 
