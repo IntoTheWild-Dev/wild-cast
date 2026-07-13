@@ -24,6 +24,14 @@ const PT_W     = +(TOTAL_W_MM * PT_PER_MM).toFixed(3)   // 314.646
 const PT_H     = +(TOTAL_H_MM * PT_PER_MM).toFixed(3)   // 436.535
 const BLEED_PT = +(BLEED_MM   * PT_PER_MM).toFixed(3)   // 8.504
 
+// The canvas the app renders is trim-size only (105×148mm) — it never draws
+// real bleed content. BLEED_PX/TRIM_PX_* let us resize the incoming PNG to its
+// true trim size (no distortion) and then extend the bleed margin separately,
+// instead of stretching trim art across the whole bleed box (see rawCmyk below).
+const BLEED_PX  = Math.round(BLEED_MM / MM_PER_INCH * DPI)   // 35
+const TRIM_PX_W = PX_W - BLEED_PX * 2                        // 1241
+const TRIM_PX_H = PX_H - BLEED_PX * 2                         // 1749
+
 // Increase body limit — the 4× canvas PNG can be 3–5 MB as base64
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 
@@ -50,8 +58,17 @@ export default async function handler(req, res) {
     // withIccProfile with a CMYK profile does the ICC-accurate sRGB→CMYK
     // conversion; raw() extracts 4 bytes/px (C, M, Y, K) in standard order.
     const rawCmyk = await sharp(pngBuffer)
-      .resize(PX_W, PX_H, { fit: 'fill' })
+      .resize(TRIM_PX_W, TRIM_PX_H, { fit: 'fill' })
       .flatten({ background: { r: 255, g: 255, b: 255 } }) // composite any alpha on white
+      // Real bleed: mirror the trim-edge pixels outward by BLEED_PX rather than
+      // stretching the trim art across the full bleed box. Keeps every design
+      // element (frame, text, photos) registered exactly at the TrimBox line —
+      // only the extra 3mm strip that gets trimmed away is the mirrored fill.
+      .extend({
+        top: BLEED_PX, bottom: BLEED_PX, left: BLEED_PX, right: BLEED_PX,
+        background: { r: 255, g: 255, b: 255 },
+        extendWith: 'mirror',
+      })
       .withIccProfile(iccPath)   // sRGB → FOGRA39 CMYK (4 channels, 0=no ink)
       .raw()
       .toBuffer()
