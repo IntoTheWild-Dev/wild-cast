@@ -12,7 +12,7 @@
 - **Search bar** at top of homepage — filters by format/category in real time
 - **Headline:** "Design. Export. Print."
 - 30 template slots total: 6 groups × 5 options (Restaurant + Retail × Flyer + Poster + Wild Poster)
-- 1 live template (Restaurant Flyer · Option A — both guided and designer modes)
+- 2 live templates (Restaurant Flyer · Option A and Option B — both guided and designer modes)
 - Coming soon tiles clearly labelled, greyed out with dashed border
 - Group cards show live thumbnail, "X available" coral badge, "5 designs" count badge
 - Options view shows "← All templates" back button, live count subtitle
@@ -105,6 +105,22 @@
 
 ---
 
+## Figma import pipeline (new 2026-07-13)
+
+Real templates can now be pulled straight out of Figma instead of manually pixel-scanning exported PNGs.
+
+- **`wildcast-app/scripts/import-figma-template.js`** — run with `node --env-file=.env.local scripts/import-figma-template.js <figma-frame-url> <output-name>`. Fetches node geometry via Figma's REST API (`/v1/files/:key/nodes`) and a print-resolution background export (`/v1/images/:key?scale=4` — Figma caps image export at 4x/288 DPI server-side, just under the 300 DPI target but print-fine) via the same API. Outputs a background PNG into `public/templates/` and a ready-to-paste zone array into `scripts/*-zones.generated.js` (gitignored — copy the values into `templateZones.js` by hand).
+- **Convention the script depends on:** any Figma node meant to become an editable WildCast zone must be named `zone:<id>` (e.g. `zone:headline`, `zone:logo`, `zone:photo`, `zone:cta`). Nodes named `zone:logo`/`zone:photo` become image zones (fit contain/cover); everything else becomes a text zone, with real font family/size/weight read automatically **only when the zone marker itself is a text node** — a placeholder shape (rectangle) gives correct position/size but no font data, which then needs manual completion.
+- **Master template requirement:** the target Figma frame must be the bleed-size master (111×154mm @ 3mm bleed), with guide/placeholder layers set to `visible: false` as their *permanent resting state* in the file — the image export renders whatever is currently visible in the saved file, there's no way to toggle visibility live via the REST API the way the interactive Figma plugin can.
+- **Needs a Figma personal access token** — each person who runs the script generates their own (Figma Settings → Security → Personal access tokens → scope `file_content:read` only), saved in `wildcast-app/.env.local` (`FIGMA_TOKEN=...`, gitignored, never shared).
+- **First two templates brought in through this pipeline (2026-07-13):**
+  - **Option A (Wen Cheng)** upgraded in place — real bleed-corrected background + script-derived zone positions, same template IDs as before. Caught and fixed a real regression risk during this: the Figma master still had "WEN CHENG" baked in as static text, which would have undone the already-shipped per-partner editable restaurant name feature. Masked it out and added a proper `zone:restaurant_name` marker instead. Also fixed sub_headline/headline/offer zones overlapping each other by 15–23px — the first pass used the raw text nodes' own bounding boxes (which reflect placeholder-text render height, not designed spacing) instead of their dedicated non-overlapping guide rectangles, same pattern already used correctly for logo/photo.
+  - **Option B replaced entirely** with a McDonald's Q4 Koblenz-based flyer — the first template built through the new pipeline from scratch. The line naming McDonald's specifically was masked out of the background art and replaced with a free-text `cta` zone so any partner can fill in their own line.
+- **Known Figma quirk hit during this work:** a cloned decorative vector (30pt white stroke, used for a card border effect) rendered with its stroke missing in one specific clone despite every measurable property (position, fill, stroke, z-order) being byte-identical to a working clone of the same source vector elsewhere in the file. Root cause not identified even after extensive diagnostic comparison — worked around by falling back to the simpler background construction (inset colored rect + white base fill) that was already proven reliable, rather than keep chasing it.
+- **Not yet built:** an in-app "Import from Figma" UI (Templates tab) — this is still a script run manually by whoever needs to bring in a new template. Worth revisiting once a few more templates have gone through the script successfully.
+
+---
+
 ## Activation key system
 
 Keys gate access to the app. Set in Vercel Environment Variables:
@@ -176,4 +192,4 @@ Answer determines whether DoorDash/Wolt's Google Workspace security settings wil
 
 ---
 
-*Last updated: 2026-07-13 — Fixed real bleed export bug found in print testing (frame was getting cut off; see bug table above). Prior entry (2026-06-30): Homepage redesigned: two-level browse (group cards → options view), search bar, "Design. Export. Print." headline, 30 template slots (5 per format per category). Google Drive export requested by Wolt executive — awaiting security clarification before building.*
+*Last updated: 2026-07-13 — Built a real Figma-to-WildCast import pipeline (`scripts/import-figma-template.js`), used it to upgrade Option A with a proper bleed-corrected background and to replace Option B entirely with a new template built from scratch through the pipeline. Catalogue now shows exactly two live templates (A, B) — the temporary pipeline-test entry was removed. See "Figma import pipeline" section above. Prior entry (same day): fixed the real bleed export bug found in print testing (frame was getting cut off; see bug table above).*
