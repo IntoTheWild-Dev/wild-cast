@@ -47,19 +47,8 @@ export const TEMPLATES = [
     thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
     live: true,
   },
-  // ── Restaurant Flyer Option B ─────────────────────────────────────────────
-  {
-    id: 'opt-b-flyer1-simple',
-    name: 'Restaurant Flyer · Option B',
-    desc: 'Guided step-by-step editing — fill in your headline and offer text. Layout locked, always on-brand.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-only',
-    mode: 'non-designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    thumb: '/templates/opt-b-preview.png',
-    live: true,
-  },
+  // ── Restaurant Flyer Option B — replaced with the Koblenz-based build,
+  // the first template brought in through the Figma import pipeline ─────────
   {
     id: 'opt-b-flyer2-simple',
     name: 'Restaurant Flyer · Option B',
@@ -69,19 +58,7 @@ export const TEMPLATES = [
     mode: 'non-designer',
     cat: 'restaurant',
     format: 'Flyer',
-    thumb: '/templates/opt-b-preview.png',
-    live: true,
-  },
-  {
-    id: 'opt-b-flyer1',
-    name: 'Restaurant Flyer · Option B',
-    desc: 'Full designer control — move, resize and restyle any text element freely.',
-    tags: ['A6', 'CMYK', '3mm bleed'],
-    type: 'text-only',
-    mode: 'designer',
-    cat: 'restaurant',
-    format: 'Flyer',
-    thumb: '/templates/opt-b-preview.png',
+    thumb: '/templates/opt-b-designer-v3.png',
     live: true,
   },
   {
@@ -93,7 +70,7 @@ export const TEMPLATES = [
     mode: 'designer',
     cat: 'restaurant',
     format: 'Flyer',
-    thumb: '/templates/opt-b-preview.png',
+    thumb: '/templates/opt-b-designer-v3.png',
     live: true,
   },
 ]

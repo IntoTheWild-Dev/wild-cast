@@ -10,7 +10,7 @@ import AISuggest from './AISuggest'
 import { hasTransparency } from '../lib/image'
 import { assetFolderForZone, saveAssetToLibrary } from '../lib/assetLibrary'
 
-const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30 }
+const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30, cta: 60 }
 
 const FIELD_HINTS = {
   headline:         "Your main line, e.g. 'DREAMTEAM'",
@@ -18,6 +18,7 @@ const FIELD_HINTS = {
   restaurant_name:  "Your restaurant name, e.g. 'Wen Cheng'",
   offer:            "Your promotion, e.g. '30% SPAREN'",
   tc:               'Small-print terms, rotated vertically on the flyer',
+  cta:              "Second line under the app-download prompt, e.g. 'Lieblingsessen bei Burger King bestellen.'",
 }
 
 function OptionalBadge() {
@@ -456,6 +457,16 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
             align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
             onResetPosition={() => onResetZone?.('tc')}
+          />
+        )}
+        {templateConfig?.zones?.some(z => z.id === 'cta') && (
+          <StepFieldRow
+            step={5} label="App download line" fieldKey="cta"
+            value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
+            showControls={showControls} showSize={isNonDesigner}
+            fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}
+            align={effectiveAlign('cta', 'center')} onAlign={a => onAlignChange('cta', a)}
+            onResetPosition={() => onResetZone?.('cta')}
           />
         )}
 

@@ -20,6 +20,7 @@ const DEFAULT_FIELDS = {
   sub_headline:    '',
   restaurant_name: '',
   tc:              '',
+  cta:             '',
   logoUrl:         null,
   photoUrl:        null,
   qrUrl:           null,
