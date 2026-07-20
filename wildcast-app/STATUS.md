@@ -117,7 +117,21 @@ Real templates can now be pulled straight out of Figma instead of manually pixel
   - **Option A (Wen Cheng)** upgraded in place — real bleed-corrected background + script-derived zone positions, same template IDs as before. Caught and fixed a real regression risk during this: the Figma master still had "WEN CHENG" baked in as static text, which would have undone the already-shipped per-partner editable restaurant name feature. Masked it out and added a proper `zone:restaurant_name` marker instead. Also fixed sub_headline/headline/offer zones overlapping each other by 15–23px — the first pass used the raw text nodes' own bounding boxes (which reflect placeholder-text render height, not designed spacing) instead of their dedicated non-overlapping guide rectangles, same pattern already used correctly for logo/photo.
   - **Option B replaced entirely** with a McDonald's Q4 Koblenz-based flyer — the first template built through the new pipeline from scratch. The line naming McDonald's specifically was masked out of the background art and replaced with a free-text `cta` zone so any partner can fill in their own line.
 - **Known Figma quirk hit during this work:** a cloned decorative vector (30pt white stroke, used for a card border effect) rendered with its stroke missing in one specific clone despite every measurable property (position, fill, stroke, z-order) being byte-identical to a working clone of the same source vector elsewhere in the file. Root cause not identified even after extensive diagnostic comparison — worked around by falling back to the simpler background construction (inset colored rect + white base fill) that was already proven reliable, rather than keep chasing it.
-- **Not yet built:** an in-app "Import from Figma" UI (Templates tab) — this is still a script run manually by whoever needs to bring in a new template. Worth revisiting once a few more templates have gone through the script successfully.
+- **✅ Superseded (2026-07-13, same day) by a self-serve in-app import** — see below. The CLI script above still works and is what the in-app feature is built on top of, but you no longer need to run it by hand for a new template.
+
+---
+
+## Self-serve Figma import (new 2026-07-13)
+
+The manual script above now has a real in-app front end — paste a Figma link into WildCast itself, no code edit or redeploy needed to bring in a new template.
+
+- **How it works:** an "Import" nav item (visible only to `role:designer` activation keys) opens a form — Figma frame URL + target catalogue slot (any currently "coming soon" slot, e.g. "Restaurant Flyer · Option C"). Submitting calls `POST /api/import-figma-template`, which pulls zones + a real bleed background from Figma (same logic as the CLI script, now shared via `api/_lib/figma-import.js`) and saves both to Vercel Blob under `templates/<slotKey>.json` / `templates/<slotKey>-bg.png`.
+- **Draft-first, always.** An import never goes live automatically — it lands with `live:false`. The designer reviews the result (background + zone list) in the same screen, then clicks **Publish** (`POST /api/publish-template`) to make it real. This is deliberate: a bad import can never surface to a real partner without a human choosing to publish it.
+- **Templates stay hybrid, not fully migrated.** Option A and B are still hardcoded in `templateZones.js`/`templates.js` exactly as before — untouched, zero migration risk. Only *new* imports go through Blob, and they can only fill *empty* catalogue slots (`BASE_TEMPLATES` in `TemplatePicker.jsx` — the 30-slot skeleton never changes, just which slots have real data). `App.jsx` fetches `/api/list-templates` once on load and merges the result with the static templates; if that fetch fails for any reason, the app just falls back to the static templates silently.
+- **New role field on `WILDCAST_KEYS`** — see Activation key system below. Defaults to `partner` so every existing key keeps working with zero changes.
+- **⚠️ Needs a new Vercel env var to actually work: `FIGMA_TOKEN`** (server-side secret, separate from the local `.env.local` one used by the CLI script) — see Activation key system section / `ACTIVATION_KEYS.txt` for setup steps. Until it's set, the import route returns a clean 500 ("FIGMA_TOKEN is not configured on the server") rather than crashing anything.
+- **Verification status, to be transparent about:** the CLI-script refactor was proven byte-identical (re-ran against the existing Wen Cheng master, diffed output). Role-gating and the import form were verified in-browser. The actual live Blob-backed import flow has **not** been tested end-to-end yet — there's no local serverless emulation for `api/*.js` under plain `vite dev` (confirmed earlier this project), and the Blob token is Vercel-only. First real test needs to happen after `FIGMA_TOKEN` is set in Vercel — low risk either way given the draft-first design above.
+- **Key files:** `api/_lib/figma-import.js` (shared extraction logic), `api/import-figma-template.js` / `api/list-templates.js` / `api/publish-template.js` / `api/delete-template.js`, `src/lib/customTemplates.js` (static+dynamic merge), `src/components/TemplateImportPage.jsx`.
 
 ---
 
@@ -126,15 +140,17 @@ Real templates can now be pulled straight out of Figma instead of manually pixel
 Keys gate access to the app. Set in Vercel Environment Variables:
 
 ```
-WILDCAST_KEYS=WOLT-DE-demo-key|Wolt DE|20,WILD-Demo-KEY|Wild Stack|100
+WILDCAST_KEYS=WOLT-DE-demo-key|Wolt DE|20,WILD-Demo-KEY|Wild Stack|100|designer
 ```
 
-Format: `key|Client Name|credits` — comma-separated for multiple keys.
+Format: `key|Client Name|credits|role` — role is **optional** (added 2026-07-13; omit it and a key behaves exactly as before, defaulting to `partner`) — comma-separated for multiple keys. `role:designer` unlocks the "Import" nav item (self-serve Figma import, see above).
 
-| Key | Client | Credits | Purpose |
-|-----|--------|---------|---------|
-| `WOLT-DE-demo-key` | Wolt DE | 20 | Client demo |
-| `WILD-Demo-KEY` | Wild Stack | 100 | Internal use |
+| Key | Client | Credits | Role | Purpose |
+|-----|--------|---------|------|---------|
+| `WOLT-DE-demo-key` | Wolt DE | 20 | partner | Client demo |
+| `WILD-Demo-KEY` | Wild Stack | 100 | *(set to `designer` for Julia + colleague)* | Internal use |
+
+**Also needs `FIGMA_TOKEN`** (separate env var, for the self-serve import feature) — see the "Self-serve Figma import" section above and `ACTIVATION_KEYS.txt` for exact setup steps.
 
 **How credits work (demo):** 1 PDF export = 1 credit. Tracked client-side in localStorage. Credits shown in editor breadcrumb bar. Export blocked at 0. Sign out button in header clears the session.
 
@@ -192,4 +208,4 @@ Answer determines whether DoorDash/Wolt's Google Workspace security settings wil
 
 ---
 
-*Last updated: 2026-07-13 — Built a real Figma-to-WildCast import pipeline (`scripts/import-figma-template.js`), used it to upgrade Option A with a proper bleed-corrected background and to replace Option B entirely with a new template built from scratch through the pipeline. Catalogue now shows exactly two live templates (A, B) — the temporary pipeline-test entry was removed. See "Figma import pipeline" section above. Prior entry (same day): fixed the real bleed export bug found in print testing (frame was getting cut off; see bug table above).*
+*Last updated: 2026-07-13 — Built self-serve Figma import: paste a link into WildCast's new "Import" screen (designer-role-gated), it lands as a draft, publish when ready — no code deploy needed for a new template anymore. Templates stay hybrid: Option A/B still hardcoded (untouched), only new imports go through Vercel Blob into empty catalogue slots. Needs a new `FIGMA_TOKEN` Vercel env var to actually run — see "Self-serve Figma import" section above. Not yet tested against a live deploy (no local serverless emulation available); draft-first design makes that low-risk. Prior entry (same day): built the manual CLI import pipeline (`scripts/import-figma-template.js`) and used it to upgrade Option A + replace Option B.*
