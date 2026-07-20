@@ -134,8 +134,14 @@ const WEN_CHENG_V3_ZONES = [
     fit: 'cover',
     label: 'Food photo',
     hint: 'PNG with transparent background',
-    x: 15.9, y: 173.4,
-    width: 284.5, height: 144,
+    // Widened/shortened box (was 284.5×144, a 1.98:1 ratio taken straight from the
+    // Figma placeholder) left very little vertical crop slack for most food photos
+    // — most photos aren't that wide, so 'cover' had to zoom in hard. Grown
+    // downward into available space (offer zone starts at y=333.2) and narrowed
+    // to a gentler 1.7:1 ratio so more of the photo shows and Position nudge
+    // actually has room to move.
+    x: 26.4, y: 173.4,
+    width: 263.5, height: 155,
   },
   {
     id: 'restaurant_name',
@@ -189,8 +195,13 @@ const OPT_B_ZONES = [
     fit: 'cover',
     label: 'Food photo',
     hint: 'PNG with transparent background',
-    x: 25.5, y: 169.2,
-    width: 266.5, height: 122,
+    // Widened/shortened box (was 266.5×122, a 2.18:1 ratio taken straight from the
+    // Figma placeholder) left very little horizontal crop slack for most food
+    // photos — grown downward into available space (cta zone starts at y=307)
+    // and narrowed to a gentler 1.77:1 ratio so more of the photo shows and
+    // Position nudge actually has room to move.
+    x: 43.8, y: 169.2,
+    width: 230, height: 130,
   },
   // Line 1 ("Jetzt Wolt App downloaden und") stays baked in the background —
   // line 2 was McDonald's-specific ("...bei McDonald's bestellen.") and is now
