@@ -8,9 +8,11 @@ import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
 import LibraryPage from './components/LibraryPage'
 import ReviewPage from './components/ReviewPage'
+import TemplateImportPage from './components/TemplateImportPage'
 import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
+import { mergeCustomTemplates } from './lib/customTemplates'
 
 const STORAGE_KEY = 'wildcast_projects'
 
@@ -116,9 +118,12 @@ export default function App() {
   const [reviewUrl, setReviewUrl]             = useState(null) // share modal URL
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
-  // activation: null = not yet validated, object = { key, clientName, credits }
+  // activation: null = not yet validated, object = { key, clientName, credits, role }
   const [activation, setActivation]           = useState(null)
   const [showHelp, setShowHelp]               = useState(false)
+  // Figma-imported templates (draft + live), fetched once and merged with the
+  // static TEMPLATE_ZONES/TEMPLATES — see src/lib/customTemplates.js
+  const [customTemplates, setCustomTemplates] = useState({ zonesById: {}, cards: [], records: [] })
   const exportRef = useRef(null)
 
   // ── Undo history ─────────────────────────────────────────────────────────────
@@ -190,6 +195,12 @@ export default function App() {
     if (rid) { setReviewProjectId(rid); setScreen('review') }
   }, [])
 
+  // Fetch Figma-imported templates once on mount. Failure just means the app
+  // runs with the static built-in templates only — never blocks/breaks the app.
+  useEffect(() => {
+    refetchCustomTemplates()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Lock body scroll in editor mode so the canvas never scrolls with the page
   useEffect(() => {
     if (screen === 'editor') {
@@ -215,10 +226,13 @@ export default function App() {
         if (data.valid) {
           const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
           const credits = Number.isFinite(savedCredits) ? savedCredits : data.total_credits
-          setActivation({ key: savedKey, clientName: data.client_name, credits })
+          const role = data.role || 'partner'
+          localStorage.setItem('wildcast_role', role)
+          setActivation({ key: savedKey, clientName: data.client_name, credits, role })
         } else {
           localStorage.removeItem('wildcast_activation_key')
           localStorage.removeItem('wildcast_credits')
+          localStorage.removeItem('wildcast_role')
         }
       })
       .catch(() => {
@@ -226,13 +240,14 @@ export default function App() {
         // app still works offline/slow connections after a valid prior session.
         const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
         if (Number.isFinite(savedCredits)) {
-          setActivation({ key: savedKey, clientName: '', credits: savedCredits })
+          const role = localStorage.getItem('wildcast_role') || 'partner'
+          setActivation({ key: savedKey, clientName: '', credits: savedCredits, role })
         }
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleActivated({ key, clientName, credits }) {
-    setActivation({ key, clientName, credits })
+  function handleActivated({ key, clientName, credits, role }) {
+    setActivation({ key, clientName, credits, role: role || 'partner' })
   }
 
   // Fetch comments whenever the open project changes
@@ -268,6 +283,14 @@ export default function App() {
     else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
     else if (target === 'library') setScreen('library')
+    else if (target === 'import' && activation?.role === 'designer') setScreen('import')
+  }
+
+  function refetchCustomTemplates() {
+    fetch('/api/list-templates')
+      .then(r => r.json())
+      .then(data => setCustomTemplates(mergeCustomTemplates(data.templates ?? [])))
+      .catch(() => {})
   }
 
   function handleFontSizeChange(key, size) {
@@ -481,6 +504,7 @@ export default function App() {
     }
 
     const template = TEMPLATES.find(t => t.id === project.templateId)
+      ?? customTemplates.cards.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
 
     // Fetch comments directly — can't rely on the useEffect because the
@@ -508,7 +532,7 @@ export default function App() {
     setScreen('editor')
   }
 
-  const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? null
+  const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
 
   // Show activation gate unless already activated or this is a shared review link
   if (!activation && !reviewProjectId) {
@@ -527,13 +551,13 @@ export default function App() {
 
       {screen === 'picker' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplatePicker mode="hero" onSelect={handleSelectTemplate} />
+          <TemplatePicker mode="hero" onSelect={handleSelectTemplate} customCards={customTemplates.cards} />
         </div>
       )}
 
       {screen === 'catalogue' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplatePicker mode="catalogue" onSelect={handleSelectTemplate} />
+          <TemplatePicker mode="catalogue" onSelect={handleSelectTemplate} customCards={customTemplates.cards} />
         </div>
       )}
 
@@ -546,6 +570,12 @@ export default function App() {
       {screen === 'library' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <LibraryPage />
+        </div>
+      )}
+
+      {screen === 'import' && activation?.role === 'designer' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} />
         </div>
       )}
 

@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { TEMPLATES } from '../data/templates'
 
 // ── Template data ─────────────────────────────────────────────────────────────
-const ALL_TEMPLATES = [
+// This is the fixed 30-slot skeleton (labels/categories/formats never change).
+// Which slots are actually "live" can come from here (Option A/B, hardcoded)
+// or be overlaid at runtime from Figma-imported templates — see
+// overlayCustomCards() below, used by the default-exported TemplatePicker.
+export const BASE_TEMPLATES = [
   {
     label: 'Restaurant Flyer · Option A',
     category: 'restaurant', format: 'Flyer',
@@ -52,22 +56,44 @@ const ALL_TEMPLATES = [
   { label: 'Retail Wild Poster · Option E', category: 'retail', format: 'Wild Poster', live: false },
 ]
 
-// Derive unique groups from ALL_TEMPLATES preserving order
-const ALL_GROUPS = (() => {
+// Fills empty ("coming soon") slots with matching Figma-imported templates.
+// Never touches a slot that's already live (Option A/B stay hardcoded,
+// untouchable by an import even by naming coincidence). Matched by exact
+// label + category + format — the designer picks the target slot by label
+// when importing, so this only needs a direct match, not fuzzy logic.
+function overlayCustomCards(baseTemplates, customCards) {
+  return baseTemplates.map(slot => {
+    if (slot.live) return slot
+    const designerCard = customCards.find(c =>
+      c.mode === 'designer' && c.name === slot.label && c.cat === slot.category && c.format === slot.format
+    )
+    if (!designerCard) return slot
+    return {
+      ...slot,
+      thumb: designerCard.thumb,
+      live: designerCard.live,
+      templateIdGuided: `${designerCard.id}-simple`,
+      templateIdDesigner: designerCard.id,
+    }
+  })
+}
+
+// Derive unique groups from a templates array, preserving order.
+function deriveGroups(templates) {
   const seen = new Set()
   const groups = []
-  for (const t of ALL_TEMPLATES) {
+  for (const t of templates) {
     const key = `${t.category}__${t.format}`
     if (!seen.has(key)) {
       seen.add(key)
-      const members = ALL_TEMPLATES.filter(x => x.category === t.category && x.format === t.format)
+      const members = templates.filter(x => x.category === t.category && x.format === t.format)
       const hero    = members.find(x => x.live) ?? null
       const liveCount = members.filter(x => x.live).length
       groups.push({ category: t.category, format: t.format, key, members, hero, liveCount })
     }
   }
   return groups
-})()
+}
 
 // ── Layout picker modal ───────────────────────────────────────────────────────
 function LayoutModal({ entry, onPick, onClose }) {
@@ -191,14 +217,14 @@ function GroupCard({ group, onViewAll }) {
 }
 
 // ── Catalogue view (all template groups) ──────────────────────────────────────
-function CatalogueView({ onViewGroup }) {
+function CatalogueView({ groups, onViewGroup }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Wolt Partner Tools</div>
         <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 32 }}>All templates</h1>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
-          {ALL_GROUPS.map(g => (
+          {groups.map(g => (
             <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
           ))}
         </div>
@@ -208,14 +234,14 @@ function CatalogueView({ onViewGroup }) {
 }
 
 // ── Options view (drilled in) ─────────────────────────────────────────────────
-function OptionsView({ group, onBack, onSelect }) {
+function OptionsView({ group, customCards, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const { format, category, members } = group
   const cap = category.charAt(0).toUpperCase() + category.slice(1)
   const liveCount = members.filter(x => x.live).length
 
   function handlePick(templateId) {
-    const template = TEMPLATES.find(t => t.id === templateId)
+    const template = TEMPLATES.find(t => t.id === templateId) ?? customCards.find(t => t.id === templateId)
     if (template) onSelect(template)
     setModal(null)
   }
@@ -413,14 +439,18 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) — reached via the header logo.
 // mode="catalogue": full template grid — reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero' }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [] }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
+
+  const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards), [customCards])
+  const allGroups     = useMemo(() => deriveGroups(allTemplates), [allTemplates])
 
   // Options view
   if (selectedGroup) {
     return (
       <OptionsView
         group={selectedGroup}
+        customCards={customCards}
         onBack={() => setSelectedGroup(null)}
         onSelect={onSelect}
       />
@@ -428,11 +458,11 @@ export default function TemplatePicker({ onSelect, mode = 'hero' }) {
   }
 
   if (mode === 'catalogue') {
-    return <CatalogueView onViewGroup={setSelectedGroup} />
+    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} />
   }
 
   function handleBriefSubmit({ category, format }) {
-    const group = ALL_GROUPS.find(g => g.category === category && g.format === format)
+    const group = allGroups.find(g => g.category === category && g.format === format)
     if (group) setSelectedGroup(group)
   }
 

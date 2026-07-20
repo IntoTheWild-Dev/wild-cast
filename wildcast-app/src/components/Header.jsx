@@ -29,6 +29,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             {navItem('Templates', 'catalogue')}
             {navItem('Library', 'library')}
             {navItem('Designs', 'designs')}
+            {activation?.role === 'designer' && navItem('Import', 'import')}
             <span
               onClick={onHelp}
               style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
@@ -53,6 +54,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
                 onClick={() => {
                   localStorage.removeItem('wildcast_activation_key')
                   localStorage.removeItem('wildcast_credits')
+                  localStorage.removeItem('wildcast_role')
                   window.location.reload()
                 }}
                 title="Sign out"
