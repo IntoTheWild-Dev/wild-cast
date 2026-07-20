@@ -21,7 +21,7 @@ export const BASE_TEMPLATES = [
   {
     label: 'Restaurant Flyer · Option B',
     category: 'restaurant', format: 'Flyer',
-    thumb: '/templates/opt-b-designer-v3.png',
+    thumb: '/templates/preview_opt-b.png',
     live: true,
     templateIdGuided:   'opt-b-flyer2-simple',
     templateIdDesigner: 'opt-b-flyer2',

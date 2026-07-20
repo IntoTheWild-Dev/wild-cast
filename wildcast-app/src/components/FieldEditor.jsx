@@ -8,7 +8,7 @@ function formatDateTime(ts) {
 }
 import AISuggest from './AISuggest'
 import { hasTransparency } from '../lib/image'
-import { assetFolderForZone, saveAssetToLibrary } from '../lib/assetLibrary'
+import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets } from '../lib/assetLibrary'
 
 const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30, cta: 60 }
 
@@ -155,10 +155,30 @@ const CANVAS_PPI = 316 / (105 / 25.4)
 function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
+  const [showLibrary, setShowLibrary] = useState(false)
+
+  const libraryFolder = folder ?? 'other'
+  const libraryAssets = getLibraryAssets().filter(a => a.folder === libraryFolder)
 
   // The displayed min-resolution text always matches the real 300 DPI check below —
   // never hardcode a pixel count in a zone's hint string, it will drift from this.
   const fullHint = minWidth && minHeight ? `${hint} · min ${minWidth}×${minHeight}px` : hint
+
+  function applyImage(url, name) {
+    onChange(url, name)
+    if (minWidth && minHeight) {
+      const img = new Image()
+      img.onload = () => {
+        if (img.naturalWidth < minWidth || img.naturalHeight < minHeight) {
+          const effectiveDpi = Math.round((img.naturalWidth / (minWidth / 300)))
+          setResWarning(`Low resolution — approx. ${effectiveDpi} DPI (300 DPI recommended for print). Images may appear pixelated when printed.`)
+        } else {
+          setResWarning(null)
+        }
+      }
+      img.src = url
+    }
+  }
 
   const handleClick = () => {
     const input = document.createElement('input')
@@ -185,23 +205,20 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         }
       }
 
-      onChange(url, file.name)
-      saveAssetToLibrary(folder ?? 'other', file.name, url)
-
-      if (minWidth && minHeight) {
-        const img = new Image()
-        img.onload = () => {
-          if (img.naturalWidth < minWidth || img.naturalHeight < minHeight) {
-            const effectiveDpi = Math.round((img.naturalWidth / (minWidth / 300)))
-            setResWarning(`Low resolution — approx. ${effectiveDpi} DPI (300 DPI recommended for print). Images may appear pixelated when printed.`)
-          } else {
-            setResWarning(null)
-          }
-        }
-        img.src = url
-      }
+      saveAssetToLibrary(libraryFolder, file.name, url)
+      applyImage(url, file.name)
     }
     input.click()
+  }
+
+  const handlePickFromLibrary = async asset => {
+    setBgError(null)
+    if (requireTransparent && !(await hasTransparency(asset.dataUrl))) {
+      setBgError('This image has a background — please pick a transparent PNG.')
+      return
+    }
+    applyImage(asset.dataUrl, asset.name)
+    setShowLibrary(false)
   }
 
   return (
@@ -252,6 +269,32 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           </>
         )}
       </div>
+
+      {/* Library picker toggle — only shown when this zone's folder already has saved assets */}
+      {libraryAssets.length > 0 && (
+        <button
+          onClick={() => setShowLibrary(s => !s)}
+          style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
+        >
+          {showLibrary ? '‹ Hide library' : 'or choose from library →'}
+        </button>
+      )}
+      {showLibrary && (
+        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+          {libraryAssets.map(asset => (
+            <img
+              key={asset.id}
+              src={asset.dataUrl}
+              alt={asset.name}
+              title={asset.name}
+              onClick={() => handlePickFromLibrary(asset)}
+              style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '1.5px solid var(--border)', transition: 'border-color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Background rejection — shown when a transparent-PNG zone gets a flattened/promo image */}
       {bgError && (
