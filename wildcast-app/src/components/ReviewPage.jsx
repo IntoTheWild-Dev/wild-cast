@@ -20,7 +20,7 @@ export default function ReviewPage({ projectId }) {
   useEffect(() => {
     Promise.all([
       fetch(`/api/get-review?id=${projectId}`).then(r => r.json()),
-      fetch(`/api/get-comments?id=${projectId}`).then(r => r.json()),
+      fetch(`/api/comments?id=${projectId}`).then(r => r.json()),
     ])
       .then(([proj, comm]) => {
         if (proj.error) throw new Error(proj.error)
@@ -32,7 +32,7 @@ export default function ReviewPage({ projectId }) {
   }, [projectId])
 
   async function loadComments() {
-    const res = await fetch(`/api/get-comments?id=${projectId}`)
+    const res = await fetch(`/api/comments?id=${projectId}`)
     const data = await res.json()
     setComments(data.comments || [])
   }
@@ -42,7 +42,7 @@ export default function ReviewPage({ projectId }) {
     if (!name.trim() || !text.trim() || submitting) return
     setSubmitting(true)
     try {
-      const res = await fetch('/api/add-comment', {
+      const res = await fetch('/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId, name: name.trim(), text: text.trim() }),

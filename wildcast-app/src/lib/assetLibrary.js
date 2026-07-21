@@ -22,7 +22,7 @@ export function assetFolderForZone(zoneId) {
 
 export async function getLibraryAssets() {
   try {
-    const res = await fetch('/api/list-library-assets')
+    const res = await fetch('/api/library-assets')
     if (!res.ok) return []
     const { assets } = await res.json()
     return assets ?? []
@@ -39,7 +39,7 @@ export async function getLibraryAssets() {
 export async function saveAssetToLibrary(folder, name, blobUrl) {
   try {
     const dataUrl = await blobUrlToDataUrl(blobUrl, { maxDim: LIBRARY_MAX_DIM })
-    const res = await fetch('/api/upload-library-asset', {
+    const res = await fetch('/api/library-assets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folder, name, dataUrl }),
@@ -54,7 +54,7 @@ export async function saveAssetToLibrary(folder, name, blobUrl) {
 
 export async function deleteLibraryAsset(url) {
   try {
-    await fetch(`/api/delete-library-asset?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
+    await fetch(`/api/library-assets?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
   } catch (err) {
     console.warn('Could not delete library asset:', err)
   }

@@ -253,7 +253,7 @@ export default function App() {
   // Fetch comments whenever the open project changes
   useEffect(() => {
     if (!currentProjectId) { setComments([]); return }
-    fetch(`/api/get-comments?id=${currentProjectId}`)
+    fetch(`/api/comments?id=${currentProjectId}`)
       .then(r => r.json())
       .then(d => setComments(d.comments || []))
       .catch(() => {})
@@ -511,7 +511,7 @@ export default function App() {
     // project id may not have changed (same project re-opened from Designs)
     let freshComments = []
     try {
-      const commRes = await fetch(`/api/get-comments?id=${project.id}`)
+      const commRes = await fetch(`/api/comments?id=${project.id}`)
       const commData = await commRes.json()
       freshComments = commData.comments || []
     } catch {}
