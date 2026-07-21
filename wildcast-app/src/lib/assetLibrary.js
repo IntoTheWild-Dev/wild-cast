@@ -9,6 +9,7 @@ export const FOLDERS = {
   logos: 'Logos',
   'product-images': 'Product images',
   stickers: 'Stickers',
+  'qr-codes': 'QR codes',
   other: 'Other',
 }
 
@@ -16,6 +17,7 @@ export const FOLDERS = {
 export function assetFolderForZone(zoneId) {
   if (zoneId === 'logo') return 'logos'
   if (zoneId === 'photo') return 'product-images'
+  if (zoneId === 'qr') return 'qr-codes'
   if (zoneId?.includes('sticker')) return 'stickers'
   return 'other'
 }
@@ -64,5 +66,24 @@ export async function deleteLibraryAsset(url) {
     await fetch(`/api/library-assets?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
   } catch (err) {
     console.warn('Could not delete library asset:', err)
+  }
+}
+
+// Renames an asset in place — several QR codes look identical, so a label
+// is the only way to tell them apart. Vercel Blob has no in-place rename;
+// this copies to a new pathname (same folder/id, new name) and deletes the old one.
+export async function renameLibraryAsset(url, newName) {
+  try {
+    const res = await fetch('/api/library-assets', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, newName }),
+    })
+    if (!res.ok) throw new Error((await res.json())?.error || 'Rename failed')
+    const asset = await res.json()
+    return { ...asset, src: libraryAssetSrc(asset.url) }
+  } catch (err) {
+    console.warn('Could not rename library asset:', err)
+    return null
   }
 }

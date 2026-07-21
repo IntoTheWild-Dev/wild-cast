@@ -43,9 +43,18 @@ export function collectZoneNodes(node, out = []) {
   return out
 }
 
+// Zone ids that become image uploads (fit/label/hint per id). Everything
+// else named zone:<id> becomes a text zone.
+const IMAGE_ZONE_CONFIG = {
+  logo:    { fit: 'contain', label: 'Restaurant logo', hint: 'JPG or PNG' },
+  photo:   { fit: 'cover',   label: 'Food photo',       hint: 'PNG with transparent background' },
+  sticker: { fit: 'contain', label: 'Sticker / badge',  hint: 'PNG with transparent background' },
+  qr:      { fit: 'contain', label: 'QR code',          hint: 'PNG or JPG' },
+}
+
 export function toCanvasZone(node, frameBox) {
   const id = node.name.slice('zone:'.length)
-  const isImage = id === 'logo' || id === 'photo'
+  const isImage = Object.prototype.hasOwnProperty.call(IMAGE_ZONE_CONFIG, id)
 
   const scaleX = CANVAS_W / (frameBox.width - BLEED_UNITS * 2)
   const scaleY = CANVAS_H / (frameBox.height - BLEED_UNITS * 2)
@@ -63,9 +72,7 @@ export function toCanvasZone(node, frameBox) {
   }
 
   if (isImage) {
-    zone.fit = id === 'logo' ? 'contain' : 'cover'
-    zone.label = id === 'logo' ? 'Restaurant logo' : 'Food photo'
-    zone.hint = id === 'logo' ? 'JPG or PNG' : 'PNG with transparent background'
+    Object.assign(zone, IMAGE_ZONE_CONFIG[id])
   } else if (node.type === 'TEXT' && node.style) {
     // Real font data straight from Figma — only available when the zone
     // marker itself is a text node, not a placeholder shape.

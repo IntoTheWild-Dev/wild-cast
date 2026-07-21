@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
-import { FOLDERS, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset } from '../lib/assetLibrary'
+import { FOLDERS, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset } from '../lib/assetLibrary'
 import { hasTransparency } from '../lib/image'
 
 // Folders a partner can upload straight into from this page — matches the
 // same rules the canvas already enforces per zone type (logos: any JPG/PNG,
-// product photos: must be a real transparent PNG).
+// product photos and stickers: must be a real transparent PNG, QR codes: no
+// transparency requirement since QR generators commonly export flat PNGs).
 const UPLOADABLE_FOLDERS = [
   { key: 'logos', label: 'Upload a logo', requireTransparent: false },
   { key: 'product-images', label: 'Upload a product photo', requireTransparent: true },
+  { key: 'stickers', label: 'Upload a sticker / badge', requireTransparent: true },
+  { key: 'qr-codes', label: 'Upload a QR code', requireTransparent: false },
 ]
 
 // No specific print zone to check against here, so this is a general
@@ -96,8 +99,11 @@ function UploadCard({ folderKey, label, requireTransparent, onUploaded }) {
   )
 }
 
-function AssetCard({ asset, onDelete }) {
+function AssetCard({ asset, onDelete, onRename }) {
   const [dims, setDims] = useState(null)
+  const [editing, setEditing] = useState(false)
+  const [draftName, setDraftName] = useState(asset.name)
+  const [renaming, setRenaming] = useState(false)
 
   useEffect(() => {
     const img = new Image()
@@ -106,6 +112,15 @@ function AssetCard({ asset, onDelete }) {
   }, [asset.src])
 
   const isHiRes = dims && Math.max(dims.w, dims.h) >= HI_RES_THRESHOLD
+
+  async function commitRename() {
+    setEditing(false)
+    const trimmed = draftName.trim()
+    if (!trimmed || trimmed === asset.name) { setDraftName(asset.name); return }
+    setRenaming(true)
+    await onRename(asset, trimmed)
+    setRenaming(false)
+  }
 
   return (
     <div
@@ -120,9 +135,31 @@ function AssetCard({ asset, onDelete }) {
         <img src={asset.src} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
       <div style={{ padding: '8px 10px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asset.name}>
-          {asset.name}
-        </div>
+        {editing ? (
+          <input
+            autoFocus
+            value={draftName}
+            onChange={e => setDraftName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') { setDraftName(asset.name); setEditing(false) }
+            }}
+            style={{
+              width: '100%', fontSize: 11, fontWeight: 600, color: 'var(--dark)',
+              border: '1px solid var(--primary)', borderRadius: 4, padding: '1px 4px',
+              boxSizing: 'border-box', outline: 'none',
+            }}
+          />
+        ) : (
+          <div
+            onClick={() => !renaming && setEditing(true)}
+            title={`${asset.name} — click to rename`}
+            style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+          >
+            {renaming ? 'Renaming…' : asset.name}
+          </div>
+        )}
         <div style={{ fontSize: 10, color: 'var(--mid)', marginTop: 2 }}>{formatDate(asset.uploadedAt)}</div>
         {dims && (
           <div style={{ fontSize: 10, marginTop: 3, color: isHiRes ? '#3F9C6D' : '#B7791F', fontWeight: 600 }}>
@@ -166,6 +203,11 @@ export default function LibraryPage() {
     await deleteLibraryAsset(asset.url)
   }
 
+  async function handleRename(asset, newName) {
+    const renamed = await renameLibraryAsset(asset.url, newName)
+    if (renamed) setAssets(prev => prev.map(a => (a.id === asset.id ? renamed : a)))
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
 
@@ -198,7 +240,7 @@ export default function LibraryPage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
                   {folderAssets.map(asset => (
-                    <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} />
+                    <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} onRename={handleRename} />
                   ))}
                 </div>
               </div>

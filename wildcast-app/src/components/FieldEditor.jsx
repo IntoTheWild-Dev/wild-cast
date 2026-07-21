@@ -531,7 +531,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 hint={zone.hint ?? 'JPG or PNG'}
                 value={fields[`${zone.id}Url`]}
                 onChange={url => onChange(`${zone.id}Url`, url)}
-                square={zone.id === 'logo'}
+                square={zone.id === 'logo' || zone.id === 'qr'}
                 onResetPosition={() => onResetZone?.(zone.id)}
                 scalePercent={imageScales?.[zone.id] ?? 100}
                 onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}

@@ -1,6 +1,6 @@
 // Merged upload/list/delete-library-asset.js into one route (dispatched by
 // method) to stay under Vercel's per-deployment serverless function count.
-import { put, list, del } from '@vercel/blob'
+import { put, list, del, copy } from '@vercel/blob'
 
 const FOLDER_PATTERN = /^[a-z-]+$/
 
@@ -94,6 +94,37 @@ async function handlePost(req, res) {
   }
 }
 
+// No in-place rename in Blob — copy to a new pathname (same folder/id, new
+// name) then delete the old one. Several QR codes look identical, so a
+// label is the only way to tell them apart once more than one is saved.
+async function handlePatch(req, res) {
+  const { url, newName } = req.body ?? {}
+  if (!url || !newName) return res.status(400).json({ error: 'Missing url or newName' })
+
+  try {
+    const oldPath = decodeURIComponent(new URL(url).pathname).replace(/^\//, '')
+    const match = /^library\/([a-z-]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
+    if (!match) return res.status(400).json({ error: 'Could not parse existing asset path' })
+    const [, folder, id, , ext] = match
+    const safeName = newName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80)
+    const newPath = `library/${folder}/${id}__${safeName}.${ext}`
+
+    const token = process.env.BLOB_READ_WRITE_TOKEN
+    const copied = await copy(url, newPath, {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      token,
+    })
+    await del(url, { token })
+
+    return res.status(200).json({ id, folder, name: newName, url: copied.url, uploadedAt: Date.now() })
+  } catch (err) {
+    console.error('rename-library-asset error:', err)
+    return res.status(500).json({ error: err.message })
+  }
+}
+
 async function handleDelete(req, res) {
   const { url } = req.query
   if (!url) return res.status(400).json({ error: 'Missing url' })
@@ -110,6 +141,7 @@ async function handleDelete(req, res) {
 export default async function handler(req, res) {
   if (req.method === 'GET') return handleGet(req, res)
   if (req.method === 'POST') return handlePost(req, res)
+  if (req.method === 'PATCH') return handlePatch(req, res)
   if (req.method === 'DELETE') return handleDelete(req, res)
   return res.status(405).end()
 }
