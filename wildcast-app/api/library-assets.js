@@ -71,7 +71,7 @@ async function handlePost(req, res) {
     }
     const ext = contentType === 'image/png' ? 'png' : 'jpg'
     const id = crypto.randomUUID()
-    const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80)
+    const safeName = name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
 
     const blob = await put(`library/${folder}/${id}__${safeName}.${ext}`, buffer, {
       access: 'private',
@@ -106,7 +106,7 @@ async function handlePatch(req, res) {
     const match = /^library\/([a-z-]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
     if (!match) return res.status(400).json({ error: 'Could not parse existing asset path' })
     const [, folder, id, , ext] = match
-    const safeName = newName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80)
+    const safeName = newName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
     const newPath = `library/${folder}/${id}__${safeName}.${ext}`
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
