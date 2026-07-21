@@ -154,6 +154,11 @@ const WEN_CHENG_V3_ZONES = [
     color: '#FFFFFF',
     align: 'right',
     autoShrink: true,
+    // No manual font-size control exists for this zone in any mode (FieldEditor
+    // renders it with showControls=false/showSize=false) — auto-shrink must run
+    // in designer mode too, or a long name has no way to avoid wrapping onto a
+    // second line and breaking alignment with the baked "♥ WOLT" beside it.
+    alwaysShrink: true,
   },
 ]
 
@@ -214,7 +219,7 @@ const OPT_B_ZONES = [
     width: 198.5, height: 17,
     fontSize: 11,
     fontFamily: 'omnes-pro',
-    fontWeight: 500,
+    fontWeight: 600,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
