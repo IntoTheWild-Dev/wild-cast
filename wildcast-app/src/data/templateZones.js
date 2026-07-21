@@ -254,18 +254,20 @@ export const TEMPLATE_ZONES = {
   },
 
   // ── Option B — real bleed export via the Figma import pipeline ────────────
+  // backgroundFill is #00C2E8 (not Option A's #00C2CB) — confirmed against the
+  // real Figma master's "BG — blue" fill and the shipped background PNG's actual pixels.
   'opt-b-flyer2': {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_OPT_B,
-    backgroundFill: '#00C2CB',
+    backgroundFill: '#00C2E8',
     zones: OPT_B_ZONES,
   },
   'opt-b-flyer2-simple': {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_OPT_B,
-    backgroundFill: '#00C2CB',
+    backgroundFill: '#00C2E8',
     zones: OPT_B_ZONES,
   },
 }
