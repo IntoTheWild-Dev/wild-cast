@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function formatDateTime(ts) {
   return new Date(ts).toLocaleString('en-GB', {
@@ -156,9 +156,16 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [showLibrary, setShowLibrary] = useState(false)
+  const [libraryAssets, setLibraryAssets] = useState([])
 
   const libraryFolder = folder ?? 'other'
-  const libraryAssets = getLibraryAssets().filter(a => a.folder === libraryFolder)
+
+  async function refreshLibrary() {
+    const assets = await getLibraryAssets()
+    setLibraryAssets(assets.filter(a => a.folder === libraryFolder))
+  }
+
+  useEffect(() => { refreshLibrary() }, [libraryFolder]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The displayed min-resolution text always matches the real 300 DPI check below —
   // never hardcode a pixel count in a zone's hint string, it will drift from this.
@@ -205,7 +212,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         }
       }
 
-      saveAssetToLibrary(libraryFolder, file.name, url)
+      saveAssetToLibrary(libraryFolder, file.name, url).then(refreshLibrary)
       applyImage(url, file.name)
     }
     input.click()
@@ -213,11 +220,11 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 
   const handlePickFromLibrary = async asset => {
     setBgError(null)
-    if (requireTransparent && !(await hasTransparency(asset.dataUrl))) {
+    if (requireTransparent && !(await hasTransparency(asset.url))) {
       setBgError('This image has a background — please pick a transparent PNG.')
       return
     }
-    applyImage(asset.dataUrl, asset.name)
+    applyImage(asset.url, asset.name)
     setShowLibrary(false)
   }
 
@@ -284,7 +291,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           {libraryAssets.map(asset => (
             <img
               key={asset.id}
-              src={asset.dataUrl}
+              src={asset.url}
               alt={asset.name}
               title={asset.name}
               onClick={() => handlePickFromLibrary(asset)}

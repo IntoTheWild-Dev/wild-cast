@@ -1,8 +1,9 @@
 import { blobUrlToDataUrl } from './image'
 
-const LIBRARY_KEY = 'wildcast_library_assets'
-const MAX_PER_FOLDER = 60
-const LIBRARY_MAX_DIM = 800
+// Shared library, backed by Vercel Blob (not localStorage) — same asset is
+// reusable across designs AND across browsers/devices, and stored at real
+// print resolution instead of a small browsing-thumbnail size.
+const LIBRARY_MAX_DIM = 2400
 
 export const FOLDERS = {
   logos: 'Logos',
@@ -19,32 +20,42 @@ export function assetFolderForZone(zoneId) {
   return 'other'
 }
 
-export function getLibraryAssets() {
+export async function getLibraryAssets() {
   try {
-    return JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]')
-  } catch {
+    const res = await fetch('/api/list-library-assets')
+    if (!res.ok) return []
+    const { assets } = await res.json()
+    return assets ?? []
+  } catch (err) {
+    console.warn('Could not load library assets:', err)
     return []
   }
 }
 
-// Saves a blob: URL into the library under the given folder. Fire-and-forget —
-// failures (e.g. storage quota) are logged, not surfaced, since this runs
+// Saves a blob: URL into the library under the given folder, at full (capped
+// only to a sane hi-res ceiling, not a browsing-thumbnail size) resolution.
+// Fire-and-forget — failures are logged, not surfaced, since this runs
 // alongside the primary upload-into-the-design flow.
 export async function saveAssetToLibrary(folder, name, blobUrl) {
   try {
     const dataUrl = await blobUrlToDataUrl(blobUrl, { maxDim: LIBRARY_MAX_DIM })
-    const existing = getLibraryAssets()
-    const entry = { id: crypto.randomUUID(), folder, name, dataUrl, uploadedAt: Date.now() }
-    const sameFolder = existing.filter(a => a.folder === folder).slice(0, MAX_PER_FOLDER - 1)
-    const otherFolders = existing.filter(a => a.folder !== folder)
-    localStorage.setItem(LIBRARY_KEY, JSON.stringify([...otherFolders, entry, ...sameFolder]))
+    const res = await fetch('/api/upload-library-asset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder, name, dataUrl }),
+    })
+    if (!res.ok) throw new Error((await res.json())?.error || 'Upload failed')
+    return await res.json()
   } catch (err) {
     console.warn('Could not save asset to library:', err)
+    return null
   }
 }
 
-export function deleteLibraryAsset(id) {
-  const updated = getLibraryAssets().filter(a => a.id !== id)
-  localStorage.setItem(LIBRARY_KEY, JSON.stringify(updated))
-  return updated
+export async function deleteLibraryAsset(url) {
+  try {
+    await fetch(`/api/delete-library-asset?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
+  } catch (err) {
+    console.warn('Could not delete library asset:', err)
+  }
 }

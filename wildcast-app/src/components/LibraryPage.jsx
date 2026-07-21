@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react'
-import { FOLDERS, getLibraryAssets, deleteLibraryAsset } from '../lib/assetLibrary'
+import { FOLDERS, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset } from '../lib/assetLibrary'
+import { hasTransparency } from '../lib/image'
+
+// Folders a partner can upload straight into from this page — matches the
+// same rules the canvas already enforces per zone type (logos: any JPG/PNG,
+// product photos: must be a real transparent PNG).
+const UPLOADABLE_FOLDERS = [
+  { key: 'logos', label: 'Upload a logo', requireTransparent: false },
+  { key: 'product-images', label: 'Upload a product photo', requireTransparent: true },
+]
+
+// No specific print zone to check against here, so this is a general
+// "will this look sharp in most print zones" heuristic, not an exact DPI figure.
+const HI_RES_THRESHOLD = 1200
 
 function formatDate(ts) {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -12,14 +25,88 @@ function EmptyState() {
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--dark)', marginBottom: 6 }}>No assets yet</div>
         <div style={{ fontSize: 13, color: 'var(--mid)', maxWidth: 320 }}>
-          Logos and photos you upload in the editor are saved here automatically, sorted into folders, so you can reuse them across designs.
+          Upload a logo or product photo above, or use one in the editor — either way it's saved here for reuse across designs.
         </div>
       </div>
     </div>
   )
 }
 
+function UploadCard({ folderKey, label, requireTransparent, onUploaded }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  function handleClick() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async e => {
+      const file = e.target.files[0]
+      if (!file) return
+      setError(null)
+
+      if (requireTransparent && file.type !== 'image/png') {
+        setError('This image has a background — please upload a transparent PNG.')
+        return
+      }
+
+      const url = URL.createObjectURL(file)
+
+      if (requireTransparent) {
+        const transparent = await hasTransparency(url)
+        if (!transparent) {
+          setError('This image has a background — please upload a transparent PNG.')
+          URL.revokeObjectURL(url)
+          return
+        }
+      }
+
+      setBusy(true)
+      await saveAssetToLibrary(folderKey, file.name, url)
+      setBusy(false)
+      onUploaded()
+    }
+    input.click()
+  }
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <button
+        onClick={handleClick}
+        disabled={busy}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 16px', borderRadius: 10,
+          border: '1.5px dashed var(--border)', background: '#fff',
+          cursor: busy ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--dark)',
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        {busy ? 'Uploading…' : label}
+      </button>
+      {error && (
+        <div style={{ marginTop: 6, fontSize: 11, color: '#B91C1C' }}>✕ {error}</div>
+      )}
+    </div>
+  )
+}
+
 function AssetCard({ asset, onDelete }) {
+  const [dims, setDims] = useState(null)
+
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => setDims({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = asset.url
+  }, [asset.url])
+
+  const isHiRes = dims && Math.max(dims.w, dims.h) >= HI_RES_THRESHOLD
+
   return (
     <div
       style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', position: 'relative' }}
@@ -30,16 +117,21 @@ function AssetCard({ asset, onDelete }) {
           ? 'repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50% / 16px 16px'
           : '#F3F4F6',
       }}>
-        <img src={asset.dataUrl} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <img src={asset.url} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
       <div style={{ padding: '8px 10px' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asset.name}>
           {asset.name}
         </div>
         <div style={{ fontSize: 10, color: 'var(--mid)', marginTop: 2 }}>{formatDate(asset.uploadedAt)}</div>
+        {dims && (
+          <div style={{ fontSize: 10, marginTop: 3, color: isHiRes ? '#3F9C6D' : '#B7791F', fontWeight: 600 }}>
+            {dims.w}×{dims.h}px {isHiRes ? '· High resolution ✓' : '· May be low-res for print'}
+          </div>
+        )}
       </div>
       <button
-        onClick={() => onDelete(asset.id)}
+        onClick={() => onDelete(asset)}
         title="Remove from library"
         style={{
           position: 'absolute', top: 6, right: 6,
@@ -60,13 +152,18 @@ function AssetCard({ asset, onDelete }) {
 
 export default function LibraryPage() {
   const [assets, setAssets] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setAssets(getLibraryAssets())
-  }, [])
+  async function refresh() {
+    setAssets(await getLibraryAssets())
+    setLoading(false)
+  }
 
-  function handleDelete(id) {
-    setAssets(deleteLibraryAsset(id))
+  useEffect(() => { refresh() }, [])
+
+  async function handleDelete(asset) {
+    setAssets(prev => prev.filter(a => a.id !== asset.id))
+    await deleteLibraryAsset(asset.url)
   }
 
   return (
@@ -75,14 +172,19 @@ export default function LibraryPage() {
       {/* Page header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Library</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
-          {assets.length === 0
+        <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--mid)' }}>
+          {loading ? 'Loading…' : assets.length === 0
             ? 'Your uploaded logos and photos, ready to reuse across designs.'
             : `${assets.length} saved asset${assets.length === 1 ? '' : 's'}`}
         </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {UPLOADABLE_FOLDERS.map(f => (
+            <UploadCard key={f.key} folderKey={f.key} label={f.label} requireTransparent={f.requireTransparent} onUploaded={refresh} />
+          ))}
+        </div>
       </div>
 
-      {assets.length === 0 ? (
+      {!loading && assets.length === 0 ? (
         <EmptyState />
       ) : (
         <div style={{ padding: '32px 40px' }}>
