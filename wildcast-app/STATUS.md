@@ -144,7 +144,9 @@ The library used to be 100% client-side localStorage, capped at 800px per image 
 - **One route, `api/library-assets.js`**, dispatched by HTTP method: `GET` (no query) lists everything, `GET ?url=<blobUrl>` proxies a single private blob's bytes to the browser, `POST` uploads, `DELETE ?url=<blobUrl>` removes. All three original separate files got merged into this one — see the function-count gotcha below.
 - **Data model:** no metadata JSON per asset — folder + display name are encoded directly in the blob's pathname (`library/<folder>/<uuid>__<name>.<ext>`), `uploadedAt` comes from Blob's own list() metadata.
 - **Frontend:** `src/lib/assetLibrary.js`'s `getLibraryAssets`/`saveAssetToLibrary`/`deleteLibraryAsset` are now async (fetch-based). Every asset gets a `.src` field (the proxied path) — always use `.src` for rendering/pixel-reads, `.url` (the raw private blob URL) only for delete.
-- **Direct upload UI added to the Library page itself** (previously the only way in was auto-save from inside a template editor) — two buttons (logo / product photo), same `hasTransparency()` check the canvas already enforces per zone type, plus a resolution badge per asset (general ≥1200px-on-the-long-side heuristic, since there's no specific print zone to check against on this page).
+- **Direct upload UI added to the Library page itself** (previously the only way in was auto-save from inside a template editor) — four buttons now (logo / product photo / sticker-badge / QR code), same `hasTransparency()` check the canvas already enforces per zone type, plus a resolution badge per asset (general ≥1200px-on-the-long-side heuristic, since there's no specific print zone to check against on this page).
+- **Rename support (2026-07-21)** — click an asset's name on the Library page to rename it in place. No in-place rename in Vercel Blob, so this `copy()`s to a new pathname (same folder/id, new name) then `del()`s the old one — folded into `api/library-assets.js` as a `PATCH` to avoid a new function file. Added because several QR codes look visually identical and are otherwise impossible to tell apart.
+  - **Gotcha hit + fixed:** the sanitization regex used when building the blob pathname (`name.replace(/[^a-zA-Z0-9._-]/g, '_')`) stripped spaces, so a rename to "Munich Store QR" round-tripped as "Munich_Store_QR" on the next list refresh (display name is derived from the pathname, not stored separately) — defeats the point of a human-readable rename. Relaxed to only strip characters genuinely unsafe in a URL path segment (`/ \ ? % * : | " < >`), spaces and most punctuation now survive.
 - **Known limitation:** old localStorage-saved assets do not migrate automatically — different storage system. Acceptable given this is still early/low-volume usage, not real client data.
 - **⚠️ Two real Vercel gotchas hit and fixed while building this — worth knowing before adding any future `api/*.js` file:**
   1. **Serverless function count limit.** This project's Vercel plan caps a deployment at 12 functions. Adding 3 new one-per-route files (15 total) made the deploy **fail silently** — build logs look clean, it just dies right after "Deploying outputs..." with no code-level error anywhere in the CLI. Only found via `gh api repos/.../commits/<sha>/status` + `vercel inspect <deployment-id> --logs`. **Before adding a new API file, run `ls api/*.js | wc -l` — if already near 12, merge into an existing file (dispatch by `req.method`) instead.**
@@ -212,13 +214,13 @@ Answer determines whether DoorDash/Wolt's Google Workspace security settings wil
 - Wild Poster (landscape)
 - Retail category templates
 
-### 5. New zone types needed before the next Figma import (Julia designing now, 2026-07-21)
-The next template needs three things the current `zone:<id>` convention doesn't handle:
-- **Sticker/badge** (e.g. a circular "26% OFF" badge) — Julia's instinct is image-upload, not editable text, since these are too visually specific to reflow as plain text.
-- **QR code** — image upload, plus needs a way to **rename/label each one** so multiple QR codes in the library don't become indistinguishable.
-- **Promo/discount code box** (e.g. "CODE FRESSNAPFMUC10") — a short text field, but a distinct kind from headline/offer.
+### 5. New zone types for the next Figma import — pipeline-side support ✅ done, Julia still needs to design + import the real master
+The next template needs three things the original `zone:<id>` convention didn't handle — **all three now supported as of 2026-07-21:**
+- **Sticker/badge** (e.g. a circular "26% OFF" badge) — `zone:sticker` now imports as an image zone (contain-fit, requires transparent PNG), matching Julia's instinct that this shouldn't be editable text.
+- **QR code** — `zone:qr` now imports as an image zone (contain-fit, square preview, no transparency requirement since QR generators commonly export flat PNGs). **Rename support also shipped** — click an asset's name on the Library page to relabel it, so multiple QR codes don't become indistinguishable.
+- **Promo/discount code box** (e.g. "CODE FRESSNAPFMUC10") — already worked with no changes; any `zone:<id>` that isn't `logo`/`photo`/`sticker`/`qr` becomes a text zone automatically (e.g. `zone:code`).
 
-None of these map onto `api/_lib/figma-import.js`'s current rule (`zone:logo`/`zone:photo` → image, everything else → text) — needs real design work on the import pipeline before the next master can be built. Reference screenshots (AKKO Chicken & Grilled, Wolt×Fressnapf) shared by Julia show what these look like in a real client design.
+**Still outstanding:** Julia hasn't designed the actual Figma master yet — reference screenshots (AKKO Chicken & Grilled, Wolt×Fressnapf) show what she's aiming for. Once she has a real bleed-master frame with `zone:sticker`/`zone:qr`/`zone:code` markers, the existing self-serve Import screen should just work — this hasn't been tested against a *real* sticker/QR Figma file yet (only synthetic API-level testing so far).
 
 ---
 
