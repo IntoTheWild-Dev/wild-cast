@@ -20,12 +20,19 @@ export function assetFolderForZone(zoneId) {
   return 'other'
 }
 
+// The stored blob is private (store-level setting, can't be overridden per-blob),
+// so a plain <img src> can't read it directly — route through the proxy GET
+// on this same route, which attaches the Authorization header server-side.
+export function libraryAssetSrc(url) {
+  return `/api/library-assets?url=${encodeURIComponent(url)}`
+}
+
 export async function getLibraryAssets() {
   try {
     const res = await fetch('/api/library-assets')
     if (!res.ok) return []
     const { assets } = await res.json()
-    return assets ?? []
+    return (assets ?? []).map(a => ({ ...a, src: libraryAssetSrc(a.url) }))
   } catch (err) {
     console.warn('Could not load library assets:', err)
     return []

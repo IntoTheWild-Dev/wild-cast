@@ -12,6 +12,25 @@ function dataUrlToBuffer(dataUrl) {
 
 async function handleGet(req, res) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
+
+  // ?url=<blobUrl> — proxy a single private blob's bytes through to the
+  // browser (used as the <img src>, since the store only allows private
+  // access and a plain <img> can't attach the Authorization header itself).
+  if (req.query.url) {
+    try {
+      const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!upstream.ok) return res.status(upstream.status).end()
+      const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
+      const buffer = Buffer.from(await upstream.arrayBuffer())
+      res.setHeader('Content-Type', contentType)
+      res.setHeader('Cache-Control', 'private, max-age=86400')
+      return res.status(200).send(buffer)
+    } catch (err) {
+      console.error('library-asset image proxy error:', err)
+      return res.status(500).end()
+    }
+  }
+
   try {
     const { blobs } = await list({ prefix: 'library/', token })
 
@@ -55,7 +74,7 @@ async function handlePost(req, res) {
     const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80)
 
     const blob = await put(`library/${folder}/${id}__${safeName}.${ext}`, buffer, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType,

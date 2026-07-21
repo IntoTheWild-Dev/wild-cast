@@ -102,8 +102,8 @@ function AssetCard({ asset, onDelete }) {
   useEffect(() => {
     const img = new Image()
     img.onload = () => setDims({ w: img.naturalWidth, h: img.naturalHeight })
-    img.src = asset.url
-  }, [asset.url])
+    img.src = asset.src
+  }, [asset.src])
 
   const isHiRes = dims && Math.max(dims.w, dims.h) >= HI_RES_THRESHOLD
 
@@ -117,7 +117,7 @@ function AssetCard({ asset, onDelete }) {
           ? 'repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50% / 16px 16px'
           : '#F3F4F6',
       }}>
-        <img src={asset.url} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <img src={asset.src} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
       <div style={{ padding: '8px 10px' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asset.name}>

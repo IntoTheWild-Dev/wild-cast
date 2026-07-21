@@ -220,11 +220,11 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 
   const handlePickFromLibrary = async asset => {
     setBgError(null)
-    if (requireTransparent && !(await hasTransparency(asset.url))) {
+    if (requireTransparent && !(await hasTransparency(asset.src))) {
       setBgError('This image has a background — please pick a transparent PNG.')
       return
     }
-    applyImage(asset.url, asset.name)
+    applyImage(asset.src, asset.name)
     setShowLibrary(false)
   }
 
@@ -291,7 +291,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           {libraryAssets.map(asset => (
             <img
               key={asset.id}
-              src={asset.url}
+              src={asset.src}
               alt={asset.name}
               title={asset.name}
               onClick={() => handlePickFromLibrary(asset)}
