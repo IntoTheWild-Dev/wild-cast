@@ -102,11 +102,12 @@ function UploadCard({ folderKey, label, requireTransparent, merchant, onUploaded
   )
 }
 
-function AssetCard({ asset, onDelete, onRename, showMerchant }) {
+function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMerchant }) {
   const [dims, setDims] = useState(null)
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState(asset.name)
   const [renaming, setRenaming] = useState(false)
+  const [movingMerchant, setMovingMerchant] = useState(false)
 
   useEffect(() => {
     const img = new Image()
@@ -163,9 +164,33 @@ function AssetCard({ asset, onDelete, onRename, showMerchant }) {
             {renaming ? 'Renaming…' : asset.name}
           </div>
         )}
-        <div style={{ fontSize: 10, color: 'var(--mid)', marginTop: 2 }}>
-          {formatDate(asset.uploadedAt)}
-          {showMerchant && <span> · {asset.merchant || GENERAL_MERCHANT}</span>}
+        <div style={{ fontSize: 10, color: 'var(--mid)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span>{formatDate(asset.uploadedAt)}</span>
+          {showMerchant && (
+            movingMerchant ? (
+              <select
+                autoFocus
+                defaultValue={asset.merchant || GENERAL_MERCHANT}
+                onBlur={() => setMovingMerchant(false)}
+                onChange={async e => {
+                  const next = e.target.value
+                  setMovingMerchant(false)
+                  if (next !== (asset.merchant || GENERAL_MERCHANT)) await onMove(asset, next)
+                }}
+                style={{ fontSize: 10, border: '1px solid var(--primary)', borderRadius: 4, padding: '0 2px' }}
+              >
+                {allMerchants.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            ) : (
+              <span
+                onClick={() => setMovingMerchant(true)}
+                title="Click to move to a different merchant"
+                style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
+              >
+                · {asset.merchant || GENERAL_MERCHANT}
+              </span>
+            )
+          )}
         </div>
         {dims && (
           <div style={{ fontSize: 10, marginTop: 3, color: isHiRes ? '#3F9C6D' : '#B7791F', fontWeight: 600 }}>
@@ -207,8 +232,16 @@ export default function LibraryPage() {
   useEffect(() => { refresh() }, [])
 
   function handleMerchantChange(next) {
-    setMerchant(next)
-    if (next && next !== ALL_MERCHANTS) localStorage.setItem(LAST_MERCHANT_KEY, next)
+    // Snap to an existing merchant's exact casing when typing a new one that
+    // matches case-insensitively — mirrors the server-side snap that happens
+    // on actual upload, so the view doesn't show an empty "new" merchant for
+    // a moment before the first upload resolves it back to the real one.
+    // Recomputed fresh from `assets` here (not the memoized `merchants` below)
+    // so this plain event handler doesn't reference a useMemo'd value.
+    const existing = uniqueMerchants(assets).find(m => m.toLowerCase() === next.toLowerCase())
+    const resolved = existing || next
+    setMerchant(resolved)
+    if (resolved && resolved !== ALL_MERCHANTS) localStorage.setItem(LAST_MERCHANT_KEY, resolved)
   }
 
   async function handleDelete(asset) {
@@ -219,6 +252,13 @@ export default function LibraryPage() {
   async function handleRename(asset, newName) {
     const renamed = await renameLibraryAsset(asset.url, newName)
     if (renamed) setAssets(prev => prev.map(a => (a.id === asset.id ? renamed : a)))
+  }
+
+  // Moves an asset to a different merchant folder — e.g. consolidating a
+  // stray "wen cheng" duplicate into the real "Wen Cheng".
+  async function handleMove(asset, newMerchant) {
+    const moved = await renameLibraryAsset(asset.url, asset.name, newMerchant)
+    if (moved) setAssets(prev => prev.map(a => (a.id === asset.id ? moved : a)))
   }
 
   const merchants = useMemo(() => uniqueMerchants(assets), [assets])
@@ -306,7 +346,7 @@ export default function LibraryPage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
                   {folderAssets.map(asset => (
-                    <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} onRename={handleRename} showMerchant={merchant === ALL_MERCHANTS} />
+                    <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} onRename={handleRename} onMove={handleMove} allMerchants={merchants} showMerchant={merchant === ALL_MERCHANTS} />
                   ))}
                 </div>
               </div>

@@ -10,6 +10,22 @@ function dataUrlToBuffer(dataUrl) {
   return { contentType: match[1], buffer: Buffer.from(match[2], 'base64') }
 }
 
+// Snaps a requested merchant name to an existing merchant's exact casing when
+// they match case-insensitively — "wen cheng" typed after "Wen Cheng" already
+// exists reuses "Wen Cheng" instead of silently creating a second, visually
+// near-identical folder. First-seen casing across the whole library wins.
+async function resolveMerchant(requested, token) {
+  const wanted = (requested || 'General').trim() || 'General'
+  const { blobs } = await list({ prefix: 'library/', token })
+  for (const b of blobs) {
+    const parts = b.pathname.split('/')
+    if (parts.length < 4) continue
+    const existing = decodeURIComponent(parts[2])
+    if (existing.toLowerCase() === wanted.toLowerCase()) return existing
+  }
+  return wanted.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60) || 'General'
+}
+
 async function handleGet(req, res) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
@@ -79,17 +95,18 @@ async function handlePost(req, res) {
     const ext = contentType === 'image/png' ? 'png' : 'jpg'
     const id = crypto.randomUUID()
     const safeName = name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
+    const token = process.env.BLOB_READ_WRITE_TOKEN
     // Merchant folder — one Wolt DE key covers many restaurants, so assets are
     // scoped per merchant (not per activation key). Defaults to "General" for
     // shared/non-merchant-specific assets (e.g. a generic Wolt app-store badge).
-    const safeMerchant = (merchant || 'General').trim().replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60) || 'General'
+    const safeMerchant = await resolveMerchant(merchant, token)
 
     const blob = await put(`library/${folder}/${safeMerchant}/${id}__${safeName}.${ext}`, buffer, {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      token,
     })
 
     return res.status(200).json({
@@ -110,7 +127,7 @@ async function handlePost(req, res) {
 // name) then delete the old one. Several QR codes look identical, so a
 // label is the only way to tell them apart once more than one is saved.
 async function handlePatch(req, res) {
-  const { url, newName } = req.body ?? {}
+  const { url, newName, merchant: newMerchantRaw } = req.body ?? {}
   if (!url || !newName) return res.status(400).json({ error: 'Missing url or newName' })
 
   try {
@@ -121,13 +138,18 @@ async function handlePatch(req, res) {
     const merchantMatch = /^library\/([a-z-]+)\/([^/]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
     const legacyMatch = !merchantMatch && /^library\/([a-z-]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
     if (!merchantMatch && !legacyMatch) return res.status(400).json({ error: 'Could not parse existing asset path' })
-    const [folder, merchant, id, ext] = merchantMatch
+    const [folder, oldMerchant, id, ext] = merchantMatch
       ? [merchantMatch[1], merchantMatch[2], merchantMatch[3], merchantMatch[5]]
       : [legacyMatch[1], 'General', legacyMatch[2], legacyMatch[4]]
     const safeName = newName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
+    const token = process.env.BLOB_READ_WRITE_TOKEN
+    // Reassigning to a different merchant (the "move" action) goes through the
+    // same case-insensitive snap as a fresh upload — moving into "wen cheng"
+    // when "Wen Cheng" already exists lands in the existing folder, not a
+    // second near-duplicate one.
+    const merchant = newMerchantRaw != null ? await resolveMerchant(newMerchantRaw, token) : oldMerchant
     const newPath = `library/${folder}/${merchant}/${id}__${safeName}.${ext}`
 
-    const token = process.env.BLOB_READ_WRITE_TOKEN
     const copied = await copy(url, newPath, {
       access: 'private',
       addRandomSuffix: false,

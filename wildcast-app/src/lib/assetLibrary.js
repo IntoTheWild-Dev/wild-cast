@@ -87,12 +87,14 @@ export async function deleteLibraryAsset(url) {
 // Renames an asset in place — several QR codes look identical, so a label
 // is the only way to tell them apart. Vercel Blob has no in-place rename;
 // this copies to a new pathname (same folder/id, new name) and deletes the old one.
-export async function renameLibraryAsset(url, newName) {
+// Passing `merchant` also reassigns/moves the asset to a different merchant folder
+// (e.g. consolidating a stray "wen cheng" duplicate into the real "Wen Cheng").
+export async function renameLibraryAsset(url, newName, merchant) {
   try {
     const res = await fetch('/api/library-assets', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, newName }),
+      body: JSON.stringify({ url, newName, merchant }),
     })
     if (!res.ok) throw new Error((await res.json())?.error || 'Rename failed')
     const asset = await res.json()
