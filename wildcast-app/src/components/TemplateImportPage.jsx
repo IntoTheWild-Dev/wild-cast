@@ -1,8 +1,111 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BASE_TEMPLATES } from './TemplatePicker'
 
 function slugify(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// Figma tokens expire every few months — this used to mean a Vercel env var
+// edit + redeploy each time. Now stored in Blob and updatable right here.
+function FigmaTokenSettings() {
+  const [tokenStatus, setTokenStatus] = useState(null) // { configured, source, updatedAt }
+  const [editing, setEditing] = useState(false)
+  const [draftToken, setDraftToken] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  async function refresh() {
+    try {
+      const res = await fetch('/api/import-figma-template')
+      setTokenStatus(await res.json())
+    } catch {
+      setTokenStatus(null)
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!draftToken.trim()) return
+    setSaving(true)
+    setSaveError('')
+    try {
+      const res = await fetch('/api/import-figma-template', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: draftToken.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save token')
+      setDraftToken('')
+      setEditing(false)
+      await refresh()
+    } catch (err) {
+      setSaveError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 28, background: '#fff' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>Figma access token</div>
+          <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 2 }}>
+            {tokenStatus == null
+              ? 'Checking…'
+              : tokenStatus.configured
+                ? `✓ Configured${tokenStatus.updatedAt ? ` — updated ${formatDate(tokenStatus.updatedAt)}` : ' (from server env var)'}`
+                : '⚠ Not configured — imports will fail until one is set'}
+          </div>
+        </div>
+        {!editing && (
+          <button
+            onClick={() => setEditing(true)}
+            style={{ padding: '7px 14px', fontSize: 12, fontWeight: 600, borderRadius: 7, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer' }}
+          >
+            {tokenStatus?.configured ? 'Update token' : 'Set token'}
+          </button>
+        )}
+      </div>
+
+      {editing && (
+        <form onSubmit={handleSave} style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+          <input
+            type="password"
+            value={draftToken}
+            onChange={e => setDraftToken(e.target.value)}
+            placeholder="figd_… (Figma → Settings → Personal access tokens)"
+            autoFocus
+            style={{ flex: 1, padding: '9px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none' }}
+          />
+          <button
+            type="submit"
+            disabled={saving || !draftToken.trim()}
+            style={{ padding: '9px 16px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: saving || !draftToken.trim() ? '#E5E7EB' : 'var(--primary)', color: saving || !draftToken.trim() ? 'var(--mid)' : '#fff', cursor: saving || !draftToken.trim() ? 'not-allowed' : 'pointer' }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setEditing(false); setDraftToken(''); setSaveError('') }}
+            style={{ padding: '9px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--mid)', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+        </form>
+      )}
+      {saveError && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C' }}>{saveError}</div>
+      )}
+    </div>
+  )
 }
 
 export default function TemplateImportPage({ customRecords, onRefetch }) {
@@ -78,6 +181,8 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
         <p style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 28 }}>
           Designer-only. Pulls zone geometry + a real bleed background from a Figma master (named <code>zone:&lt;id&gt;</code> boxes) into an empty catalogue slot. Lands as a draft — publish it yourself once you've checked it over.
         </p>
+
+        <FigmaTokenSettings />
 
         <form onSubmit={handleImport} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32 }}>
           <div>

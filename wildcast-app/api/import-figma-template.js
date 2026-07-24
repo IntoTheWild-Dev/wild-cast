@@ -2,12 +2,61 @@
 // background from a Figma master (see api/_lib/figma-import.js) and stores
 // the result in Vercel Blob as a draft template — nothing is deployed live
 // until a designer reviews it and calls /api/publish-template.
-import { put } from '@vercel/blob'
+import { put, head } from '@vercel/blob'
 import { importFigmaTemplate } from './_lib/figma-import.js'
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end()
+const TOKEN_PATH = 'config/figma-token.json'
 
+// Figma personal access tokens expire (~every few months) and updating the
+// Vercel env var means a dashboard visit + redeploy every time — not
+// something Julia wants to need a developer for. The token can instead be
+// stored in Blob and updated from inside the app (see the PUT handler
+// below); this checks Blob first and falls back to the original env var
+// only if nothing has been saved there yet.
+async function resolveFigmaToken(blobToken) {
+  try {
+    const meta = await head(TOKEN_PATH, { token: blobToken })
+    const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${blobToken}` } })
+    if (res.ok) {
+      const { token, updatedAt } = await res.json()
+      if (token) return { token, source: 'blob', updatedAt }
+    }
+  } catch {
+    // No stored token yet (first-ever run, or head() 404s) — fall through to env var.
+  }
+  return { token: process.env.FIGMA_TOKEN || null, source: 'env', updatedAt: null }
+}
+
+async function handleGet(req, res) {
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+  const { token, source, updatedAt } = await resolveFigmaToken(blobToken)
+  // Never return the token value itself — just enough for the UI to show
+  // "configured, last updated on X" or "not configured".
+  return res.status(200).json({ configured: !!token, source, updatedAt })
+}
+
+async function handlePut(req, res) {
+  const { token } = req.body ?? {}
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    return res.status(400).json({ error: 'Missing token' })
+  }
+  try {
+    const updatedAt = new Date().toISOString()
+    await put(TOKEN_PATH, JSON.stringify({ token: token.trim(), updatedAt }), {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    })
+    return res.status(200).json({ ok: true, updatedAt })
+  } catch (err) {
+    console.error('update-figma-token error:', err)
+    return res.status(500).json({ error: err.message })
+  }
+}
+
+async function handlePost(req, res) {
   try {
     const { figmaUrl, slotKey, label, cat, format } = req.body ?? {}
     if (!figmaUrl || !slotKey || !label || !cat || !format) {
@@ -17,9 +66,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'slotKey must be lowercase letters/numbers/hyphens only' })
     }
 
-    const token = process.env.FIGMA_TOKEN
+    const { token } = await resolveFigmaToken(process.env.BLOB_READ_WRITE_TOKEN)
     if (!token) {
-      return res.status(500).json({ error: 'FIGMA_TOKEN is not configured on the server' })
+      return res.status(500).json({ error: 'Figma token is not configured — set it from the Import screen' })
     }
 
     const result = await importFigmaTemplate({ figmaUrl, token })
@@ -62,4 +111,11 @@ export default async function handler(req, res) {
     console.error('import-figma-template error:', err)
     return res.status(500).json({ error: err.message })
   }
+}
+
+export default async function handler(req, res) {
+  if (req.method === 'GET') return handleGet(req, res)
+  if (req.method === 'PUT') return handlePut(req, res)
+  if (req.method === 'POST') return handlePost(req, res)
+  return res.status(405).end()
 }
