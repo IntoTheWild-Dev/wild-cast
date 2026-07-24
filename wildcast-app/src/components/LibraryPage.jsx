@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react'
-import { FOLDERS, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset } from '../lib/assetLibrary'
+import { useState, useEffect, useMemo } from 'react'
+import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset, uniqueMerchants } from '../lib/assetLibrary'
 import { hasTransparency } from '../lib/image'
+
+const ALL_MERCHANTS = '__all__'
+const LAST_MERCHANT_KEY = 'wildcast_library_last_merchant'
 
 // Folders a partner can upload straight into from this page — matches the
 // same rules the canvas already enforces per zone type (logos: any JPG/PNG,
@@ -35,7 +38,7 @@ function EmptyState() {
   )
 }
 
-function UploadCard({ folderKey, label, requireTransparent, onUploaded }) {
+function UploadCard({ folderKey, label, requireTransparent, merchant, onUploaded }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -65,7 +68,7 @@ function UploadCard({ folderKey, label, requireTransparent, onUploaded }) {
       }
 
       setBusy(true)
-      await saveAssetToLibrary(folderKey, file.name, url)
+      await saveAssetToLibrary(folderKey, file.name, url, merchant)
       setBusy(false)
       onUploaded()
     }
@@ -99,7 +102,7 @@ function UploadCard({ folderKey, label, requireTransparent, onUploaded }) {
   )
 }
 
-function AssetCard({ asset, onDelete, onRename }) {
+function AssetCard({ asset, onDelete, onRename, showMerchant }) {
   const [dims, setDims] = useState(null)
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState(asset.name)
@@ -160,7 +163,10 @@ function AssetCard({ asset, onDelete, onRename }) {
             {renaming ? 'Renaming…' : asset.name}
           </div>
         )}
-        <div style={{ fontSize: 10, color: 'var(--mid)', marginTop: 2 }}>{formatDate(asset.uploadedAt)}</div>
+        <div style={{ fontSize: 10, color: 'var(--mid)', marginTop: 2 }}>
+          {formatDate(asset.uploadedAt)}
+          {showMerchant && <span> · {asset.merchant || GENERAL_MERCHANT}</span>}
+        </div>
         {dims && (
           <div style={{ fontSize: 10, marginTop: 3, color: isHiRes ? '#3F9C6D' : '#B7791F', fontWeight: 600 }}>
             {dims.w}×{dims.h}px {isHiRes ? '· High resolution ✓' : '· May be low-res for print'}
@@ -190,6 +196,8 @@ function AssetCard({ asset, onDelete, onRename }) {
 export default function LibraryPage() {
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
+  const [merchant, setMerchant] = useState(() => localStorage.getItem(LAST_MERCHANT_KEY) || GENERAL_MERCHANT)
+  const [search, setSearch] = useState('')
 
   async function refresh() {
     setAssets(await getLibraryAssets())
@@ -197,6 +205,11 @@ export default function LibraryPage() {
   }
 
   useEffect(() => { refresh() }, [])
+
+  function handleMerchantChange(next) {
+    setMerchant(next)
+    if (next && next !== ALL_MERCHANTS) localStorage.setItem(LAST_MERCHANT_KEY, next)
+  }
 
   async function handleDelete(asset) {
     setAssets(prev => prev.filter(a => a.id !== asset.id))
@@ -207,6 +220,17 @@ export default function LibraryPage() {
     const renamed = await renameLibraryAsset(asset.url, newName)
     if (renamed) setAssets(prev => prev.map(a => (a.id === asset.id ? renamed : a)))
   }
+
+  const merchants = useMemo(() => uniqueMerchants(assets), [assets])
+
+  const viewAssets = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return assets
+      .filter(a => merchant === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === merchant)
+      .filter(a => !q || a.name.toLowerCase().includes(q))
+  }, [assets, merchant, search])
+
+  const uploadMerchant = merchant === ALL_MERCHANTS ? GENERAL_MERCHANT : merchant
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
@@ -219,19 +243,61 @@ export default function LibraryPage() {
             ? 'Your uploaded logos and photos, ready to reuse across designs.'
             : `${assets.length} saved asset${assets.length === 1 ? '' : 's'}`}
         </p>
+
+        {/* Merchant folder — which restaurant these uploads belong to. Uploads
+            below are tagged with whichever merchant is selected here (or
+            "General" if "All merchants" is selected, for shared/generic assets). */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Merchant
+          </label>
+          <select
+            value={merchant}
+            onChange={e => handleMerchantChange(e.target.value)}
+            style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+          >
+            <option value={ALL_MERCHANTS}>All merchants</option>
+            {merchants.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <input
+            type="text"
+            placeholder="+ New merchant name…"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                handleMerchantChange(e.currentTarget.value.trim())
+                e.currentTarget.value = ''
+              }
+            }}
+            style={{ fontSize: 13, padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff', width: 160 }}
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name…"
+            style={{ marginLeft: 'auto', fontSize: 13, padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff', width: 200 }}
+          />
+        </div>
+
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {UPLOADABLE_FOLDERS.map(f => (
-            <UploadCard key={f.key} folderKey={f.key} label={f.label} requireTransparent={f.requireTransparent} onUploaded={refresh} />
+            <UploadCard key={f.key} folderKey={f.key} label={f.label} requireTransparent={f.requireTransparent} merchant={uploadMerchant} onUploaded={refresh} />
           ))}
         </div>
       </div>
 
       {!loading && assets.length === 0 ? (
         <EmptyState />
+      ) : !loading && viewAssets.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+          <div style={{ fontSize: 13, color: 'var(--mid)', textAlign: 'center' }}>
+            No assets match {search.trim() ? `"${search.trim()}"` : 'this merchant'}.
+          </div>
+        </div>
       ) : (
         <div style={{ padding: '32px 40px' }}>
           {Object.entries(FOLDERS).map(([folderKey, folderLabel]) => {
-            const folderAssets = assets.filter(a => a.folder === folderKey)
+            const folderAssets = viewAssets.filter(a => a.folder === folderKey)
             if (folderAssets.length === 0) return null
             return (
               <div key={folderKey} style={{ marginBottom: 36 }}>
@@ -240,7 +306,7 @@ export default function LibraryPage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
                   {folderAssets.map(asset => (
-                    <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} onRename={handleRename} />
+                    <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} onRename={handleRename} showMerchant={merchant === ALL_MERCHANTS} />
                   ))}
                 </div>
               </div>

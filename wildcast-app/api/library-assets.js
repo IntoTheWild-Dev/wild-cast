@@ -34,14 +34,21 @@ async function handleGet(req, res) {
   try {
     const { blobs } = await list({ prefix: 'library/', token })
 
+    // Pathname is either library/<folder>/<merchant>/<id>__<name>.<ext>
+    // (merchant-scoped, post-foldering) or the older library/<folder>/<id>__<name>.<ext>
+    // (no merchant segment — predates this feature). Older assets simply show
+    // up under "General" rather than needing a one-off migration.
     const assets = blobs.map(b => {
       const parts = b.pathname.split('/')
       const folder = parts[1]
-      const filename = parts[2] ?? ''
+      const hasMerchant = parts.length >= 4
+      const merchant = hasMerchant ? decodeURIComponent(parts[2]) : 'General'
+      const filename = (hasMerchant ? parts[3] : parts[2]) ?? ''
       const idMatch = /^([^_]+)__(.+)\.[a-zA-Z0-9]+$/.exec(filename)
       return {
         id: idMatch ? idMatch[1] : filename,
         folder,
+        merchant,
         name: idMatch ? idMatch[2] : filename,
         url: b.url,
         uploadedAt: new Date(b.uploadedAt).getTime(),
@@ -57,7 +64,7 @@ async function handleGet(req, res) {
 
 async function handlePost(req, res) {
   try {
-    const { folder, name, dataUrl } = req.body ?? {}
+    const { folder, name, dataUrl, merchant } = req.body ?? {}
     if (!folder || !name || !dataUrl) {
       return res.status(400).json({ error: 'Missing folder, name, or dataUrl' })
     }
@@ -72,8 +79,12 @@ async function handlePost(req, res) {
     const ext = contentType === 'image/png' ? 'png' : 'jpg'
     const id = crypto.randomUUID()
     const safeName = name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
+    // Merchant folder — one Wolt DE key covers many restaurants, so assets are
+    // scoped per merchant (not per activation key). Defaults to "General" for
+    // shared/non-merchant-specific assets (e.g. a generic Wolt app-store badge).
+    const safeMerchant = (merchant || 'General').trim().replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60) || 'General'
 
-    const blob = await put(`library/${folder}/${id}__${safeName}.${ext}`, buffer, {
+    const blob = await put(`library/${folder}/${safeMerchant}/${id}__${safeName}.${ext}`, buffer, {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
@@ -84,6 +95,7 @@ async function handlePost(req, res) {
     return res.status(200).json({
       id,
       folder,
+      merchant: safeMerchant,
       name,
       url: blob.url,
       uploadedAt: Date.now(),
@@ -103,11 +115,17 @@ async function handlePatch(req, res) {
 
   try {
     const oldPath = decodeURIComponent(new URL(url).pathname).replace(/^\//, '')
-    const match = /^library\/([a-z-]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
-    if (!match) return res.status(400).json({ error: 'Could not parse existing asset path' })
-    const [, folder, id, , ext] = match
+    // Merchant-scoped path (current format) first, falling back to the older
+    // no-merchant format — renaming an old asset also migrates it into
+    // "General" rather than needing a one-off migration script.
+    const merchantMatch = /^library\/([a-z-]+)\/([^/]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
+    const legacyMatch = !merchantMatch && /^library\/([a-z-]+)\/([^_]+)__(.+)\.([a-zA-Z0-9]+)$/.exec(oldPath)
+    if (!merchantMatch && !legacyMatch) return res.status(400).json({ error: 'Could not parse existing asset path' })
+    const [folder, merchant, id, ext] = merchantMatch
+      ? [merchantMatch[1], merchantMatch[2], merchantMatch[3], merchantMatch[5]]
+      : [legacyMatch[1], 'General', legacyMatch[2], legacyMatch[4]]
     const safeName = newName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
-    const newPath = `library/${folder}/${id}__${safeName}.${ext}`
+    const newPath = `library/${folder}/${merchant}/${id}__${safeName}.${ext}`
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
     const copied = await copy(url, newPath, {
@@ -118,7 +136,7 @@ async function handlePatch(req, res) {
     })
     await del(url, { token })
 
-    return res.status(200).json({ id, folder, name: newName, url: copied.url, uploadedAt: Date.now() })
+    return res.status(200).json({ id, folder, merchant, name: newName, url: copied.url, uploadedAt: Date.now() })
   } catch (err) {
     console.error('rename-library-asset error:', err)
     return res.status(500).json({ error: err.message })

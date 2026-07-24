@@ -13,6 +13,21 @@ export const FOLDERS = {
   other: 'Other',
 }
 
+// "General" is the default bucket for assets not tied to one specific
+// merchant (e.g. a shared Wolt app-store badge reused across restaurants).
+export const GENERAL_MERCHANT = 'General'
+
+// Sorted, deduped merchant names present in a set of assets — "General" always
+// sorts first since it's the fallback bucket, not a real merchant.
+export function uniqueMerchants(assets) {
+  const names = new Set(assets.map(a => a.merchant || GENERAL_MERCHANT))
+  return [...names].sort((a, b) => {
+    if (a === GENERAL_MERCHANT) return -1
+    if (b === GENERAL_MERCHANT) return 1
+    return a.localeCompare(b)
+  })
+}
+
 // Routes a template zone (e.g. 'logo', 'photo') to the library folder it belongs in.
 export function assetFolderForZone(zoneId) {
   if (zoneId === 'logo') return 'logos'
@@ -45,13 +60,13 @@ export async function getLibraryAssets() {
 // only to a sane hi-res ceiling, not a browsing-thumbnail size) resolution.
 // Fire-and-forget — failures are logged, not surfaced, since this runs
 // alongside the primary upload-into-the-design flow.
-export async function saveAssetToLibrary(folder, name, blobUrl) {
+export async function saveAssetToLibrary(folder, name, blobUrl, merchant) {
   try {
     const dataUrl = await blobUrlToDataUrl(blobUrl, { maxDim: LIBRARY_MAX_DIM })
     const res = await fetch('/api/library-assets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder, name, dataUrl }),
+      body: JSON.stringify({ folder, name, dataUrl, merchant }),
     })
     if (!res.ok) throw new Error((await res.json())?.error || 'Upload failed')
     return await res.json()

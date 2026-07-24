@@ -8,7 +8,9 @@ function formatDateTime(ts) {
 }
 import AISuggest from './AISuggest'
 import { hasTransparency } from '../lib/image'
-import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets } from '../lib/assetLibrary'
+import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets, uniqueMerchants, GENERAL_MERCHANT } from '../lib/assetLibrary'
+
+const ALL_MERCHANTS = '__all__'
 
 const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30, cta: 60 }
 
@@ -152,10 +154,12 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
-  const [showLibrary, setShowLibrary] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [libraryMerchantFilter, setLibraryMerchantFilter] = useState(merchant)
   const [libraryAssets, setLibraryAssets] = useState([])
 
   const libraryFolder = folder ?? 'other'
@@ -166,6 +170,20 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
   }
 
   useEffect(() => { refreshLibrary() }, [libraryFolder]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Default the library modal's merchant filter to whichever restaurant is
+  // currently being edited (re-applied on every open, in case the restaurant
+  // name changed since last time) — most of the time that's exactly what you
+  // want to reuse from.
+  function openLibrary() {
+    setLibraryMerchantFilter(merchant)
+    setLibraryOpen(true)
+  }
+
+  const libraryMerchants = uniqueMerchants(libraryAssets)
+  const filteredLibraryAssets = libraryAssets
+    .filter(a => libraryMerchantFilter === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === libraryMerchantFilter)
+    .filter(a => !librarySearch.trim() || a.name.toLowerCase().includes(librarySearch.trim().toLowerCase()))
 
   // The displayed min-resolution text always matches the real 300 DPI check below —
   // never hardcode a pixel count in a zone's hint string, it will drift from this.
@@ -212,7 +230,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         }
       }
 
-      saveAssetToLibrary(libraryFolder, file.name, url).then(refreshLibrary)
+      saveAssetToLibrary(libraryFolder, file.name, url, merchant).then(refreshLibrary)
       applyImage(url, file.name)
     }
     input.click()
@@ -225,7 +243,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       return
     }
     applyImage(asset.src, asset.name)
-    setShowLibrary(false)
+    setLibraryOpen(false)
   }
 
   return (
@@ -280,26 +298,75 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       {/* Library picker toggle — only shown when this zone's folder already has saved assets */}
       {libraryAssets.length > 0 && (
         <button
-          onClick={() => setShowLibrary(s => !s)}
+          onClick={openLibrary}
           style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
         >
-          {showLibrary ? '‹ Hide library' : 'or choose from library →'}
+          or choose from library →
         </button>
       )}
-      {showLibrary && (
-        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-          {libraryAssets.map(asset => (
-            <img
-              key={asset.id}
-              src={asset.src}
-              alt={asset.name}
-              title={asset.name}
-              onClick={() => handlePickFromLibrary(asset)}
-              style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '1.5px solid var(--border)', transition: 'border-color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-            />
-          ))}
+      {libraryOpen && (
+        <div
+          onClick={() => setLibraryOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 14, padding: 20, width: 560, maxWidth: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', flex: 1 }}>Choose from library</div>
+              <button
+                onClick={() => setLibraryOpen(false)}
+                style={{ width: 26, height: 26, border: 'none', background: '#F3F4F6', borderRadius: '50%', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', lineHeight: 1 }}
+              >×</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <input
+                type="text"
+                value={librarySearch}
+                onChange={e => setLibrarySearch(e.target.value)}
+                placeholder="Search by name…"
+                autoFocus
+                style={{ flex: 1, fontSize: 13, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', outline: 'none' }}
+              />
+              {libraryMerchants.length > 1 && (
+                <select
+                  value={libraryMerchantFilter}
+                  onChange={e => setLibraryMerchantFilter(e.target.value)}
+                  style={{ fontSize: 13, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)' }}
+                >
+                  <option value={ALL_MERCHANTS}>All merchants</option>
+                  {libraryMerchants.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {filteredLibraryAssets.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', padding: '30px 0' }}>
+                  No assets match{librarySearch.trim() ? ` "${librarySearch.trim()}"` : ' this filter'}.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                  {filteredLibraryAssets.map(asset => (
+                    <div key={asset.id} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <img
+                        src={asset.src}
+                        alt={asset.name}
+                        title={asset.name}
+                        onClick={() => handlePickFromLibrary(asset)}
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '1.5px solid var(--border)', transition: 'border-color 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                      />
+                      <div style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asset.name}>
+                        {asset.name}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -540,6 +607,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
                 requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
                 folder={assetFolderForZone(zone.id)}
+                merchant={(fields.restaurant_name || '').trim() || GENERAL_MERCHANT}
               />
             ))}
           </>
