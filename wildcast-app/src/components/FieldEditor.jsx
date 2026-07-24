@@ -618,12 +618,15 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>ICC Profile</div>
-          <select style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit' }}>
-            <option>FOGRA39 (European offset)</option>
-            <option>GRACoL 2013 (US web coated)</option>
-            <option>SWOP</option>
-            <option>Japan Color 2001</option>
-          </select>
+          {/* Every export is FOGRA39 — the only client is Wolt DE (Germany), so
+              this was never a real choice. A dropdown offering other profiles
+              (GRACoL/SWOP/Japan Color) wasn't wired to anything anyway — the
+              export always used FOGRA39 regardless of what was selected — so
+              showing it as a fixed value is more honest than a fake picker. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--dark)' }}>
+            <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span>
+            FOGRA39 (European offset)
+          </div>
         </div>
 
       </div>
