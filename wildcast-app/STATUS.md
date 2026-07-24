@@ -157,6 +157,16 @@ The library used to be 100% client-side localStorage, capped at 800px per image 
   2. **The Blob store is private-access-only.** `put(..., {access:'public'})` is flatly rejected: `"Cannot use public access on a private store."` Any binary asset needs the same proxy-through-a-server-route pattern as private JSON already uses elsewhere (`load-project.js`) — a plain `<img src>` on the raw blob URL will not work.
 - **Verified end-to-end live**, not just build-clean: uploaded a synthetic 1600×1200 test PNG directly via the API, confirmed it lists correctly, proxies back at full resolution, and renders/applies correctly both on the Library page and inside a template's "choose from library" picker. Cleaned up the test asset after.
 
+### Merchant folders + search (added 2026-07-24)
+
+Wolt DE is the only client, but they have many merchants (restaurants) — the shared library had no way to separate one restaurant's assets from another's, and "choose from library" had no way to find anything once a folder grew past a handful of items.
+
+- **Pathname gains a merchant segment:** `library/<folder>/<merchant>/<id>__<name>.<ext>` — defaults to `"General"` when no merchant is given (shared/non-merchant assets, e.g. a generic Wolt app-store badge). `api/library-assets.js`'s GET/PATCH handlers parse both this new 4-segment format and the older 3-segment (no-merchant) format for backward compatibility — old assets just show under "General" rather than needing a migration script. Renaming an old asset also migrates it into the merchant-scoped format.
+- **Library page:** a Merchant dropdown (known merchants + type a new one) scopes both the 4 upload buttons and the asset grid below; "All merchants" shows everything with a small merchant tag per card. A search box filters by name within whatever merchant view is active. Last-used merchant remembered via `localStorage`.
+- **In-canvas "choose from library" is now a real pop-up modal** (was an inline-expanding grid), with its own search box and a merchant filter dropdown (only shown when the folder actually has more than one merchant). **Defaults to whichever restaurant name is currently typed in the editor** — and any NEW upload made from inside the canvas editor is auto-tagged to that same restaurant (via a new `merchant` prop threaded from `fields.restaurant_name` down through `FieldEditor` → `ImageUpload`), so normal editing needs zero extra steps to stay organized by merchant. Stickers and QR codes (already their own folders since 2026-07-21) get the exact same merchant scoping automatically — no separate mechanism needed.
+- **Verified locally** via a mocked `/api/library-assets` (local `vite dev` still has no working serverless layer) — merchant filtering, search, the auto-default-to-current-restaurant behavior, and upload prop-threading (confirmed via React fiber inspection, since a naive raw-DOM `select.value` mutation doesn't reliably trigger React state and gave a false-negative on first attempt) all checked out.
+- **Known limitation:** this is one flat merchant namespace with no autocomplete-dedup — typing "Wen Cheng" vs "wen cheng" would create two separate folders. Fine at current scale (Julia manages this manually); revisit if merchant count grows large enough for typos to become a real problem.
+
 ---
 
 ## Activation key system
