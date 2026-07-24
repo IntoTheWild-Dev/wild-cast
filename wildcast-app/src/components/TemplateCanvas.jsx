@@ -43,11 +43,20 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
 
-  // Clamps a user nudge offset to the crop slack the current scale allows, so an
-  // image can never be nudged far enough to reveal zone background behind it.
+  // Clamps a user nudge offset to how far the image can move without breaking
+  // its fit contract, so a nudge can never reveal zone background behind it
+  // (cover) or push the image outside its own box (contain).
+  //
+  // Cover-fit images are scaled >= the zone in both dimensions (overflow), so
+  // slack = (scaledDim - zoneDim)/2 — how far the oversized image can shift
+  // before its edge reaches the zone edge. Contain-fit images (e.g. logos) are
+  // scaled <= the zone in the non-binding dimension (letterboxed underflow),
+  // so the same formula went negative and Math.max(0, …) floored it to zero —
+  // nudge was permanently a no-op for any contain-fit zone. Math.abs() unifies
+  // both cases: it's the same "how far can this edge travel" distance either way.
   function clampOffset(zone, scaledW, scaledH, rawOffset) {
-    const slackX = Math.max(0, (scaledW - zone.width)  / 2)
-    const slackY = Math.max(0, (scaledH - zone.height) / 2)
+    const slackX = Math.abs(scaledW  - zone.width)  / 2
+    const slackY = Math.abs(scaledH - zone.height) / 2
     const raw = rawOffset ?? { x: 0, y: 0 }
     return {
       x: Math.max(-slackX, Math.min(slackX, raw.x)),
@@ -584,16 +593,24 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }
 
         canvas.add(img)
+        zoneObjsRef.current[`${zone.id}-image`] = img
         // Z-order: images → guide rects (so border shows on top of image) → textboxes
-        // → overlap images (float above text for layering effect)
+        // → overlap images (float above text for layering effect).
+        // Re-applied in full (not just for this zone) every time ANY image zone
+        // loads — each zone's fabric.Image.fromURL callback fires independently
+        // and asynchronously, so re-uploading e.g. the logo after the photo was
+        // already loaded would otherwise re-bring textboxes above the photo and
+        // silently break its overlap until the photo was re-uploaded too.
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o._wcGuide) canvas.bringToFront(o)
         })
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o.type === 'textbox') canvas.bringToFront(o)
         })
-        if (zone.overlapAbove) canvas.bringToFront(img)
-        zoneObjsRef.current[`${zone.id}-image`] = img
+        config.zones.filter(z => z.type === 'image' && z.overlapAbove).forEach(z => {
+          const overlapImg = zoneObjsRef.current[`${z.id}-image`]
+          if (overlapImg) canvas.bringToFront(overlapImg)
+        })
         canvas.renderAll()
       }, { crossOrigin: 'anonymous' })
     })

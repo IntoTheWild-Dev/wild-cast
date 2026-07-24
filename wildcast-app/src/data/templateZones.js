@@ -146,7 +146,11 @@ const WEN_CHENG_V3_ZONES = [
   {
     id: 'restaurant_name',
     type: 'text',
-    x: 1.9, y: 149,
+    // y nudged +4 from the raw Figma guide rect — pixel-measured against the
+    // baked "♥ WOLT" wordmark (canvas-space rows 160-170): at y:149 the name's
+    // own baseline (row 166) sat 4px above WOLT's baseline (row 170), reading
+    // as not-inline. Confirmed via canvas pixel scan, not guesswork.
+    x: 1.9, y: 153,
     width: 165, height: 28,
     fontSize: 20,
     fontFamily: 'omnes-cond',
@@ -207,6 +211,10 @@ const OPT_B_ZONES = [
     // Position nudge actually has room to move.
     x: 43.8, y: 169.2,
     width: 230, height: 130,
+    // Photo sits directly below the headline with zero gap (169.2 = headline's
+    // own y+height) — extend the clip region up by the full headline height so
+    // the photo can visually overlap it, matching Julia's Figma reference.
+    overlapAbove: 44,
   },
   // Line 1 ("Jetzt Wolt App downloaden und") stays baked in the background —
   // line 2 was McDonald's-specific ("...bei McDonald's bestellen.") and is now
@@ -217,7 +225,7 @@ const OPT_B_ZONES = [
     type: 'text',
     x: 59.5, y: 307,
     width: 198.5, height: 17,
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'omnes-pro',
     fontWeight: 600,
     color: '#FFFFFF',
