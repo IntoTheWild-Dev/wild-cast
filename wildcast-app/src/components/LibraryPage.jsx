@@ -38,11 +38,106 @@ function EmptyState() {
   )
 }
 
-function UploadCard({ folderKey, label, requireTransparent, merchant, onUploaded }) {
+// Asked for by name: clicking an upload button used to silently tag the new
+// asset with whatever merchant happened to be selected in the page-level
+// filter above — not obvious at all, took real figuring-out to notice that
+// connection existed. Now it asks explicitly, every time, right where the
+// decision actually needs to be made.
+function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onConfirm }) {
+  const hasExisting = merchants.length > 0
+  const [mode, setMode] = useState(hasExisting ? 'existing' : 'new')
+  const [existingChoice, setExistingChoice] = useState(defaultMerchant || merchants[0] || '')
+  const [newName, setNewName] = useState('')
+
+  const subject = label.replace(/^Upload (a|an) /i, '')
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 380, maxWidth: '100%' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', marginBottom: 4 }}>Who is this {subject.toLowerCase()} for?</div>
+        <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 16 }}>Assets are organized by merchant so they don't get mixed up.</div>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {hasExisting && (
+            <button
+              onClick={() => setMode('existing')}
+              style={{
+                flex: 1, padding: '9px 10px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer',
+                border: mode === 'existing' ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+                background: mode === 'existing' ? 'var(--primary-glow)' : '#fff',
+                color: mode === 'existing' ? 'var(--primary)' : 'var(--dark)',
+              }}
+            >
+              Add to existing merchant
+            </button>
+          )}
+          <button
+            onClick={() => setMode('new')}
+            style={{
+              flex: 1, padding: '9px 10px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer',
+              border: mode === 'new' ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+              background: mode === 'new' ? 'var(--primary-glow)' : '#fff',
+              color: mode === 'new' ? 'var(--primary)' : 'var(--dark)',
+            }}
+          >
+            Add new merchant
+          </button>
+        </div>
+
+        {mode === 'existing' ? (
+          <select
+            value={existingChoice}
+            onChange={e => setExistingChoice(e.target.value)}
+            style={{ width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', boxSizing: 'border-box' }}
+          >
+            {merchants.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="e.g. Wen Cheng"
+            autoFocus
+            style={{ width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box' }}
+          />
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+          <button
+            onClick={onCancel}
+            style={{ flex: 1, padding: '10px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--mid)', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(mode === 'new' ? newName.trim() : existingChoice)}
+            disabled={mode === 'new' && !newName.trim()}
+            style={{
+              flex: 2, padding: '10px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none',
+              background: mode === 'new' && !newName.trim() ? '#E5E7EB' : 'var(--primary)',
+              color: mode === 'new' && !newName.trim() ? 'var(--mid)' : '#fff',
+              cursor: mode === 'new' && !newName.trim() ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Continue to upload
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UploadCard({ folderKey, label, requireTransparent, merchants, defaultMerchant, onUploaded }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [picking, setPicking] = useState(false)
 
-  function handleClick() {
+  function runUpload(merchant) {
+    setPicking(false)
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
@@ -78,7 +173,7 @@ function UploadCard({ folderKey, label, requireTransparent, merchant, onUploaded
   return (
     <div style={{ marginBottom: 8 }}>
       <button
-        onClick={handleClick}
+        onClick={() => setPicking(true)}
         disabled={busy}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
@@ -97,6 +192,15 @@ function UploadCard({ folderKey, label, requireTransparent, merchant, onUploaded
       </button>
       {error && (
         <div style={{ marginTop: 6, fontSize: 11, color: '#B91C1C' }}>✕ {error}</div>
+      )}
+      {picking && (
+        <MerchantPickerModal
+          label={label}
+          merchants={merchants}
+          defaultMerchant={defaultMerchant}
+          onCancel={() => setPicking(false)}
+          onConfirm={runUpload}
+        />
       )}
     </div>
   )
@@ -270,7 +374,9 @@ export default function LibraryPage() {
       .filter(a => !q || a.name.toLowerCase().includes(q))
   }, [assets, merchant, search])
 
-  const uploadMerchant = merchant === ALL_MERCHANTS ? GENERAL_MERCHANT : merchant
+  // Default pre-fill for the upload picker's "existing merchant" dropdown —
+  // whatever's currently being viewed, if it's a real merchant.
+  const defaultUploadMerchant = merchant === ALL_MERCHANTS ? (merchants[0] || GENERAL_MERCHANT) : merchant
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
@@ -284,12 +390,12 @@ export default function LibraryPage() {
             : `${assets.length} saved asset${assets.length === 1 ? '' : 's'}`}
         </p>
 
-        {/* Merchant folder — which restaurant these uploads belong to. Uploads
-            below are tagged with whichever merchant is selected here (or
-            "General" if "All merchants" is selected, for shared/generic assets). */}
+        {/* Merchant — filters which assets are shown below. Which merchant a
+            NEW upload gets tagged with is asked explicitly in a pop-up when
+            you click one of the upload buttons, not decided by this filter. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Merchant
+            Viewing
           </label>
           <select
             value={merchant}
@@ -301,17 +407,6 @@ export default function LibraryPage() {
           </select>
           <input
             type="text"
-            placeholder="+ New merchant name…"
-            onKeyDown={e => {
-              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                handleMerchantChange(e.currentTarget.value.trim())
-                e.currentTarget.value = ''
-              }
-            }}
-            style={{ fontSize: 13, padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff', width: 160 }}
-          />
-          <input
-            type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by name…"
@@ -321,7 +416,7 @@ export default function LibraryPage() {
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {UPLOADABLE_FOLDERS.map(f => (
-            <UploadCard key={f.key} folderKey={f.key} label={f.label} requireTransparent={f.requireTransparent} merchant={uploadMerchant} onUploaded={refresh} />
+            <UploadCard key={f.key} folderKey={f.key} label={f.label} requireTransparent={f.requireTransparent} merchants={merchants} defaultMerchant={defaultUploadMerchant} onUploaded={refresh} />
           ))}
         </div>
       </div>
