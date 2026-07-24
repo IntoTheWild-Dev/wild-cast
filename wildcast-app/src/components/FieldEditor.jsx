@@ -390,15 +390,17 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Scale</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
             <button
-              onClick={e => { e.stopPropagation(); onScaleChange(Math.max(20, (scalePercent ?? 100) - 10)) }}
-              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+              onClick={e => { e.stopPropagation(); onScaleChange(Math.max(20, (scalePercent ?? 100) - 5)) }}
+              disabled={(scalePercent ?? 100) <= 20}
+              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: (scalePercent ?? 100) <= 20 ? 'default' : 'pointer', fontSize: 14, color: (scalePercent ?? 100) <= 20 ? 'var(--light)' : 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
               onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >−</button>
             <span style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'center', color: 'var(--mid)', fontWeight: 600 }}>{scalePercent ?? 100}%</span>
             <button
-              onClick={e => { e.stopPropagation(); onScaleChange(Math.min(300, (scalePercent ?? 100) + 10)) }}
-              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+              onClick={e => { e.stopPropagation(); onScaleChange(Math.min(300, (scalePercent ?? 100) + 5)) }}
+              disabled={(scalePercent ?? 100) >= 300}
+              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: (scalePercent ?? 100) >= 300 ? 'default' : 'pointer', fontSize: 14, color: (scalePercent ?? 100) >= 300 ? 'var(--light)' : 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
               onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >+</button>
@@ -406,8 +408,11 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         </div>
       )}
 
-      {/* Nudge control — repositions the photo within its zone. Bump Scale up first
-          if the food sits off-centre in your source photo, then nudge to recentre it. */}
+      {/* Nudge control — repositions the photo within its zone. The image can
+          never be nudged far enough to reveal empty space behind it, so how
+          far it can move depends on Scale: at 100% there's often only a few
+          clicks' worth of room before it silently stops (by design, not a
+          bug) — the hint below is the only feedback for that today. */}
       {value && onNudge && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
           <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Position</span>
@@ -428,6 +433,11 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
               >{dir}</button>
             ))}
           </div>
+        </div>
+      )}
+      {value && onNudge && (
+        <div style={{ fontSize: 10, color: 'var(--light)', marginTop: 4, paddingLeft: 2 }}>
+          If Position stops moving, bump Scale up first for more room to nudge.
         </div>
       )}
     </div>

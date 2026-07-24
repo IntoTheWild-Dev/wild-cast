@@ -57,8 +57,16 @@ export default async function handler(req, res) {
     // Using raw bytes + FlateDecode sidesteps that convention entirely.
     // withIccProfile with a CMYK profile does the ICC-accurate sRGB→CMYK
     // conversion; raw() extracts 4 bytes/px (C, M, Y, K) in standard order.
+    // 'cover' (not 'fill') — the editor canvas is 316×441px, which is ~1% off
+    // true A6's 105:148 ratio (canvasH was rounded to 441 rather than the more
+    // precise 445 when these constants were first chosen), so a naive
+    // fill-resize stretched every element on export slightly non-uniformly
+    // (circles → faint ovals, etc). 'cover' scales uniformly and crops the
+    // ~1% overflow off one edge instead — invisible here since the
+    // background art fills edge-to-edge — guaranteeing nothing in the design
+    // gets stretched out of proportion.
     const rawCmyk = await sharp(pngBuffer)
-      .resize(TRIM_PX_W, TRIM_PX_H, { fit: 'fill' })
+      .resize(TRIM_PX_W, TRIM_PX_H, { fit: 'cover' })
       .flatten({ background: { r: 255, g: 255, b: 255 } }) // composite any alpha on white
       // Real bleed: mirror the trim-edge pixels outward by BLEED_PX rather than
       // stretching the trim art across the full bleed box. Keeps every design

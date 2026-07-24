@@ -225,6 +225,25 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         canvas.add(guide)
         zoneObjsRef.current['_centre-guide'] = guide
 
+        // Trim-line guide — the canvas itself IS the trim size (this app never
+        // renders real bleed in the editor; bleed is only added at export time
+        // by mirroring the trim edge outward, see api/export-cmyk.js). A thin
+        // red outline right at the canvas edge marks that cut line so nothing
+        // important gets placed too close to it. Always visible while editing,
+        // hidden on export like the other guides (_wcGuide).
+        const trimGuide = new fabric.Rect({
+          left: 0.75, top: 0.75,
+          width: canvasW - 1.5, height: canvasH - 1.5,
+          fill: 'transparent',
+          stroke: '#FF3B30',
+          strokeWidth: 1.5,
+          selectable: false,
+          evented: false,
+          _wcGuide: true,
+        })
+        canvas.add(trimGuide)
+        zoneObjsRef.current['_trim-guide'] = trimGuide
+
         zones.forEach(zone => {
           zoneCfgRef.current[zone.id] = zone
 
