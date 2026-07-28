@@ -7,7 +7,7 @@ function formatDateTime(ts) {
   })
 }
 import AISuggest from './AISuggest'
-import { hasTransparency } from '../lib/image'
+import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets, uniqueMerchants, GENERAL_MERCHANT } from '../lib/assetLibrary'
 
 const ALL_MERCHANTS = '__all__'
@@ -154,7 +154,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -219,7 +219,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         return
       }
 
-      const url = URL.createObjectURL(file)
+      let url = URL.createObjectURL(file)
 
       if (requireTransparent) {
         const transparent = await hasTransparency(url)
@@ -229,6 +229,12 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           return
         }
       }
+
+      // Many QR generators export with a big white "quiet zone" margin baked
+      // into the file — crop it away so a plain "contain" fit fills the zone
+      // tightly instead of leaving visible gaps, no manual scale/position
+      // needed from a non-designer partner.
+      if (autoCropContent) url = await cropToContent(url)
 
       saveAssetToLibrary(libraryFolder, file.name, url, merchant).then(refreshLibrary)
       applyImage(url, file.name)
@@ -242,7 +248,10 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       setBgError('This image has a background — please pick a transparent PNG.')
       return
     }
-    applyImage(asset.src, asset.name)
+    // Covers library assets uploaded before this cropping existed — cropToContent
+    // is a no-op (returns the same url) if it's already a tight fit.
+    const src = autoCropContent ? await cropToContent(asset.src) : asset.src
+    applyImage(src, asset.name)
     setLibraryOpen(false)
   }
 
@@ -617,7 +626,12 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
                 requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
                 folder={assetFolderForZone(zone.id)}
-                merchant={(fields.restaurant_name || '').trim() || GENERAL_MERCHANT}
+                // Templates without a restaurant_name field (e.g. Figma imports
+                // that don't define one) have nothing to auto-tag the merchant
+                // with — fall back to the project name instead of dumping
+                // everything into "General", still with zero extra clicks.
+                merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                autoCropContent={zone.id === 'qr'}
               />
             ))}
           </>

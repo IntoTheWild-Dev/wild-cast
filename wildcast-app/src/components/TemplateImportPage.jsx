@@ -122,6 +122,14 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
   const [showDraftModal, setShowDraftModal] = useState(false)
   const [actionSlot, setActionSlot] = useState(null)
   const [actionError, setActionError] = useState('')
+  // Per-zone overrides staged in the "Zone settings" review panel below,
+  // keyed by zone id — lets a designer correct font size/rotation right here
+  // instead of pixel-hunting via screenshots and waiting on a code change.
+  // Figma's own point size is what's extracted (see api/_lib/figma-import.js),
+  // but a zone with no live text to sample from still needs a human's call.
+  const [zoneEdits, setZoneEdits] = useState({})
+  const [savingZones, setSavingZones] = useState(false)
+  const [zonesSaved, setZonesSaved] = useState(false)
 
   // Every "coming soon" slot is a valid import target — Option A/B are hardcoded
   // and never show up here, so an import can never clobber a real live template.
@@ -156,12 +164,50 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Import failed')
       setResult(data)
+      setZoneEdits({})
+      setZonesSaved(false)
       setStatus('done')
       setShowDraftModal(true)
       onRefetch?.()
     } catch (err) {
       setError(err.message)
       setStatus('error')
+    }
+  }
+
+  // Merges staged zoneEdits on top of the import result — what's actually
+  // shown in the review panel and what gets saved.
+  function zonesWithEdits() {
+    if (!result) return []
+    return result.zones.map(z => zoneEdits[z.id] ? { ...z, ...zoneEdits[z.id] } : z)
+  }
+
+  function updateZoneEdit(zoneId, patch) {
+    setZoneEdits(prev => ({ ...prev, [zoneId]: { ...prev[zoneId], ...patch } }))
+    setZonesSaved(false)
+  }
+
+  async function handleSaveZones() {
+    if (!result) return
+    setSavingZones(true)
+    setError('')
+    try {
+      const zones = zonesWithEdits()
+      const res = await fetch('/api/publish-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotKey: result.slotKey, action: 'updateZones', zones }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save zone settings')
+      setResult(r => ({ ...r, zones: data.zones }))
+      setZoneEdits({})
+      setZonesSaved(true)
+      onRefetch?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingZones(false)
     }
   }
 
@@ -329,9 +375,49 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
 
               {result.needsReview?.length > 0 && (
                 <div style={{ padding: '8px 10px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, fontSize: 11, color: '#795548', marginBottom: 16 }}>
-                  ⚠ These zones had no live text to read font info from — double-check fontSize/fontFamily in the editor: {result.needsReview.join(', ')}
+                  ⚠ These zones had no live text to read font info from — double-check fontSize/rotation below: {result.needsReview.join(', ')}
                 </div>
               )}
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 8 }}>Zone settings</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {zonesWithEdits().filter(z => z.type === 'text').map(z => (
+                    <div key={z.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', flex: 1 }}>{z.id}</span>
+                      <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Size
+                        <input
+                          type="number"
+                          value={z.fontSize ?? ''}
+                          onChange={e => updateZoneEdit(z.id, { fontSize: e.target.value === '' ? null : Number(e.target.value) })}
+                          style={{ width: 52, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={z.rotate === -90}
+                          onChange={e => updateZoneEdit(z.id, { rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
+                        />
+                        Rotate 90°
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSaveZones}
+                  disabled={savingZones || Object.keys(zoneEdits).length === 0}
+                  style={{
+                    marginTop: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
+                    background: savingZones || Object.keys(zoneEdits).length === 0 ? '#E5E7EB' : 'var(--dark)',
+                    color: savingZones || Object.keys(zoneEdits).length === 0 ? 'var(--mid)' : '#fff',
+                    cursor: savingZones || Object.keys(zoneEdits).length === 0 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {savingZones ? 'Saving…' : zonesSaved ? 'Saved ✓' : 'Save zone settings'}
+                </button>
+              </div>
 
               {!result.live && (
                 <button
