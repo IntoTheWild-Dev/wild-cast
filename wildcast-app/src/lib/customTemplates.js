@@ -13,7 +13,13 @@ export function templateAssetSrc(url) {
   return `/api/list-templates?url=${encodeURIComponent(url)}`
 }
 
+// "Override" records (see api/publish-template.js) exist only to let a
+// hardcoded static slot — Option A/B — be archived; they carry no real
+// zones/background and must never enter the zonesById/cards merge (there's
+// nothing real to render, and Option A/B's actual data is the static
+// templateZones.js/templates.js import, untouched by any of this).
 export function customZonesEntry(record) {
+  if (record.isOverrideOnly) return {}
   const config = {
     canvasW: record.canvasW,
     canvasH: record.canvasH,
@@ -28,6 +34,7 @@ export function customZonesEntry(record) {
 }
 
 export function customTemplateCards(record) {
+  if (record.isOverrideOnly) return []
   const base = {
     desc: 'Imported from Figma.',
     tags: ['A6', 'CMYK', '3mm bleed'],

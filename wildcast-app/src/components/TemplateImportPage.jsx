@@ -193,7 +193,11 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
   // Used by the "Previously imported" list — publish/unpublish/archive/restore
   // any past record, not just the one currently shown in the result panel above.
   async function handleRecordAction(record, action) {
-    if (action === 'archive' && record.live) {
+    // An override record (Option A/B) has no `.live` field of its own — it's
+    // "live" to partners whenever it isn't archived, since the underlying
+    // template is always hardcoded-visible unless this flag hides it.
+    const isVisibleToPartners = record.isOverrideOnly ? !record.archived : record.live
+    if (action === 'archive' && isVisibleToPartners) {
       const ok = window.confirm(
         `"${record.label}" is currently live — partners can see it. Archive it anyway? It disappears from the catalogue immediately; you can restore it as a draft later.`
       )
@@ -352,10 +356,13 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {customRecords.map(r => {
-                const status = r.archived ? 'Archived' : r.live ? 'Live' : 'Draft'
+                // Override records (see api/publish-template.js) exist only for
+                // Option A/B — hardcoded static templates with no real draft/
+                // live data of their own, just an archived on/off switch.
+                const status = r.archived ? 'Archived' : r.isOverrideOnly ? 'Built-in' : r.live ? 'Live' : 'Draft'
                 const statusStyle = r.archived
                   ? { background: '#F3F4F6', color: 'var(--mid)' }
-                  : r.live
+                  : (r.isOverrideOnly || r.live)
                     ? { background: '#D1FAE5', color: '#065F46' }
                     : { background: '#FEF3C7', color: '#92400E' }
                 const busy = actionSlot === r.slotKey
@@ -374,6 +381,10 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
                       {r.archived ? (
                         <button disabled={busy} onClick={() => handleRecordAction(r, 'restore')} style={btnStyle}>
                           {busy ? '…' : 'Restore'}
+                        </button>
+                      ) : r.isOverrideOnly ? (
+                        <button disabled={busy} onClick={() => handleRecordAction(r, 'archive')} style={btnStyle}>
+                          {busy ? '…' : 'Archive'}
                         </button>
                       ) : r.live ? (
                         <>

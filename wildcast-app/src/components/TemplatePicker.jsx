@@ -1,6 +1,13 @@
 import { useState, useMemo } from 'react'
 import { TEMPLATES } from '../data/templates'
 
+// Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label —
+// duplicated (not imported) to keep this file's only dependency on that one
+// small and obvious; must stay byte-identical to match slotKeys correctly.
+function slotKeyFor(label) {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
 // ── Template data ─────────────────────────────────────────────────────────────
 // This is the fixed 30-slot skeleton (labels/categories/formats never change).
 // Which slots are actually "live" can come from here (Option A/B, hardcoded)
@@ -56,14 +63,22 @@ export const BASE_TEMPLATES = [
   { label: 'Retail Wild Poster · Option E', category: 'retail', format: 'Wild Poster', live: false },
 ]
 
-// Fills empty ("coming soon") slots with matching Figma-imported templates.
-// Never touches a slot that's already live (Option A/B stay hardcoded,
-// untouchable by an import even by naming coincidence). Matched by exact
-// label + category + format — the designer picks the target slot by label
-// when importing, so this only needs a direct match, not fuzzy logic.
-function overlayCustomCards(baseTemplates, customCards) {
+// Fills empty ("coming soon") slots with matching Figma-imported templates,
+// and separately lets a HARDCODED live slot (Option A/B) be archived too —
+// via a lightweight "override" record (isOverrideOnly:true, no real
+// zones/background, see src/lib/customTemplates.js) keyed by the same
+// slugified label a real Figma import uses. Never touches a hardcoded
+// slot's underlying data, only whether it's shown. Matched by exact label +
+// category + format — the designer picks the target slot by label when
+// importing, so this only needs a direct match, not fuzzy logic.
+function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
   return baseTemplates.map(slot => {
-    if (slot.live) return slot
+    if (slot.live) {
+      const override = customRecords.find(r => r.slotKey === slotKeyFor(slot.label) && r.isOverrideOnly)
+      // Archived hardcoded slot → hide exactly like an archived import does.
+      // Restoring just clears the override, so the slot goes right back to live.
+      return override?.archived ? { ...slot, live: false } : slot
+    }
     const designerCard = customCards.find(c =>
       c.mode === 'designer' && c.name === slot.label && c.cat === slot.category && c.format === slot.format
     )
@@ -243,12 +258,16 @@ function ManageMenu({ record, onAction }) {
   const [busy, setBusy] = useState(false)
 
   async function run(action) {
-    if (action === 'archive' && record.live) {
+    // An override record (Option A/B) has no `.live` of its own — it's
+    // visible to partners whenever it isn't archived, since the underlying
+    // template is hardcoded-visible unless this flag hides it.
+    const isVisibleToPartners = record.isOverrideOnly ? !record.archived : record.live
+    if (action === 'archive' && isVisibleToPartners) {
       const ok = window.confirm(`"${record.label}" is currently live — partners can see it. Archive it anyway? You can restore it as a draft later.`)
       if (!ok) return
     }
     setBusy(true)
-    await onAction(record.slotKey, action)
+    await onAction(record.slotKey, action, record.label)
     setBusy(false)
     setOpen(false)
   }
@@ -266,9 +285,14 @@ function ManageMenu({ record, onAction }) {
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 4 }} />
           <div style={{ position: 'absolute', top: 32, right: 0, zIndex: 6, background: '#fff', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.18)', border: '1px solid var(--border)', overflow: 'hidden', minWidth: 132 }}>
-            {(record.live
-              ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
-              : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }]
+            {(record.isOverrideOnly
+              // A hardcoded slot (Option A/B) has no draft/live concept of its
+              // own to publish/unpublish — archiving just hides it, restoring
+              // just un-hides it.
+              ? (record.archived ? [{ label: 'Restore', action: 'restore' }] : [{ label: 'Archive', action: 'archive' }])
+              : record.live
+                ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
+                : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }]
             ).map(opt => (
               <button
                 key={opt.action}
@@ -299,21 +323,28 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
     setModal(null)
   }
 
-  // A slot only carries templateIdDesigner matching a real customRecords
-  // entry when overlayCustomCards() actually linked a (non-archived) Figma
-  // import into it — this is true for both live and draft custom slots, so
-  // it doubles as "is this slot manageable" for both catalogue branches below.
+  // Every BASE_TEMPLATES slot (custom import or hardcoded) is keyed by the
+  // same slugified label a real Figma import uses as its slotKey — a real
+  // custom-import record is found this way whether it's live or still a
+  // draft. A hardcoded live slot (Option A/B) usually has no backing record
+  // at all (nothing to archive yet); synthesize a virtual one so the menu
+  // still shows, offering just "Archive" — clicking it creates the real
+  // override record server-side on first use (see api/publish-template.js).
   function customRecordFor(t) {
     if (!canManage) return null
-    return customRecords.find(r => r.slotKey === t.templateIdDesigner) ?? null
+    const key = slotKeyFor(t.label)
+    const real = customRecords.find(r => r.slotKey === key)
+    if (real) return real
+    const isHardcoded = BASE_TEMPLATES.some(b => b.label === t.label && b.live)
+    return isHardcoded ? { slotKey: key, label: t.label, live: true, archived: false, isOverrideOnly: true } : null
   }
 
-  async function handleManageAction(slotKey, action) {
+  async function handleManageAction(slotKey, action, label) {
     try {
       const res = await fetch('/api/publish-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slotKey, action }),
+        body: JSON.stringify({ slotKey, action, label }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Action failed')
@@ -377,6 +408,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 </div>
               </div>
             )
+            const archivedBuiltIn = record?.isOverrideOnly  // was live, now archived — not a draft
             return (
               <div
                 key={i}
@@ -388,13 +420,13 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {record ? 'Draft — not published' : 'Coming soon'}
+                    {archivedBuiltIn ? 'Archived' : record ? 'Draft — not published' : 'Coming soon'}
                   </span>
                 </div>
                 <div style={{ padding: '16px 18px 18px' }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
                   <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>
-                    {record ? 'Imported from Figma — use ⋯ to publish or archive.' : 'Template in progress'}
+                    {archivedBuiltIn ? 'Hidden from partners — use ⋯ to restore it.' : record ? 'Imported from Figma — use ⋯ to publish or archive.' : 'Template in progress'}
                   </div>
                 </div>
               </div>
@@ -529,7 +561,7 @@ function BriefingForm({ onSubmit }) {
 export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
-  const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards), [customCards])
+  const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
   const allGroups     = useMemo(() => deriveGroups(allTemplates), [allTemplates])
 
   // Options view

@@ -551,7 +551,7 @@ export default function App() {
 
       {screen === 'picker' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplatePicker mode="hero" onSelect={handleSelectTemplate} customCards={customTemplates.cards} />
+          <TemplatePicker mode="hero" onSelect={handleSelectTemplate} customCards={customTemplates.cards} customRecords={customTemplates.records} />
         </div>
       )}
 
