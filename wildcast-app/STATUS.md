@@ -5,6 +5,10 @@
 
 ---
 
+**⚠️ Check when you resume (2026-07-28 session close-out):** production had a brief real outage during this session (a couple of minutes, activation/`api/validate-key` failing) caused by a mistaken manual deploy command while chasing a slow-to-appear push. It was caught and reverted the same session, and both `cast.wildstack.studio` and `wild-cast-psi.vercel.app` were re-verified working afterward (real activation-key checks, not just a visual load) — but worth a quick sanity check yourself first thing: **log in with your real key and confirm the app loads and a template opens normally.** Full account in "Option D test found 3 more real bugs" below, and in Claude's own session memory. Everything else in this session (bug fixes, new features) is deployed and was verified live.
+
+---
+
 ## What's working right now
 
 ### Template Picker (redesigned 2026-06-30)
