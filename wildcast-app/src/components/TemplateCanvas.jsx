@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 
+// Visual-only bleed margin drawn around the canvas in the editor, matching
+// the Figma master's own look (solid page edge + inset dashed trim line) —
+// canvas is 316px wide representing 105mm trim, so 3mm bleed ≈ 316/105*3 ≈
+// 9px at this same scale. Purely a CSS wrapper outside the actual canvas;
+// does not change canvasW/canvasH or any zone coordinate.
+const BLEED_MARGIN = 9
+
 async function loadFonts() {
   // document.fonts.ready resolves when @font-face declarations are parsed —
   // but the actual font FILES may not be downloaded yet (especially on first
@@ -687,12 +694,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           Guided mode · canvas locked
         </div>
       )}
-      {/* Space-holder: takes up the zoomed canvas size so the container scrolls correctly */}
+      {/* Space-holder: takes up the zoomed canvas size (plus the bleed margin
+          drawn around it below) so the container scrolls correctly */}
       <div style={{
         position: 'relative',
         flexShrink: 0,
-        width: canvasW * scale,
-        height: canvasH * scale,
+        width: (canvasW + BLEED_MARGIN * 2) * scale,
+        height: (canvasH + BLEED_MARGIN * 2) * scale,
         marginBottom: 36,
       }}>
         {/* CSS transform scales the actual canvas element */}
@@ -702,8 +710,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           transformOrigin: 'top left',
           transform: `scale(${scale})`,
         }}>
-          <div style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6)', borderRadius: 3, overflow: 'hidden' }}>
-            <canvas ref={canvasElRef} />
+          {/* Bleed margin, drawn around the canvas exactly like the Figma
+              master (solid outer edge = true page/bleed boundary; the pink
+              dashed trim line is drawn just inside the canvas's own edge —
+              see the trim-guide fabric.Rect in the effect above). This is
+              purely a visual guide outside the actual canvas — canvas
+              dimensions and every zone coordinate stay trim-only/unchanged. */}
+          <div style={{
+            padding: BLEED_MARGIN,
+            background: '#fff',
+            border: '1px solid rgba(0,0,0,0.25)',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ borderRadius: 3, overflow: 'hidden' }}>
+              <canvas ref={canvasElRef} />
+            </div>
           </div>
         </div>
         {/* Zoom controls */}
