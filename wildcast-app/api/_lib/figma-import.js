@@ -102,7 +102,13 @@ export function toCanvasZone(node, frameBox, allNodes = []) {
   if (node.type === 'TEXT' && node.style) {
     // Real font data straight from Figma — only available when the zone
     // marker itself is a text node, not a placeholder shape.
-    zone.fontSize = Math.round(node.style.fontSize * scaleY)
+    // fontSize is used as-is, NOT multiplied by scaleY — unlike position/
+    // size, a font's point size isn't a spatial coordinate in the Figma
+    // frame that needs remapping into canvas-unit space; Fabric's fontSize
+    // is meant to match the same point size a designer reads directly off
+    // Figma's own text panel. Confirmed against a real mismatch: scaling by
+    // ~1.05 made every imported heading render ~5% larger than intended.
+    zone.fontSize = Math.round(node.style.fontSize)
     zone.fontFamily = node.style.fontFamily
     zone.fontWeight = node.style.fontWeight
     zone.color = '#FFFFFF'
@@ -120,7 +126,8 @@ export function toCanvasZone(node, frameBox, allNodes = []) {
   const sibling = allNodes.find(n => n.name === id && n.type === 'TEXT' && n.style)
   if (sibling) {
     Object.assign(zone, boxToZoneRect(sibling.absoluteBoundingBox, frameBox, scaleX, scaleY))
-    zone.fontSize = Math.round(sibling.style.fontSize * scaleY)
+    // Not scaled by scaleY — see the comment on the same line above (node.type === 'TEXT' branch).
+    zone.fontSize = Math.round(sibling.style.fontSize)
     zone.fontFamily = sibling.style.fontFamily
     zone.fontWeight = sibling.style.fontWeight
     zone.color = '#FFFFFF'
