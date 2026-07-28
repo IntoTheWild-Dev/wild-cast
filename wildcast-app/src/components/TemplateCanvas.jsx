@@ -206,13 +206,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
         // Shrink a textbox's fontSize until its rendered height fits within the zone.
         // Resets to the base size first so it can grow back if text is deleted.
+        // A rotated zone's pre-rotation `height` becomes the visual THICKNESS once
+        // drawn at -90°, so it must fit within zone.width, not zone.height — the
+        // axes are swapped by the rotation.
         function shrinkToFit(tb, zone) {
-          if (!zone.autoShrink || zone.rotate) return
+          if (!zone.autoShrink) return
+          const fitLimit = zone.rotate ? zone.width : zone.height
           const base = fontSizes?.[zone.id] ?? zone.fontSize ?? 24
           let size = base
           tb.set('fontSize', size)
           tb.initDimensions()
-          while (tb.height > zone.height + 2 && size > 6) {
+          while (tb.height > fitLimit + 2 && size > 6) {
             size -= 0.5
             tb.set('fontSize', size)
             tb.initDimensions()
@@ -357,11 +361,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // the exact displayed state from last save (post-shrink + any manual adjustments).
         // Only run the shrink loop when there is NO saved size (first open of a fresh template).
         zones.forEach(zone => {
-          if (zone.type !== 'text' || !zone.autoShrink || zone.rotate) return
+          if (zone.type !== 'text' || !zone.autoShrink) return
           if (!locked && !zone.alwaysShrink) return
           const tb = zoneObjsRef.current[zone.id]
           if (!tb || !tb.text) return
           const savedSize = fontSizesRef.current?.[zone.id]
+          // A rotated zone's pre-rotation height becomes the visual thickness once
+          // drawn at -90° — must fit zone.width, not zone.height (axes swap).
+          const fitLimit = zone.rotate ? zone.width : zone.height
           if (savedSize != null) {
             // Saved size is the source of truth — skip auto-shrink entirely.
             tb.set('fontSize', savedSize)
@@ -371,7 +378,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             let size = zone.fontSize ?? 24
             tb.set('fontSize', size)
             tb.initDimensions()
-            while (tb.height > zone.height + 2 && size > 6) {
+            while (tb.height > fitLimit + 2 && size > 6) {
               size -= 0.5
               tb.set('fontSize', size)
               tb.initDimensions()
@@ -457,11 +464,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       // not re-shrink text zones the user may have manually sized up.
       const textChanged = prevFieldsRef.current[id] !== value
       const zone = zoneCfgRef.current[id]
-      if (textChanged && zone?.autoShrink && !zone.rotate && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
+      if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
         let size = fontSizesRef.current?.[zone.id] ?? zone.fontSize
         obj.set('fontSize', size)
         obj.initDimensions()
-        while (obj.height > zone.height + 2 && size > 6) {
+        // A rotated zone's pre-rotation height becomes the visual thickness once
+        // drawn at -90° — must fit zone.width, not zone.height (axes swap).
+        const fitLimit = zone.rotate ? zone.width : zone.height
+        while (obj.height > fitLimit + 2 && size > 6) {
           size -= 0.5
           obj.set('fontSize', size)
           obj.initDimensions()

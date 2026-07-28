@@ -109,7 +109,7 @@ function FigmaTokenSettings() {
   )
 }
 
-export default function TemplateImportPage({ customRecords, onRefetch }) {
+export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch }) {
   const [figmaUrl, setFigmaUrl] = useState('')
   const [slotLabel, setSlotLabel] = useState('')
   const [status, setStatus] = useState('idle') // idle | importing | done | error
@@ -168,6 +168,7 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       setZonesSaved(false)
       setStatus('done')
       setShowDraftModal(true)
+      onOptimisticPatch?.(slotKey, data)
       onRefetch?.()
     } catch (err) {
       setError(err.message)
@@ -203,6 +204,7 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       setResult(r => ({ ...r, zones: data.zones }))
       setZoneEdits({})
       setZonesSaved(true)
+      onOptimisticPatch?.(result.slotKey, { zones: data.zones })
       onRefetch?.()
     } catch (err) {
       setError(err.message)
@@ -223,6 +225,7 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Publish failed')
       setResult(r => ({ ...r, live: true, archived: false }))
+      onOptimisticPatch?.(result.slotKey, { live: true, archived: false })
       onRefetch?.()
     } catch (err) {
       setError(err.message)
@@ -259,6 +262,11 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Action failed')
+      // Apply the response immediately — Vercel Blob's list()-based reads
+      // (which is what customRecords/onRefetch ultimately come from) can lag
+      // behind a write by up to ~30s, which made a working action look like
+      // it needed several clicks before this.
+      onOptimisticPatch?.(record.slotKey, { live: data.live, archived: data.archived, isOverrideOnly: data.isOverrideOnly, label: record.label })
       onRefetch?.()
     } catch (err) {
       setActionError(err.message)

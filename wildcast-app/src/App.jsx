@@ -293,6 +293,24 @@ export default function App() {
       .catch(() => {})
   }
 
+  // Applies a publish-template.js response directly to local state instead of
+  // waiting on a refetch — Vercel Blob's list() reads can lag up to ~30s behind
+  // a write it was just given (see STATUS.md), so a refetch right after an
+  // action can silently show the PRE-action status, making Publish/Archive
+  // look like it needs several clicks when the first one already worked. The
+  // action's own response is the one source that's already known-fresh.
+  function patchCustomRecord(slotKey, patch) {
+    setCustomTemplates(prev => {
+      const exists = prev.records.some(r => r.slotKey === slotKey)
+      // Archiving a hardcoded slot (Option A/B) for the first time creates a
+      // brand-new override record server-side — nothing to patch locally yet.
+      const records = exists
+        ? prev.records.map(r => r.slotKey === slotKey ? { ...r, ...patch } : r)
+        : [...prev.records, { slotKey, ...patch }]
+      return mergeCustomTemplates(records)
+    })
+  }
+
   function handleFontSizeChange(key, size) {
     pushUndoSnapshot()
     setFontSizes(prev => ({ ...prev, [key]: Math.max(6, Math.min(120, size)) }))
@@ -564,6 +582,7 @@ export default function App() {
             customRecords={customTemplates.records}
             canManage={activation?.role === 'designer'}
             onRefetch={refetchCustomTemplates}
+            onOptimisticPatch={patchCustomRecord}
           />
         </div>
       )}
@@ -582,7 +601,7 @@ export default function App() {
 
       {screen === 'import' && activation?.role === 'designer' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} />
+          <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
         </div>
       )}
 

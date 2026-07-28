@@ -311,7 +311,7 @@ function ManageMenu({ record, onAction }) {
 }
 
 // ── Options view (drilled in) ─────────────────────────────────────────────────
-function OptionsView({ group, customCards, customRecords = [], canManage = false, onRefetch, onBack, onSelect }) {
+function OptionsView({ group, customCards, customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const { format, category, members } = group
   const cap = category.charAt(0).toUpperCase() + category.slice(1)
@@ -348,6 +348,11 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Action failed')
+      // Apply the action's own response immediately — a refetch right after
+      // can still read back the pre-action status (Vercel Blob's list() reads
+      // can lag behind a write by up to ~30s), which made this look like it
+      // needed several clicks when the first one had already worked.
+      onOptimisticPatch?.(slotKey, { live: data.live, archived: data.archived, isOverrideOnly: data.isOverrideOnly, label })
       onRefetch?.()
     } catch (err) {
       window.alert(err.message)
@@ -408,25 +413,54 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 </div>
               </div>
             )
-            const archivedBuiltIn = record?.isOverrideOnly  // was live, now archived — not a draft
+            const isArchived = !!record?.archived
+            // A non-archived draft can be opened and tested exactly like a
+            // live card — designer-only, since only canManage ever populates
+            // `record` here at all. This is the actual "preview a draft"
+            // feature: without it there was no supported way to check a
+            // draft's real layout before publishing it blind.
+            const isPreviewable = !!record && !isArchived
             return (
               <div
                 key={i}
-                style={{ position: 'relative', background: '#fff', borderRadius: 14, border: record ? '1.5px dashed var(--primary)' : '1px dashed var(--border)', overflow: 'hidden', opacity: record ? 0.85 : 0.55 }}
+                onClick={isPreviewable ? () => setModal(t) : undefined}
+                style={{
+                  position: 'relative', background: '#fff', borderRadius: 14,
+                  border: record ? '1.5px dashed var(--primary)' : '1px dashed var(--border)',
+                  overflow: 'hidden', opacity: record ? 0.85 : 0.55,
+                  cursor: isPreviewable ? 'pointer' : 'default',
+                  transition: isPreviewable ? 'transform 0.15s, box-shadow 0.15s' : undefined,
+                }}
+                onMouseEnter={isPreviewable ? e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' } : undefined}
+                onMouseLeave={isPreviewable ? e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' } : undefined}
               >
                 {record && <ManageMenu record={record} onAction={handleManageAction} />}
-                <div style={{ height: 240, background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                {isPreviewable && (
+                  <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Draft
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {archivedBuiltIn ? 'Archived' : record ? 'Draft — not published' : 'Coming soon'}
-                  </span>
+                )}
+                <div style={{ height: 240, background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, overflow: 'hidden' }}>
+                  {isPreviewable && t.thumb ? (
+                    <img src={t.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                    </div>
+                  )}
+                  {!isPreviewable && (
+                    <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      {isArchived ? 'Archived' : 'Coming soon'}
+                    </span>
+                  )}
                 </div>
                 <div style={{ padding: '16px 18px 18px' }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
+                    {isPreviewable && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>Preview ↗</span>}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>
-                    {archivedBuiltIn ? 'Hidden from partners — use ⋯ to restore it.' : record ? 'Imported from Figma — use ⋯ to publish or archive.' : 'Template in progress'}
+                    {isArchived ? 'Hidden from partners — use ⋯ to restore it.' : isPreviewable ? 'Draft — click to open and check it, use ⋯ to publish.' : 'Template in progress'}
                   </div>
                 </div>
               </div>
@@ -558,7 +592,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) — reached via the header logo.
 // mode="catalogue": full template grid — reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
@@ -573,6 +607,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
         customRecords={customRecords}
         canManage={canManage}
         onRefetch={onRefetch}
+        onOptimisticPatch={onOptimisticPatch}
         onBack={() => setSelectedGroup(null)}
         onSelect={onSelect}
       />
