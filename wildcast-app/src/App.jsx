@@ -557,7 +557,14 @@ export default function App() {
 
       {screen === 'catalogue' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplatePicker mode="catalogue" onSelect={handleSelectTemplate} customCards={customTemplates.cards} />
+          <TemplatePicker
+            mode="catalogue"
+            onSelect={handleSelectTemplate}
+            customCards={customTemplates.cards}
+            customRecords={customTemplates.records}
+            canManage={activation?.role === 'designer'}
+            onRefetch={refetchCustomTemplates}
+          />
         </div>
       )}
 

@@ -235,8 +235,59 @@ function CatalogueView({ groups, onViewGroup }) {
   )
 }
 
+// ── Designer-only manage menu (Publish / Unpublish / Archive) ────────────────
+// Lets a designer act on a Figma-imported card right where they're browsing,
+// instead of needing the separate Import screen for every routine action.
+function ManageMenu({ record, onAction }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function run(action) {
+    if (action === 'archive' && record.live) {
+      const ok = window.confirm(`"${record.label}" is currently live — partners can see it. Archive it anyway? You can restore it as a draft later.`)
+      if (!ok) return
+    }
+    setBusy(true)
+    await onAction(record.slotKey, action)
+    setBusy(false)
+    setOpen(false)
+  }
+
+  return (
+    <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 10, right: 10, zIndex: 6 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Manage this template"
+        style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'rgba(2,6,24,0.65)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', lineHeight: '26px' }}
+      >
+        ⋯
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 4 }} />
+          <div style={{ position: 'absolute', top: 32, right: 0, zIndex: 6, background: '#fff', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.18)', border: '1px solid var(--border)', overflow: 'hidden', minWidth: 132 }}>
+            {(record.live
+              ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
+              : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }]
+            ).map(opt => (
+              <button
+                key={opt.action}
+                disabled={busy}
+                onClick={() => run(opt.action)}
+                style={{ display: 'block', width: '100%', padding: '9px 14px', fontSize: 12, fontWeight: 600, textAlign: 'left', border: 'none', background: 'transparent', color: 'var(--dark)', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1, fontFamily: 'inherit' }}
+              >
+                {busy ? '…' : opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Options view (drilled in) ─────────────────────────────────────────────────
-function OptionsView({ group, customCards, onBack, onSelect }) {
+function OptionsView({ group, customCards, customRecords = [], canManage = false, onRefetch, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const { format, category, members } = group
   const cap = category.charAt(0).toUpperCase() + category.slice(1)
@@ -246,6 +297,30 @@ function OptionsView({ group, customCards, onBack, onSelect }) {
     const template = TEMPLATES.find(t => t.id === templateId) ?? customCards.find(t => t.id === templateId)
     if (template) onSelect(template)
     setModal(null)
+  }
+
+  // A slot only carries templateIdDesigner matching a real customRecords
+  // entry when overlayCustomCards() actually linked a (non-archived) Figma
+  // import into it — this is true for both live and draft custom slots, so
+  // it doubles as "is this slot manageable" for both catalogue branches below.
+  function customRecordFor(t) {
+    if (!canManage) return null
+    return customRecords.find(r => r.slotKey === t.templateIdDesigner) ?? null
+  }
+
+  async function handleManageAction(slotKey, action) {
+    try {
+      const res = await fetch('/api/publish-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotKey, action }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Action failed')
+      onRefetch?.()
+    } catch (err) {
+      window.alert(err.message)
+    }
   }
 
   return (
@@ -275,46 +350,56 @@ function OptionsView({ group, customCards, onBack, onSelect }) {
         {modal && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
-          {members.map((t, i) => t.live ? (
-            <div
-              key={i}
-              onClick={() => setModal(t)}
-              style={{ background: '#fff', borderRadius: 14, border: '1.5px solid var(--border)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
-            >
-              <div style={{ height: 240, background: '#00C2CB', overflow: 'hidden' }}>
-                <img src={t.thumb} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-              </div>
-              <div style={{ padding: '16px 18px 18px' }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{t.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                  <div style={{ display: 'flex', gap: 5 }}>
-                    {['A6', 'CMYK', '3mm bleed'].map(tag => (
-                      <span key={tag} style={{ fontSize: 10, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>{tag}</span>
-                    ))}
+          {members.map((t, i) => {
+            const record = customRecordFor(t)
+            if (t.live) return (
+              <div
+                key={i}
+                onClick={() => setModal(t)}
+                style={{ position: 'relative', background: '#fff', borderRadius: 14, border: '1.5px solid var(--border)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
+              >
+                {record && <ManageMenu record={record} onAction={handleManageAction} />}
+                <div style={{ height: 240, background: '#00C2CB', overflow: 'hidden' }}>
+                  <img src={t.thumb} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                </div>
+                <div style={{ padding: '16px 18px 18px' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{t.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                    <div style={{ display: 'flex', gap: 5 }}>
+                      {['A6', 'CMYK', '3mm bleed'].map(tag => (
+                        <span key={tag} style={{ fontSize: 10, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>{tag}</span>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>Open ↗</span>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>Open ↗</span>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div
-              key={i}
-              style={{ background: '#fff', borderRadius: 14, border: '1px dashed var(--border)', overflow: 'hidden', opacity: 0.55 }}
-            >
-              <div style={{ height: 240, background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+            )
+            return (
+              <div
+                key={i}
+                style={{ position: 'relative', background: '#fff', borderRadius: 14, border: record ? '1.5px dashed var(--primary)' : '1px dashed var(--border)', overflow: 'hidden', opacity: record ? 0.85 : 0.55 }}
+              >
+                {record && <ManageMenu record={record} onAction={handleManageAction} />}
+                <div style={{ height: 240, background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {record ? 'Draft — not published' : 'Coming soon'}
+                  </span>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Coming soon</span>
+                <div style={{ padding: '16px 18px 18px' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>
+                    {record ? 'Imported from Figma — use ⋯ to publish or archive.' : 'Template in progress'}
+                  </div>
+                </div>
               </div>
-              <div style={{ padding: '16px 18px 18px' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>Template in progress</div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
@@ -441,7 +526,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) — reached via the header logo.
 // mode="catalogue": full template grid — reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [] }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards), [customCards])
@@ -453,6 +538,9 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
       <OptionsView
         group={selectedGroup}
         customCards={customCards}
+        customRecords={customRecords}
+        canManage={canManage}
+        onRefetch={onRefetch}
         onBack={() => setSelectedGroup(null)}
         onSelect={onSelect}
       />
