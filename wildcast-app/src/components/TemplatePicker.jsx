@@ -285,14 +285,20 @@ function ManageMenu({ record, onAction }) {
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 4 }} />
           <div style={{ position: 'absolute', top: 32, right: 0, zIndex: 6, background: '#fff', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.18)', border: '1px solid var(--border)', overflow: 'hidden', minWidth: 132 }}>
-            {(record.isOverrideOnly
-              // A hardcoded slot (Option A/B) has no draft/live concept of its
-              // own to publish/unpublish — archiving just hides it, restoring
-              // just un-hides it.
-              ? (record.archived ? [{ label: 'Restore', action: 'restore' }] : [{ label: 'Archive', action: 'archive' }])
-              : record.live
-                ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
-                : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }]
+            {(record.archived
+              // Archived beats everything else, override or real record alike —
+              // this was a real bug: the old logic only ever checked `archived`
+              // for override records, so an archived REAL Figma-import record
+              // still showed Publish/Archive instead of Restore, with no way
+              // to actually bring it back from this menu.
+              ? [{ label: 'Restore', action: 'restore' }]
+              : record.isOverrideOnly
+                // A hardcoded slot (Option A/B) has no draft/live concept of its
+                // own to publish/unpublish — archiving just hides it.
+                ? [{ label: 'Archive', action: 'archive' }]
+                : record.live
+                  ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
+                  : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }]
             ).map(opt => (
               <button
                 key={opt.action}
