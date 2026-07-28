@@ -11,3 +11,5 @@ files/*.pdf
 
 # Internal tooling
 wildcast-app/.claude/
+.vercel
+.env*
