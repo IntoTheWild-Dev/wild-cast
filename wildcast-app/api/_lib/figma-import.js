@@ -44,6 +44,15 @@ export function collectZoneNodes(node, out = []) {
   return out
 }
 
+// Recursively collect EVERY descendant node (not just zone:<id> ones) — used
+// to find a plain-named text layer that corresponds to a zone marker, see
+// toCanvasZone() below.
+export function collectAllNodes(node, out = []) {
+  out.push(node)
+  for (const child of node.children ?? []) collectAllNodes(child, out)
+  return out
+}
+
 // Zone ids that become image uploads (fit/label/hint per id). Everything
 // else named zone:<id> becomes a text zone.
 const IMAGE_ZONE_CONFIG = {
@@ -53,28 +62,44 @@ const IMAGE_ZONE_CONFIG = {
   qr:      { fit: 'contain', label: 'QR code',          hint: 'PNG or JPG' },
 }
 
-export function toCanvasZone(node, frameBox) {
+// Text zones that are always a rotated, narrow sidebar by app-wide convention
+// (see src/data/templateZones.js's Option A/B tc zone) regardless of what a
+// given Figma file's tc marker looks like — safe to assume even with no live
+// text in Figma to confirm it, since this app has never had a non-rotated tc.
+const ROTATED_TEXT_DEFAULTS = {
+  tc: { fontSize: 8, fontFamily: 'omnes-pro', fontWeight: 500, align: 'left', rotate: -90 },
+}
+
+function boxToZoneRect(box, frameBox, scaleX, scaleY) {
+  const trimX = (box.x - frameBox.x) - BLEED_UNITS
+  const trimY = (box.y - frameBox.y) - BLEED_UNITS
+  return {
+    x: +(trimX * scaleX).toFixed(1),
+    y: +(trimY * scaleY).toFixed(1),
+    width: +(box.width * scaleX).toFixed(1),
+    height: +(box.height * scaleY).toFixed(1),
+  }
+}
+
+export function toCanvasZone(node, frameBox, allNodes = []) {
   const id = node.name.slice('zone:'.length)
   const isImage = Object.prototype.hasOwnProperty.call(IMAGE_ZONE_CONFIG, id)
 
   const scaleX = CANVAS_W / (frameBox.width - BLEED_UNITS * 2)
   const scaleY = CANVAS_H / (frameBox.height - BLEED_UNITS * 2)
 
-  const trimX = (node.absoluteBoundingBox.x - frameBox.x) - BLEED_UNITS
-  const trimY = (node.absoluteBoundingBox.y - frameBox.y) - BLEED_UNITS
-
   const zone = {
     id,
     type: isImage ? 'image' : 'text',
-    x: +(trimX * scaleX).toFixed(1),
-    y: +(trimY * scaleY).toFixed(1),
-    width: +(node.absoluteBoundingBox.width * scaleX).toFixed(1),
-    height: +(node.absoluteBoundingBox.height * scaleY).toFixed(1),
+    ...boxToZoneRect(node.absoluteBoundingBox, frameBox, scaleX, scaleY),
   }
 
   if (isImage) {
     Object.assign(zone, IMAGE_ZONE_CONFIG[id])
-  } else if (node.type === 'TEXT' && node.style) {
+    return zone
+  }
+
+  if (node.type === 'TEXT' && node.style) {
     // Real font data straight from Figma — only available when the zone
     // marker itself is a text node, not a placeholder shape.
     zone.fontSize = Math.round(node.style.fontSize * scaleY)
@@ -83,23 +108,46 @@ export function toCanvasZone(node, frameBox) {
     zone.color = '#FFFFFF'
     zone.align = (node.style.textAlignHorizontal ?? 'CENTER').toLowerCase()
     zone.autoShrink = true
-  } else {
-    // Placeholder shape, not a text node — position/size are exact, but font
-    // details need a human to fill in (no live text to sample from). These
-    // still need to be REAL values, not null: Fabric's Textbox crashes hard
-    // measuring text with a null fontFamily ("Cannot read properties of null
-    // (reading 'toLowerCase')" deep in its text-measurement code), which
-    // stops the whole canvas from ever finishing its load — _needsFontReview
-    // is the actual "a human should check this" signal; the values
-    // themselves must always be safe to render as-is.
-    zone.fontSize = 24
-    zone.fontFamily = 'omnes-cond'
-    zone.fontWeight = 400
-    zone.color = '#FFFFFF'
-    zone.align = 'center'
-    zone.autoShrink = true
-    zone._needsFontReview = true
+    return zone
   }
+
+  // The zone:<id> marker isn't itself real text — a common, valid workflow
+  // is a separate position/boundary box (the marker) plus the actual styled
+  // text sitting nearby, named just "<id>" with no "zone:" prefix, rather
+  // than renaming the real text layer itself. If one exists, use ITS real
+  // box + style — the marker was only ever meant to signal intent, not be
+  // the true position or font.
+  const sibling = allNodes.find(n => n.name === id && n.type === 'TEXT' && n.style)
+  if (sibling) {
+    Object.assign(zone, boxToZoneRect(sibling.absoluteBoundingBox, frameBox, scaleX, scaleY))
+    zone.fontSize = Math.round(sibling.style.fontSize * scaleY)
+    zone.fontFamily = sibling.style.fontFamily
+    zone.fontWeight = sibling.style.fontWeight
+    zone.color = '#FFFFFF'
+    zone.align = (sibling.style.textAlignHorizontal ?? 'CENTER').toLowerCase()
+    zone.autoShrink = true
+    return zone
+  }
+
+  // No live text anywhere to sample from — font details need a human to fill
+  // in, but the values themselves must always be REAL, not null: Fabric's
+  // Textbox crashes hard measuring text with a null fontFamily ("Cannot read
+  // properties of null (reading 'toLowerCase')" deep in its text-measurement
+  // code), which stops the whole canvas from ever finishing its load —
+  // _needsFontReview is the actual "a human should check this" signal; the
+  // values themselves must always be safe to render as-is.
+  const rotatedDefaults = ROTATED_TEXT_DEFAULTS[id]
+  Object.assign(zone, {
+    fontSize: 24,
+    fontFamily: 'omnes-cond',
+    fontWeight: 400,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+    _needsFontReview: true,
+    ...rotatedDefaults,
+  })
+  if (rotatedDefaults) zone.textWidth = zone.height // rotated: text wraps along the box's long (height) axis
 
   return zone
 }
@@ -115,8 +163,9 @@ export async function importFigmaTemplate({ figmaUrl, token }) {
   if (!frame) throw new Error(`Node ${nodeId} not found in file ${fileKey}`)
 
   const frameBox = frame.absoluteBoundingBox
+  const allNodes = collectAllNodes(frame)
   const zoneNodes = collectZoneNodes(frame)
-  const zones = zoneNodes.map(n => toCanvasZone(n, frameBox))
+  const zones = zoneNodes.map(n => toCanvasZone(n, frameBox, allNodes))
 
   const needsReview = zones.filter(z => z._needsFontReview).map(z => z.id)
   zones.forEach(z => delete z._needsFontReview)
