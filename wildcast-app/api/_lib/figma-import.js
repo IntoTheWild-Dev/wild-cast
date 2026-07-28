@@ -7,6 +7,7 @@
 // Zones named "logo"/"photo" become image zones (fit: contain/cover);
 // everything else becomes a text zone. The target frame must be the
 // bleed-size master (111x154mm @ 3mm bleed).
+import sharp from 'sharp'
 
 export const BLEED_MM = 3
 export const MM_PER_INCH = 25.4
@@ -124,7 +125,35 @@ export async function importFigmaTemplate({ figmaUrl, token }) {
   const imageUrl = imgRes.images[nodeId]
   if (!imageUrl) throw new Error('Figma did not return an image URL — check the node is exportable.')
 
-  const imageBuffer = Buffer.from(await fetch(imageUrl).then(r => r.arrayBuffer()))
+  const rawImageBuffer = Buffer.from(await fetch(imageUrl).then(r => r.arrayBuffer()))
+
+  // This export is the FULL bleed frame (111x154mm) — but every zone
+  // coordinate above is computed relative to the TRIM rect only (CANVAS_W ×
+  // CANVAS_H = the trim size), and the editor/export pipeline both treat this
+  // background as trim-only (TemplateCanvas.jsx stretches it to fill exactly
+  // canvasW×canvasH; export-cmyk.js adds its own separate 3mm bleed on top
+  // via mirror-extend). Left uncropped, every background carries an extra
+  // ~3mm of margin the zone math doesn't know about, AND gets a second 3mm
+  // of bleed added again on export — effectively double bleed, silently
+  // shrinking every design ~4-6% smaller than the true Figma master.
+  // Crop that same BLEED_UNITS margin off each edge here so the saved
+  // background genuinely is trim-only, matching what the rest of the app
+  // already assumes it is.
+  const bleedPx = Math.round(BLEED_UNITS * scale)
+  const rawMeta = await sharp(rawImageBuffer).metadata()
+  const imageBuffer = await sharp(rawImageBuffer)
+    .extract({
+      left: bleedPx,
+      top: bleedPx,
+      // Clamp to the image's own actual dimensions rather than the
+      // calculated frameBox×scale — Figma's real export can be a pixel or
+      // two off from that calculation, and .extract() throws on an
+      // out-of-bounds region.
+      width: rawMeta.width - bleedPx * 2,
+      height: rawMeta.height - bleedPx * 2,
+    })
+    .png()
+    .toBuffer()
 
   return {
     fileKey,
