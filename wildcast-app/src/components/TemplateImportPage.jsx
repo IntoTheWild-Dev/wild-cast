@@ -120,10 +120,17 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
   // badge below was easy to miss, and it wasn't clear an import is always
   // safe (never live) until you deliberately choose to publish it.
   const [showDraftModal, setShowDraftModal] = useState(false)
+  const [actionSlot, setActionSlot] = useState(null)
+  const [actionError, setActionError] = useState('')
 
   // Every "coming soon" slot is a valid import target — Option A/B are hardcoded
   // and never show up here, so an import can never clobber a real live template.
-  const emptySlots = BASE_TEMPLATES.filter(t => !t.live)
+  // A custom slot that's already LIVE is excluded too (BASE_TEMPLATES' own
+  // live:false never changes for these, so this can't be read off it alone) —
+  // draft and archived custom slots stay valid targets, so re-importing over
+  // an unpublished or archived draft is still allowed.
+  const liveSlotKeys = new Set((customRecords ?? []).filter(r => r.live).map(r => r.slotKey))
+  const emptySlots = BASE_TEMPLATES.filter(t => !t.live && !liveSlotKeys.has(slugify(t.label)))
   const selectedSlot = emptySlots.find(s => s.label === slotLabel)
 
   async function handleImport(e) {
@@ -165,11 +172,11 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       const res = await fetch('/api/publish-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slotKey: result.slotKey, live: true }),
+        body: JSON.stringify({ slotKey: result.slotKey, action: 'publish' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Publish failed')
-      setResult(r => ({ ...r, live: true }))
+      setResult(r => ({ ...r, live: true, archived: false }))
       onRefetch?.()
     } catch (err) {
       setError(err.message)
@@ -181,6 +188,33 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
   async function handlePublishFromModal() {
     await handlePublish()
     setShowDraftModal(false)
+  }
+
+  // Used by the "Previously imported" list — publish/unpublish/archive/restore
+  // any past record, not just the one currently shown in the result panel above.
+  async function handleRecordAction(record, action) {
+    if (action === 'archive' && record.live) {
+      const ok = window.confirm(
+        `"${record.label}" is currently live — partners can see it. Archive it anyway? It disappears from the catalogue immediately; you can restore it as a draft later.`
+      )
+      if (!ok) return
+    }
+    setActionSlot(record.slotKey)
+    setActionError('')
+    try {
+      const res = await fetch('/api/publish-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotKey: record.slotKey, action }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Action failed')
+      onRefetch?.()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionSlot(null)
+    }
   }
 
   return (
@@ -311,19 +345,59 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
         {customRecords?.length > 0 && (
           <div style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', marginBottom: 12 }}>Previously imported</h2>
+            {actionError && (
+              <div style={{ padding: '8px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, color: '#B91C1C', marginBottom: 10 }}>
+                {actionError}
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {customRecords.map(r => (
-                <div key={r.slotKey} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', flex: 1 }}>{r.label}</span>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
-                    background: r.live ? '#D1FAE5' : '#FEF3C7',
-                    color: r.live ? '#065F46' : '#92400E',
-                  }}>
-                    {r.live ? 'Live' : 'Draft'}
-                  </span>
-                </div>
-              ))}
+              {customRecords.map(r => {
+                const status = r.archived ? 'Archived' : r.live ? 'Live' : 'Draft'
+                const statusStyle = r.archived
+                  ? { background: '#F3F4F6', color: 'var(--mid)' }
+                  : r.live
+                    ? { background: '#D1FAE5', color: '#065F46' }
+                    : { background: '#FEF3C7', color: '#92400E' }
+                const busy = actionSlot === r.slotKey
+                const btnStyle = {
+                  padding: '6px 11px', fontSize: 11, fontWeight: 700, borderRadius: 7,
+                  border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)',
+                  cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1, whiteSpace: 'nowrap',
+                }
+                return (
+                  <div key={r.slotKey} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, opacity: r.archived ? 0.65 : 1 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', flex: 1 }}>{r.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100, ...statusStyle }}>
+                      {status}
+                    </span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {r.archived ? (
+                        <button disabled={busy} onClick={() => handleRecordAction(r, 'restore')} style={btnStyle}>
+                          {busy ? '…' : 'Restore'}
+                        </button>
+                      ) : r.live ? (
+                        <>
+                          <button disabled={busy} onClick={() => handleRecordAction(r, 'unpublish')} style={btnStyle}>
+                            {busy ? '…' : 'Unpublish'}
+                          </button>
+                          <button disabled={busy} onClick={() => handleRecordAction(r, 'archive')} style={btnStyle}>
+                            {busy ? '…' : 'Archive'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button disabled={busy} onClick={() => handleRecordAction(r, 'publish')} style={{ ...btnStyle, border: 'none', background: 'var(--primary)', color: '#fff' }}>
+                            {busy ? '…' : 'Publish'}
+                          </button>
+                          <button disabled={busy} onClick={() => handleRecordAction(r, 'archive')} style={btnStyle}>
+                            {busy ? '…' : 'Archive'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

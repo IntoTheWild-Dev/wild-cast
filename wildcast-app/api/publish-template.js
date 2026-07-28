@@ -1,14 +1,25 @@
-// Flips a Figma-imported template's draft/live flag. Nothing from
+// Flips a Figma-imported template's draft/live/archived status. Nothing from
 // /api/import-figma-template.js is partner-visible until this is called
-// with live:true — a deliberate review gate before anything goes public.
+// with action:'publish' — a deliberate review gate before anything goes public.
 import { list, put } from '@vercel/blob'
+
+// publish  → live,      visible in the catalogue
+// unpublish→ draft,     pulled back for more review, still re-publishable
+// archive  → archived,  hidden everywhere, slot freed up for a fresh import
+// restore  → draft,     brought back from archive (does NOT auto-publish)
+const ACTIONS = {
+  publish:   { live: true,  archived: false },
+  unpublish: { live: false, archived: false },
+  archive:   { live: false, archived: true },
+  restore:   { live: false, archived: false },
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { slotKey, live } = req.body ?? {}
-  if (!slotKey || typeof live !== 'boolean') {
-    return res.status(400).json({ error: 'Missing slotKey or live (boolean)' })
+  const { slotKey, action } = req.body ?? {}
+  if (!slotKey || !ACTIONS[action]) {
+    return res.status(400).json({ error: `Missing slotKey or action (one of ${Object.keys(ACTIONS).join('|')})` })
   }
 
   const token = process.env.BLOB_READ_WRITE_TOKEN
@@ -23,8 +34,10 @@ export default async function handler(req, res) {
     if (!response.ok) return res.status(500).json({ error: 'Could not read existing template record' })
     const record = await response.json()
 
+    const { live, archived } = ACTIONS[action]
     record.live = live
-    record.publishedAt = live ? new Date().toISOString() : null
+    record.archived = archived
+    if (live) record.publishedAt = new Date().toISOString()
 
     await put(`templates/${slotKey}.json`, JSON.stringify(record), {
       access: 'private',
@@ -35,7 +48,7 @@ export default async function handler(req, res) {
     })
 
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-    return res.status(200).json({ ok: true, slotKey, live })
+    return res.status(200).json({ ok: true, slotKey, live, archived })
   } catch (err) {
     console.error('publish-template error:', err)
     return res.status(500).json({ error: err.message })

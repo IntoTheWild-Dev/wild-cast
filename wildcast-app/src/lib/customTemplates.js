@@ -37,6 +37,7 @@ export function customTemplateCards(record) {
     name: record.label,
     thumb: templateAssetSrc(record.backgroundUrl),
     live: record.live,
+    archived: !!record.archived,
   }
   return [
     { ...base, id: record.slotKey, mode: 'designer' },

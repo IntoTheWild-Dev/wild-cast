@@ -67,7 +67,9 @@ function overlayCustomCards(baseTemplates, customCards) {
     const designerCard = customCards.find(c =>
       c.mode === 'designer' && c.name === slot.label && c.cat === slot.category && c.format === slot.format
     )
-    if (!designerCard) return slot
+    // Archived records stay invisible everywhere — same as if nothing had
+    // ever been imported into this slot, freeing it up for a fresh import.
+    if (!designerCard || designerCard.archived) return slot
     return {
       ...slot,
       thumb: designerCard.thumb,
