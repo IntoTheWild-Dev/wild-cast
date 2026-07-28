@@ -67,7 +67,7 @@ const IMAGE_ZONE_CONFIG = {
 // given Figma file's tc marker looks like — safe to assume even with no live
 // text in Figma to confirm it, since this app has never had a non-rotated tc.
 const ROTATED_TEXT_DEFAULTS = {
-  tc: { fontSize: 8, fontFamily: 'omnes-pro', fontWeight: 500, align: 'left', rotate: -90 },
+  tc: { fontSize: 18, fontFamily: 'omnes-pro', fontWeight: 500, align: 'left', rotate: -90 },
 }
 
 function boxToZoneRect(box, frameBox, scaleX, scaleY) {
