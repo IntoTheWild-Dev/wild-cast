@@ -16,7 +16,13 @@ const TOKEN_PATH = 'config/figma-token.json'
 async function resolveFigmaToken(blobToken) {
   try {
     const meta = await head(TOKEN_PATH, { token: blobToken })
-    const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${blobToken}` } })
+    // The blob URL is stable (addRandomSuffix:false) — Cloudflare's CDN can
+    // and does serve a stale cached response for it, which meant a token
+    // saved seconds ago via PUT could still read back the OLD (possibly
+    // actually-expired) value on the very next import. Same class of bug
+    // already hit and fixed in list-templates.js/publish-template.js.
+    const cacheBustUrl = meta.url + (meta.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+    const res = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${blobToken}` }, cache: 'no-store' })
     if (res.ok) {
       const { token, updatedAt } = await res.json()
       if (token) return { token, source: 'blob', updatedAt }
@@ -32,6 +38,7 @@ async function handleGet(req, res) {
   const { token, source, updatedAt } = await resolveFigmaToken(blobToken)
   // Never return the token value itself — just enough for the UI to show
   // "configured, last updated on X" or "not configured".
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
   return res.status(200).json({ configured: !!token, source, updatedAt })
 }
 
