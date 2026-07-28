@@ -208,7 +208,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Resets to the base size first so it can grow back if text is deleted.
         function shrinkToFit(tb, zone) {
           if (!zone.autoShrink || zone.rotate) return
-          const base = fontSizes?.[zone.id] ?? zone.fontSize
+          const base = fontSizes?.[zone.id] ?? zone.fontSize ?? 24
           let size = base
           tb.set('fontSize', size)
           tb.initDimensions()
@@ -287,8 +287,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               originX: isRotated ? 'center' : 'left',
               originY: isRotated ? 'center' : 'top',
               width:   textW,
-              fontSize:   fontSizes?.[zone.id] ?? zone.fontSize,
-              fontFamily: zone.fontFamily,
+              // A Figma import zone whose source node had no live text to sample
+              // (_needsFontReview, see api/_lib/figma-import.js) saves fontSize/
+              // fontFamily as null pending a human filling them in — but Fabric's
+              // Textbox crashes hard measuring text with a null fontFamily
+              // ("Cannot read properties of null (reading 'toLowerCase')" deep in
+              // its text-measurement code), which stops the WHOLE canvas from
+              // ever finishing its load. Always fall back to a real value so the
+              // canvas can load and the zone stays editable/reviewable at all.
+              fontSize:   fontSizes?.[zone.id] ?? zone.fontSize ?? 24,
+              fontFamily: zone.fontFamily || 'omnes-cond',
               fontWeight: zone.fontWeight ? String(zone.fontWeight) : 'normal',
               fill:    zone.color || '#FFFFFF',
               textAlign: modeRef.current === 'non-designer'
@@ -360,7 +368,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             tb.initDimensions()
           } else {
             // First open with no saved state — shrink from the zone default to fit.
-            let size = zone.fontSize
+            let size = zone.fontSize ?? 24
             tb.set('fontSize', size)
             tb.initDimensions()
             while (tb.height > zone.height + 2 && size > 6) {

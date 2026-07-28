@@ -85,10 +85,16 @@ export function toCanvasZone(node, frameBox) {
     zone.autoShrink = true
   } else {
     // Placeholder shape, not a text node — position/size are exact, but font
-    // details need a human to fill in (no live text to sample from).
-    zone.fontSize = null
-    zone.fontFamily = null
-    zone.fontWeight = null
+    // details need a human to fill in (no live text to sample from). These
+    // still need to be REAL values, not null: Fabric's Textbox crashes hard
+    // measuring text with a null fontFamily ("Cannot read properties of null
+    // (reading 'toLowerCase')" deep in its text-measurement code), which
+    // stops the whole canvas from ever finishing its load — _needsFontReview
+    // is the actual "a human should check this" signal; the values
+    // themselves must always be safe to render as-is.
+    zone.fontSize = 24
+    zone.fontFamily = 'omnes-cond'
+    zone.fontWeight = 400
     zone.color = '#FFFFFF'
     zone.align = 'center'
     zone.autoShrink = true
