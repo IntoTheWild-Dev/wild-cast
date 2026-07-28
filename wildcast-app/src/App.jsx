@@ -287,7 +287,7 @@ export default function App() {
   }
 
   function refetchCustomTemplates() {
-    fetch('/api/list-templates')
+    fetch(`/api/list-templates?_t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(data => setCustomTemplates(mergeCustomTemplates(data.templates ?? [])))
       .catch(() => {})

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BASE_TEMPLATES } from './TemplatePicker'
+import { templateAssetSrc } from '../lib/customTemplates'
 
 function slugify(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -115,6 +116,10 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [publishing, setPublishing] = useState(false)
+  // A separate, explicit pop-up right after import — the inline "Draft"
+  // badge below was easy to miss, and it wasn't clear an import is always
+  // safe (never live) until you deliberately choose to publish it.
+  const [showDraftModal, setShowDraftModal] = useState(false)
 
   // Every "coming soon" slot is a valid import target — Option A/B are hardcoded
   // and never show up here, so an import can never clobber a real live template.
@@ -145,6 +150,7 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
       if (!res.ok) throw new Error(data.error || 'Import failed')
       setResult(data)
       setStatus('done')
+      setShowDraftModal(true)
       onRefetch?.()
     } catch (err) {
       setError(err.message)
@@ -172,8 +178,42 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
     }
   }
 
+  async function handlePublishFromModal() {
+    await handlePublish()
+    setShowDraftModal(false)
+  }
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+      {showDraftModal && result && (
+        <div
+          onClick={() => setShowDraftModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 420, maxWidth: '100%' }}>
+            <div style={{ fontSize: 20, marginBottom: 8 }}>📝</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--dark)', marginBottom: 6 }}>Saved as a draft</div>
+            <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.5, marginBottom: 20 }}>
+              "{result.label}" is imported but <strong>not visible to partners yet</strong> — only you can see it here, on this page. Review the background and zones below whenever you like, then publish when you're happy with it.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setShowDraftModal(false)}
+                style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer' }}
+              >
+                Keep as draft — review first
+              </button>
+              <button
+                onClick={handlePublishFromModal}
+                disabled={publishing}
+                style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: publishing ? 'default' : 'pointer' }}
+              >
+                {publishing ? 'Publishing…' : 'Publish now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 32px 64px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
           Import from Figma
@@ -232,7 +272,7 @@ export default function TemplateImportPage({ customRecords, onRefetch }) {
 
         {result && (
           <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <img src={result.backgroundUrl} alt="" style={{ width: '100%', display: 'block', background: '#F3F4F6' }} />
+            <img src={templateAssetSrc(result.backgroundUrl)} alt="" style={{ width: '100%', display: 'block', background: '#F3F4F6' }} />
             <div style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{result.label}</span>

@@ -16,7 +16,10 @@ export default async function handler(req, res) {
     const { blobs } = await list({ prefix: `templates/${slotKey}.json`, token })
     if (!blobs.length) return res.status(404).json({ error: `No template found for slotKey "${slotKey}"` })
 
-    const response = await fetch(blobs[0].url, { headers: { Authorization: `Bearer ${token}` } })
+    // Cache-bust so a rapid import-then-publish (typical usage) can't read
+    // back a stale pre-import version of this record from Cloudflare's CDN.
+    const cacheBustUrl = blobs[0].url + (blobs[0].url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+    const response = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
     if (!response.ok) return res.status(500).json({ error: 'Could not read existing template record' })
     const record = await response.json()
 
@@ -31,6 +34,7 @@ export default async function handler(req, res) {
       token,
     })
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return res.status(200).json({ ok: true, slotKey, live })
   } catch (err) {
     console.error('publish-template error:', err)
