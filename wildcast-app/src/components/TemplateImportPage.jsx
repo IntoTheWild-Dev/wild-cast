@@ -141,6 +141,19 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   const emptySlots = BASE_TEMPLATES.filter(t => !t.live && !liveSlotKeys.has(slugify(t.label)))
   const selectedSlot = emptySlots.find(s => s.label === slotLabel)
 
+  // "Previously imported" grouped by category + format (same grouping the
+  // Templates catalogue already uses) instead of one long flat list — this
+  // was Julia's ask once there were enough imports to make the flat list
+  // unwieldy. Sorted alphabetically for a stable, predictable order.
+  const recordGroups = Object.entries(
+    (customRecords ?? []).reduce((groups, r) => {
+      const cap = r.cat ? r.cat.charAt(0).toUpperCase() + r.cat.slice(1) : 'Other'
+      const label = r.format ? `${cap} ${r.format}` : cap
+      ;(groups[label] ??= []).push(r)
+      return groups
+    }, {})
+  ).sort(([a], [b]) => a.localeCompare(b))
+
   async function handleImport(e) {
     e.preventDefault()
     if (!selectedSlot || !figmaUrl.trim()) return
@@ -448,8 +461,13 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 {actionError}
               </div>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {customRecords.map(r => {
+            {recordGroups.map(([groupLabel, records]) => (
+              <details key={groupLabel} open style={{ marginBottom: 10 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--dark)', padding: '8px 4px', listStyle: 'none' }}>
+                  {groupLabel} <span style={{ fontWeight: 500, color: 'var(--mid)' }}>({records.length})</span>
+                </summary>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                  {records.map(r => {
                 // Override records (see api/publish-template.js) exist only for
                 // Option A/B — hardcoded static templates with no real draft/
                 // live data of their own, just an archived on/off switch.
@@ -502,8 +520,10 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                     </div>
                   </div>
                 )
-              })}
-            </div>
+                  })}
+                </div>
+              </details>
+            ))}
           </div>
         )}
       </div>

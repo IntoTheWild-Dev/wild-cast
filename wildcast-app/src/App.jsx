@@ -14,8 +14,6 @@ import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
 import { mergeCustomTemplates } from './lib/customTemplates'
 
-const STORAGE_KEY = 'wildcast_projects'
-
 const DEFAULT_FIELDS = {
   headline:        '',
   offer:           '',
@@ -463,11 +461,6 @@ export default function App() {
       body: JSON.stringify(project),
     })
     if (!response.ok) throw new Error(await response.text())
-    const { url } = await response.json()
-
-    const meta = { id, url, templateName: selectedTemplate.name, projectName: name, savedAt: project.savedAt, thumbnail }
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([meta, ...existing.filter(p => p.id !== id)].slice(0, 50)))
 
     // Write the full project to sessionStorage so re-opens within this session
     // always get the exact saved state — no CDN or browser cache involved.
@@ -589,7 +582,7 @@ export default function App() {
 
       {screen === 'designs' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <DesignsPage onOpenProject={handleOpenProject} />
+          <DesignsPage onOpenProject={handleOpenProject} customCards={customTemplates.cards} />
         </div>
       )}
 
