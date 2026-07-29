@@ -218,10 +218,14 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
 
   const filtered = useMemo(() => {
     if (!filters) return []
-    return enriched.filter(p =>
-      (filters.format === ALL || p.group === filters.format) &&
-      (filters.merchant === ALL || p.merchant === filters.merchant)
-    )
+    return enriched
+      .filter(p =>
+        (filters.format === ALL || p.group === filters.format) &&
+        (filters.merchant === ALL || p.merchant === filters.merchant)
+      )
+      // Newest first — the blob listing this comes from has no inherent
+      // order, which read as random once designs from many merchants mixed.
+      .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
   }, [enriched, filters])
 
   const grouped = useMemo(() => {
