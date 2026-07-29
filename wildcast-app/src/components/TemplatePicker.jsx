@@ -419,36 +419,28 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 </div>
               </div>
             )
-            // Archived means fully invisible in the catalogue, to designers
-            // too — same as a slot that was never imported into at all.
-            // Archive/Restore lives exclusively on the Import screen's
-            // "Previously imported" list from here on (Julia's call: keep
-            // Templates a pure browsing surface, and it doubles as the one
-            // place that still works if Import itself ever gets locked down
-            // to fewer people than Templates is shown to).
             const isArchived = !!record?.archived
-            const visibleRecord = isArchived ? null : record
-            // A draft can be opened and tested exactly like a live card —
-            // designer-only, since only canManage ever populates `record` at
-            // all. This is the actual "preview a draft" feature: without it
-            // there was no supported way to check a draft's real layout
-            // before publishing it blind.
-            const isPreviewable = !!visibleRecord
+            // A non-archived draft can be opened and tested exactly like a
+            // live card — designer-only, since only canManage ever populates
+            // `record` here at all. This is the actual "preview a draft"
+            // feature: without it there was no supported way to check a
+            // draft's real layout before publishing it blind.
+            const isPreviewable = !!record && !isArchived
             return (
               <div
                 key={i}
                 onClick={isPreviewable ? () => setModal(t) : undefined}
                 style={{
                   position: 'relative', background: '#fff', borderRadius: 14,
-                  border: visibleRecord ? '1.5px dashed var(--primary)' : '1px dashed var(--border)',
-                  overflow: 'hidden', opacity: visibleRecord ? 0.85 : 0.55,
+                  border: record ? '1.5px dashed var(--primary)' : '1px dashed var(--border)',
+                  overflow: 'hidden', opacity: record ? 0.85 : 0.55,
                   cursor: isPreviewable ? 'pointer' : 'default',
                   transition: isPreviewable ? 'transform 0.15s, box-shadow 0.15s' : undefined,
                 }}
                 onMouseEnter={isPreviewable ? e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' } : undefined}
                 onMouseLeave={isPreviewable ? e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' } : undefined}
               >
-                {visibleRecord && <ManageMenu record={visibleRecord} onAction={handleManageAction} />}
+                {record && <ManageMenu record={record} onAction={handleManageAction} />}
                 {isPreviewable && (
                   <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Draft
@@ -463,8 +455,8 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                     </div>
                   )}
                   {!isPreviewable && (
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Coming soon
+                    <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      {isArchived ? 'Archived' : 'Coming soon'}
                     </span>
                   )}
                 </div>
@@ -474,7 +466,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                     {isPreviewable && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>Preview ↗</span>}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>
-                    {isPreviewable ? 'Draft — click to open and check it, use ⋯ to publish.' : 'Template in progress'}
+                    {isArchived ? 'Hidden from partners — use ⋯ to restore it.' : isPreviewable ? 'Draft — click to open and check it, use ⋯ to publish.' : 'Template in progress'}
                   </div>
                 </div>
               </div>
