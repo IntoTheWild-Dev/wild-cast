@@ -533,7 +533,7 @@ export default function App() {
 
     historyRef.current = []; setCanUndo(false)
     setSelectedTemplate(template)
-    setFields(project.fields ?? DEFAULT_FIELDS)
+    setFields({ ...DEFAULT_FIELDS, ...(project.fields ?? {}) })
     setFontSizes(project.fontSizes ?? {})
     setAlignments(project.alignments ?? {})
     setImageScales(project.imageScales ?? {})
