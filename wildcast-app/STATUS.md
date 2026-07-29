@@ -47,11 +47,12 @@
 
 ### Designs Tab
 - Header nav: Templates · Designs · Help
-- Saved projects appear as thumbnail tiles (template name + date)
-- "Continue editing" — opens editor with full state restored (text, font sizes, images, zone positions, comments)
-- Hover × delete button — removes from localStorage AND deletes from Vercel Blob (project JSON + comments)
+- **Global** — every activation key sees every saved design (not per-browser), server-listed via `GET /api/save-project`
+- "Find a design" popup (Format + Merchant dropdowns) gates the list before it renders; results grouped by format
+- Opening a design (card click or "Continue editing") asks **"Edit original" or "Duplicate & edit a copy"** first — duplicating clones the full state under a new id so the source design is never overwritten
+- Hover × delete button — deletes from Vercel Blob (project JSON + comments)
 - Empty state with clear onboarding copy
-- Projects stored in Vercel Blob (JSON, private); local registry in localStorage
+- Projects stored in Vercel Blob (JSON, private) — no client-side registry
 
 ### Send for Review
 - "Send for Review" button saves the project then shows a modal with a copyable share link
@@ -168,6 +169,13 @@ Julia's first real (non-Option A/B) import went through the whole pipeline for t
 - Removed the now-dead `localStorage` write in `App.jsx`'s save flow (the separate `sessionStorage` same-session-reopen cache is untouched).
 - **`TemplateImportPage.jsx`'s "Previously imported" list is now grouped into collapsible sections** by category + format (same grouping Templates already uses), instead of one flat list that would only get harder to scan as more templates get imported.
 - **Reverted same day, per Julia's own follow-up call**: archived templates stay visible with the "Archived" label + Restore action right on the Templates catalogue page (not hidden, and not exclusively on the Import screen as briefly tried) — she tried both and preferred having it in both places.
+
+### Duplicate-or-edit-original safety net for Designs (2026-07-29)
+
+- **Risk surfaced by going global**: once every activation key can see and open every saved design, there's no ownership boundary — anyone can open, edit, and overwrite anyone else's saved work. Julia's fix: ask first.
+- Opening a design from the Designs tab (card click or "Continue editing") now shows a popup: **"Edit original"** (unchanged behaviour — opens and, on next Save, overwrites that exact record) or **"Duplicate & edit a copy"** (clones the full saved state under a brand-new id, saves the clone immediately as its own independent record, then opens the *copy* — the original is never touched).
+- `App.jsx`: `handleOpenProject` split into `loadFullProject` (sessionStorage-then-fetch) + `openLoadedProject` (populate editor state), so both the original-opening path and the new `handleDuplicateProject` path share one implementation instead of two copies of the same logic.
+- No new API route — the duplicate is created with the same `POST /api/save-project` every regular Save already uses, just called immediately with a cloned payload.
 
 ### Option D test found 3 more real bugs, then a deploy incident briefly took production down (2026-07-28)
 

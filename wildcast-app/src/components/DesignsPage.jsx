@@ -83,6 +83,48 @@ function FilterPopup({ formatOptions, merchantOptions, onApply }) {
   )
 }
 
+// Designs are shared across every activation key now, with no ownership
+// boundary — so opening one always asks first rather than editing the
+// original in place, since anyone might be picking up someone else's saved
+// work. Duplicating creates an independent copy up front; only "Edit
+// original" touches the source record.
+function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+          {project.projectName || project.templateName}
+        </h3>
+        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>
+          This design is shared — anyone can open it. Edit the original in place, or duplicate it and keep the original untouched.
+        </p>
+
+        <button
+          disabled={busy}
+          onClick={onDuplicate}
+          style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}
+        >
+          {busy ? 'Working…' : 'Duplicate & edit a copy'}
+        </button>
+        <button
+          disabled={busy}
+          onClick={onEditOriginal}
+          style={{ marginTop: 10, width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: '#fff', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}
+        >
+          Edit original
+        </button>
+        <button
+          disabled={busy}
+          onClick={onCancel}
+          style={{ marginTop: 10, width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: 'none', color: 'var(--mid)', border: 'none', cursor: busy ? 'default' : 'pointer' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function DesignCard({ project, loading, onOpen, onDelete }) {
   return (
     <div
@@ -149,11 +191,13 @@ function DesignCard({ project, loading, onOpen, onDelete }) {
 // registry — nobody but whoever saved a design, on that exact browser, could
 // ever see it existed. Now backed by a real server-side listing
 // (GET /api/save-project), so every activation key sees every saved design.
-export default function DesignsPage({ onOpenProject, customCards = [] }) {
+export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [] }) {
   const [projects, setProjects] = useState([])
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [loadingId, setLoadingId] = useState(null)
   const [filters, setFilters] = useState(null) // null = filter popup still showing
+  const [pendingProject, setPendingProject] = useState(null)
+  const [pendingBusy, setPendingBusy] = useState(false)
 
   useEffect(() => {
     fetch('/api/save-project', { cache: 'no-store' })
@@ -192,11 +236,32 @@ export default function DesignsPage({ onOpenProject, customCards = [] }) {
     fetch(`/api/delete-project?id=${id}`, { method: 'DELETE' }).catch(() => {})
   }
 
-  async function handleOpen(project) {
+  function handleRequestOpen(project) {
+    setPendingProject(project)
+  }
+
+  async function handleEditOriginal() {
+    const project = pendingProject
+    setPendingBusy(true)
     setLoadingId(project.id)
     try {
       await onOpenProject(project)
+      setPendingProject(null)
     } finally {
+      setPendingBusy(false)
+      setLoadingId(null)
+    }
+  }
+
+  async function handleDuplicate() {
+    const project = pendingProject
+    setPendingBusy(true)
+    setLoadingId(project.id)
+    try {
+      await onDuplicateProject(project)
+      setPendingProject(null)
+    } finally {
+      setPendingBusy(false)
       setLoadingId(null)
     }
   }
@@ -209,6 +274,16 @@ export default function DesignsPage({ onOpenProject, customCards = [] }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
       {status === 'ready' && projects.length > 0 && filters === null && (
         <FilterPopup formatOptions={formatOptions} merchantOptions={merchantOptions} onApply={setFilters} />
+      )}
+
+      {pendingProject && (
+        <ConfirmOpenModal
+          project={pendingProject}
+          busy={pendingBusy}
+          onEditOriginal={handleEditOriginal}
+          onDuplicate={handleDuplicate}
+          onCancel={() => setPendingProject(null)}
+        />
       )}
 
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
@@ -256,7 +331,7 @@ export default function DesignsPage({ onOpenProject, customCards = [] }) {
                     key={project.id}
                     project={project}
                     loading={loadingId === project.id}
-                    onOpen={handleOpen}
+                    onOpen={handleRequestOpen}
                     onDelete={handleDelete}
                   />
                 ))}

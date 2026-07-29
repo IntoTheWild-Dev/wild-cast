@@ -499,21 +499,25 @@ export default function App() {
     }
   }
 
-  async function handleOpenProject(projectMeta) {
-    // Check sessionStorage first — written directly on every save, so it always
-    // reflects the exact last saved state with no CDN or browser cache involved.
-    let project = null
+  // Fetches a project's full saved state — sessionStorage first (written on
+  // every save, always reflects the exact last-saved state with no CDN or
+  // browser cache involved), falling back to a fresh server fetch.
+  async function loadFullProject(projectMeta) {
     try {
       const cached = sessionStorage.getItem(`wildcast_project_${projectMeta.id}`)
-      if (cached) project = JSON.parse(cached)
+      if (cached) return JSON.parse(cached)
     } catch { /* corrupted or unavailable — fall through to fetch */ }
 
-    if (!project) {
-      const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
-      if (!response.ok) throw new Error('Could not load project')
-      project = await response.json()
-    }
+    const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
+    if (!response.ok) throw new Error('Could not load project')
+    return response.json()
+  }
 
+  // Puts an already-loaded project's full state into the editor. Shared by
+  // opening the original and opening a freshly-made duplicate — the only
+  // difference between the two is which project object got loaded/created
+  // before this runs.
+  async function openLoadedProject(project) {
     const template = TEMPLATES.find(t => t.id === project.templateId)
       ?? customTemplates.cards.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
@@ -541,6 +545,37 @@ export default function App() {
     setSaveStatus(null)
     setLoadKey(k => k + 1)
     setScreen('editor')
+  }
+
+  async function handleOpenProject(projectMeta) {
+    const project = await loadFullProject(projectMeta)
+    await openLoadedProject(project)
+  }
+
+  // Designs are shared across every activation key now — anyone can open
+  // anyone else's. Duplicating first (rather than editing in place) is the
+  // safety net: it saves a brand-new, independent copy under a fresh id
+  // *before* opening it, so continuing to edit can never overwrite someone
+  // else's original.
+  async function handleDuplicateProject(projectMeta) {
+    const original = await loadFullProject(projectMeta)
+    const id = crypto.randomUUID()
+    const duplicate = {
+      ...original,
+      id,
+      projectName: `${original.projectName || original.templateName} (copy)`,
+      savedAt: Date.now(),
+    }
+
+    const response = await fetch('/api/save-project', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(duplicate),
+    })
+    if (!response.ok) throw new Error('Could not save the duplicate')
+
+    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(duplicate)) } catch { /* storage full */ }
+
+    await openLoadedProject(duplicate)
   }
 
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
@@ -582,7 +617,7 @@ export default function App() {
 
       {screen === 'designs' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <DesignsPage onOpenProject={handleOpenProject} customCards={customTemplates.cards} />
+          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} />
         </div>
       )}
 
