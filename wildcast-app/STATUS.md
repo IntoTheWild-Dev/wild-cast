@@ -5,10 +5,6 @@
 
 ---
 
-**⚠️ Check when you resume (2026-07-28 session close-out):** production had a brief real outage during this session (a couple of minutes, activation/`api/validate-key` failing) caused by a mistaken manual deploy command while chasing a slow-to-appear push. It was caught and reverted the same session, and both `cast.wildstack.studio` and `wild-cast-psi.vercel.app` were re-verified working afterward (real activation-key checks, not just a visual load) — but worth a quick sanity check yourself first thing: **log in with your real key and confirm the app loads and a template opens normally.** Full account in "Option D test found 3 more real bugs" below, and in Claude's own session memory. Everything else in this session (bug fixes, new features) is deployed and was verified live.
-
----
-
 ## What's working right now
 
 ### Template Picker (redesigned 2026-06-30)
@@ -163,6 +159,15 @@ Julia's first real (non-Option A/B) import went through the whole pipeline for t
 - **Every imported heading rendered ~5% larger than its real Figma size.** `fontSize` was being multiplied by the same `scaleY` factor used for position/dimensions (~1.05 for this file) — correct for spatial coordinates, which genuinely need remapping from Figma's frame space into the fixed 316×441 canvas space, but wrong for a font's point size, which should read the same as what a designer sees directly in Figma's own text panel. Caught by comparing Julia's exact spec (headline 51 / sub-headline 35) against the imported 54 / 37 — precisely the scaleY-multiplied values once rounded, not a coincidence. `fontSize` is no longer scaled at all now.
 - All four fixed and reverified live against Julia's real draft (re-imported after each fix, not just claimed) — confirmed via `GET /api/list-templates` showing the corrected zone JSON, and by opening the actual canvas via a direct React-fiber `onSelect` call (no UI workaround needed) to visually confirm rendering.
 - **Also found and fixed in the same investigation:** the in-app "Update token" flow had the exact same Cloudflare-CDN staleness bug already hit and fixed elsewhere in this file (`list-templates.js`, `publish-template.js`) — a freshly-saved Figma token could still read back the old cached value on the very next import. `resolveFigmaToken()` in `api/import-figma-template.js` now cache-busts the same way.
+
+### Designs go global + categorized, Import list organized by group (2026-07-29)
+
+- **Designs were never actually global** — confirmed by reading the code, not assuming: the list of "which designs exist" lived entirely in a per-browser `localStorage` registry. Even though each design's content was already saved server-side, nobody but whoever saved it, on that exact browser, ever knew it existed. Julia confirmed this should change (over keeping Designs per-browser but better organized).
+- **`api/save-project.js` gains a GET (list) handler** alongside the existing POST (save) — still 12 total function files. Lists every saved project straight from Blob, computing a `merchant` tag server-side (real restaurant name if the template has one, else the project's own name).
+- **`DesignsPage.jsx` rewritten**: fetches the global list; derives each design's format (Restaurant Flyer, Retail Poster, etc.) from the same `cat`/`format` fields every template card already carries — no new data needed on a saved project itself. Shows a **"Find a design" popup** (Format + Merchant dropdowns, both default to "All") before any design renders — Julia's ask for a structured pre-filter gate rather than just an inline search box — then groups results by format below it, with a "Filters" button to reopen and adjust. Verified live: the popup correctly listed real merchants from 14 existing saved designs, and grouped them correctly after applying.
+- Removed the now-dead `localStorage` write in `App.jsx`'s save flow (the separate `sessionStorage` same-session-reopen cache is untouched).
+- **`TemplateImportPage.jsx`'s "Previously imported" list is now grouped into collapsible sections** by category + format (same grouping Templates already uses), instead of one flat list that would only get harder to scan as more templates get imported.
+- **Reverted same day, per Julia's own follow-up call**: archived templates stay visible with the "Archived" label + Restore action right on the Templates catalogue page (not hidden, and not exclusively on the Import screen as briefly tried) — she tried both and preferred having it in both places.
 
 ### Option D test found 3 more real bugs, then a deploy incident briefly took production down (2026-07-28)
 
