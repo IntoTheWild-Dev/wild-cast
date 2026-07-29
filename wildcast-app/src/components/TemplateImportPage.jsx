@@ -130,6 +130,17 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   const [zoneEdits, setZoneEdits] = useState({})
   const [savingZones, setSavingZones] = useState(false)
   const [zonesSaved, setZonesSaved] = useState(false)
+  // "Previously imported" groups collapse by default — with enough imports
+  // this list gets busy fast, so only the group a designer clicks into opens.
+  const [openGroups, setOpenGroups] = useState(() => new Set())
+
+  function toggleGroup(label) {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      next.has(label) ? next.delete(label) : next.add(label)
+      return next
+    })
+  }
 
   // Every "coming soon" slot is a valid import target — Option A/B are hardcoded
   // and never show up here, so an import can never clobber a real live template.
@@ -461,12 +472,19 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 {actionError}
               </div>
             )}
-            {recordGroups.map(([groupLabel, records]) => (
-              <details key={groupLabel} open style={{ marginBottom: 10 }}>
-                <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--dark)', padding: '8px 4px', listStyle: 'none' }}>
+            {recordGroups.map(([groupLabel, records]) => {
+              const isOpen = openGroups.has(groupLabel)
+              return (
+              <div key={groupLabel} style={{ marginBottom: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                <button
+                  onClick={() => toggleGroup(groupLabel)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--dark)', padding: '10px 12px', background: '#fff', border: 'none', textAlign: 'left' }}
+                >
+                  <span style={{ display: 'inline-block', transition: 'transform 0.15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10, color: 'var(--mid)' }}>▶</span>
                   {groupLabel} <span style={{ fontWeight: 500, color: 'var(--mid)' }}>({records.length})</span>
-                </summary>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                </button>
+                {isOpen && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 12px 12px' }}>
                   {records.map(r => {
                 // Override records (see api/publish-template.js) exist only for
                 // Option A/B — hardcoded static templates with no real draft/
@@ -522,8 +540,10 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 )
                   })}
                 </div>
-              </details>
-            ))}
+                )}
+              </div>
+              )
+            })}
           </div>
         )}
       </div>
