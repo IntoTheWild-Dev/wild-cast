@@ -393,7 +393,13 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
           {members.map((t, i) => {
-            const record = customRecordFor(t)
+            // An archived record is treated as if the slot were empty on this
+            // catalogue page — no "Archived" label, no manage menu here. Julia's
+            // call: archiving should free the slot up visually too, exactly like
+            // it was never imported; restoring only happens from the Import
+            // page's "Previously imported" list, which still lists it either way.
+            const rawRecord = customRecordFor(t)
+            const record = rawRecord?.archived ? null : rawRecord
             if (t.live) return (
               <div
                 key={i}
