@@ -3,6 +3,7 @@ import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, delete
 import { hasTransparency } from '../lib/image'
 
 const ALL_MERCHANTS = '__all__'
+const ALL_TYPES = '__all__'
 const LAST_MERCHANT_KEY = 'wildcast_library_last_merchant'
 
 // Folders a partner can upload straight into from this page — matches the
@@ -326,6 +327,7 @@ export default function LibraryPage() {
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
   const [merchant, setMerchant] = useState(() => localStorage.getItem(LAST_MERCHANT_KEY) || GENERAL_MERCHANT)
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES)
   const [search, setSearch] = useState('')
 
   async function refresh() {
@@ -371,8 +373,9 @@ export default function LibraryPage() {
     const q = search.trim().toLowerCase()
     return assets
       .filter(a => merchant === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === merchant)
+      .filter(a => typeFilter === ALL_TYPES || a.folder === typeFilter)
       .filter(a => !q || a.name.toLowerCase().includes(q))
-  }, [assets, merchant, search])
+  }, [assets, merchant, typeFilter, search])
 
   // Default pre-fill for the upload picker's "existing merchant" dropdown —
   // whatever's currently being viewed, if it's a real merchant.
@@ -405,6 +408,14 @@ export default function LibraryPage() {
             <option value={ALL_MERCHANTS}>All merchants</option>
             {merchants.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
+          <select
+            value={typeFilter}
+            onChange={e => setTypeFilter(e.target.value)}
+            style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+          >
+            <option value={ALL_TYPES}>All types</option>
+            {Object.entries(FOLDERS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
           <input
             type="text"
             value={search}
@@ -426,7 +437,7 @@ export default function LibraryPage() {
       ) : !loading && viewAssets.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
           <div style={{ fontSize: 13, color: 'var(--mid)', textAlign: 'center' }}>
-            No assets match {search.trim() ? `"${search.trim()}"` : 'this merchant'}.
+            No assets match {search.trim() ? `"${search.trim()}"` : 'these filters'}.
           </div>
         </div>
       ) : (
