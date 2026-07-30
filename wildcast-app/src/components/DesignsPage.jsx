@@ -196,6 +196,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [loadingId, setLoadingId] = useState(null)
   const [filters, setFilters] = useState(null) // null = filter popup still showing
+  const [nameSearch, setNameSearch] = useState('')
   const [pendingProject, setPendingProject] = useState(null)
   const [pendingBusy, setPendingBusy] = useState(false)
 
@@ -218,15 +219,17 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
 
   const filtered = useMemo(() => {
     if (!filters) return []
+    const q = nameSearch.trim().toLowerCase()
     return enriched
       .filter(p =>
         (filters.format === ALL || p.group === filters.format) &&
-        (filters.merchant === ALL || p.merchant === filters.merchant)
+        (filters.merchant === ALL || p.merchant === filters.merchant) &&
+        (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first — the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-  }, [enriched, filters])
+  }, [enriched, filters, nameSearch])
 
   const grouped = useMemo(() => {
     const byGroup = {}
@@ -270,8 +273,15 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     }
   }
 
-  const activeFilterSummary = filters && (filters.format !== ALL || filters.merchant !== ALL)
-    ? [filters.format !== ALL ? filters.format : null, filters.merchant !== ALL ? filters.merchant : null].filter(Boolean).join(' · ')
+  const activeFilterCount = filters
+    ? [filters.format !== ALL, filters.merchant !== ALL, !!nameSearch.trim()].filter(Boolean).length
+    : 0
+  const activeFilterSummary = activeFilterCount > 0
+    ? [
+        filters.format !== ALL ? filters.format : null,
+        filters.merchant !== ALL ? filters.merchant : null,
+        nameSearch.trim() ? `"${nameSearch.trim()}"` : null,
+      ].filter(Boolean).join(' · ')
     : null
 
   return (
@@ -305,12 +315,21 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
           </p>
         </div>
         {status === 'ready' && projects.length > 0 && filters && (
-          <button
-            onClick={() => setFilters(null)}
-            style={{ padding: '8px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer', flexShrink: 0 }}
-          >
-            Filters{activeFilterSummary ? ` (${[filters.format !== ALL, filters.merchant !== ALL].filter(Boolean).length})` : ''}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <input
+              type="text"
+              value={nameSearch}
+              onChange={e => setNameSearch(e.target.value)}
+              placeholder="Search by name…"
+              style={{ fontSize: 13, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', width: 200 }}
+            />
+            <button
+              onClick={() => setFilters(null)}
+              style={{ padding: '8px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer', flexShrink: 0 }}
+            >
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+          </div>
         )}
       </div>
 
@@ -319,7 +338,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       )}
 
       {status === 'ready' && projects.length > 0 && filters && filtered.length === 0 && (
-        <EmptyState title="No designs match" desc="Try widening your format or merchant filter." />
+        <EmptyState title="No designs match" desc="Try widening your format or merchant filter, or clearing the name search." />
       )}
 
       {status === 'ready' && filters && filtered.length > 0 && (
