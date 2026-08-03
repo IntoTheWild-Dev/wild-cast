@@ -26,6 +26,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <nav style={{ display: 'flex', gap: 4 }}>
+            {navItem('+ New Brief', 'new-brief')}
             {navItem('Templates', 'catalogue')}
             {navItem('Library', 'library')}
             {navItem('Designs', 'designs')}

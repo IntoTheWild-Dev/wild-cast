@@ -49,7 +49,7 @@ function NoMatchFallback({ brief, onEdit }) {
   )
 }
 
-export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendForReview }) {
+export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendForReview, savedIds }) {
   const [candidateFields, setCandidateFields] = useState(null) // null until resolved
   const [previews, setPreviews] = useState({}) // { [templateId]: pngDataUrl }
   const [ticked, setTicked] = useState({}) // { [templateId]: boolean } — one or both
@@ -86,7 +86,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
   function handlePick(templateId) {
     const template = TEMPLATES.find(t => t.id === templateId)
     if (!template || !candidateFields) return
-    onPick(template, candidateFields[templateId])
+    onPick(template, candidateFields[templateId], savedIds?.[templateId])
   }
 
   function toggleTick(id) {

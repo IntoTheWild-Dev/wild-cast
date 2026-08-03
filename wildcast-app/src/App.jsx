@@ -113,6 +113,17 @@ export default function App() {
   // B), not lose it. BriefingForm no longer owns this — it's just the
   // submitted brief snapshot ({...brief} at Submit), or null before that.
   const [briefSubmission, setBriefSubmission] = useState(null)
+  // Bumped by the "+ New Brief" nav item to force BriefingForm to remount
+  // (resetting its own in-progress field values) even when it's already
+  // mounted and showing the brief screen.
+  const [briefResetKey, setBriefResetKey] = useState(0)
+  // { [templateId]: savedProjectId } — recorded when "Save & pick another
+  // design" saves a brief-generated candidate. Lets re-clicking Edit on the
+  // same option reopen what was actually saved (nudge/scale + the project id
+  // to update) instead of regenerating a fresh, un-edited candidate — Julia's
+  // "the designs have reset after editing" report (2026-08-03). Cleared on
+  // every fresh brief submission so a new brief never inherits a stale save.
+  const [savedCandidateIds, setSavedCandidateIds] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
   const [lang, setLang]                       = useState('de')
@@ -309,7 +320,22 @@ export default function App() {
   // (src/components/TemplateCandidatePicker.jsx) — mirrors handleSelectTemplate
   // above but pre-fills the editor with the brief's answers instead of resetting
   // to DEFAULT_FIELDS, and opens into the locked-down review mode (Phase 2).
-  function handleSelectGeneratedCandidate(template, prefilledFields) {
+  //
+  // savedId: if this exact candidate was already saved once this brief session
+  // (via "Save & pick another design" — see savedCandidateIds above), reopen
+  // that saved state instead of regenerating a fresh, un-edited one. Falls
+  // through to the fresh path if the sessionStorage cache is missing/corrupt.
+  async function handleSelectGeneratedCandidate(template, prefilledFields, savedId) {
+    if (savedId) {
+      try {
+        const cached = sessionStorage.getItem(`wildcast_project_${savedId}`)
+        if (cached) {
+          await openLoadedProject(JSON.parse(cached), { restricted: true })
+          return
+        }
+      } catch { /* corrupted cache — fall through to fresh generation */ }
+    }
+
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(true)
     setSelectedTemplate(template)
@@ -333,6 +359,18 @@ export default function App() {
 
   function handleNavigate(target) {
     if (target === 'brief') setScreen('brief')
+    // Distinct from plain 'brief' (the logo, which resumes whatever brief/
+    // picker was already in progress) — this always starts a genuinely fresh
+    // brief, per Julia's ask for "another offer form again." Clearing
+    // briefSubmission alone isn't enough if BriefingForm is already mounted
+    // (its own in-progress field values are local state that a prop change
+    // won't reset), so briefResetKey forces a full remount too.
+    else if (target === 'new-brief') {
+      setBriefSubmission(null)
+      setSavedCandidateIds({})
+      setBriefResetKey(k => k + 1)
+      setScreen('brief')
+    }
     else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
     else if (target === 'library') setScreen('library')
@@ -598,7 +636,11 @@ export default function App() {
   async function handleSaveAndReturnToPicker() {
     setSaving(true)
     try {
-      await doSave()
+      const id = await doSave()
+      // Record which project this candidate saved to, so re-clicking Edit on
+      // the same option in the picker reopens this saved state instead of a
+      // fresh, un-edited one (see savedCandidateIds above).
+      setSavedCandidateIds(prev => ({ ...prev, [selectedTemplate.id]: id }))
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
       setScreen('brief')
@@ -687,7 +729,7 @@ export default function App() {
   // opening the original and opening a freshly-made duplicate — the only
   // difference between the two is which project object got loaded/created
   // before this runs.
-  async function openLoadedProject(project) {
+  async function openLoadedProject(project, { restricted = false } = {}) {
     const template = TEMPLATES.find(t => t.id === project.templateId)
       ?? customTemplates.cards.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
@@ -702,7 +744,7 @@ export default function App() {
     } catch {}
 
     historyRef.current = []; setCanUndo(false)
-    setRestrictedReview(false)
+    setRestrictedReview(restricted)
     setSelectedTemplate(template)
     setFields({ ...DEFAULT_FIELDS, ...(project.fields ?? {}) })
     setFontSizes(project.fontSizes ?? {})
@@ -768,10 +810,12 @@ export default function App() {
 
       {screen === 'brief' && (
         <BriefingForm
+          key={briefResetKey}
           submitted={briefSubmission}
-          onSubmitted={setBriefSubmission}
+          onSubmitted={brief => { setSavedCandidateIds({}); setBriefSubmission(brief) }}
           onPick={handleSelectGeneratedCandidate}
           onSendForReview={handleSendCandidatesForReview}
+          savedCandidateIds={savedCandidateIds}
         />
       )}
 

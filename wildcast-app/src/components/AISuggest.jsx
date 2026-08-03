@@ -27,6 +27,7 @@ export default function AISuggest({ field, lang, onApply }) {
   return (
     <div style={{ position: 'relative' }}>
       <button
+        type="button"
         onClick={() => { setDropLang(lang); setOpen(o => !o) }}
         style={{
           display: 'flex', alignItems: 'center', gap: 5,
