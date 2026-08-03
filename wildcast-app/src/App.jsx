@@ -3,6 +3,7 @@ import Header from './components/Header'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker from './components/TemplatePicker'
+import BriefingForm from './components/BriefingForm'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
@@ -98,7 +99,7 @@ function ReviewModal({ url, onClose }) {
 }
 
 export default function App() {
-  const [screen, setScreen]                   = useState('picker')
+  const [screen, setScreen]                   = useState('brief')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
   const [lang, setLang]                       = useState('de')
@@ -107,6 +108,9 @@ export default function App() {
   const [alignments, setAlignments]           = useState({})
   const [imageScales, setImageScales]         = useState({})
   const [imagePositions, setImagePositions]   = useState({})
+  // Nudge offsets for specific text zones (headline/sub_headline) in the
+  // restricted review mode — see handleTextNudge and TemplateCanvas.jsx.
+  const [textPositions, setTextPositions]     = useState({})
   const [zonePositions, setZonePositions]     = useState({})
   const [projectName, setProjectName]         = useState('')
   const [currentProjectId, setCurrentProjectId] = useState(null)
@@ -119,6 +123,10 @@ export default function App() {
   // activation: null = not yet validated, object = { key, clientName, credits, role }
   const [activation, setActivation]           = useState(null)
   const [showHelp, setShowHelp]               = useState(false)
+  // true only when the editor was entered via a brief-generated candidate —
+  // gates the locked-down FieldEditor mode (Phase 2). Reset to false by every
+  // other entry point so the lock never leaks into normal editing.
+  const [restrictedReview, setRestrictedReview] = useState(false)
   // Figma-imported templates (draft + live), fetched once and merged with the
   // static TEMPLATE_ZONES/TEMPLATES — see src/lib/customTemplates.js
   const [customTemplates, setCustomTemplates] = useState({ zonesById: {}, cards: [], records: [] })
@@ -259,11 +267,34 @@ export default function App() {
 
   function handleSelectTemplate(template) {
     historyRef.current = []; setCanUndo(false)
+    setRestrictedReview(false)
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
     setAlignments({})
     setImageScales({})
+    setTextPositions({})
+    setZonePositions({})
+    setProjectName(template.name)
+    setCurrentProjectId(null)
+    setSaveStatus(null)
+    setLoadKey(k => k + 1)
+    setScreen('editor')
+  }
+
+  // Entry point for a candidate generated from the briefing form
+  // (src/components/TemplateCandidatePicker.jsx) — mirrors handleSelectTemplate
+  // above but pre-fills the editor with the brief's answers instead of resetting
+  // to DEFAULT_FIELDS, and opens into the locked-down review mode (Phase 2).
+  function handleSelectGeneratedCandidate(template, prefilledFields) {
+    historyRef.current = []; setCanUndo(false)
+    setRestrictedReview(true)
+    setSelectedTemplate(template)
+    setFields({ ...DEFAULT_FIELDS, ...prefilledFields })
+    setFontSizes({})
+    setAlignments({})
+    setImageScales({})
+    setTextPositions({})
     setZonePositions({})
     setProjectName(template.name)
     setCurrentProjectId(null)
@@ -277,7 +308,7 @@ export default function App() {
   }
 
   function handleNavigate(target) {
-    if (target === 'picker') setScreen('picker')
+    if (target === 'brief') setScreen('brief')
     else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
     else if (target === 'library') setScreen('library')
@@ -335,6 +366,20 @@ export default function App() {
     })
   }
 
+  // Nudges a text zone within its box (px, in canvas units) — only meaningful
+  // in the restricted review mode (see FieldEditor.jsx), where it's the only
+  // way to reposition headline/sub_headline since Designer-mode canvas drag
+  // is disallowed there. Clamped to a modest range so restricted-mode text
+  // can't wander off-canvas with repeated clicks.
+  function handleTextNudge(zoneId, axis, delta) {
+    pushUndoSnapshot()
+    setTextPositions(prev => {
+      const cur = prev[zoneId] ?? { x: 0, y: 0 }
+      const next = { ...cur, [axis]: Math.max(-40, Math.min(40, cur[axis] + delta)) }
+      return { ...prev, [zoneId]: next }
+    })
+  }
+
   function handleResetZone(zoneId) {
     exportRef.current?.resetZone?.(zoneId)
     setImageScales(prev => {
@@ -342,6 +387,10 @@ export default function App() {
       const next = { ...prev }; delete next[zoneId]; return next
     })
     setImagePositions(prev => {
+      if (!(zoneId in prev)) return prev
+      const next = { ...prev }; delete next[zoneId]; return next
+    })
+    setTextPositions(prev => {
       if (!(zoneId in prev)) return prev
       const next = { ...prev }; delete next[zoneId]; return next
     })
@@ -356,6 +405,7 @@ export default function App() {
     exportRef.current?.resetLayout?.()
     setImageScales({})
     setImagePositions({})
+    setTextPositions({})
   }
 
   // Guided mode locks the canvas — nothing can be dragged, so a position-only reset
@@ -370,6 +420,7 @@ export default function App() {
     setAlignments({})
     setImageScales({})
     setImagePositions({})
+    setTextPositions({})
     setZonePositions({})
     setSaveStatus(null)
     setLoadKey(k => k + 1)
@@ -532,6 +583,7 @@ export default function App() {
     } catch {}
 
     historyRef.current = []; setCanUndo(false)
+    setRestrictedReview(false)
     setSelectedTemplate(template)
     setFields({ ...DEFAULT_FIELDS, ...(project.fields ?? {}) })
     setFontSizes(project.fontSizes ?? {})
@@ -588,18 +640,14 @@ export default function App() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Header
-        onLogoClick={() => setScreen('picker')}
+        onLogoClick={() => setScreen('brief')}
         screen={screen}
         onNavigate={handleNavigate}
         activation={activation}
         onHelp={() => setShowHelp(true)}
       />
 
-      {screen === 'picker' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <TemplatePicker mode="hero" onSelect={handleSelectTemplate} customCards={customTemplates.cards} customRecords={customTemplates.records} />
-        </div>
-      )}
+      {screen === 'brief' && <BriefingForm onPick={handleSelectGeneratedCandidate} />}
 
       {screen === 'catalogue' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -702,15 +750,21 @@ export default function App() {
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
                 Undo
               </button>
-              <button
-                onClick={selectedTemplate?.mode === 'non-designer' ? handleResetToBlank : handleResetLayout}
-                title={selectedTemplate?.mode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
-                style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
-              >
-                {selectedTemplate?.mode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
-              </button>
+              {/* Restricted review mode (opened from a brief-generated candidate) has
+                  nothing meaningful to reset back to — no blank/start-over concept
+                  applies once a finished design was auto-generated, so the whole
+                  button is hidden rather than wired to either reset flow. */}
+              {!restrictedReview && (
+                <button
+                  onClick={selectedTemplate?.mode === 'non-designer' ? handleResetToBlank : handleResetLayout}
+                  title={selectedTemplate?.mode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
+                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+                >
+                  {selectedTemplate?.mode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
+                </button>
+              )}
             </div>
 
             <TemplateCanvas
@@ -723,6 +777,7 @@ export default function App() {
               alignments={alignments}
               imageScales={imageScales}
               imagePositions={imagePositions}
+              textPositions={textPositions}
               mode={selectedTemplate?.mode ?? 'designer'}
               loadKey={loadKey}
               zonePositions={zonePositions}
@@ -748,6 +803,8 @@ export default function App() {
             onImageScaleChange={handleImageScaleChange}
             imagePositions={imagePositions}
             onImageOffsetChange={handleImageOffsetChange}
+            onTextNudge={handleTextNudge}
+            restricted={restrictedReview}
             mode={selectedTemplate?.mode ?? 'designer'}
             onSave={handleSave}
             saving={saving}

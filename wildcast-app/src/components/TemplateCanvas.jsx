@@ -25,7 +25,7 @@ async function loadFonts() {
   }
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -45,6 +45,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   zonePositionsRef.current = zonePositions ?? {}
   const onZoneDragStartRef = useRef(onZoneDragStart) // always current, read inside canvas-init closure
   onZoneDragStartRef.current = onZoneDragStart
+  const onReadyRef = useRef(onReady) // always current, read inside canvas-init closure
+  onReadyRef.current = onReady
   const syncing = useRef(false)
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
@@ -387,7 +389,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         })
 
         canvas.renderAll()
-        if (!destroyed) setLoading(false)
+        if (!destroyed) {
+          setLoading(false)
+          onReadyRef.current?.()
+        }
       }
 
       // Restore saved drag positions for text zones (designer mode re-open)
@@ -511,6 +516,36 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     canvas.renderAll()
   }, [alignments, config])
+
+  // ── Sync text-zone nudge offsets → canvas ─────────────────────────────────
+  // Mirrors the image nudge pattern below, but for specific text zones (e.g.
+  // headline/sub_headline in the restricted review mode — see FieldEditor.jsx)
+  // — the only other way to move text is a Designer-mode canvas drag, which
+  // this mode disallows entirely. Only zones present as a key in
+  // `textPositions` are touched; every other flow passes {} and this is a no-op.
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !config || !textPositions) return
+    let changed = false
+    config.zones.forEach(zone => {
+      if (zone.type !== 'text') return
+      const offset = textPositions[zone.id]
+      if (!offset) return
+      const obj = zoneObjsRef.current[zone.id]
+      if (!obj) return
+      const isRotated = !!zone.rotate
+      const baseLeft = isRotated ? zone.x + zone.width / 2 : zone.x
+      const baseTop  = isRotated ? zone.y + zone.height / 2 : zone.y
+      const left = baseLeft + (offset.x ?? 0)
+      const top  = baseTop  + (offset.y ?? 0)
+      if (obj.left !== left || obj.top !== top) {
+        obj.set({ left, top })
+        obj.setCoords()
+        changed = true
+      }
+    })
+    if (changed) canvas.renderAll()
+  }, [textPositions, config])
 
   // ── Sync image scale adjustments → canvas ─────────────────────────────────
   useEffect(() => {

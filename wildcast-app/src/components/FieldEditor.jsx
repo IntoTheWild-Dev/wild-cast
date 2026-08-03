@@ -75,10 +75,40 @@ function SizeControl({ size, onSize }) {
   )
 }
 
+// Same arrow-button layout as ImageUpload's Position control below — reused
+// here for text zones (headline/sub_headline) in the restricted review mode,
+// where a canvas drag isn't available (see TemplateCanvas.jsx's textPositions).
+function NudgeControl({ onNudge }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 34 }}>
+      <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600 }}>Position</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
+        {[
+          { dir: '←', axis: 'x', delta: -4 },
+          { dir: '→', axis: 'x', delta: 4 },
+          { dir: '↑', axis: 'y', delta: -4 },
+          { dir: '↓', axis: 'y', delta: 4 },
+        ].map(({ dir, axis, delta }) => (
+          <button
+            key={dir}
+            onClick={() => onNudge(axis, delta)}
+            title={`Nudge ${dir === '←' ? 'left' : dir === '→' ? 'right' : dir === '↑' ? 'up' : 'down'}`}
+            style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >{dir}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Unified numbered field row (both modes) ─────────────────────────────────
 // showControls=true adds font-size, alignment and reset position (designer mode)
 // showSize=true adds just the font-size control (guided mode)
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition }) {
+// readOnly=true (restricted review mode) locks the text value itself and hides
+// AI Suggest — only Scale (showSize) and onNudge, if passed, stay available.
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge }) {
   const limit = CHAR_LIMITS[fieldKey]
   const hint = FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
@@ -105,7 +135,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         </div>
       </div>
 
-      {/* Controls row — full (designer) or size-only (guided) */}
+      {/* Controls row — full (designer) or size-only (guided/restricted) */}
       {(showControls || showSize) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 34 }}>
           {showControls && align != null && <AlignControl align={align} onAlign={onAlign} />}
@@ -122,29 +152,35 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         </div>
       )}
 
+      {onNudge && <NudgeControl onNudge={onNudge} />}
+
       {/* Input */}
       {multiline ? (
         <textarea
           value={value}
           onChange={e => onChange(e.target.value)}
+          readOnly={readOnly}
           maxLength={limit}
           rows={3}
           placeholder={`Enter ${label.toLowerCase()}…`}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5 }}
+          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text' }}
         />
       ) : (
         <input
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
+          readOnly={readOnly}
           maxLength={limit}
           placeholder={`Enter ${label.toLowerCase()}…`}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit' }}
+          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
         />
       )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-        <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
+        </div>
+      )}
     </div>
   )
 }
@@ -154,7 +190,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -281,13 +317,13 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         </div>
       </div>
       <div
-        onClick={handleClick}
-        style={{ border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '16px', cursor: 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}
+        onClick={restricted ? undefined : handleClick}
+        style={{ border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '16px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}
       >
         {value ? (
           <>
             <img src={value} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: square ? 4 : 6 }} />
-            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>Uploaded ✓ — click to replace</span>
+            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>{restricted ? 'Uploaded ✓' : 'Uploaded ✓ — click to replace'}</span>
           </>
         ) : (
           <>
@@ -297,7 +333,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Click to upload</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{restricted ? 'No image' : 'Click to upload'}</div>
               <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{fullHint}</div>
             </div>
           </>
@@ -305,7 +341,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       </div>
 
       {/* Library picker toggle — only shown when this zone's folder already has saved assets */}
-      {libraryAssets.length > 0 && (
+      {!restricted && libraryAssets.length > 0 && (
         <button
           onClick={openLibrary}
           style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
@@ -454,7 +490,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -499,7 +535,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)' }}>Edit content</div>
             <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>
               {template?.name ?? 'Promo Flyer'} · A6
-              {isNonDesigner && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '1px 6px', borderRadius: 100 }}>Guided</span>}
+              {isNonDesigner && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '1px 6px', borderRadius: 100 }}>{restricted ? 'Review' : 'Guided'}</span>}
             </div>
           </div>
           <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2, flexShrink: 0 }}>
@@ -543,7 +579,9 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         {/* Intro banner for non-designer */}
         {isNonDesigner && (
           <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
-            Fill in each step below — your text will appear on the preview automatically.
+            {restricted
+              ? 'This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review — text and images are locked.'
+              : 'Fill in each step below — your text will appear on the preview automatically.'}
           </div>
         )}
 
@@ -551,25 +589,30 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <StepFieldRow
           step={1} label="Headline" fieldKey="headline"
           value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-          showControls={showControls} showSize={isNonDesigner}
+          readOnly={restricted}
+          showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
           fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
           align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
           onResetPosition={() => onResetZone?.('headline')}
+          onNudge={restricted ? (axis, delta) => onTextNudge?.('headline', axis, delta) : undefined}
         />
         {templateConfig?.zones?.some(z => z.id === 'sub_headline') && (
           <StepFieldRow
             step={2} label="Sub-headline" fieldKey="sub_headline"
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
-            showControls={showControls} showSize={isNonDesigner}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
             align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
             onResetPosition={() => onResetZone?.('sub_headline')}
+            onNudge={restricted ? (axis, delta) => onTextNudge?.('sub_headline', axis, delta) : undefined}
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'restaurant_name') && (
           <StepFieldRow
             step={3} label="Restaurant name" fieldKey="restaurant_name"
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
+            readOnly={restricted}
             showControls={false} showSize={false}
             fontSize={20}
             align="right"
@@ -579,7 +622,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={4} label="Offer" fieldKey="offer"
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-            showControls={showControls} showSize={isNonDesigner}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
             fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
             align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
             onResetPosition={() => onResetZone?.('offer')}
@@ -589,7 +633,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={5} label="T&amp;Cs" fieldKey="tc"
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
-            showControls={showControls}
+            readOnly={restricted}
+            showControls={showControls && !restricted}
             fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
             align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
             onResetPosition={() => onResetZone?.('tc')}
@@ -599,7 +644,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={5} label="App download line" fieldKey="cta"
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
-            showControls={showControls} showSize={isNonDesigner}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
             fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}
             align={effectiveAlign('cta', 'center')} onAlign={a => onAlignChange('cta', a)}
             onResetPosition={() => onResetZone?.('cta')}
@@ -632,6 +678,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 // everything into "General", still with zero extra clicks.
                 merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
                 autoCropContent={zone.id === 'qr'}
+                restricted={restricted}
               />
             ))}
           </>
@@ -655,30 +702,38 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
       </div>
 
-      {/* Action footer: Export PDF → Send for Review → Save */}
+      {/* Action footer: Export PDF → Send for Review → Save (restricted review
+          mode only ever shows Send for Review — no export/manual save yet) */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button
-          onClick={onExport}
-          disabled={exporting}
-          style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: exporting ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'background 0.15s' }}
-          onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary-dark)' }}
-          onMouseLeave={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary)' }}
-        >
-          {exporting ? 'Exporting…' : 'Export PDF'}
-        </button>
+        {!restricted && (
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: exporting ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'background 0.15s' }}
+            onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary-dark)' }}
+            onMouseLeave={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary)' }}
+          >
+            {exporting ? 'Exporting…' : 'Export PDF'}
+          </button>
+        )}
 
         <button
           onClick={onSendForReview}
           disabled={saving}
-          style={{
+          style={restricted ? {
+            width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
+            background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
+            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          } : {
             width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
             background: '#fff', color: 'var(--dark)',
             border: '1.5px solid var(--border)',
             borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
-          onMouseEnter={e => { if (!saving) e.currentTarget.style.borderColor = 'var(--dark)' }}
-          onMouseLeave={e => { if (!saving) e.currentTarget.style.borderColor = 'var(--border)' }}
+          onMouseEnter={e => { if (!saving && !restricted) e.currentTarget.style.borderColor = 'var(--dark)' }}
+          onMouseLeave={e => { if (!saving && !restricted) e.currentTarget.style.borderColor = 'var(--border)' }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
@@ -686,20 +741,22 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           Send for Review
         </button>
 
-        <button
-          onClick={onSave}
-          disabled={saving}
-          style={{
-            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
-            background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
-            border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
-          onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
-        >
-          {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
-        </button>
+        {!restricted && (
+          <button
+            onClick={onSave}
+            disabled={saving}
+            style={{
+              width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+              background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
+              border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
+              borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
+            onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
+          >
+            {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
+          </button>
+        )}
 
         <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center' }}>CMYK · 3mm bleed · print-ready</div>
       </div>
