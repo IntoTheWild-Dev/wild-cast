@@ -342,7 +342,20 @@ export default function App() {
 
   function handleFontSizeChange(key, size) {
     pushUndoSnapshot()
-    setFontSizes(prev => ({ ...prev, [key]: Math.max(6, Math.min(120, size)) }))
+    // Restricted review mode only allows a modest ±20% adjustment around the
+    // generated size — enough to nudge-fit, not enough to grow large enough to
+    // wrap/overlap into a neighboring zone (confirmed as a real, visible issue
+    // testing this at the full 6-120pt range — headline growing past ~60pt on
+    // Option A visibly collided with sub_headline/restaurant_name below it).
+    // Normal Designer/Guided mode keeps the original full range unchanged.
+    let min = 6, max = 120
+    if (restrictedReview) {
+      const zone = templateConfig?.zones?.find(z => z.id === key)
+      const base = zone?.fontSize ?? size
+      min = Math.max(6, Math.round(base * 0.8))
+      max = Math.round(base * 1.2)
+    }
+    setFontSizes(prev => ({ ...prev, [key]: Math.max(min, Math.min(max, size)) }))
   }
 
   function handleAlignChange(key, align) {
