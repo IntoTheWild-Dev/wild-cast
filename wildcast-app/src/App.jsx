@@ -112,6 +112,15 @@ export default function App() {
   const [lang, setLang]                       = useState('de')
   const [exporting, setExporting]             = useState(false)
   const [fontSizes, setFontSizes]             = useState({})
+  // The REAL font size each auto-shrink zone actually rendered at on load —
+  // captured once via handleCanvasReady, never mutated afterward for that
+  // session. Needed because auto-shrink is applied directly to the Fabric
+  // object and never written back into `fontSizes`, so without this,
+  // `fontSizes[zoneId]` (and the restricted-mode clamp below) would be
+  // anchored to the unshrunk static default instead of what's actually on
+  // screen — a long headline could show "54pt" while really rendering at
+  // 21pt, so clicking + once jumped straight to ~55pt instead of ~22pt.
+  const [generatedFontSizes, setGeneratedFontSizes] = useState({})
   const [alignments, setAlignments]           = useState({})
   const [imageScales, setImageScales]         = useState({})
   const [imagePositions, setImagePositions]   = useState({})
@@ -278,6 +287,7 @@ export default function App() {
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
+    setGeneratedFontSizes({})
     setAlignments({})
     setImageScales({})
     setTextPositions({})
@@ -299,6 +309,7 @@ export default function App() {
     setSelectedTemplate(template)
     setFields({ ...DEFAULT_FIELDS, ...prefilledFields })
     setFontSizes({})
+    setGeneratedFontSizes({})
     setAlignments({})
     setImageScales({})
     setTextPositions({})
@@ -350,19 +361,32 @@ export default function App() {
   function handleFontSizeChange(key, size) {
     pushUndoSnapshot()
     // Restricted review mode only allows a modest ±20% adjustment around the
-    // generated size — enough to nudge-fit, not enough to grow large enough to
-    // wrap/overlap into a neighboring zone (confirmed as a real, visible issue
-    // testing this at the full 6-120pt range — headline growing past ~60pt on
-    // Option A visibly collided with sub_headline/restaurant_name below it).
-    // Normal Designer/Guided mode keeps the original full range unchanged.
+    // size the zone actually rendered at on load (generatedFontSizes — see its
+    // declaration above for why this can't just be zone.fontSize) — enough to
+    // nudge-fit, not enough to grow large enough to wrap/overlap into a
+    // neighboring zone. Normal Designer/Guided mode keeps the full 6-120 range.
     let min = 6, max = 120
     if (restrictedReview) {
       const zone = templateConfig?.zones?.find(z => z.id === key)
-      const base = zone?.fontSize ?? size
+      const base = generatedFontSizes[key] ?? zone?.fontSize ?? size
       min = Math.max(6, Math.round(base * 0.8))
       max = Math.round(base * 1.2)
     }
     setFontSizes(prev => ({ ...prev, [key]: Math.max(min, Math.min(max, size)) }))
+  }
+
+  // Fires once the interactive editor's TemplateCanvas finishes mounting (its
+  // own auto-shrink for this template's zones has already run by then — see
+  // TemplateCanvas.jsx's onReady). Seeds `fontSizes` with what's REALLY
+  // rendered, not the static per-zone default, so the panel's displayed pt
+  // number and the +/- stepper's starting point are both accurate from the
+  // first render — not just for restricted mode, this was equally wrong
+  // (just less visible) in normal Guided mode.
+  function handleCanvasReady() {
+    const effective = exportRef.current?.getEffectiveFontSizes?.()
+    if (!effective) return
+    setGeneratedFontSizes(effective)
+    setFontSizes(prev => ({ ...effective, ...prev }))
   }
 
   function handleAlignChange(key, align) {
@@ -437,6 +461,7 @@ export default function App() {
     historyRef.current = []; setCanUndo(false)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
+    setGeneratedFontSizes({})
     setAlignments({})
     setImageScales({})
     setImagePositions({})
@@ -846,6 +871,7 @@ export default function App() {
               loadKey={loadKey}
               zonePositions={zonePositions}
               onZoneDragStart={handleZoneDragStart}
+              onReady={handleCanvasReady}
             />
           </div>
 

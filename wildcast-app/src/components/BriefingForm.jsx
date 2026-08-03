@@ -137,7 +137,16 @@ export default function BriefingForm({ onPick, onSendForReview }) {
 
           <HeroColumn />
 
-          <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--border)', padding: '32px' }}>
+          <form
+            onSubmit={handleSubmit}
+            // Pressing Enter in a plain text <input> natively submits the
+            // enclosing form (since a submit button exists) — with a form this
+            // long, that reads as "it randomly jumped to the picker halfway
+            // through." Block it there; textareas/selects/the submit button
+            // itself are untouched (Enter in a textarea just adds a newline).
+            onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault() }}
+            style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--border)', padding: '32px' }}
+          >
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', marginBottom: 20 }}>Brief your design</div>
 
         <Field label="Partner name">
@@ -181,6 +190,16 @@ export default function BriefingForm({ onPick, onSendForReview }) {
             ))}
           </div>
         </Field>
+
+        {/* Option A's flyer shows a restaurant name on the artwork — only ask
+            for it when Flyer is actually picked. Defaults to Partner name if
+            left blank (buildCandidateFields), but the display name can differ
+            (e.g. partner "McD" internally, flyer reads "McDonald's Zentrum"). */}
+        {brief.formats.includes('flyer') && (
+          <Field label="Restaurant name" hint="Shown on the flyer — leave blank to just use the partner name above.">
+            <input style={inputStyle} placeholder={partnerName || 'e.g. Wen Cheng'} value={brief.restaurantName} onChange={e => set('restaurantName', e.target.value)} />
+          </Field>
+        )}
 
         <div style={{ borderTop: '1px solid var(--border)', margin: '28px 0 24px', paddingTop: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>Copy</div>

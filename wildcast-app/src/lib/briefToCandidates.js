@@ -34,7 +34,10 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
   return {
     headline: brief.headline || '',
     sub_headline: brief.subline || '',
-    restaurant_name: partnerName || '',
+    // Explicit Restaurant name wins when set (the display name on the flyer
+    // can differ from Partner name, e.g. partner "McD" but flyer should read
+    // "McDonald's Zentrum") — falls back to Partner name otherwise.
+    restaurant_name: brief.restaurantName?.trim() || partnerName || '',
     tc: brief.tcs || '',
     offer: offerText,
     // Option B has no subline zone — its `cta` line is the closest fit, so it

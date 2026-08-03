@@ -490,16 +490,28 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   }, [fields])
 
   // ── Sync font size overrides → canvas ──────────────────────────────────────
+  // Real bug found 2026-08-03 (Julia: "sizing the headline also resizes the
+  // subline"): this used to fall back to zone.fontSize (the static default)
+  // for any zone with no entry in `fontSizes`. `fontSizes` is a brand-new
+  // object reference every time ANY zone's size changes, so this whole effect
+  // re-ran on every single font-size edit — and for a zone that had been
+  // auto-shrunk on load (its real Fabric fontSize applied directly, never
+  // written back into this React state), that meant its shrunk size got
+  // silently overwritten back to the unfit static default the moment a
+  // DIFFERENT zone's size was touched. Only ever apply an explicit entry in
+  // `fontSizes` — a zone with no entry keeps whatever size it currently has.
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !config) return
+    let changed = false
     config.zones.forEach(zone => {
+      if (!fontSizes || !(zone.id in fontSizes)) return
       const obj = zoneObjsRef.current[zone.id]
       if (!obj || obj.type !== 'textbox') return
-      const size = fontSizes?.[zone.id] ?? zone.fontSize
-      if (obj.fontSize !== size) obj.set('fontSize', size)
+      const size = fontSizes[zone.id]
+      if (obj.fontSize !== size) { obj.set('fontSize', size); changed = true }
     })
-    canvas.renderAll()
+    if (changed) canvas.renderAll()
   }, [fontSizes, config])
 
   // ── Sync alignment overrides → canvas ──────────────────────────────────────

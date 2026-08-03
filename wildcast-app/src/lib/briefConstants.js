@@ -30,6 +30,10 @@ export const DEFAULT_BRIEF = {
   about: '',
   objective: '', objectiveFollowUp: '',
   formats: [],
+  // Shown on the flyer artwork (Option A's restaurant_name zone) — distinct
+  // from Partner name, which just scopes the Library/internal tracking.
+  // Left blank, it falls back to Partner name (buildCandidateFields).
+  restaurantName: '',
   headline: '', subline: '',
   stickerAsset: null, stickerRequestMode: false, stickerRequest: '',
   foodPhotoAsset: null,
