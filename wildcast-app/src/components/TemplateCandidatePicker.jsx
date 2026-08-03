@@ -61,8 +61,12 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick }) {
     async function run() {
       if (!matchingIds.length) { setCandidateFields(null); return }
       const partnerName = resolvePartnerName(brief)
-      const { logoUrl, photoUrl } = await fetchMerchantAssets(partnerName)
+      const { logoUrl, photoUrl: autoPhotoUrl } = await fetchMerchantAssets(partnerName)
       if (cancelled) return
+      // A food photo explicitly picked in the brief (brief.foodPhotoAsset — added
+      // because a merchant like Wen Cheng may have several dishes, so "just grab
+      // the first one" isn't always right) wins over the auto-pulled fallback.
+      const photoUrl = brief.foodPhotoAsset?.src ?? autoPhotoUrl
       const fields = buildCandidateFields(brief, { logoUrl, photoUrl })
       setCandidateFields({ [OPTION_A_ID]: fields, [OPTION_B_ID]: fields })
     }

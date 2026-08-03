@@ -6,7 +6,7 @@ export const ADD_NEW = '__add_new__'
 
 // Placeholder partner list — no backend wiring yet, this is just so the
 // dropdown feels real while Julia checks the form itself is correct.
-export const PLACEHOLDER_PARTNERS = ['Wen Cheng', 'Fressnapf Koblenz', 'AKKO Chicken & Grilled']
+export const PLACEHOLDER_PARTNERS = ['Wen Cheng', 'McD', 'Fressnapf Koblenz', 'AKKO Chicken & Grilled']
 
 export const OBJECTIVES = [
   { value: 'new_opening', label: 'New opening', followUp: "What's the new name of the restaurant?" },
@@ -24,9 +24,6 @@ export const FORMATS = [
   { value: 'wild_poster', label: 'Wild Poster' },
 ]
 
-export const STICKERS = ['26% OFF badge', 'NEW badge', 'Limited time badge']
-export const REQUEST_NEW_STICKER = '__request_new__'
-
 export const DEFAULT_BRIEF = {
   partner: '', partnerNew: '',
   businessType: '',
@@ -34,10 +31,11 @@ export const DEFAULT_BRIEF = {
   objective: '', objectiveFollowUp: '',
   formats: [],
   headline: '', subline: '',
-  sticker: '', stickerRequest: '',
+  stickerAsset: null, stickerRequestMode: false, stickerRequest: '',
+  foodPhotoAsset: null,
   tcs: '',
   qrNeeded: null, // null | true | false
-  qrFileName: '',
+  qrAsset: null,
 }
 
 // Resolves the "Partner name" field to a plain string regardless of whether

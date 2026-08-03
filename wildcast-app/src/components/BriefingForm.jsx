@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import TemplateCandidatePicker from './TemplateCandidatePicker'
 import AISuggest from './AISuggest'
-import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, STICKERS, REQUEST_NEW_STICKER, DEFAULT_BRIEF } from '../lib/briefConstants'
+import LibraryAssetPickerField from './LibraryAssetPickerField'
+import { GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -48,6 +50,7 @@ export default function BriefingForm({ onPick }) {
 
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
+  const partnerName = resolvePartnerName(brief)
 
   const isValid =
     partnerFilled &&
@@ -139,18 +142,44 @@ export default function BriefingForm({ onPick }) {
 
           <Field label="Subline">
             <input style={inputStyle} value={brief.subline} onChange={e => set('subline', e.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} />
+            </div>
           </Field>
 
-          <Field label="Sticker" hint="Choose from preselected stickers, or request a new one.">
-            <select style={inputStyle} value={brief.sticker} onChange={e => set('sticker', e.target.value)}>
-              <option value="">None</option>
-              {STICKERS.map(s => <option key={s} value={s}>{s}</option>)}
-              <option value={REQUEST_NEW_STICKER}>+ Request a new sticker</option>
-            </select>
-            {brief.sticker === REQUEST_NEW_STICKER && (
-              <input style={{ ...inputStyle, marginTop: 8 }} placeholder="Describe the sticker you need" value={brief.stickerRequest} onChange={e => set('stickerRequest', e.target.value)} />
+          <div style={{ marginBottom: 22 }}>
+            {brief.stickerRequestMode ? (
+              <Field label="Sticker" hint="Describe the new sticker you need — we'll add it to the library.">
+                <input style={inputStyle} placeholder="e.g. '26% OFF' badge" value={brief.stickerRequest} onChange={e => set('stickerRequest', e.target.value)} />
+                <button type="button" onClick={() => set('stickerRequestMode', false)} style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--mid)', padding: 0 }}>
+                  ← choose from library instead
+                </button>
+              </Field>
+            ) : (
+              <>
+                <LibraryAssetPickerField
+                  label="Sticker"
+                  hint="Choose from preselected stickers, or request a new one."
+                  folder="stickers"
+                  merchant={GENERAL_MERCHANT}
+                  value={brief.stickerAsset}
+                  onSelect={a => set('stickerAsset', a)}
+                />
+                <button type="button" onClick={() => set('stickerRequestMode', true)} style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}>
+                  + Request a new sticker
+                </button>
+              </>
             )}
-          </Field>
+          </div>
+
+          <LibraryAssetPickerField
+            label="Food photo"
+            hint="Pick a photo from your library — helps when a partner has more than one dish to choose from."
+            folder="product-images"
+            merchant={partnerName || GENERAL_MERCHANT}
+            value={brief.foodPhotoAsset}
+            onSelect={a => set('foodPhotoAsset', a)}
+          />
 
           <Field label="T&Cs">
             <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} value={brief.tcs} onChange={e => set('tcs', e.target.value)} />
@@ -161,10 +190,17 @@ export default function BriefingForm({ onPick }) {
               <ChoiceButton active={brief.qrNeeded === true} onClick={() => set('qrNeeded', true)}>Yes</ChoiceButton>
               <ChoiceButton active={brief.qrNeeded === false} onClick={() => set('qrNeeded', false)}>No</ChoiceButton>
             </div>
-            {brief.qrNeeded === true && (
-              <input type="file" accept="image/*" style={{ marginTop: 10, fontSize: 13 }} onChange={e => set('qrFileName', e.target.files?.[0]?.name || '')} />
-            )}
           </Field>
+          {brief.qrNeeded === true && (
+            <LibraryAssetPickerField
+              label="QR code"
+              hint="Choose the QR code from your library."
+              folder="qr-codes"
+              merchant={partnerName || GENERAL_MERCHANT}
+              value={brief.qrAsset}
+              onSelect={a => set('qrAsset', a)}
+            />
+          )}
         </div>
 
         <button type="submit" disabled={!isValid} style={{
