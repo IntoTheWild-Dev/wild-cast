@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import { getLibraryAssets } from '../lib/assetLibrary'
 
+// "Nothing in the library yet" reads as broken if you don't know why — these
+// folders only ever get populated by uploading through the Library page
+// (Header nav → Library), since Option A/B have no sticker/QR zone to
+// auto-upload one via the normal in-canvas flow. Julia hit exactly this
+// (2026-08-03): reported the picker as "not functioning" when it was actually
+// correctly showing a genuinely empty folder.
+const EMPTY_HINTS = {
+  stickers: 'No stickers uploaded yet. Go to Library (top nav) → upload a sticker/badge — it\'ll show up here right after.',
+  'qr-codes': 'No QR codes uploaded yet for this partner. Go to Library (top nav) → upload a QR code — it\'ll show up here right after.',
+  'product-images': 'No photos uploaded yet for this partner. Go to Library (top nav) → upload a product photo, or add one from inside the editor.',
+}
+
 // A compact "pick an existing asset from the shared Library" field — used for
 // Sticker, QR code and Food photo in the briefing form. Deliberately does NOT
 // support a fresh upload here (unlike the editor's ImageUpload) — the brief
@@ -57,8 +69,8 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
               {loading ? (
                 <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', padding: '30px 0' }}>Loading…</div>
               ) : assets.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', padding: '30px 0' }}>
-                  Nothing in the library yet for this{folder === 'stickers' ? '' : ' partner'}.
+                <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', padding: '30px 0', lineHeight: 1.5 }}>
+                  {EMPTY_HINTS[folder] ?? 'Nothing in the library yet for this.'}
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
