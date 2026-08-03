@@ -107,6 +107,12 @@ function ReviewModal({ items, onClose }) {
 
 export default function App() {
   const [screen, setScreen]                   = useState('brief')
+  // Lifted out of BriefingForm so it survives a round trip to the editor and
+  // back — Julia's ask (2026-08-03): saving a candidate mid-edit should
+  // return to the "pick a design" screen (e.g. a merchant wants both A and
+  // B), not lose it. BriefingForm no longer owns this — it's just the
+  // submitted brief snapshot ({...brief} at Submit), or null before that.
+  const [briefSubmission, setBriefSubmission] = useState(null)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
   const [lang, setLang]                       = useState('de')
@@ -580,6 +586,30 @@ export default function App() {
     }
   }
 
+  // Save from the restricted review editor (a brief-generated candidate) —
+  // Julia's ask (2026-08-03): persists via the same doSave()/Designs
+  // mechanism as any other save (so an interrupted session isn't lost — it's
+  // findable/reopenable/editable from Designs like anything else), but then
+  // returns to the "pick a design" screen instead of staying in the editor,
+  // since a merchant may want both Option A and B handled, not just one.
+  // briefSubmission (App-level, unlike BriefingForm's old local state) is
+  // never touched here, so BriefingForm shows the exact same two candidates
+  // again rather than a blank form.
+  async function handleSaveAndReturnToPicker() {
+    setSaving(true)
+    try {
+      await doSave()
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 3000)
+      setScreen('brief')
+    } catch (err) {
+      console.error('Save error:', err)
+      alert('Save failed: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleSendForReview() {
     setSaving(true)
     try {
@@ -736,7 +766,14 @@ export default function App() {
         onHelp={() => setShowHelp(true)}
       />
 
-      {screen === 'brief' && <BriefingForm onPick={handleSelectGeneratedCandidate} onSendForReview={handleSendCandidatesForReview} />}
+      {screen === 'brief' && (
+        <BriefingForm
+          submitted={briefSubmission}
+          onSubmitted={setBriefSubmission}
+          onPick={handleSelectGeneratedCandidate}
+          onSendForReview={handleSendCandidatesForReview}
+        />
+      )}
 
       {screen === 'catalogue' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -896,7 +933,7 @@ export default function App() {
             onTextNudge={handleTextNudge}
             restricted={restrictedReview}
             mode={selectedTemplate?.mode ?? 'designer'}
-            onSave={handleSave}
+            onSave={restrictedReview ? handleSaveAndReturnToPicker : handleSave}
             saving={saving}
             saveStatus={saveStatus}
             onSendForReview={handleSendForReview}

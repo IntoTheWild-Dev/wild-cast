@@ -623,10 +623,11 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             step={4} label="Offer" fieldKey="offer"
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             readOnly={restricted}
-            showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
             align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
             onResetPosition={() => onResetZone?.('offer')}
+            onNudge={restricted ? (axis, delta) => onTextNudge?.('offer', axis, delta) : undefined}
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'tc') && (
@@ -703,7 +704,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       </div>
 
       {/* Action footer: Export PDF → Send for Review → Save (restricted review
-          mode only ever shows Send for Review — no export/manual save yet) */}
+          mode hides Export PDF only — Save stays, and returns to the "pick a
+          design" screen so a merchant wanting both A and B isn't stuck) */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!restricted && (
           <button
@@ -741,22 +743,21 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           Send for Review
         </button>
 
-        {!restricted && (
-          <button
-            onClick={onSave}
-            disabled={saving}
-            style={{
-              width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
-              background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
-              border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
-              borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
-            onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
-          >
-            {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
-          </button>
-        )}
+        <button
+          onClick={onSave}
+          disabled={saving}
+          title={restricted ? 'Saves this design (findable later in Designs) and takes you back to pick the other option' : undefined}
+          style={{
+            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+            background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
+            border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
+            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
+          onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
+        >
+          {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : restricted ? 'Save & pick another design' : 'Save'}
+        </button>
 
         <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center' }}>CMYK · 3mm bleed · print-ready</div>
       </div>
