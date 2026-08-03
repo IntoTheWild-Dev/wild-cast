@@ -7,6 +7,58 @@ import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, reso
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
+// Left-column hero copy — reused from the old landing page (TemplatePicker.jsx's
+// now-unused mode="hero" path) per Julia's ask (2026-08-03) to bring back that
+// left-text/right-form layout for the new briefing form.
+const FEATURES = [
+  {
+    title: 'Pre-approved templates',
+    desc: 'On-brand designs, ready to customize — no designer needed.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>,
+  },
+  {
+    title: 'Edit text & photos in minutes',
+    desc: 'Swap in your own copy, logo and food photos.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+  },
+  {
+    title: 'Print-ready CMYK export',
+    desc: 'PDF/X-4 with 3mm bleed — send straight to print.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  },
+  {
+    title: 'Logos & photos saved for reuse',
+    desc: 'Everything you upload lands in your library automatically.',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+  },
+]
+
+function HeroColumn() {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
+      <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0, lineHeight: 1.08 }}>Design. Export.</h1>
+      <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--primary)', margin: '0 0 20px', lineHeight: 1.08 }}>Print.</h1>
+      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
+        Tell us what you need, the same way you'd brief a designer — we'll turn it into finished designs to choose from.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {FEATURES.map(f => (
+          <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {f.icon}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{f.title}</div>
+              <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{f.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 22 }}>
@@ -80,14 +132,13 @@ export default function BriefingForm({ onPick, onSendForReview }) {
 
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Brief your design</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)', maxWidth: 520 }}>
-          Tell us what you need, the same way you'd brief a designer — we'll turn it into finished designs to choose from.
-        </p>
-      </div>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-      <form onSubmit={handleSubmit} style={{ maxWidth: 640, margin: '0 auto', padding: '32px 24px 60px' }}>
+          <HeroColumn />
+
+          <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--border)', padding: '32px' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', marginBottom: 20 }}>Brief your design</div>
 
         <Field label="Partner name">
           <select style={inputStyle} value={brief.partner} onChange={e => set('partner', e.target.value)}>
@@ -211,7 +262,10 @@ export default function BriefingForm({ onPick, onSendForReview }) {
           Submit brief
         </button>
         {!isValid && <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', marginTop: 8 }}>Fill in the fields above to continue.</div>}
-      </form>
+          </form>
+
+        </div>
+      </div>
     </div>
   )
 }
