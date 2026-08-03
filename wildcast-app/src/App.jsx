@@ -58,36 +58,43 @@ async function makeThumbnail(fullPng) {
   })
 }
 
-function ReviewModal({ url, onClose }) {
-  const [copied, setCopied] = useState(false)
-  function copy() {
+// items: [{ url, label? }] — label is only shown when reviewing more than one
+// design at once (e.g. ticking both candidates on the brief's picker screen).
+function ReviewModal({ items, onClose }) {
+  const [copiedIdx, setCopiedIdx] = useState(null)
+  function copy(url, idx) {
     navigator.clipboard.writeText(url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setCopiedIdx(idx)
+    setTimeout(() => setCopiedIdx(null), 2000)
   }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
         <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Ready to share</div>
         <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
-          Send this link to your client or team. They can view the design and leave comments.
+          Send {items.length > 1 ? 'these links' : 'this link'} to your client or team. They can view the design and leave comments.
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input
-            value={url} readOnly
-            style={{ flex: 1, padding: '10px 12px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, background: '#F9FAFB', color: 'var(--dark)', fontFamily: 'inherit' }}
-            onClick={e => e.target.select()}
-          />
-          <button
-            onClick={copy}
-            style={{ padding: '10px 16px', background: copied ? '#16a34a' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, flexShrink: 0, transition: 'background 0.2s', minWidth: 70 }}
-          >
-            {copied ? '✓ Copied' : 'Copy'}
-          </button>
-        </div>
+        {items.map((item, i) => (
+          <div key={i} style={{ marginBottom: 12 }}>
+            {item.label && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', marginBottom: 4 }}>{item.label}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={item.url} readOnly
+                style={{ flex: 1, padding: '10px 12px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, background: '#F9FAFB', color: 'var(--dark)', fontFamily: 'inherit' }}
+                onClick={e => e.target.select()}
+              />
+              <button
+                onClick={() => copy(item.url, i)}
+                style={{ padding: '10px 16px', background: copiedIdx === i ? '#16a34a' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, flexShrink: 0, transition: 'background 0.2s', minWidth: 70 }}
+              >
+                {copiedIdx === i ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        ))}
         <button
           onClick={onClose}
-          style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: 'var(--mid)', fontFamily: 'inherit' }}
+          style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: 'var(--mid)', fontFamily: 'inherit', marginTop: 4 }}
           onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--dark)'}
           onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
         >
@@ -117,7 +124,7 @@ export default function App() {
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved'
   const [loadKey, setLoadKey]                 = useState(0)    // increments on project load to reset auto-shrink
-  const [reviewUrl, setReviewUrl]             = useState(null) // share modal URL
+  const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
   // activation: null = not yet validated, object = { key, clientName, credits, role }
@@ -554,9 +561,53 @@ export default function App() {
       const id = await doSave()
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
-      setReviewUrl(`${window.location.origin}/?review=${id}`)
+      setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
     } catch (err) {
       console.error('Send for Review error:', err)
+      alert('Send for Review failed: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Saves + generates a review link directly from a brief-generated candidate,
+  // WITHOUT ever opening the interactive editor — Julia's confirmed choice for
+  // "Send for Review" on the picker screen (2026-08-03). Deliberately doesn't
+  // reuse doSave(): that function depends on exportRef/fields/etc. being the
+  // CURRENTLY OPEN editor's live state, which doesn't exist here. Takes the
+  // already-captured PNG from TemplateCandidatePicker's off-screen render
+  // instead of calling exportRef.current.getPng().
+  async function saveCandidateForReview(template, prefilledFields, fullPng) {
+    const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
+    const id = crypto.randomUUID()
+    const project = {
+      id, templateId: template.id, templateName: template.name,
+      projectName: template.name,
+      fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: {}, imagePositions: {}, zonePositions: {},
+      mode: template.mode, savedAt: Date.now(), thumbnail, preview,
+    }
+    const response = await fetch('/api/save-project', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    })
+    if (!response.ok) throw new Error(await response.text())
+    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
+    return id
+  }
+
+  // items: [{ template, fields, png, label }] — one entry per ticked candidate.
+  // Ticking both Option A and B produces two independent saved designs and two
+  // review links, shown together in the same ReviewModal.
+  async function handleSendCandidatesForReview(items) {
+    setSaving(true)
+    try {
+      const ids = await Promise.all(items.map(it => saveCandidateForReview(it.template, it.fields, it.png)))
+      setReviewItems(ids.map((id, i) => ({
+        url: `${window.location.origin}/?review=${id}`,
+        label: items.length > 1 ? items[i].label : undefined,
+      })))
+    } catch (err) {
+      console.error('Send candidates for review error:', err)
       alert('Send for Review failed: ' + err.message)
     } finally {
       setSaving(false)
@@ -660,7 +711,7 @@ export default function App() {
         onHelp={() => setShowHelp(true)}
       />
 
-      {screen === 'brief' && <BriefingForm onPick={handleSelectGeneratedCandidate} />}
+      {screen === 'brief' && <BriefingForm onPick={handleSelectGeneratedCandidate} onSendForReview={handleSendCandidatesForReview} />}
 
       {screen === 'catalogue' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -832,7 +883,7 @@ export default function App() {
       )}
 
       {/* Share / Send for Review modal */}
-      {reviewUrl && <ReviewModal url={reviewUrl} onClose={() => setReviewUrl(null)} />}
+      {reviewItems && <ReviewModal items={reviewItems} onClose={() => setReviewItems(null)} />}
 
       {/* Help modal */}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}

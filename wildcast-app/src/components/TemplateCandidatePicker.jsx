@@ -49,9 +49,11 @@ function NoMatchFallback({ brief, onEdit }) {
   )
 }
 
-export default function TemplateCandidatePicker({ brief, onEdit, onPick }) {
+export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendForReview }) {
   const [candidateFields, setCandidateFields] = useState(null) // null until resolved
   const [previews, setPreviews] = useState({}) // { [templateId]: pngDataUrl }
+  const [ticked, setTicked] = useState({}) // { [templateId]: boolean } — one or both
+  const [sending, setSending] = useState(false)
   const matchingIds = getMatchingTemplateIds(brief)
   const exportRefA = useRef(null)
   const exportRefB = useRef(null)
@@ -87,18 +89,48 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick }) {
     onPick(template, candidateFields[templateId])
   }
 
+  function toggleTick(id) {
+    setTicked(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
   if (!matchingIds.length) {
     return <NoMatchFallback brief={brief} onEdit={onEdit} />
   }
 
   const bothReady = previews[OPTION_A_ID] && previews[OPTION_B_ID]
+  const tickedIds = [OPTION_A_ID, OPTION_B_ID].filter(id => ticked[id])
+
+  // Julia's confirmed choice (2026-08-03): Send for Review skips the editor
+  // entirely, reusing the PNG already captured for the card preview — one
+  // review link per ticked design (both ticked = two links, shown together).
+  async function handleSend() {
+    if (!tickedIds.length || !candidateFields) return
+    setSending(true)
+    try {
+      const items = tickedIds.map(id => ({
+        template: TEMPLATES.find(t => t.id === id),
+        fields: candidateFields[id],
+        png: previews[id],
+        label: CANDIDATE_LABELS[id],
+      }))
+      await onSendForReview(items)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Edit only makes sense for exactly one design at a time.
+  function handleEdit() {
+    if (tickedIds.length !== 1) return
+    handlePick(tickedIds[0])
+  }
 
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Pick a design</h1>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)', maxWidth: 520 }}>
-          Generated from your brief. Pick one to fine-tune it.
+          Generated from your brief. Tick one or both, then send for review or edit one further.
         </p>
       </div>
 
@@ -111,27 +143,68 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick }) {
 
         <div style={{ display: bothReady ? 'flex' : 'none', gap: 20, justifyContent: 'center' }}>
           {[OPTION_A_ID, OPTION_B_ID].map(id => (
-            <button
+            <div
               key={id}
-              onClick={() => handlePick(id)}
+              onClick={() => toggleTick(id)}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                padding: 14, borderRadius: 12, border: '1.5px solid var(--border)', background: '#fff',
+                padding: 14, borderRadius: 12, position: 'relative',
+                border: `1.5px solid ${ticked[id] ? 'var(--primary)' : 'var(--border)'}`,
+                background: ticked[id] ? 'var(--primary-glow)' : '#fff',
                 cursor: 'pointer', width: 240,
               }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
             >
+              <div style={{
+                position: 'absolute', top: 10, left: 10, width: 22, height: 22, borderRadius: 6,
+                border: `1.5px solid ${ticked[id] ? 'var(--primary)' : 'var(--border)'}`,
+                background: ticked[id] ? 'var(--primary)' : '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 13, fontWeight: 700,
+              }}>
+                {ticked[id] && '✓'}
+              </div>
               {previews[id] && <img src={previews[id]} alt={CANDIDATE_LABELS[id]} style={{ width: '100%', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }} />}
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{CANDIDATE_LABELS[id]}</div>
-            </button>
+            </div>
           ))}
         </div>
 
         {bothReady && (
-          <button onClick={onEdit} style={{ marginTop: 24, width: '100%', padding: '11px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--mid)', cursor: 'pointer' }}>
-            ← Edit answers
-          </button>
+          <>
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              <button
+                onClick={handleEdit}
+                disabled={tickedIds.length !== 1}
+                title={tickedIds.length !== 1 ? 'Tick exactly one design to edit it' : undefined}
+                style={{
+                  flex: 1, padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10,
+                  border: '1.5px solid var(--border)', background: '#fff',
+                  color: tickedIds.length === 1 ? 'var(--dark)' : 'var(--light)',
+                  cursor: tickedIds.length === 1 ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={!tickedIds.length || sending}
+                style={{
+                  flex: 1, padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none',
+                  background: tickedIds.length && !sending ? 'var(--primary)' : '#E5E7EB',
+                  color: tickedIds.length && !sending ? '#fff' : 'var(--mid)',
+                  cursor: tickedIds.length && !sending ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {sending ? 'Sending…' : tickedIds.length > 1 ? 'Send both for Review' : 'Send for Review'}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center', marginTop: 8 }}>
+              Send for Review skips editing — it goes straight out as-is.
+            </div>
+            <button onClick={onEdit} style={{ marginTop: 16, width: '100%', padding: '11px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--mid)', cursor: 'pointer' }}>
+              ← Edit answers
+            </button>
+          </>
         )}
       </div>
 

@@ -35,7 +35,7 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
   )
 }
 
-export default function BriefingForm({ onPick }) {
+export default function BriefingForm({ onPick, onSendForReview }) {
   const [brief, setBrief] = useState(DEFAULT_BRIEF)
   const [submitted, setSubmitted] = useState(null)
 
@@ -73,6 +73,7 @@ export default function BriefingForm({ onPick }) {
         brief={submitted}
         onEdit={() => setSubmitted(null)}
         onPick={onPick}
+        onSendForReview={onSendForReview}
       />
     )
   }
