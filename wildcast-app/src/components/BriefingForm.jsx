@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import TemplateCandidatePicker from './TemplateCandidatePicker'
+import AISuggest from './AISuggest'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, STICKERS, REQUEST_NEW_STICKER, DEFAULT_BRIEF } from '../lib/briefConstants'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
@@ -131,6 +132,9 @@ export default function BriefingForm({ onPick }) {
 
           <Field label="Headline">
             <input style={inputStyle} value={brief.headline} onChange={e => set('headline', e.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} />
+            </div>
           </Field>
 
           <Field label="Subline">
