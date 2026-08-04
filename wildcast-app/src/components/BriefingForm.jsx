@@ -88,7 +88,14 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
 }
 
 export default function BriefingForm({ submitted, onSubmitted, onPick, onSendForReview, savedCandidateIds }) {
-  const [brief, setBrief] = useState(DEFAULT_BRIEF)
+  // Seed from `submitted` (the last-submitted snapshot) rather than always
+  // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
+  // (e.g. clicking Edit on a candidate opens the editor) and remounts fresh
+  // when you come back — without this, `brief` would reset to blank even
+  // though `submitted` still holds the real answers, so clicking "Edit
+  // answers" after that round trip showed an empty form instead of what was
+  // actually submitted (Julia's report, 2026-08-04).
+  const [brief, setBrief] = useState(() => submitted ?? DEFAULT_BRIEF)
 
   function set(key, value) { setBrief(prev => ({ ...prev, [key]: value })) }
 
