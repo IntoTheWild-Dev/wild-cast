@@ -225,6 +225,10 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             </div>
           </Field>
 
+          <Field label="Call to action (Option B only)" hint="The line under 'Jetzt Wolt App downloaden und' on Option B. Leave blank to reuse Subline.">
+            <input style={inputStyle} placeholder={brief.subline || 'e.g. NEU IN DEINER STADT'} value={brief.cta} onChange={e => set('cta', e.target.value)} />
+          </Field>
+
           <div style={{ marginBottom: 22 }}>
             {brief.stickerRequestMode ? (
               <Field label="Sticker" hint="Describe the new sticker you need — we'll add it to the library.">

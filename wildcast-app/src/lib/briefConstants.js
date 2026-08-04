@@ -35,6 +35,12 @@ export const DEFAULT_BRIEF = {
   // Left blank, it falls back to Partner name (buildCandidateFields).
   restaurantName: '',
   headline: '', subline: '',
+  // Option B's second CTA line ("Jetzt Wolt App downloaden und <cta>") — its
+  // own field, distinct from Subline. Option A has no equivalent zone at all
+  // (it uses `offer` instead), so this only ever reaches Option B's canvas.
+  // Left blank, buildCandidateFields falls back to Subline, then the
+  // objective text, so older/incomplete briefs still fill something.
+  cta: '',
   stickerAsset: null, stickerRequestMode: false, stickerRequest: '',
   foodPhotoAsset: null,
   tcs: '',

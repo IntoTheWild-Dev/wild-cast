@@ -40,9 +40,10 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
     restaurant_name: brief.restaurantName?.trim() || partnerName || '',
     tc: brief.tcs || '',
     offer: offerText,
-    // Option B has no subline zone — its `cta` line is the closest fit, so it
-    // reuses subline when present, falling back to the same objective text.
-    cta: brief.subline?.trim() || offerText,
+    // Own field, distinct from Subline (Julia's ask, 2026-08-04) — falls back
+    // to Subline, then the objective text, so a brief filled out before this
+    // field existed (or left blank) still fills Option B's second line.
+    cta: brief.cta?.trim() || brief.subline?.trim() || offerText,
     logoUrl: logoUrl || null,
     photoUrl: photoUrl || null,
     // No live template has a `qr` zone yet (checked directly against
