@@ -75,19 +75,26 @@ const WEN_CHENG_ZONES = [
 // math is script-derived (not hand pixel-scanned); fontFamily/fontWeight
 // forced to 'omnes-cond'/700 since only that weight is Typekit-loaded (script
 // read the Figma file's real "Omnes Cond"/900, which isn't available to load).
-// `tc` is reused unchanged from WEN_CHENG_ZONES — it's rotated -90°, which the
-// import script can't derive automatically, so it was left hand-tuned as-is.
 // sub_headline/headline/offer positions come from their dedicated (non-
 // overlapping) guide rectangles, not the raw text nodes — the text nodes'
 // own bounding boxes overlapped each other by 15-23px since they reflect
 // placeholder-text render height, not designed zone spacing.
+//
+// Coordinates below are further pre-scaled to match `backgroundScale` +
+// `backgroundOffset` on the wen-cheng-flyer2 template configs (see
+// TEMPLATE_ZONES) — same fix, same card art proportions, and the same
+// Wolt-bag-bleeds-past-bottom issue as Option B's background (this asset
+// comes from the same Figma export batch). See OPT_B_ZONES's comment for
+// the full rationale. `tc` is rotated -90°, so it's transformed via its
+// center point + the average of sX/sY rather than per-axis — a rotated box
+// can't be transformed by two different axis scales without shearing it.
 const WEN_CHENG_V3_ZONES = [
   {
     id: 'sub_headline',
     type: 'text',
-    x: 15.9, y: 77.8,
-    width: 284.5, height: 34.7,
-    fontSize: 37,
+    x: 7.89, y: 72.09,
+    width: 300.54, height: 36.09,
+    fontSize: 38.78,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
@@ -97,9 +104,9 @@ const WEN_CHENG_V3_ZONES = [
   {
     id: 'headline',
     type: 'text',
-    x: 15.9, y: 112.5,
-    width: 284.5, height: 38.9,
-    fontSize: 54,
+    x: 7.89, y: 108.18,
+    width: 300.54, height: 40.46,
+    fontSize: 56.6,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
@@ -109,24 +116,37 @@ const WEN_CHENG_V3_ZONES = [
   {
     id: 'offer',
     type: 'text',
-    x: 56.3, y: 333.2,
-    width: 204.9, height: 26.3,
-    fontSize: 30,
+    x: 50.57, y: 337.71,
+    width: 216.45, height: 27.35,
+    fontSize: 31.45,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
   },
-  WEN_CHENG_ZONES.find(z => z.id === 'tc'),
+  {
+    id: 'tc',
+    type: 'text',
+    // Rotated -90° in lower-left area (67.59%–94.53% top, 7.31%–13.03% left in Figma)
+    x: 15.46, y: 300.61,
+    width: 18.87, height: 124.73,
+    textWidth: 124.73,
+    fontSize: 4.72,
+    fontFamily: 'omnes-pro',
+    fontWeight: 500,
+    color: '#FFFFFF',
+    align: 'left',
+    rotate: -90,
+  },
   {
     id: 'logo',
     type: 'image',
     fit: 'contain',
     label: 'Restaurant logo',
     hint: 'JPG or PNG',
-    x: 121, y: 10.5,
-    width: 73.3, height: 53.6,
+    x: 118.91, y: 1.98,
+    width: 77.43, height: 55.74,
   },
   {
     id: 'photo',
@@ -137,22 +157,22 @@ const WEN_CHENG_V3_ZONES = [
     // Widened/shortened box (was 284.5×144, a 1.98:1 ratio taken straight from the
     // Figma placeholder) left very little vertical crop slack for most food photos
     // — most photos aren't that wide, so 'cover' had to zoom in hard. Grown
-    // downward into available space (offer zone starts at y=333.2) and narrowed
-    // to a gentler 1.7:1 ratio so more of the photo shows and Position nudge
-    // actually has room to move.
-    x: 26.4, y: 173.4,
-    width: 263.5, height: 155,
+    // downward into available space (offer zone starts at y=333.2, pre-scale)
+    // and narrowed to a gentler 1.7:1 ratio so more of the photo shows and
+    // Position nudge actually has room to move.
+    x: 18.98, y: 171.52,
+    width: 278.36, height: 161.2,
   },
   {
     id: 'restaurant_name',
     type: 'text',
-    // y nudged +4 from the raw Figma guide rect — pixel-measured against the
-    // baked "♥ WOLT" wordmark (canvas-space rows 160-170): at y:149 the name's
-    // own baseline (row 166) sat 4px above WOLT's baseline (row 170), reading
-    // as not-inline. Confirmed via canvas pixel scan, not guesswork.
-    x: 1.9, y: 153,
-    width: 165, height: 28,
-    fontSize: 20,
+    // y nudged +4 from the raw Figma guide rect (pre-scale) — pixel-measured
+    // against the baked "♥ WOLT" wordmark: at y:149 the name's own baseline
+    // sat 4px above WOLT's baseline, reading as not-inline. Confirmed via
+    // canvas pixel scan, not guesswork.
+    x: -6.9, y: 150.3,
+    width: 174.3, height: 29.12,
+    fontSize: 20.96,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
@@ -238,7 +258,9 @@ const OPT_B_ZONES = [
     x: 53.95, y: 310.46,
     width: 209.69, height: 17.68,
     fontSize: 10.48,
-    fontFamily: 'omnes-pro',
+    // omnes-cond (not omnes-pro) to match the headline zone's font family.
+    // Weight/size unchanged from before — only the family differs.
+    fontFamily: 'omnes-cond',
     fontWeight: 600,
     color: '#FFFFFF',
     align: 'center',
@@ -254,11 +276,21 @@ export const TEMPLATE_ZONES = {
     backgroundFill: '#00C2CB',
     zones: WEN_CHENG_ZONES,
   },
+  // backgroundScale/backgroundOffset/bleedExtraBottom/trimGapBottom: see
+  // OPT_B_ZONES's comment — same source asset family, same fix (card margin
+  // was ~6.5-6.7mm at fill-exact scale, now a consistent 4mm; Wolt bag
+  // bleeds past the bottom trim edge by design, so it gets a little real
+  // canvas room instead of being clipped, and the trim-line dash skips
+  // across its own span instead of drawing over it).
   'wen-cheng-flyer2': {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_WEN_CHENG_V3,
-    backgroundFill: '#00C2CB',
+    backgroundFill: '#FFFFFF',
+    backgroundScale: { x: 1.0564, y: 1.0400 },
+    backgroundOffset: { x: -8.91, y: -8.82 },
+    bleedExtraBottom: 9,
+    trimGapBottom: [100, 214],
     zones: WEN_CHENG_V3_ZONES,
   },
   // Same layout as flyer2 but used with mode='non-designer' — canvas objects locked, guided right panel
@@ -266,7 +298,11 @@ export const TEMPLATE_ZONES = {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_WEN_CHENG_V3,
-    backgroundFill: '#00C2CB',
+    backgroundFill: '#FFFFFF',
+    backgroundScale: { x: 1.0564, y: 1.0400 },
+    backgroundOffset: { x: -8.91, y: -8.82 },
+    bleedExtraBottom: 9,
+    trimGapBottom: [100, 214],
     zones: WEN_CHENG_V3_ZONES,
   },
   // Same layout as flyer1 but used with mode='non-designer'
