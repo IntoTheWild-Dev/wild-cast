@@ -15,7 +15,11 @@ const MOCK_SUGGESTIONS = {
   },
 }
 
-export default function AISuggest({ field, lang, onApply }) {
+// variant="pill" (default) — small colored pill, used inline next to a field
+// (FieldEditor.jsx). variant="button-group" — matches BriefingForm.jsx's
+// plain-outlined ChoiceButton style, for sitting alongside "Write my own" /
+// "Choose preset" as one consistent row of mode buttons.
+export default function AISuggest({ field, lang, onApply, variant = 'pill' }) {
   const [open, setOpen] = useState(false)
   const [dropLang, setDropLang] = useState(lang)
 
@@ -24,17 +28,26 @@ export default function AISuggest({ field, lang, onApply }) {
 
   const suggestions = MOCK_SUGGESTIONS[activeLang]?.[field] ?? []
 
+  const buttonStyle = variant === 'button-group'
+    ? {
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontSize: 13, fontWeight: 600, color: 'var(--dark)',
+        background: '#fff', border: '1.5px solid var(--border)',
+        borderRadius: 8, padding: '8px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
+      }
+    : {
+        display: 'flex', alignItems: 'center', gap: 5,
+        fontSize: 11, fontWeight: 600, color: 'var(--primary)',
+        background: 'var(--primary-glow)', border: '1px solid rgba(223,111,109,0.25)',
+        borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
+      }
+
   return (
     <div style={{ position: 'relative' }}>
       <button
         type="button"
         onClick={() => { setDropLang(lang); setOpen(o => !o) }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          fontSize: 11, fontWeight: 600, color: 'var(--primary)',
-          background: 'var(--primary-glow)', border: '1px solid rgba(223,111,109,0.25)',
-          borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
-        }}
+        style={buttonStyle}
       >
         <span>✦</span> AI Suggest
       </button>

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import TemplateCandidatePicker from './TemplateCandidatePicker'
 import AISuggest from './AISuggest'
+import PresetPicker from './PresetPicker'
 import LibraryAssetPickerField from './LibraryAssetPickerField'
 import { GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
@@ -96,6 +97,8 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   // answers" after that round trip showed an empty form instead of what was
   // actually submitted (Julia's report, 2026-08-04).
   const [brief, setBrief] = useState(() => submitted ?? DEFAULT_BRIEF)
+  const headlineInputRef = useRef(null)
+  const sublineInputRef = useRef(null)
 
   function set(key, value) { setBrief(prev => ({ ...prev, [key]: value })) }
 
@@ -212,17 +215,21 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>Copy</div>
 
           <Field label="Headline">
-            <input style={inputStyle} value={brief.headline} onChange={e => set('headline', e.target.value)} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <ChoiceButton onClick={() => headlineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
+              <PresetPicker field="headline" lang="de" onApply={v => set('headline', v)} />
+              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} variant="button-group" />
             </div>
+            <input ref={headlineInputRef} style={inputStyle} placeholder="e.g. Fresh pasta, made daily" value={brief.headline} onChange={e => set('headline', e.target.value)} />
           </Field>
 
           <Field label="Subline">
-            <input style={inputStyle} value={brief.subline} onChange={e => set('subline', e.target.value)} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <ChoiceButton onClick={() => sublineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
+              <PresetPicker field="subline" lang="de" onApply={v => set('subline', v)} />
+              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} variant="button-group" />
             </div>
+            <input ref={sublineInputRef} style={inputStyle} placeholder="e.g. Order now on Wolt" value={brief.subline} onChange={e => set('subline', e.target.value)} />
           </Field>
 
           <Field label="Call to action (Option B only)" hint="The line under 'Jetzt Wolt App downloaden und' on Option B. Leave blank to reuse Subline.">
