@@ -32,8 +32,12 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
   const offerText = objectiveText(brief)
 
   return {
-    headline: brief.headline || '',
-    sub_headline: brief.subline || '',
+    // Wolt's Omnes Cond headline/subline treatment is always uppercase —
+    // enforced here rather than on the input field, so it's guaranteed on
+    // the actual artwork regardless of how it was typed (and covers presets/
+    // AI-suggested copy too, not just hand-typed text).
+    headline: (brief.headline || '').toUpperCase(),
+    sub_headline: (brief.subline || '').toUpperCase(),
     // Explicit Restaurant name wins when set (the display name on the flyer
     // can differ from Partner name, e.g. partner "McD" but flyer should read
     // "McDonald's Zentrum") — falls back to Partner name otherwise.
