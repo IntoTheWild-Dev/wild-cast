@@ -97,6 +97,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   // answers" after that round trip showed an empty form instead of what was
   // actually submitted (Julia's report, 2026-08-04).
   const [brief, setBrief] = useState(() => submitted ?? DEFAULT_BRIEF)
+  const [step, setStep] = useState(1)
   const headlineInputRef = useRef(null)
   const sublineInputRef = useRef(null)
 
@@ -113,19 +114,29 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
   const partnerName = resolvePartnerName(brief)
 
-  const isValid =
+  // Split per-step so "Next" can gate on just that step's fields — the full
+  // isValid (below) still gates final submit exactly like before.
+  const step1Valid =
     partnerFilled &&
     brief.businessType &&
     brief.about.trim() &&
     brief.objective &&
     (!selectedObjective?.followUp || brief.objectiveFollowUp.trim()) &&
-    brief.formats.length > 0 &&
-    brief.headline.trim()
+    brief.formats.length > 0
+  const step2Valid = brief.headline.trim().length > 0
+
+  const isValid = step1Valid && step2Valid
 
   function handleSubmit(e) {
     e.preventDefault()
     if (!isValid) return
     onSubmitted({ ...brief })
+  }
+
+  function goNext(fromStep) {
+    if (fromStep === 1 && !step1Valid) return
+    if (fromStep === 2 && !step2Valid) return
+    setStep(fromStep + 1)
   }
 
   if (submitted) {
@@ -157,8 +168,13 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault() }}
             style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--border)', padding: '32px' }}
           >
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', marginBottom: 20 }}>Brief your design</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)' }}>Brief your design</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)' }}>Step {step} of 3</div>
+            </div>
 
+        {step === 1 && (
+          <>
         <Field label="Partner name">
           <select style={inputStyle} value={brief.partner} onChange={e => set('partner', e.target.value)}>
             <option value="" disabled>Select a partner…</option>
@@ -211,8 +227,21 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           </Field>
         )}
 
-        <div style={{ borderTop: '1px solid var(--border)', margin: '28px 0 24px', paddingTop: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>Copy</div>
+        <button type="button" onClick={() => goNext(1)} disabled={!step1Valid} style={{
+          width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: step1Valid ? 'pointer' : 'not-allowed',
+          background: step1Valid ? 'var(--primary)' : '#E5E7EB', color: step1Valid ? '#fff' : 'var(--mid)',
+        }}>
+          Next
+        </button>
+        {!step1Valid && <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', marginTop: 8 }}>Fill in the fields above to continue.</div>}
+          </>
+        )}
+
+        {step === 2 && (
+          <div>
+          <button type="button" onClick={() => setStep(1)} style={{ marginBottom: 20, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--mid)', padding: 0 }}>
+            ← Back
+          </button>
 
           <Field label="Headline">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
@@ -235,6 +264,22 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           <Field label="Call to action (Option B only)" hint="The line under 'Jetzt Wolt App downloaden und' on Option B. Leave blank to reuse Subline.">
             <input style={inputStyle} placeholder={brief.subline || 'e.g. NEU IN DEINER STADT'} value={brief.cta} onChange={e => set('cta', e.target.value)} />
           </Field>
+
+          <button type="button" onClick={() => goNext(2)} disabled={!step2Valid} style={{
+            width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: step2Valid ? 'pointer' : 'not-allowed',
+            background: step2Valid ? 'var(--primary)' : '#E5E7EB', color: step2Valid ? '#fff' : 'var(--mid)',
+          }}>
+            Next
+          </button>
+          {!step2Valid && <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', marginTop: 8 }}>Fill in the headline to continue.</div>}
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+          <button type="button" onClick={() => setStep(2)} style={{ marginBottom: 20, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--mid)', padding: 0 }}>
+            ← Back
+          </button>
 
           <div style={{ marginBottom: 22 }}>
             {brief.stickerRequestMode ? (
@@ -290,7 +335,6 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
               onSelect={a => set('qrAsset', a)}
             />
           )}
-        </div>
 
         <button type="submit" disabled={!isValid} style={{
           width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: isValid ? 'pointer' : 'not-allowed',
@@ -299,6 +343,8 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           Submit brief
         </button>
         {!isValid && <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', marginTop: 8 }}>Fill in the fields above to continue.</div>}
+          </div>
+        )}
           </form>
 
         </div>
