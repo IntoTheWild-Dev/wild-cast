@@ -15,9 +15,9 @@ const FIELD_DESCRIPTIONS = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.WILDCAST_COPY
   if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
+    return res.status(500).json({ error: 'WILDCAST_COPY (Anthropic API key) is not configured' })
   }
 
   try {
