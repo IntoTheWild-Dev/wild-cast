@@ -8,6 +8,14 @@ import { fabric } from 'fabric'
 // does not change canvasW/canvasH or any zone coordinate.
 const BLEED_MARGIN = 9
 
+// Figma-imported zone coordinates land on arbitrary fractional pixels
+// (e.g. x: 15.9, y: 77.8), so two guide rects with the same strokeWidth
+// anti-alias differently and visibly look thicker/thinner than each other.
+// Snapping every guide coordinate to the same .5px offset keeps their
+// anti-aliasing consistent across the canvas. Guides are visual-only
+// (hidden on export), so this never touches real content placement.
+const snapHalf = v => Math.round(v) + 0.5
+
 async function loadFonts() {
   // document.fonts.ready resolves when @font-face declarations are parsed —
   // but the actual font FILES may not be downloaded yet (especially on first
@@ -78,11 +86,23 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     if (!canvasElRef.current || !config) return
     let destroyed = false
 
-    const { canvasW, canvasH, backgroundUrl, backgroundFill, zones } = config
+    const { canvasW, canvasH, backgroundUrl, backgroundFill, backgroundScale, backgroundOffset, bleedExtraBottom, zones } = config
+
+    // The fabric canvas normally renders exactly the trim area (canvasW ×
+    // canvasH) — this app deliberately doesn't draw real bleed in the
+    // editor (see trim-guide comment below). bleedExtraBottom is a narrow,
+    // opt-in escape hatch: a few extra pixels of real canvas below the trim
+    // line so art that intentionally bleeds past the bottom edge (e.g. a
+    // product photo hanging off a card) isn't hard-clipped by the canvas
+    // boundary itself. Every zone/guide coordinate below still uses
+    // canvasH (the trim height) unchanged — only the fabric canvas's own
+    // pixel height grows. getPng() crops back to canvasH before export, so
+    // nothing about the print output changes.
+    const renderH = canvasH + (bleedExtraBottom || 0)
 
     const canvas = new fabric.Canvas(canvasElRef.current, {
       width: canvasW,
-      height: canvasH,
+      height: renderH,
       selection: false,
       backgroundColor: backgroundFill || '#00C2CB',
       enableRetinaScaling: true,
@@ -168,7 +188,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           const cg = zoneObjsRef.current['_centre-guide']
           if (cg) cg.set('visible', false)
           canvas.renderAll()
-          const data = canvas.toDataURL({ format: 'png', multiplier: 4 })
+          // left/top/width/height crop back to the trim area — bleedExtraBottom
+          // (if any) added real canvas pixels below the trim line purely so
+          // overflow art isn't hard-clipped on screen; export must still only
+          // ever contain the trim-sized image the rest of the pipeline expects.
+          const data = canvas.toDataURL({ format: 'png', multiplier: 4, left: 0, top: 0, width: canvasW, height: canvasH })
           guideObjs.forEach((o, i) => o.set('visible', prevVis[i]))
           canvas.renderAll()
           return data
@@ -226,7 +250,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }
 
         // Guide goes in first so it renders below all text and image zones
-        const guideX = canvasW / 2
+        const guideX = snapHalf(canvasW / 2)
         const guide = new fabric.Line([guideX, 0, guideX, canvasH], {
           stroke: '#FF3182',
           strokeWidth: 1.5,
@@ -241,32 +265,63 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Trim-line guide — the canvas itself IS the trim size (this app never
         // renders real bleed in the editor; bleed is only added at export time
         // by mirroring the trim edge outward, see api/export-cmyk.js). A thin
-        // red outline right at the canvas edge marks that cut line so nothing
+        // dashed outline right at the canvas edge marks that cut line so nothing
         // important gets placed too close to it. Always visible while editing,
         // hidden on export like the other guides (_wcGuide).
-        const trimGuide = new fabric.Rect({
-          left: 0.75, top: 0.75,
-          width: canvasW - 1.5, height: canvasH - 1.5,
-          fill: 'transparent',
-          stroke: '#FF3B30',
-          strokeWidth: 1.5,
-          selectable: false,
-          evented: false,
-          _wcGuide: true,
+        //
+        // Drawn as 4 independent Lines, not one Rect, and inset 1px from the
+        // true canvas edge rather than running flush along it. Measured with
+        // a pixel-level probe: a stroke whose outer edge sits exactly at the
+        // canvas boundary (x=0 or x=canvasW) renders at half the physical
+        // width of one that doesn't — reproducible identically whether drawn
+        // as a Rect or as separate Lines, so it's Fabric/canvas clipping the
+        // edge-touching half of the stroke, not a rect-vs-line rasterization
+        // quirk. Staying 1px clear of every boundary avoids the clip
+        // entirely; strokeWidth 1 centered on a half-integer coordinate
+        // (the classic crisp-line trick) keeps each line itself anti-alias-free.
+        const trimX0 = 1.5, trimY0 = 1.5, trimX1 = canvasW - 1.5, trimY1 = canvasH - 1.5
+        // trimGapBottom: [x0, x1] skips drawing the bottom trim line across
+        // that span — for art that intentionally bleeds past the bottom
+        // edge (bleedExtraBottom), the dashed line reading on top of that
+        // art looks like a stray mark cutting across it rather than a cut
+        // guide, since there's nothing to actually cut there in that span.
+        const bottomEdges = config.trimGapBottom
+          ? [
+              [trimX1, trimY1, config.trimGapBottom[1], trimY1],
+              [config.trimGapBottom[0], trimY1, trimX0, trimY1],
+            ]
+          : [[trimX1, trimY1, trimX0, trimY1]]
+        const trimEdges = [
+          [trimX0, trimY0, trimX1, trimY0], // top
+          [trimX1, trimY0, trimX1, trimY1], // right
+          ...bottomEdges, // bottom (possibly split around trimGapBottom)
+          [trimX0, trimY1, trimX0, trimY0], // left
+        ]
+        trimEdges.forEach((pts, i) => {
+          const edge = new fabric.Line(pts, {
+            stroke: '#FF3182',
+            strokeWidth: 1,
+            strokeDashArray: [4, 4],
+            selectable: false,
+            evented: false,
+            _wcGuide: true,
+          })
+          canvas.add(edge)
+          zoneObjsRef.current[`_trim-guide-${i}`] = edge
         })
-        canvas.add(trimGuide)
-        zoneObjsRef.current['_trim-guide'] = trimGuide
 
         zones.forEach(zone => {
           zoneCfgRef.current[zone.id] = zone
 
           // Zone boundary guide for text zones — visible in editor (designer + guided), hidden on export
           if (zone.type === 'text' && !zone.rotate) {
+            const gLeft = snapHalf(zone.x)
+            const gTop  = snapHalf(zone.y)
             const gr = new fabric.Rect({
-              left:   zone.x,
-              top:    zone.y,
-              width:  zone.width,
-              height: zone.height,
+              left:   gLeft,
+              top:    gTop,
+              width:  snapHalf(zone.x + zone.width) - gLeft,
+              height: snapHalf(zone.y + zone.height) - gTop,
               fill:   'transparent',
               stroke: 'rgba(255,255,255,0.5)',
               strokeWidth: 1.5,
@@ -335,11 +390,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
           } else if (zone.type === 'image') {
             // Image zone guide — stays visible as a boundary indicator even after upload, hidden on export
+            const pLeft = snapHalf(zone.x)
+            const pTop  = snapHalf(zone.y)
             const rect = new fabric.Rect({
-              left:   zone.x,
-              top:    zone.y,
-              width:  zone.width,
-              height: zone.height,
+              left:   pLeft,
+              top:    pTop,
+              width:  snapHalf(zone.x + zone.width) - pLeft,
+              height: snapHalf(zone.y + zone.height) - pTop,
               fill:   'transparent',
               stroke: 'rgba(255,255,255,0.5)',
               strokeWidth: 1.5,
@@ -415,10 +472,35 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (backgroundUrl) {
         fabric.Image.fromURL(backgroundUrl, img => {
           if (destroyed) { canvas.dispose(); return }
+          // backgroundScale (>1 zooms in / <1 shrinks) resizes the whole
+          // background image, opening up (or closing) a margin of
+          // `backgroundFill` around it instead of always stretching the art
+          // to fill the canvas exactly. Per-axis {x, y} because the source
+          // art's own aspect ratio rarely matches the canvas's exactly, so a
+          // single uniform factor can't hit the same margin on both axes at
+          // once. Omit it (or 1) to keep the old fill-the-canvas-exactly
+          // behaviour.
+          //
+          // Positioning defaults to centered, but backgroundOffset can
+          // override left/top explicitly per axis — needed when the art
+          // isn't symmetric (e.g. Option B's Wolt bag graphic bleeds all the
+          // way to the source PNG's own bottom edge with zero spare pixels,
+          // so centering a Y zoom pushes it past the canvas and clips it;
+          // an explicit top-anchored offset keeps the top margin precise
+          // without dragging the bag down with it).
+          // canvasW/canvasH (the trim size), not canvas.getWidth()/getHeight() —
+          // the fabric canvas's own pixel height is renderH when
+          // bleedExtraBottom is set, which would throw off scale/centering
+          // math that's meant to be relative to the trim area.
+          const bgScaleX = backgroundScale?.x ?? backgroundScale ?? 1
+          const bgScaleY = backgroundScale?.y ?? backgroundScale ?? 1
+          const scaleX = (canvasW / img.width)  * bgScaleX
+          const scaleY = (canvasH / img.height) * bgScaleY
+          const left = backgroundOffset?.x ?? (canvasW - img.width  * scaleX) / 2
+          const top  = backgroundOffset?.y ?? (canvasH - img.height * scaleY) / 2
           img.set({
-            left: 0, top: 0,
-            scaleX: canvas.getWidth()  / img.width,
-            scaleY: canvas.getHeight() / img.height,
+            left, top,
+            scaleX, scaleY,
             selectable: false,
             evented:    false,
           })
@@ -717,6 +799,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
   const canvasW = config?.canvasW ?? 316
   const canvasH = config?.canvasH ?? 441
+  const renderH = canvasH + (config?.bleedExtraBottom ?? 0)
+  // When bleedExtraBottom is set, the canvas itself now renders real
+  // content into that space — stacking the decorative BLEED_MARGIN white
+  // padding underneath it too would leave a second, contentless white gap
+  // between that art and the true outer edge. Drop the bottom padding in
+  // that case so the canvas's own bottom edge doubles as the outer edge.
+  const bleedPadBottom = config?.bleedExtraBottom ? 0 : BLEED_MARGIN
   const scale = zoom / 100
 
   return (
@@ -765,7 +854,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         position: 'relative',
         flexShrink: 0,
         width: (canvasW + BLEED_MARGIN * 2) * scale,
-        height: (canvasH + BLEED_MARGIN * 2) * scale,
+        height: (renderH + BLEED_MARGIN + bleedPadBottom) * scale,
         marginBottom: 36,
       }}>
         {/* CSS transform scales the actual canvas element */}
@@ -782,9 +871,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               purely a visual guide outside the actual canvas — canvas
               dimensions and every zone coordinate stay trim-only/unchanged. */}
           <div style={{
-            padding: BLEED_MARGIN,
+            paddingTop: BLEED_MARGIN, paddingLeft: BLEED_MARGIN, paddingRight: BLEED_MARGIN,
+            paddingBottom: bleedPadBottom,
             background: '#fff',
-            border: '1px solid rgba(0,0,0,0.25)',
+            // border: '1px solid rgba(0,0,0,0.25)',
             boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
           }}>
             <div style={{ borderRadius: 3, overflow: 'hidden' }}>

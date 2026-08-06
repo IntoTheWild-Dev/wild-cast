@@ -176,13 +176,24 @@ const WEN_CHENG_V3_ZONES = [
 // The line that named McDonald's ("...bei McDonald's bestellen.") was masked
 // out of the background art and replaced by the free-text `cta` zone below,
 // so any partner can fill in their own line — no partner branding is baked in.
+// Coordinates below are pre-scaled to match `backgroundScale` + `backgroundOffset`
+// on the opt-b template configs (see TEMPLATE_ZONES). The inner margin
+// (card to trim edge) is 4mm on every side, symmetric X and Y, matching the
+// approved "A6 Bleed Master" reference. The Wolt bag graphic still bleeds
+// past the bottom of the card (by design) and past the trim line itself —
+// `bleedExtraBottom` on the template config gives the canvas a few extra
+// real pixels below the trim line so that overflow renders instead of
+// getting hard-clipped by the canvas boundary (see TemplateCanvas.jsx).
+// If backgroundScale/backgroundOffset change, these numbers must be
+// re-derived from the original (pre-scale) values still visible in git
+// history.
 const OPT_B_ZONES = [
   {
     id: 'headline',
     type: 'text',
-    x: 15.9, y: 125.1,
-    width: 284.5, height: 44.1,
-    fontSize: 58,
+    x: 7.89, y: 121.28,
+    width: 300.54, height: 45.86,
+    fontSize: 60.8,
     fontFamily: 'omnes-cond',
     fontWeight: 700,
     color: '#FFFFFF',
@@ -195,8 +206,8 @@ const OPT_B_ZONES = [
     fit: 'contain',
     label: 'Restaurant logo',
     hint: 'JPG or PNG',
-    x: 121, y: 0,
-    width: 73, height: 73,
+    x: 118.91, y: -8.82,
+    width: 77.12, height: 75.92,
   },
   {
     id: 'photo',
@@ -209,12 +220,13 @@ const OPT_B_ZONES = [
     // photos — grown downward into available space (cta zone starts at y=307)
     // and narrowed to a gentler 1.77:1 ratio so more of the photo shows and
     // Position nudge actually has room to move.
-    x: 43.8, y: 169.2,
-    width: 230, height: 130,
+    x: 37.36, y: 167.15,
+    width: 242.97, height: 135.2,
     // Photo sits directly below the headline with zero gap (169.2 = headline's
-    // own y+height) — extend the clip region up by the full headline height so
-    // the photo can visually overlap it, matching Julia's Figma reference.
-    overlapAbove: 44,
+    // own y+height, pre-scale) — extend the clip region up by the full
+    // (pre-scaled) headline height so the photo can visually overlap it,
+    // matching Julia's Figma reference.
+    overlapAbove: 45.76,
   },
   // Line 1 ("Jetzt Wolt App downloaden und") stays baked in the background —
   // line 2 was McDonald's-specific ("...bei McDonald's bestellen.") and is now
@@ -223,9 +235,9 @@ const OPT_B_ZONES = [
   {
     id: 'cta',
     type: 'text',
-    x: 59.5, y: 307,
-    width: 198.5, height: 17,
-    fontSize: 10,
+    x: 53.95, y: 310.46,
+    width: 209.69, height: 17.68,
+    fontSize: 10.48,
     fontFamily: 'omnes-pro',
     fontWeight: 600,
     color: '#FFFFFF',
@@ -267,20 +279,47 @@ export const TEMPLATE_ZONES = {
   },
 
   // ── Option B — real bleed export via the Figma import pipeline ────────────
-  // backgroundFill is #00C2E8 (not Option A's #00C2CB) — confirmed against the
-  // real Figma master's "BG — blue" fill and the shipped background PNG's actual pixels.
+  // The card art (BG_OPT_B) already has a margin baked in, but at
+  // fill-the-canvas-exactly scale it comes out to ~20px (~6-7mm). backgroundScale
+  // zooms in (per-axis, since the art's own aspect isn't exactly the
+  // canvas's) so the card's margin measures 4mm on every side (X centered,
+  // Y via an explicit backgroundOffset that lands the same 4mm on top and
+  // bottom — the source card art is itself vertically symmetric, so this
+  // works out exact). The Wolt bag still bleeds ~9px past the trim line at
+  // this scale; bleedExtraBottom gives the canvas that much real pixel
+  // room below the trim line so the bag renders in full instead of getting
+  // clipped by the canvas boundary (export still crops back to the trim
+  // size only, see getPng() in TemplateCanvas.jsx).
   'opt-b-flyer2': {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_OPT_B,
-    backgroundFill: '#00C2E8',
+    backgroundFill: '#FFFFFF',
+    backgroundScale: { x: 1.0564, y: 1.0400 },
+    backgroundOffset: { x: -8.91, y: -8.82 },
+    bleedExtraBottom: 9,
+    // Skips the bottom trim-line dash across the Wolt bag's own horizontal
+    // span (measured off the art at this backgroundScale) — the bag bleeds
+    // past the trim line intentionally, so the guide reads as a stray mark
+    // cutting across it there rather than a real cut line. Padded a couple
+    // px past the bag's measured 102.7–211.4 range.
+    trimGapBottom: [100, 214],
     zones: OPT_B_ZONES,
   },
   'opt-b-flyer2-simple': {
     canvasW: 316,
     canvasH: 441,
     backgroundUrl: BG_OPT_B,
-    backgroundFill: '#00C2E8',
+    backgroundFill: '#FFFFFF',
+    backgroundScale: { x: 1.0564, y: 1.0400 },
+    backgroundOffset: { x: -8.91, y: -8.82 },
+    bleedExtraBottom: 9,
+    // Skips the bottom trim-line dash across the Wolt bag's own horizontal
+    // span (measured off the art at this backgroundScale) — the bag bleeds
+    // past the trim line intentionally, so the guide reads as a stray mark
+    // cutting across it there rather than a real cut line. Padded a couple
+    // px past the bag's measured 102.7–211.4 range.
+    trimGapBottom: [100, 214],
     zones: OPT_B_ZONES,
   },
 }
