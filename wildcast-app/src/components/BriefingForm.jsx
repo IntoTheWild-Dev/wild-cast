@@ -299,6 +299,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
                   merchant={GENERAL_MERCHANT}
                   value={brief.stickerAsset}
                   onSelect={a => set('stickerAsset', a)}
+                  requireTransparent
                 />
                 <button type="button" onClick={() => set('stickerRequestMode', true)} style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}>
                   + Request a new sticker
@@ -314,6 +315,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             merchant={partnerName || GENERAL_MERCHANT}
             value={brief.foodPhotoAsset}
             onSelect={a => set('foodPhotoAsset', a)}
+            requireTransparent
           />
 
           <Field label="T&Cs">

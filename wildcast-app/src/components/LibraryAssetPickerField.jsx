@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getLibraryAssets } from '../lib/assetLibrary'
+import { getLibraryAssets, saveAssetToLibrary, libraryAssetSrc } from '../lib/assetLibrary'
+import { hasTransparency } from '../lib/image'
 
 // "Nothing in the library yet" reads as broken if you don't know why — these
 // folders only ever get populated by uploading through the Library page
@@ -8,22 +9,27 @@ import { getLibraryAssets } from '../lib/assetLibrary'
 // (2026-08-03): reported the picker as "not functioning" when it was actually
 // correctly showing a genuinely empty folder.
 const EMPTY_HINTS = {
-  stickers: 'No stickers uploaded yet. Go to Library (top nav) → upload a sticker/badge — it\'ll show up here right after.',
-  'qr-codes': 'No QR codes uploaded yet for this partner. Go to Library (top nav) → upload a QR code — it\'ll show up here right after.',
-  'product-images': 'No photos uploaded yet for this partner. Go to Library (top nav) → upload a product photo, or add one from inside the editor.',
+  stickers: 'No stickers uploaded yet. Upload one below, or go to Library (top nav).',
+  'qr-codes': 'No QR codes uploaded yet for this partner. Upload one below, or go to Library (top nav).',
+  'product-images': 'No photos uploaded yet for this partner. Upload one below, or go to Library (top nav).',
 }
 
-// A compact "pick an existing asset from the shared Library" field — used for
-// Sticker, QR code and Food photo in the briefing form. Deliberately does NOT
-// support a fresh upload here (unlike the editor's ImageUpload) — the brief
-// only ever picks from what's already in the Library, scoped to `folder` +
-// `merchant`. Cannot be exercised against real data on local `vite dev` (no
-// serverless layer for /api/library-assets) — only verified there with a
-// mocked fetch; real verification needs the deployed app.
-export default function LibraryAssetPickerField({ label, hint, folder, merchant, value, onSelect }) {
+// A compact "pick an existing asset from the shared Library, or upload a new
+// one" field — used for Sticker, QR code and Food photo in the briefing
+// form. Uploads go through the exact same validation as everywhere else in
+// the app (see LibraryPage.jsx's UPLOADABLE_FOLDERS / lib/image.js's
+// hasTransparency): requireTransparent fields must be a real transparent
+// PNG, not a flattened image with a solid background — same "no misfit
+// backgrounds" rule Julia set for the canvas/Library page uploads. A
+// successful upload both saves to the shared Library AND selects it for
+// this field in one step, since picking is the point here (unlike the
+// Library page's plain "add to library").
+export default function LibraryAssetPickerField({ label, hint, folder, merchant, value, onSelect, requireTransparent }) {
   const [open, setOpen] = useState(false)
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
 
   useEffect(() => {
     if (!open) return
@@ -38,6 +44,48 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
     run()
     return () => { cancelled = true }
   }, [open, folder, merchant])
+
+  function handleUploadClick() {
+    setUploadError(null)
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async e => {
+      const file = e.target.files[0]
+      if (!file) return
+
+      if (requireTransparent && file.type !== 'image/png') {
+        setUploadError('This image has a background — please upload a transparent PNG.')
+        return
+      }
+
+      const blobUrl = URL.createObjectURL(file)
+
+      if (requireTransparent) {
+        const transparent = await hasTransparency(blobUrl)
+        if (!transparent) {
+          setUploadError('This image has a background — please upload a transparent PNG.')
+          URL.revokeObjectURL(blobUrl)
+          return
+        }
+      }
+
+      setUploading(true)
+      const saved = await saveAssetToLibrary(folder, file.name, blobUrl, merchant)
+      URL.revokeObjectURL(blobUrl)
+      setUploading(false)
+
+      if (!saved) {
+        setUploadError('Upload failed — please try again.')
+        return
+      }
+
+      const asset = { ...saved, src: libraryAssetSrc(saved.url) }
+      onSelect(asset)
+      setOpen(false)
+    }
+    input.click()
+  }
 
   return (
     <div style={{ marginBottom: 22 }}>
@@ -54,7 +102,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
             <span style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>{value.name} — click to change</span>
           </>
         ) : (
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Choose from library…</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Choose from library or upload…</span>
         )}
       </div>
 
@@ -65,6 +113,25 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', flex: 1 }}>Choose {label.toLowerCase()}</div>
               <button onClick={() => setOpen(false)} style={{ width: 26, height: 26, border: 'none', background: '#F3F4F6', borderRadius: '50%', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', lineHeight: 1 }}>×</button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleUploadClick}
+              disabled={uploading}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+                border: '1.5px dashed var(--border)', background: '#FAFAF8',
+                cursor: uploading ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--dark)',
+                opacity: uploading ? 0.6 : 1,
+              }}
+            >
+              {uploading ? 'Uploading…' : `↑ Upload from computer${requireTransparent ? ' (transparent PNG)' : ''}`}
+            </button>
+            {uploadError && (
+              <div style={{ marginBottom: 12, fontSize: 11, color: '#B91C1C' }}>✕ {uploadError}</div>
+            )}
+
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {loading ? (
                 <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', padding: '30px 0' }}>Loading…</div>
