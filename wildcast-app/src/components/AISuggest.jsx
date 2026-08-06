@@ -1,32 +1,58 @@
 import { useState } from 'react'
 
-const MOCK_SUGGESTIONS = {
-  de: {
-    headline: ['DREAMTEAM', 'NUR HEUTE', 'JETZT NEU'],
-    sub_headline: ['POTSDAMS NEUES', 'EXKLUSIV AUF WOLT', 'NEU IN DEINER STADT'],
-    offer: ['30% SPAREN', '2FÜR1 HEUTE', 'GRATIS LIEFERUNG'],
-    tc: ['*Gültig für Neukunden ohne bisherige Bestellungen auf Wolt. 14 Tage ab Kontoerstellung. Gilt für die erste Bestellung mit Lieferung ab 15 €. Nicht kombinierbar.', '*Nur über Wolt App. Solange der Vorrat reicht. Details in der App.'],
-  },
-  en: {
-    headline: ['DREAMTEAM', 'TODAY ONLY', 'BRAND NEW'],
-    sub_headline: ['POTSDAM\'S NEWEST', 'EXCLUSIVELY ON WOLT', 'NEW IN YOUR CITY'],
-    offer: ['SAVE 30%', '2FOR1 TODAY', 'FREE DELIVERY'],
-    tc: ['*Valid for new customers with no previous Wolt orders. 14 days from account creation. First delivery order of €15+. Cannot be combined.', '*Wolt app only. While stocks last. See app for details.'],
-  },
-}
-
 // variant="pill" (default) — small colored pill, used inline next to a field
 // (FieldEditor.jsx). variant="button-group" — matches BriefingForm.jsx's
 // plain-outlined ChoiceButton style, for sitting alongside "Write my own" /
 // "Choose preset" as one consistent row of mode buttons.
-export default function AISuggest({ field, lang, onApply, variant = 'pill' }) {
+//
+// context — optional brief details (businessType, about, objective,
+// partnerName) passed through to the backend so suggestions are grounded in
+// the actual brief, not just the field type. Omitted by FieldEditor.jsx,
+// which doesn't have easy access to the full brief.
+export default function AISuggest({ field, lang, onApply, variant = 'pill', context = {} }) {
   const [open, setOpen] = useState(false)
   const [dropLang, setDropLang] = useState(lang)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  // Cache per language so toggling DE/EN back and forth doesn't refetch.
+  const [byLang, setByLang] = useState({})
 
-  // Sync dropdown language when panel language changes (unless user overrode it)
   const activeLang = dropLang
+  const suggestions = byLang[activeLang] ?? []
 
-  const suggestions = MOCK_SUGGESTIONS[activeLang]?.[field] ?? []
+  async function fetchSuggestions(l) {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/ai-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, lang: l, context }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'AI suggest failed')
+      setByLang(prev => ({ ...prev, [l]: data.suggestions ?? [] }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleToggle() {
+    const willOpen = !open
+    setOpen(willOpen)
+    if (willOpen) {
+      setDropLang(lang)
+      if (!byLang[lang]) fetchSuggestions(lang)
+    }
+  }
+
+  function handleLangSwitch(e, l) {
+    e.stopPropagation()
+    setDropLang(l)
+    if (!byLang[l]) fetchSuggestions(l)
+  }
 
   const buttonStyle = variant === 'button-group'
     ? {
@@ -44,11 +70,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill' }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <button
-        type="button"
-        onClick={() => { setDropLang(lang); setOpen(o => !o) }}
-        style={buttonStyle}
-      >
+      <button type="button" onClick={handleToggle} style={buttonStyle}>
         <span>✦</span> AI Suggest
       </button>
 
@@ -72,7 +94,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill' }) {
                 {['de', 'en'].map(l => (
                   <button
                     key={l}
-                    onClick={e => { e.stopPropagation(); setDropLang(l) }}
+                    onClick={e => handleLangSwitch(e, l)}
                     style={{
                       fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
                       border: 'none', cursor: 'pointer',
@@ -87,7 +109,26 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill' }) {
               </div>
             </div>
 
-            {suggestions.map((s, i) => (
+            {loading && (
+              <div style={{ padding: '16px 14px', fontSize: 13, color: 'var(--mid)', textAlign: 'center' }}>
+                Generating…
+              </div>
+            )}
+
+            {!loading && error && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: '#B91C1C' }}>
+                {error}
+                <button
+                  type="button"
+                  onClick={() => fetchSuggestions(activeLang)}
+                  style={{ display: 'block', marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && suggestions.map((s, i) => (
               <div
                 key={i}
                 onClick={() => { onApply(s); setOpen(false) }}
@@ -102,6 +143,12 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill' }) {
                 {s}
               </div>
             ))}
+
+            {!loading && !error && suggestions.length === 0 && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--light)' }}>
+                No suggestions came back — try again.
+              </div>
+            )}
 
             <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--light)', borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
               AI copy — review before publishing

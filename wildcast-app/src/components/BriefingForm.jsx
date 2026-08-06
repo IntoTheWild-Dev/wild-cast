@@ -113,6 +113,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
   const partnerName = resolvePartnerName(brief)
+  const aiContext = { businessType: brief.businessType, about: brief.about, objective: selectedObjective?.label, partnerName }
 
   // Split per-step so "Next" can gate on just that step's fields — the full
   // isValid (below) still gates final submit exactly like before.
@@ -247,7 +248,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => headlineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="headline" lang="de" onApply={v => set('headline', v)} />
-              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} variant="button-group" />
+              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} variant="button-group" context={aiContext} />
             </div>
             <input ref={headlineInputRef} style={inputStyle} placeholder="e.g. Fresh pasta, made daily" value={brief.headline} onChange={e => set('headline', e.target.value)} />
           </Field>
@@ -256,7 +257,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => sublineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="subline" lang="de" onApply={v => set('subline', v)} />
-              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} variant="button-group" />
+              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} variant="button-group" context={aiContext} />
             </div>
             <input ref={sublineInputRef} style={inputStyle} placeholder="e.g. Order now on Wolt" value={brief.subline} onChange={e => set('subline', e.target.value)} />
           </Field>
