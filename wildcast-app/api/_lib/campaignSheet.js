@@ -50,6 +50,30 @@ export function columnsForField(field) {
   return FIELD_COLUMNS[field] ?? []
 }
 
+// Narrows rows to the given partner/merchant, matched against the sheet's
+// free-text "Tasks" column (real campaign names like "Expansion DAX -
+// McDonald's" or "WEN CHENG MANNHEIM - WILDPOSTER..." — there's no clean
+// merchant-id column, just campaign titles that usually mention the brand).
+// Matches on either the full partner name or any of its individual words
+// (min 3 chars, to skip noise like "&") appearing in the Task text, case-
+// insensitive. Falls back to the full row set when nothing matches — most
+// of the library isn't tagged to any of today's partners yet, and an empty
+// result is worse than an untargeted one.
+export function filterRowsByPartner(rows, partnerName) {
+  if (!partnerName || !partnerName.trim()) return rows
+
+  const needle = partnerName.trim().toLowerCase()
+  const words = needle.split(/\s+/).filter(w => w.length >= 3)
+
+  const matched = rows.filter(r => {
+    const task = (r['Tasks'] || '').toLowerCase()
+    if (!task) return false
+    return task.includes(needle) || words.some(w => task.includes(w))
+  })
+
+  return matched.length > 0 ? matched : rows
+}
+
 export function collectExamples(rows, columns, limit = 25) {
   const values = []
   for (const row of rows) {

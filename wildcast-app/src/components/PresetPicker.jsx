@@ -6,9 +6,15 @@ import { useState } from 'react'
 // AISuggest.jsx, which generates new tailored copy instead of reusing exact
 // past lines. Sheet content is German-only, so there's no language toggle
 // here (unlike AISuggest) — showing an empty "EN" tab would be misleading.
-export default function PresetPicker({ field, onApply }) {
+//
+// partnerName — when set, results are scoped to that merchant's own past
+// campaigns (matched server-side against the sheet's "Tasks" column), so
+// picking "McD" doesn't surface an unrelated churro or bowl campaign line.
+// Falls back to the full library when nothing matches that partner yet.
+export default function PresetPicker({ field, onApply, partnerName }) {
   const [open, setOpen] = useState(false)
   const [presets, setPresets] = useState(null)
+  const [fetchedFor, setFetchedFor] = useState(undefined)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -16,10 +22,13 @@ export default function PresetPicker({ field, onApply }) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/presets?field=${encodeURIComponent(field)}`)
+      const params = new URLSearchParams({ field })
+      if (partnerName) params.set('partner', partnerName)
+      const res = await fetch(`/api/presets?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not load presets')
       setPresets(data.presets ?? [])
+      setFetchedFor(partnerName)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -30,7 +39,7 @@ export default function PresetPicker({ field, onApply }) {
   function handleToggle() {
     const willOpen = !open
     setOpen(willOpen)
-    if (willOpen && presets === null) fetchPresets()
+    if (willOpen && (presets === null || fetchedFor !== partnerName)) fetchPresets()
   }
 
   return (
@@ -59,7 +68,7 @@ export default function PresetPicker({ field, onApply }) {
           }}>
             <div style={{ padding: '10px 12px 8px' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Real past Wolt copy
+                {partnerName ? `Past copy — ${partnerName}` : 'Real past Wolt copy'}
               </span>
             </div>
 
