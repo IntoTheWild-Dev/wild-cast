@@ -1,32 +1,43 @@
 import { useState } from 'react'
 
-// Starter copy — same "pick from a short curated list" pattern as
-// AISuggest.jsx, but a fixed library instead of generated suggestions.
-// Placeholder content: Julia/Annika should swap these for real
-// on-brand presets.
-const PRESETS = {
-  de: {
-    headline: ['JETZT NEU', 'NUR HEUTE', 'FRISCH ERÖFFNET', 'JETZT BESTELLEN'],
-    subline: ['NEU IN DEINER STADT', 'JETZT AUF WOLT', 'EXKLUSIV AUF WOLT', 'AB SOFORT VERFÜGBAR'],
-  },
-  en: {
-    headline: ['JUST LANDED', 'TODAY ONLY', 'NOW OPEN', 'ORDER NOW'],
-    subline: ['NEW IN YOUR CITY', 'NOW ON WOLT', 'EXCLUSIVELY ON WOLT', 'AVAILABLE NOW'],
-  },
-}
-
-export default function PresetPicker({ field, lang, onApply }) {
+// Real historical Wolt campaign copy pulled straight from the Google Sheet
+// (api/presets.js) — no AI, no generation, exact lines that have already
+// been used and approved. The instant/free/guaranteed-safe counterpart to
+// AISuggest.jsx, which generates new tailored copy instead of reusing exact
+// past lines. Sheet content is German-only, so there's no language toggle
+// here (unlike AISuggest) — showing an empty "EN" tab would be misleading.
+export default function PresetPicker({ field, onApply }) {
   const [open, setOpen] = useState(false)
-  const [dropLang, setDropLang] = useState(lang)
+  const [presets, setPresets] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  const activeLang = dropLang
-  const presets = PRESETS[activeLang]?.[field] ?? []
+  async function fetchPresets() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/presets?field=${encodeURIComponent(field)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not load presets')
+      setPresets(data.presets ?? [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleToggle() {
+    const willOpen = !open
+    setOpen(willOpen)
+    if (willOpen && presets === null) fetchPresets()
+  }
 
   return (
     <div style={{ position: 'relative' }}>
       <button
         type="button"
-        onClick={() => { setDropLang(lang); setOpen(o => !o) }}
+        onClick={handleToggle}
         style={{
           padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8, cursor: 'pointer',
           border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)',
@@ -44,32 +55,34 @@ export default function PresetPicker({ field, lang, onApply }) {
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
             background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            minWidth: 260, overflow: 'hidden',
+            minWidth: 260, maxHeight: 320, overflowY: 'auto',
           }}>
-            <div style={{ padding: '10px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '10px 12px 8px' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Presets
+                Real past Wolt copy
               </span>
-              <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 6, padding: 2, gap: 1 }}>
-                {['de', 'en'].map(l => (
-                  <button
-                    key={l}
-                    onClick={e => { e.stopPropagation(); setDropLang(l) }}
-                    style={{
-                      fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
-                      border: 'none', cursor: 'pointer',
-                      background: activeLang === l ? 'var(--primary)' : 'transparent',
-                      color: activeLang === l ? '#fff' : 'var(--mid)',
-                      transition: 'all 0.12s',
-                    }}
-                  >
-                    {l.toUpperCase()}
-                  </button>
-                ))}
-              </div>
             </div>
 
-            {presets.map((p, i) => (
+            {loading && (
+              <div style={{ padding: '16px 14px', fontSize: 13, color: 'var(--mid)', textAlign: 'center' }}>
+                Loading…
+              </div>
+            )}
+
+            {!loading && error && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: '#B91C1C' }}>
+                {error}
+                <button
+                  type="button"
+                  onClick={fetchPresets}
+                  style={{ display: 'block', marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && (presets ?? []).map((p, i) => (
               <div
                 key={i}
                 onClick={() => { onApply(p); setOpen(false) }}
@@ -83,6 +96,12 @@ export default function PresetPicker({ field, lang, onApply }) {
                 {p}
               </div>
             ))}
+
+            {!loading && !error && presets?.length === 0 && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--light)' }}>
+                No past examples for this field yet.
+              </div>
+            )}
           </div>
         </>
       )}
