@@ -568,6 +568,16 @@ export default function App() {
     }
   }
 
+  // Same decrement pattern as handleExport's credit deduction — each AI
+  // Suggest generation is a real Claude API call we pay for, so it costs
+  // a credit too. AISuggest.jsx gates the actual confirmation/blocking.
+  function handleAiCreditUsed() {
+    if (!activation) return
+    const newCredits = Math.max(0, activation.credits - 1)
+    setActivation(prev => ({ ...prev, credits: newCredits }))
+    localStorage.setItem('wildcast_credits', newCredits)
+  }
+
   // Core save — returns the project id. Used by both handleSave and handleSendForReview.
   async function doSave() {
     if (!exportRef.current?.getPng) throw new Error('Canvas not ready — please wait a moment and try again.')
@@ -816,6 +826,8 @@ export default function App() {
           onPick={handleSelectGeneratedCandidate}
           onSendForReview={handleSendCandidatesForReview}
           savedCandidateIds={savedCandidateIds}
+          credits={activation?.credits}
+          onCreditUsed={handleAiCreditUsed}
         />
       )}
 
@@ -959,6 +971,8 @@ export default function App() {
           <FieldEditor
             fields={fields}
             onChange={handleFieldChange}
+            credits={activation?.credits}
+            onCreditUsed={handleAiCreditUsed}
             lang={lang}
             onLangChange={setLang}
             onExport={handleExport}

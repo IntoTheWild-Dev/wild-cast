@@ -9,7 +9,19 @@ import { useState } from 'react'
 // partnerName) passed through to the backend so suggestions are grounded in
 // the actual brief, not just the field type. Omitted by FieldEditor.jsx,
 // which doesn't have easy access to the full brief.
-export default function AISuggest({ field, lang, onApply, variant = 'pill', context = {} }) {
+//
+// credits/onCreditUsed — each generation is a real Claude API call we pay
+// for, so it costs the activation key one credit (mirrors the export credit
+// deduction in App.jsx). Both are undefined when no activation is in scope,
+// which leaves generation ungated rather than blocking on a false 0.
+//
+// mode="improve" — a separate "Improve with AI" affordance next to the
+// default "Generate" mode: instead of writing fresh copy from the brief, it
+// sends whatever the partner already typed (seedText) as `seed`, and
+// api/ai-suggest.js polishes it or translates it into the target language
+// instead of inventing something new. Never cached (seedText can change
+// between opens), so every open re-checks credits and refetches.
+export default function AISuggest({ field, lang, onApply, variant = 'pill', context = {}, credits, onCreditUsed, mode = 'generate', seedText = '' }) {
   const [open, setOpen] = useState(false)
   const [dropLang, setDropLang] = useState(lang)
   const [loading, setLoading] = useState(false)
@@ -20,6 +32,9 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   const activeLang = dropLang
   const suggestions = byLang[activeLang] ?? []
 
+  const isImprove = mode === 'improve'
+  const trimmedSeed = seedText.trim()
+
   async function fetchSuggestions(l) {
     setLoading(true)
     setError(null)
@@ -27,11 +42,12 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field, lang: l, context }),
+        body: JSON.stringify({ field, lang: l, context, ...(isImprove ? { seed: trimmedSeed } : {}) }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'AI suggest failed')
       setByLang(prev => ({ ...prev, [l]: data.suggestions ?? [] }))
+      onCreditUsed?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -39,19 +55,39 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
     }
   }
 
+  // Improve mode never trusts the cache — seedText can change between
+  // opens, so a stale byLang entry would silently show suggestions for
+  // whatever was typed last time.
+  function needsFetch(l) {
+    return isImprove || !byLang[l]
+  }
+
+  // Gate before any actual API call (a cache hit in byLang is free — no
+  // fetch happens, so no confirmation needed to reopen it).
+  function canGenerate() {
+    if (credits != null && credits <= 0) {
+      alert('You have no credits remaining for AI suggestions. Contact Wild Stack to get more.')
+      return false
+    }
+    return window.confirm(isImprove ? 'Improve/translate this line? This uses 1 credit.' : 'Generate 6 AI suggestions? This uses 1 credit.')
+  }
+
   function handleToggle() {
+    if (isImprove && !trimmedSeed) return
     const willOpen = !open
+    if (willOpen && needsFetch(lang) && !canGenerate()) return
     setOpen(willOpen)
     if (willOpen) {
       setDropLang(lang)
-      if (!byLang[lang]) fetchSuggestions(lang)
+      if (needsFetch(lang)) fetchSuggestions(lang)
     }
   }
 
   function handleLangSwitch(e, l) {
     e.stopPropagation()
+    if (needsFetch(l) && !canGenerate()) return
     setDropLang(l)
-    if (!byLang[l]) fetchSuggestions(l)
+    if (needsFetch(l)) fetchSuggestions(l)
   }
 
   const buttonStyle = variant === 'button-group'
@@ -68,10 +104,18 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
         borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
       }
 
+  const disabled = isImprove && !trimmedSeed
+
   return (
     <div style={{ position: 'relative' }}>
-      <button type="button" onClick={handleToggle} style={buttonStyle}>
-        <span>✦</span> AI Suggest
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={disabled}
+        style={{ ...buttonStyle, ...(disabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}) }}
+        title={disabled ? 'Type something first' : 'Uses 1 credit per generation'}
+      >
+        <span>{isImprove ? '✨' : '✦'}</span> {isImprove ? 'Improve with AI' : 'AI Suggest'}
       </button>
 
       {open && (
@@ -88,7 +132,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
             {/* Header with language toggle */}
             <div style={{ padding: '10px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Suggestions
+                {isImprove ? 'Improve & Translate' : 'Suggestions'}
               </span>
               <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 6, padding: 2, gap: 1 }}>
                 {['de', 'en'].map(l => (

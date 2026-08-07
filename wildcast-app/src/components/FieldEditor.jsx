@@ -12,7 +12,7 @@ import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets, uniqueMerchan
 
 const ALL_MERCHANTS = '__all__'
 
-const CHAR_LIMITS = { headline: 30, offer: 20, sub_headline: 60, tc: 120, restaurant_name: 30, cta: 60 }
+const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
 
 const FIELD_HINTS = {
   headline:         "Your main line, e.g. 'DREAMTEAM'",
@@ -108,7 +108,7 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest — only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed }) {
   const limit = CHAR_LIMITS[fieldKey]
   const hint = FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
@@ -177,8 +177,9 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         />
       )}
       {!readOnly && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} credits={credits} onCreditUsed={onCreditUsed} />
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} mode="improve" seedText={value} credits={credits} onCreditUsed={onCreditUsed} />
         </div>
       )}
     </div>
@@ -490,7 +491,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange, credits, onCreditUsed }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -589,6 +590,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <StepFieldRow
           step={1} label="Headline" fieldKey="headline"
           value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
+          credits={credits} onCreditUsed={onCreditUsed}
           readOnly={restricted}
           showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
           fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
@@ -600,6 +602,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={2} label="Sub-headline" fieldKey="sub_headline"
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
+            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
@@ -612,6 +615,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={3} label="Restaurant name" fieldKey="restaurant_name"
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
+            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={false} showSize={false}
             fontSize={20}
@@ -622,6 +626,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={4} label="Offer" fieldKey="offer"
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
+            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
@@ -634,6 +639,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={5} label="T&amp;Cs" fieldKey="tc"
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
+            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted}
             fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
@@ -645,6 +651,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={5} label="App download line" fieldKey="cta"
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
+            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
             fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}

@@ -18,7 +18,7 @@ const FIELD_DESCRIPTIONS = {
 // shared import since FieldEditor.jsx's copy is frontend-only and this is a
 // serverless function; duplication here is one small object, not worth a
 // cross-boundary shared module for.
-const CHAR_LIMITS = { headline: 30, sub_headline: 60, subline: 60, offer: 20, tc: 120, restaurant_name: 30, cta: 60 }
+const CHAR_LIMITS = { headline: 20, sub_headline: 25, subline: 25, offer: 20, tc: 120, restaurant_name: 30, cta: 60 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -29,9 +29,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { field, lang = 'de', context = {} } = req.body ?? {}
+    const { field, lang = 'de', context = {}, seed } = req.body ?? {}
     const describe = FIELD_DESCRIPTIONS[field] ?? `a short line of copy for "${field}"`
     const limit = CHAR_LIMITS[field]
+    const trimmedSeed = typeof seed === 'string' ? seed.trim() : ''
 
     const rows = await loadSheetRows()
     const examples = collectExamples(rows, columnsForField(field))
@@ -44,10 +45,27 @@ export default async function handler(req, res) {
       context.partnerName && `Partner: ${context.partnerName}`,
     ].filter(Boolean).join('\n')
 
+    // "Improve with AI" (AISuggest.jsx mode="improve") sends the line the
+    // partner already wrote as `seed` instead of generating from scratch —
+    // detect its language and either polish it (already in langLabel) or
+    // translate it naturally (written in the other language), rather than
+    // inventing an unrelated new line.
+    const taskBlock = trimmedSeed
+      ? `The partner has already written this exact line for ${describe}: "${trimmedSeed}"
+
+Generate 6 revised options in ${langLabel}:
+- First work out what language their line is already written in.
+- If it's already in ${langLabel}, give polished/tightened variants that keep the same meaning and energy, just sharper.
+- If it's written in a different language, give natural, idiomatic translations into ${langLabel} — not word-for-word — plus a couple of polished variations of that translation.
+- Preserve their intended meaning; you are refining or translating what they wrote, not inventing an unrelated new line.`
+      : `Generate 6 options for ${describe}, in ${langLabel}, matching Wolt's punchy promotional style.
+
+Make the 6 genuinely different from each other, not six near-identical rewordings of the same sentence. Spread them across different angles and tones, for example: one straightforward/informative, one playful or funny, one bold or "spicy", one urgency-driven, one wordplay-driven, one very short and punchy. Favor short, punchy, memorable lines over long descriptive ones — think "Dream Team" or "Burger Me!" rather than a full sentence.`
+
     const prompt = `You are writing marketing copy for a Wolt food-delivery partner flyer/poster.
 
-Generate 6 options for ${describe}, in ${langLabel}, matching Wolt's punchy promotional style.
-${limit ? `\nHARD LIMIT: each option must be ${limit} characters or fewer, including spaces and punctuation. This is a strict print-layout constraint — options over the limit are useless, not just less ideal. If ${describe} implies two ideas, pick ONE and cut the rest; do not try to fit multiple sentences or thoughts into a single option.\n` : ''}${examples.length ? `\nReal examples of past approved Wolt campaign copy (tone/style reference only — do not copy directly, and note these are historical examples that may run longer than today's ${limit ?? 'target'}-character limit):\n${examples.map(e => `- ${e}`).join('\n')}\n` : ''}${briefLines ? `\nThis specific brief:\n${briefLines}\n` : ''}
+${taskBlock}
+${limit ? `\nHARD LIMIT: each option must be ${limit} characters or fewer, including spaces and punctuation. This is a strict print-layout constraint — options over the limit are useless, not just less ideal. If ${describe} implies two ideas, pick ONE and cut the rest; do not try to fit multiple sentences or thoughts into a single option.\n` : ''}${examples.length ? `\nReal examples of past approved Wolt campaign copy (tone/style reference only — these show voice and vocabulary, not sentence length or structure to copy. Many run longer than today's ${limit ?? 'target'}-character limit; do not just trim them down to fit — write fresh, shorter lines in the same voice instead):\n${examples.map(e => `- ${e}`).join('\n')}\n` : ''}${briefLines ? `\nThis specific brief:\n${briefLines}\n` : ''}
 Call provide_suggestions with exactly 6 options, each independently respecting the character limit above.`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {

@@ -88,7 +88,7 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
   )
 }
 
-export default function BriefingForm({ submitted, onSubmitted, onPick, onSendForReview, savedCandidateIds }) {
+export default function BriefingForm({ submitted, onSubmitted, onPick, onSendForReview, savedCandidateIds, credits, onCreditUsed }) {
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // (e.g. clicking Edit on a candidate opens the editor) and remounts fresh
@@ -248,7 +248,8 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => headlineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="headline" onApply={v => set('headline', v)} partnerName={partnerName} />
-              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} variant="button-group" context={aiContext} />
+              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} variant="button-group" context={aiContext} credits={credits} onCreditUsed={onCreditUsed} />
+              <AISuggest field="headline" lang="de" onApply={v => set('headline', v)} variant="button-group" mode="improve" seedText={brief.headline} credits={credits} onCreditUsed={onCreditUsed} />
             </div>
             <input ref={headlineInputRef} style={inputStyle} placeholder="e.g. Fresh pasta, made daily" value={brief.headline} onChange={e => set('headline', e.target.value)} />
           </Field>
@@ -257,7 +258,8 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => sublineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="subline" onApply={v => set('subline', v)} partnerName={partnerName} />
-              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} variant="button-group" context={aiContext} />
+              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} variant="button-group" context={aiContext} credits={credits} onCreditUsed={onCreditUsed} />
+              <AISuggest field="sub_headline" lang="de" onApply={v => set('subline', v)} variant="button-group" mode="improve" seedText={brief.subline} credits={credits} onCreditUsed={onCreditUsed} />
             </div>
             <input ref={sublineInputRef} style={inputStyle} placeholder="e.g. Order now on Wolt" value={brief.subline} onChange={e => set('subline', e.target.value)} />
           </Field>
