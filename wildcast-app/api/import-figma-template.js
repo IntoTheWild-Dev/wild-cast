@@ -4,6 +4,7 @@
 // until a designer reviews it and calls /api/publish-template.
 import { put, head } from '@vercel/blob'
 import { importFigmaTemplate } from './_lib/figma-import.js'
+import { requireDesignerKey } from './_lib/auth.js'
 
 const TOKEN_PATH = 'config/figma-token.json'
 
@@ -121,6 +122,7 @@ async function handlePost(req, res) {
 }
 
 export default async function handler(req, res) {
+  if (!requireDesignerKey(req, res)) return
   if (req.method === 'GET') return handleGet(req, res)
   if (req.method === 'PUT') return handlePut(req, res)
   if (req.method === 'POST') return handlePost(req, res)

@@ -10,6 +10,14 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// api/import-figma-template.js now requires this on every request (see
+// api/_lib/auth.js) — read straight from localStorage rather than threading
+// `activation` down through props, since this whole screen is only ever
+// reachable already-activated.
+function activationHeaders() {
+  return { 'X-Activation-Key': localStorage.getItem('wildcast_activation_key') || '' }
+}
+
 // Figma tokens expire every few months — this used to mean a Vercel env var
 // edit + redeploy each time. Now stored in Blob and updatable right here.
 function FigmaTokenSettings() {
@@ -21,7 +29,7 @@ function FigmaTokenSettings() {
 
   async function refresh() {
     try {
-      const res = await fetch('/api/import-figma-template')
+      const res = await fetch('/api/import-figma-template', { headers: activationHeaders() })
       setTokenStatus(await res.json())
     } catch {
       setTokenStatus(null)
@@ -38,7 +46,7 @@ function FigmaTokenSettings() {
     try {
       const res = await fetch('/api/import-figma-template', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ token: draftToken.trim() }),
       })
       const data = await res.json()
@@ -176,7 +184,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       const slotKey = slugify(selectedSlot.label)
       const res = await fetch('/api/import-figma-template', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({
           figmaUrl: figmaUrl.trim(),
           slotKey,
