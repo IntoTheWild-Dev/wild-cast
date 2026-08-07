@@ -11,6 +11,48 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// Matches every live template config's canvasW/canvasH (src/data/templateZones.js)
+// and the record api/import-figma-template.js builds — no single shared
+// constant exists for it anywhere in the app, this just follows the same
+// hardcoded-316x441 convention already used everywhere else.
+const CANVAS_W = 316
+const CANVAS_H = 441
+
+// Draws each zone's actual box on top of the imported background, in the
+// same 316x441 coordinate space the geometry itself is already in — lets a
+// designer SEE a misaligned box instead of only guessing from raw numbers
+// (Julia's ask, 2026-08-07: the previous review panel had no way to spot or
+// fix a bad import short of redoing it in Figma).
+function ZoneOverlay({ zones, backgroundUrl }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <img src={templateAssetSrc(backgroundUrl)} alt="" style={{ width: '100%', display: 'block', background: '#F3F4F6' }} />
+      {zones.map(z => (
+        <div
+          key={z.id}
+          style={{
+            position: 'absolute',
+            left: `${(z.x / CANVAS_W) * 100}%`,
+            top: `${(z.y / CANVAS_H) * 100}%`,
+            width: `${(z.width / CANVAS_W) * 100}%`,
+            height: `${(z.height / CANVAS_H) * 100}%`,
+            border: `1.5px dashed ${z.type === 'image' ? '#3B82F6' : 'var(--primary)'}`,
+            background: z.type === 'image' ? 'rgba(59,130,246,0.12)' : 'rgba(223,111,109,0.12)',
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{
+            position: 'absolute', top: -1, left: -1, fontSize: 9, fontWeight: 700, lineHeight: 1,
+            padding: '2px 4px', color: '#fff', background: z.type === 'image' ? '#3B82F6' : 'var(--primary)',
+          }}>
+            {z.id}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Figma tokens expire every few months — this used to mean a Vercel env var
 // edit + redeploy each time. Now stored in Blob and updatable right here.
 function FigmaTokenSettings() {
@@ -389,7 +431,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
 
         {result && (
           <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <img src={templateAssetSrc(result.backgroundUrl)} alt="" style={{ width: '100%', display: 'block', background: '#F3F4F6' }} />
+            <ZoneOverlay zones={zonesWithEdits()} backgroundUrl={result.backgroundUrl} />
             <div style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{result.label}</span>
@@ -413,28 +455,46 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
               )}
 
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 8 }}>Zone settings</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>Zone settings</div>
+                <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 8 }}>
+                  Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} — matches the boxes drawn on the preview above.
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {zonesWithEdits().filter(z => z.type === 'text').map(z => (
-                    <div key={z.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', flex: 1 }}>{z.id}</span>
-                      <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        Size
-                        <input
-                          type="number"
-                          value={z.fontSize ?? ''}
-                          onChange={e => updateZoneEdit(z.id, { fontSize: e.target.value === '' ? null : Number(e.target.value) })}
-                          style={{ width: 52, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none' }}
-                        />
-                      </label>
-                      <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={z.rotate === -90}
-                          onChange={e => updateZoneEdit(z.id, { rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
-                        />
-                        Rotate 90°
-                      </label>
+                  {zonesWithEdits().map(z => (
+                    <div key={z.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', minWidth: 66 }}>{z.id}</span>
+                      {['x', 'y', 'width', 'height'].map(dim => (
+                        <label key={dim} style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {dim === 'width' ? 'W' : dim === 'height' ? 'H' : dim.toUpperCase()}
+                          <input
+                            type="number"
+                            value={z[dim] ?? ''}
+                            onChange={e => updateZoneEdit(z.id, { [dim]: e.target.value === '' ? 0 : Number(e.target.value) })}
+                            style={{ width: 48, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none' }}
+                          />
+                        </label>
+                      ))}
+                      {z.type === 'text' && (
+                        <>
+                          <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            Size
+                            <input
+                              type="number"
+                              value={z.fontSize ?? ''}
+                              onChange={e => updateZoneEdit(z.id, { fontSize: e.target.value === '' ? null : Number(e.target.value) })}
+                              style={{ width: 52, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none' }}
+                            />
+                          </label>
+                          <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={z.rotate === -90}
+                              onChange={e => updateZoneEdit(z.id, { rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
+                            />
+                            Rotate 90°
+                          </label>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
