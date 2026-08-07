@@ -1,9 +1,15 @@
 // Validates an activation key against the WILDCAST_KEYS environment variable.
 // Set WILDCAST_KEYS in Vercel dashboard as:
-//   WOLT-DE-demo-key|Wolt DE|20,WILD-Demo-KEY|Wild Stack|100|designer
+//   WOLT-DE-demo-key|Wolt DE|20,WILD-Demo-KEY|Wild Stack|100|agency
 // Format: key|Client Name|credits|role  (role optional, comma-separated for multiple keys)
 // role defaults to 'partner' when omitted (keeps every existing key working
-// unchanged). role: 'designer' unlocks the Figma-import admin screen.
+// unchanged).
+//   'designer' — template management (archive/publish/zone review), NOT the
+//                Figma import screen itself. Safe to hand to a client for
+//                testing without also giving them the still-in-development
+//                import feature.
+//   'agency'   — everything 'designer' gets, PLUS the Figma import screen.
+//                Wild Stack's own keys only.
 export default function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 

@@ -392,7 +392,7 @@ export default function App() {
     else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
     else if (target === 'library') setScreen('library')
-    else if (target === 'import' && activation?.role === 'designer') setScreen('import')
+    else if (target === 'import' && activation?.role === 'agency') setScreen('import')
   }
 
   function refetchCustomTemplates() {
@@ -861,7 +861,7 @@ export default function App() {
             onSelect={handleSelectTemplate}
             customCards={customTemplates.cards}
             customRecords={customTemplates.records}
-            canManage={activation?.role === 'designer'}
+            canManage={activation?.role === 'designer' || activation?.role === 'agency'}
             onRefetch={refetchCustomTemplates}
             onOptimisticPatch={patchCustomRecord}
           />
@@ -880,7 +880,7 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'import' && activation?.role === 'designer' && (
+      {screen === 'import' && activation?.role === 'agency' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
         </div>

@@ -63,6 +63,11 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             {navItem('Templates', 'catalogue')}
             {navItem('Library', 'library')}
             {navItem('Designs', 'designs')}
+            {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
+                role:'designer' (client-facing test keys) sees it greyed out with
+                a Coming Soon popup — everything else designer-tier stays the
+                same for both roles. See api/_lib/auth.js. */}
+            {activation?.role === 'agency' && navItem('Import', 'import')}
             {activation?.role === 'designer' && navItem('Import', 'import', true)}
             <span
               onClick={onHelp}
