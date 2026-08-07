@@ -1,17 +1,50 @@
+import { useState } from 'react'
+
+// Shown instead of navigating for any nav item passed disabled=true below —
+// small and local rather than its own file since it's a single temporary
+// message, not a reusable modal.
+function ComingSoonModal({ onClose }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 340, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--dark)', marginBottom: 6 }}>Coming Soon</div>
+        <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.6, marginBottom: 20 }}>
+          The Import tab is being reworked — check back soon.
+        </div>
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: '11px', fontSize: 13, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp }) {
-  const navItem = (label, target) => {
-    const active = screen === target || (target === 'catalogue' && screen === 'editor')
+  const [showComingSoon, setShowComingSoon] = useState(false)
+
+  const navItem = (label, target, disabled) => {
+    const active = !disabled && (screen === target || (target === 'catalogue' && screen === 'editor'))
     return (
       <span
-        onClick={() => onNavigate?.(target)}
+        onClick={() => disabled ? setShowComingSoon(true) : onNavigate?.(target)}
+        title={disabled ? 'Coming soon' : undefined}
         style={{
           fontSize: 13, fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
-          color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+          color: disabled ? 'rgba(255,255,255,0.25)' : (active ? '#fff' : 'rgba(255,255,255,0.5)'),
           background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
           transition: 'all 0.15s',
         }}
-        onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
-        onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+        onMouseEnter={e => { if (!active && !disabled) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
+        onMouseLeave={e => { if (!active && !disabled) e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
       >
         {label}
       </span>
@@ -30,7 +63,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             {navItem('Templates', 'catalogue')}
             {navItem('Library', 'library')}
             {navItem('Designs', 'designs')}
-            {activation?.role === 'designer' && navItem('Import', 'import')}
+            {activation?.role === 'designer' && navItem('Import', 'import', true)}
             <span
               onClick={onHelp}
               style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
@@ -38,6 +71,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
               onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
             >Help</span>
           </nav>
+          {showComingSoon && <ComingSoonModal onClose={() => setShowComingSoon(false)} />}
           {activation?.clientName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>
