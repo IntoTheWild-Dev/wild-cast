@@ -11,12 +11,17 @@ import { useState } from 'react'
 // campaigns (matched server-side against the sheet's "Tasks" column), so
 // picking "McD" doesn't surface an unrelated churro or bowl campaign line.
 // Falls back to the full library when nothing matches that partner yet.
+// Shown collapsed to this many entries first — free/no-AI-cost, so "More
+// options" just reveals the rest of what's already fetched, no refetch.
+const VISIBLE_COUNT = 4
+
 export default function PresetPicker({ field, onApply, partnerName }) {
   const [open, setOpen] = useState(false)
   const [presets, setPresets] = useState(null)
   const [fetchedFor, setFetchedFor] = useState(undefined)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showAll, setShowAll] = useState(false)
 
   async function fetchPresets() {
     setLoading(true)
@@ -39,7 +44,10 @@ export default function PresetPicker({ field, onApply, partnerName }) {
   function handleToggle() {
     const willOpen = !open
     setOpen(willOpen)
-    if (willOpen && (presets === null || fetchedFor !== partnerName)) fetchPresets()
+    if (willOpen) {
+      setShowAll(false)
+      if (presets === null || fetchedFor !== partnerName) fetchPresets()
+    }
   }
 
   return (
@@ -91,7 +99,7 @@ export default function PresetPicker({ field, onApply, partnerName }) {
               </div>
             )}
 
-            {!loading && !error && (presets ?? []).map((p, i) => (
+            {!loading && !error && (showAll ? (presets ?? []) : (presets ?? []).slice(0, VISIBLE_COUNT)).map((p, i) => (
               <div
                 key={i}
                 onClick={() => { onApply(p); setOpen(false) }}
@@ -105,6 +113,20 @@ export default function PresetPicker({ field, onApply, partnerName }) {
                 {p}
               </div>
             ))}
+
+            {!loading && !error && !showAll && (presets?.length ?? 0) > VISIBLE_COUNT && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--primary)',
+                  background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', cursor: 'pointer',
+                }}
+              >
+                + More options ({presets.length - VISIBLE_COUNT} more)
+              </button>
+            )}
 
             {!loading && !error && presets?.length === 0 && (
               <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--light)' }}>

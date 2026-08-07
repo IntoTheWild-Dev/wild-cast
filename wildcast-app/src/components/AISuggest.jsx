@@ -28,6 +28,10 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   const [error, setError] = useState(null)
   // Cache per language so toggling DE/EN back and forth doesn't refetch.
   const [byLang, setByLang] = useState({})
+  // Tracks whether "Suggest more" has already been used for a given
+  // language — capped at one extra round per open, so at most 2 credits
+  // (initial + one more) can be spent per language per generation.
+  const [moreUsed, setMoreUsed] = useState({})
 
   const activeLang = dropLang
   const suggestions = byLang[activeLang] ?? []
@@ -35,24 +39,36 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   const isImprove = mode === 'improve'
   const trimmedSeed = seedText.trim()
 
-  async function fetchSuggestions(l) {
+  async function fetchSuggestions(l, { more = false } = {}) {
     setLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field, lang: l, context, ...(isImprove ? { seed: trimmedSeed } : {}) }),
+        body: JSON.stringify({
+          field, lang: l, context,
+          ...(isImprove ? { seed: trimmedSeed } : {}),
+          ...(more ? { exclude: byLang[l] ?? [] } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'AI suggest failed')
-      setByLang(prev => ({ ...prev, [l]: data.suggestions ?? [] }))
+      // "Suggest more" appends to what's already shown rather than
+      // replacing it, so earlier options stay pickable.
+      setByLang(prev => ({ ...prev, [l]: more ? [...(prev[l] ?? []), ...(data.suggestions ?? [])] : (data.suggestions ?? []) }))
+      if (more) setMoreUsed(prev => ({ ...prev, [l]: true }))
       onCreditUsed?.()
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleSuggestMore() {
+    if (moreUsed[activeLang] || !canGenerate('more')) return
+    fetchSuggestions(activeLang, { more: true })
   }
 
   // Improve mode never trusts the cache — seedText can change between
@@ -64,12 +80,15 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
 
   // Gate before any actual API call (a cache hit in byLang is free — no
   // fetch happens, so no confirmation needed to reopen it).
-  function canGenerate() {
+  function canGenerate(kind = 'initial') {
     if (credits != null && credits <= 0) {
       alert('You have no credits remaining for AI suggestions. Contact Wild Stack to get more.')
       return false
     }
-    return window.confirm(isImprove ? 'Improve/translate this line? This uses 1 credit.' : 'Generate 6 AI suggestions? This uses 1 credit.')
+    const message = kind === 'more'
+      ? 'Get one more round of suggestions? This uses 1 credit.'
+      : isImprove ? 'Improve/translate this line? This uses 1 credit.' : 'Generate 6 AI suggestions? This uses 1 credit.'
+    return window.confirm(message)
   }
 
   function handleToggle() {
@@ -192,6 +211,21 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
               <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--light)' }}>
                 No suggestions came back — try again.
               </div>
+            )}
+
+            {!loading && !error && !isImprove && suggestions.length > 0 && !moreUsed[activeLang] && (
+              <button
+                type="button"
+                onClick={handleSuggestMore}
+                title="Uses 1 credit"
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--primary)',
+                  background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', cursor: 'pointer',
+                }}
+              >
+                + Suggest more (1 credit)
+              </button>
             )}
 
             <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--light)', borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>

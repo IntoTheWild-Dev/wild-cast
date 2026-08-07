@@ -29,10 +29,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { field, lang = 'de', context = {}, seed } = req.body ?? {}
+    const { field, lang = 'de', context = {}, seed, exclude } = req.body ?? {}
     const describe = FIELD_DESCRIPTIONS[field] ?? `a short line of copy for "${field}"`
     const limit = CHAR_LIMITS[field]
     const trimmedSeed = typeof seed === 'string' ? seed.trim() : ''
+    const excludeList = Array.isArray(exclude) ? exclude.filter(Boolean) : []
 
     const rows = await loadSheetRows()
     const examples = collectExamples(rows, columnsForField(field))
@@ -65,7 +66,7 @@ Make the 6 genuinely different from each other, not six near-identical rewording
     const prompt = `You are writing marketing copy for a Wolt food-delivery partner flyer/poster.
 
 ${taskBlock}
-${limit ? `\nHARD LIMIT: each option must be ${limit} characters or fewer, including spaces and punctuation. This is a strict print-layout constraint — options over the limit are useless, not just less ideal. If ${describe} implies two ideas, pick ONE and cut the rest; do not try to fit multiple sentences or thoughts into a single option.\n` : ''}${examples.length ? `\nReal examples of past approved Wolt campaign copy (tone/style reference only — these show voice and vocabulary, not sentence length or structure to copy. Many run longer than today's ${limit ?? 'target'}-character limit; do not just trim them down to fit — write fresh, shorter lines in the same voice instead):\n${examples.map(e => `- ${e}`).join('\n')}\n` : ''}${briefLines ? `\nThis specific brief:\n${briefLines}\n` : ''}
+${limit ? `\nHARD LIMIT: each option must be ${limit} characters or fewer, including spaces and punctuation. This is a strict print-layout constraint — options over the limit are useless, not just less ideal. If ${describe} implies two ideas, pick ONE and cut the rest; do not try to fit multiple sentences or thoughts into a single option.\n` : ''}${examples.length ? `\nReal examples of past approved Wolt campaign copy (tone/style reference only — these show voice and vocabulary, not sentence length or structure to copy. Many run longer than today's ${limit ?? 'target'}-character limit; do not just trim them down to fit — write fresh, shorter lines in the same voice instead):\n${examples.map(e => `- ${e}`).join('\n')}\n` : ''}${briefLines ? `\nThis specific brief:\n${briefLines}\n` : ''}${excludeList.length ? `\nThe partner already saw these options in an earlier round — do not repeat, closely rephrase, or lightly edit any of them; give genuinely new options instead:\n${excludeList.map(e => `- ${e}`).join('\n')}\n` : ''}
 Call provide_suggestions with exactly 6 options, each independently respecting the character limit above.`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {

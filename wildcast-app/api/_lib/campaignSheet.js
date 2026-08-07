@@ -4,7 +4,12 @@
 // implementation so the two never drift on column names or field mapping.
 import Papa from 'papaparse'
 
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSfD0VMulwdB55zZ2Vn-OqPxRXj_8pUZ2FSp8Idl_NQrcRUDuLDSJp5n4hLJFPRCV3RB5oTj6MYF7wT/pub?gid=0&single=true&output=csv'
+// Short-copy client test sheet (2026-08) — replaces the old long-form
+// historical sheet. Same doc, gid=1591511491 tab. Headline/Sub Headline
+// columns only; no Sticker or Tasks column yet, so offer-field examples and
+// partner-scoped filtering (filterRowsByPartner) both fall back to
+// unfiltered until those columns exist here.
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSfD0VMulwdB55zZ2Vn-OqPxRXj_8pUZ2FSp8Idl_NQrcRUDuLDSJp5n4hLJFPRCV3RB5oTj6MYF7wT/pub?gid=1591511491&single=true&output=csv'
 
 // Maps a `field` prop value (from AISuggest.jsx / PresetPicker.jsx) to the
 // sheet column(s) holding real examples of that field. BriefingForm.jsx and
