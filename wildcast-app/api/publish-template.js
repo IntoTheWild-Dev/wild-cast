@@ -2,6 +2,7 @@
 // /api/import-figma-template.js is partner-visible until this is called
 // with action:'publish' — a deliberate review gate before anything goes public.
 import { list, put } from '@vercel/blob'
+import { requireDesignerKey } from './_lib/auth.js'
 
 // publish  → live,      visible in the catalogue
 // unpublish→ draft,     pulled back for more review, still re-publishable
@@ -39,6 +40,7 @@ async function writeRecord(slotKey, record, token) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!requireDesignerKey(req, res)) return
 
   const { slotKey, action, label, zones } = req.body ?? {}
 

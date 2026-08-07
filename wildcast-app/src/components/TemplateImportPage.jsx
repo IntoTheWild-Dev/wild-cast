@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BASE_TEMPLATES } from './TemplatePicker'
 import { templateAssetSrc } from '../lib/customTemplates'
+import { activationHeaders } from '../lib/activationKey'
 
 function slugify(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -8,14 +9,6 @@ function slugify(label) {
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-// api/import-figma-template.js now requires this on every request (see
-// api/_lib/auth.js) — read straight from localStorage rather than threading
-// `activation` down through props, since this whole screen is only ever
-// reachable already-activated.
-function activationHeaders() {
-  return { 'X-Activation-Key': localStorage.getItem('wildcast_activation_key') || '' }
 }
 
 // Figma tokens expire every few months — this used to mean a Vercel env var
@@ -228,7 +221,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       const zones = zonesWithEdits()
       const res = await fetch('/api/publish-template', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ slotKey: result.slotKey, action: 'updateZones', zones }),
       })
       const data = await res.json()
@@ -251,7 +244,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     try {
       const res = await fetch('/api/publish-template', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ slotKey: result.slotKey, action: 'publish' }),
       })
       const data = await res.json()
@@ -289,7 +282,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     try {
       const res = await fetch('/api/publish-template', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ slotKey: record.slotKey, action }),
       })
       const data = await res.json()

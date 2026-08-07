@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { TEMPLATES } from '../data/templates'
+import { activationHeaders } from '../lib/activationKey'
 
 // Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label —
 // duplicated (not imported) to keep this file's only dependency on that one
@@ -349,7 +350,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
     try {
       const res = await fetch('/api/publish-template', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ slotKey, action, label }),
       })
       const data = await res.json()
