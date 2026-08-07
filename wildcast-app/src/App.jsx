@@ -124,6 +124,12 @@ export default function App() {
   // "the designs have reset after editing" report (2026-08-03). Cleared on
   // every fresh brief submission so a new brief never inherits a stale save.
   const [savedCandidateIds, setSavedCandidateIds] = useState({})
+  // { [templateId]: previewPngDataUrl } — the picker's card thumbnail is
+  // captured off-screen from the brief's original (never-edited) fields, so
+  // without this it silently shows the pre-edit design after a save. Set
+  // alongside savedCandidateIds from the same just-saved project, cleared
+  // together on a fresh brief submission.
+  const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
   const [lang, setLang]                       = useState('de')
@@ -617,7 +623,7 @@ export default function App() {
     try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
 
     setCurrentProjectId(id)
-    return id
+    return { id, preview }
   }
 
   async function handleSave() {
@@ -646,11 +652,15 @@ export default function App() {
   async function handleSaveAndReturnToPicker() {
     setSaving(true)
     try {
-      const id = await doSave()
+      const { id, preview } = await doSave()
       // Record which project this candidate saved to, so re-clicking Edit on
       // the same option in the picker reopens this saved state instead of a
       // fresh, un-edited one (see savedCandidateIds above).
       setSavedCandidateIds(prev => ({ ...prev, [selectedTemplate.id]: id }))
+      // ...and record the freshly-edited preview PNG so the picker's card
+      // thumbnail for this option updates too, instead of still showing the
+      // pre-edit design captured from the original brief fields.
+      setSavedCandidatePreviews(prev => ({ ...prev, [selectedTemplate.id]: preview }))
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
       setScreen('brief')
@@ -665,7 +675,7 @@ export default function App() {
   async function handleSendForReview() {
     setSaving(true)
     try {
-      const id = await doSave()
+      const { id } = await doSave()
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
       setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
@@ -822,10 +832,11 @@ export default function App() {
         <BriefingForm
           key={briefResetKey}
           submitted={briefSubmission}
-          onSubmitted={brief => { setSavedCandidateIds({}); setBriefSubmission(brief) }}
+          onSubmitted={brief => { setSavedCandidateIds({}); setSavedCandidatePreviews({}); setBriefSubmission(brief) }}
           onPick={handleSelectGeneratedCandidate}
           onSendForReview={handleSendCandidatesForReview}
           savedCandidateIds={savedCandidateIds}
+          savedCandidatePreviews={savedCandidatePreviews}
           credits={activation?.credits}
           onCreditUsed={handleAiCreditUsed}
         />

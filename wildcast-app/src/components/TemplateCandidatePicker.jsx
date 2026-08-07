@@ -49,7 +49,7 @@ function NoMatchFallback({ brief, onEdit }) {
   )
 }
 
-export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendForReview, savedIds }) {
+export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendForReview, savedIds, savedPreviews }) {
   const [candidateFields, setCandidateFields] = useState(null) // null until resolved
   const [previews, setPreviews] = useState({}) // { [templateId]: pngDataUrl }
   const [ticked, setTicked] = useState({}) // { [templateId]: boolean } — one or both
@@ -142,7 +142,15 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
         )}
 
         <div style={{ display: bothReady ? 'flex' : 'none', gap: 20, justifyContent: 'center' }}>
-          {[OPTION_A_ID, OPTION_B_ID].map(id => (
+          {[OPTION_A_ID, OPTION_B_ID].map(id => {
+            // savedPreviews[id] is a fresh capture from the last time this
+            // option was saved in the editor — take it over the off-screen
+            // render below, which always reflects the brief's original
+            // fields and would otherwise silently show pre-edit content
+            // after a save (Julia's "preview doesn't show my changes" report,
+            // 2026-08-07).
+            const previewSrc = savedPreviews?.[id] ?? previews[id]
+            return (
             <div
               key={id}
               onClick={() => toggleTick(id)}
@@ -163,10 +171,11 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
               }}>
                 {ticked[id] && '✓'}
               </div>
-              {previews[id] && <img src={previews[id]} alt={CANDIDATE_LABELS[id]} style={{ width: '100%', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }} />}
+              {previewSrc && <img src={previewSrc} alt={CANDIDATE_LABELS[id]} style={{ width: '100%', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }} />}
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{CANDIDATE_LABELS[id]}</div>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {bothReady && (

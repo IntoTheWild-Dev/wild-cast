@@ -15,8 +15,8 @@ const ALL_MERCHANTS = '__all__'
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
 
 const FIELD_HINTS = {
-  headline:         "Your main line, e.g. 'DREAMTEAM'",
-  sub_headline:     "City or location line, e.g. 'POTSDAMS NEUES'",
+  headline:         "The bigger line, below the subline, e.g. 'DREAMTEAM'",
+  sub_headline:     "The smaller line, above the headline, e.g. 'POTSDAMS NEUES'",
   restaurant_name:  "Your restaurant name, e.g. 'Wen Cheng'",
   offer:            "Your promotion, e.g. '30% SPAREN'",
   tc:               'Small-print terms, rotated vertically on the flyer',

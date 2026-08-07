@@ -88,7 +88,7 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
   )
 }
 
-export default function BriefingForm({ submitted, onSubmitted, onPick, onSendForReview, savedCandidateIds, credits, onCreditUsed }) {
+export default function BriefingForm({ submitted, onSubmitted, onPick, onSendForReview, savedCandidateIds, savedCandidatePreviews, credits, onCreditUsed }) {
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // (e.g. clicking Edit on a candidate opens the editor) and remounts fresh
@@ -148,6 +148,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
         onPick={onPick}
         onSendForReview={onSendForReview}
         savedIds={savedCandidateIds}
+        savedPreviews={savedCandidatePreviews}
       />
     )
   }
@@ -223,7 +224,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             left blank (buildCandidateFields), but the display name can differ
             (e.g. partner "McD" internally, flyer reads "McDonald's Zentrum"). */}
         {brief.formats.includes('flyer') && (
-          <Field label="Restaurant name" hint="Shown on the flyer — leave blank to just use the partner name above.">
+          <Field label="Restaurant name" hint="Only used on Option A — leave blank to just use the partner name above.">
             <input style={inputStyle} placeholder={partnerName || 'e.g. Wen Cheng'} value={brief.restaurantName} onChange={e => set('restaurantName', e.target.value)} />
           </Field>
         )}
@@ -244,7 +245,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             ← Back
           </button>
 
-          <Field label="Headline">
+          <Field label="Headline" hint="The bigger line — sits below the subline on the flyer.">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => headlineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="headline" onApply={v => set('headline', v)} partnerName={partnerName} />
@@ -254,7 +255,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             <input ref={headlineInputRef} style={inputStyle} placeholder="e.g. Fresh pasta, made daily" value={brief.headline} onChange={e => set('headline', e.target.value)} />
           </Field>
 
-          <Field label="Subline">
+          <Field label="Subline" hint="The smaller line — sits above the headline on the flyer.">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => sublineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="subline" onApply={v => set('subline', v)} partnerName={partnerName} />
