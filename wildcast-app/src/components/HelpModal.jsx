@@ -5,7 +5,7 @@ export default function HelpModal({ onClose }) {
       onClick={onClose}
     >
       <div
-        style={{ background: '#fff', borderRadius: 16, padding: 36, maxWidth: 480, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+        style={{ background: '#fff', borderRadius: 16, padding: 36, maxWidth: 480, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -24,8 +24,8 @@ export default function HelpModal({ onClose }) {
         {/* Steps */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 28 }}>
           {[
-            { n: 1, title: 'Pick a template', desc: 'Choose from our pre-approved Wolt flyer designs, then pick Guided (fill in the blanks) or Designer (move and resize freely). More formats coming soon.' },
-            { n: 2, title: 'Fill in your content', desc: 'Add your headline, restaurant name, offer and sub-headline, then upload your logo and food photo. Everything stays on-brand automatically.' },
+            { n: 1, title: 'Brief your design', desc: 'Tell us about your partner, what it’s for, and which format you need — just like briefing a designer. Takes under a minute.' },
+            { n: 2, title: 'Pick & fine-tune', desc: 'We generate two ready-made designs (Option A & B) straight from your brief. Pick one, then nudge the text and photos into place. Want different wording? Use AI Suggest or Choose preset on the Headline/Subline — see below.' },
             { n: 3, title: 'Export & print', desc: 'Click Export PDF to download a print-ready CMYK PDF/X-4 file. Send it straight to your printer — no designer needed.' },
           ].map(({ n, title, desc }) => (
             <div key={n} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -38,6 +38,32 @@ export default function HelpModal({ onClose }) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Divider */}
+        <div style={{ borderTop: '1px solid var(--border)', marginBottom: 20 }} />
+
+        {/* Copy suggestions */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Getting headline & subline copy</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { icon: '✦', title: 'AI Suggest', desc: 'Generates 6 fresh ideas for that field. Uses 1 credit per set — picking one to use is free. Want more options? "Suggest more" gets one extra set for 1 more credit.' },
+              { icon: '✨', title: 'Improve with AI', desc: 'Already typed something? This polishes it, or translates it if you switch language tabs. 1 credit per use.' },
+              { icon: '☰', title: 'Choose preset', desc: 'Real copy from past approved campaigns — completely free, no credit used.' },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ fontSize: 14, color: 'var(--primary)', flexShrink: 0, marginTop: 1, width: 16, textAlign: 'center' }}>{icon}</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--dark)', marginBottom: 2 }}>{title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.6 }}>{desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 10 }}>
+            Your credit balance is shown top-right — contact Wild Stack if you're running low.
+          </div>
         </div>
 
         {/* Divider */}
