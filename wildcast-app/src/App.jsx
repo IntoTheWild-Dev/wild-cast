@@ -352,7 +352,13 @@ export default function App() {
     setImageScales({})
     setTextPositions({})
     setZonePositions({})
-    setProjectName(template.name)
+    // Auto-tag the project name with merchant + offer from the brief
+    // (Julia's ask, 2026-08-07) instead of the generic template name, so
+    // she doesn't have to retype the merchant every time she edits a
+    // brief-generated candidate. Falls back to the plain template name if
+    // the brief left both blank.
+    const nameTag = [prefilledFields?.restaurant_name, prefilledFields?.offer].filter(Boolean).join(' – ')
+    setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
     setSaveStatus(null)
     setLoadKey(k => k + 1)
@@ -363,7 +369,13 @@ export default function App() {
     setScreen('designs')
   }
 
+  // Julia's ask (2026-08-07): the top nav (Templates/Library/Designs/etc.)
+  // used to jump straight away from an open editor with no warning, silently
+  // dropping any unsaved edits. Guard every nav target here — but not the
+  // logo click (onLogoClick, wired separately in the JSX below), which is
+  // meant to just resume whatever brief/picker was already in progress.
   function handleNavigate(target) {
+    if (screen === 'editor' && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
     if (target === 'brief') setScreen('brief')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
     // picker was already in progress) — this always starts a genuinely fresh

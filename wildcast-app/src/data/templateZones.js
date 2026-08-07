@@ -258,9 +258,11 @@ const OPT_B_ZONES = [
     x: 53.95, y: 310.46,
     width: 209.69, height: 17.68,
     fontSize: 10.48,
-    // omnes-cond (not omnes-pro) to match the headline zone's font family.
-    // Weight/size unchanged from before — only the family differs.
-    fontFamily: 'omnes-cond',
+    // omnes-pro Semibold (Julia's ask, 2026-08-07) — omnes-cond has no real
+    // 600-weight face (only 400/700 are registered in the Typekit kit), so
+    // fontWeight: 600 on it was being browser-synthesized, not true
+    // semibold. omnes-pro actually has a native 600 face.
+    fontFamily: 'omnes-pro',
     fontWeight: 600,
     color: '#FFFFFF',
     align: 'center',

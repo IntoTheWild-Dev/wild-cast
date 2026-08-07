@@ -8,6 +8,13 @@ function formatDate(ts) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// Calendar-day key (not the raw timestamp) so two designs saved on the same
+// day but at different times of day still count as one "date" filter option.
+function dayKey(ts) {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
 // Merges the static template cards with any Figma-imported ones into one
 // id -> {cat, format} lookup — both arrays already carry these fields per
 // card (see src/data/templates.js and customTemplateCards() in
@@ -42,15 +49,16 @@ function EmptyState({ title, desc }) {
 // as a popup gate, not just inline filters, now that Designs shows everyone's
 // saved work instead of just whoever's browser it's in. Defaults to "All" on
 // both, so clicking straight through shows everything, same as skipping.
-function FilterPopup({ formatOptions, merchantOptions, onApply }) {
+function FilterPopup({ formatOptions, merchantOptions, dateOptions, onApply }) {
   const [format, setFormat] = useState(ALL)
   const [merchant, setMerchant] = useState(ALL)
+  const [date, setDate] = useState(ALL)
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>Find a design</h3>
-        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>Narrow it down, or leave both on "All" to see everything.</p>
+        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>Narrow it down, or leave on "All" to see everything.</p>
 
         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Format</label>
         <select
@@ -66,14 +74,24 @@ function FilterPopup({ formatOptions, merchantOptions, onApply }) {
         <select
           value={merchant}
           onChange={e => setMerchant(e.target.value)}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
+          style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff', marginBottom: 16 }}
         >
           <option value={ALL}>All merchants</option>
           {merchantOptions.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
 
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Date saved</label>
+        <select
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
+        >
+          <option value={ALL}>All dates</option>
+          {dateOptions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+        </select>
+
         <button
-          onClick={() => onApply({ format, merchant })}
+          onClick={() => onApply({ format, merchant, date })}
           style={{ marginTop: 22, width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer' }}
         >
           Show designs
@@ -216,6 +234,15 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
 
   const formatOptions = useMemo(() => [...new Set(enriched.map(p => p.group))].sort(), [enriched])
   const merchantOptions = useMemo(() => [...new Set(enriched.map(p => p.merchant))].sort(), [enriched])
+  const dateOptions = useMemo(() => {
+    const byKey = new Map()
+    for (const p of enriched) {
+      if (!p.savedAt) continue
+      const key = dayKey(p.savedAt)
+      if (!byKey.has(key)) byKey.set(key, { key, label: formatDate(p.savedAt), ts: p.savedAt })
+    }
+    return [...byKey.values()].sort((a, b) => b.ts - a.ts)
+  }, [enriched])
 
   const filtered = useMemo(() => {
     if (!filters) return []
@@ -224,6 +251,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       .filter(p =>
         (filters.format === ALL || p.group === filters.format) &&
         (filters.merchant === ALL || p.merchant === filters.merchant) &&
+        (filters.date === ALL || dayKey(p.savedAt) === filters.date) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first — the blob listing this comes from has no inherent
@@ -274,12 +302,13 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   }
 
   const activeFilterCount = filters
-    ? [filters.format !== ALL, filters.merchant !== ALL, !!nameSearch.trim()].filter(Boolean).length
+    ? [filters.format !== ALL, filters.merchant !== ALL, filters.date !== ALL, !!nameSearch.trim()].filter(Boolean).length
     : 0
   const activeFilterSummary = activeFilterCount > 0
     ? [
         filters.format !== ALL ? filters.format : null,
         filters.merchant !== ALL ? filters.merchant : null,
+        filters.date !== ALL ? dateOptions.find(d => d.key === filters.date)?.label : null,
         nameSearch.trim() ? `"${nameSearch.trim()}"` : null,
       ].filter(Boolean).join(' · ')
     : null
@@ -287,7 +316,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
       {status === 'ready' && projects.length > 0 && filters === null && (
-        <FilterPopup formatOptions={formatOptions} merchantOptions={merchantOptions} onApply={setFilters} />
+        <FilterPopup formatOptions={formatOptions} merchantOptions={merchantOptions} dateOptions={dateOptions} onApply={setFilters} />
       )}
 
       {pendingProject && (
