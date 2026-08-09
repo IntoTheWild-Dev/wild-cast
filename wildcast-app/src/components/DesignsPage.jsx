@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import Select from './Select'
 import { TEMPLATES } from '../data/templates'
 
 const ALL = '__all__'
@@ -61,34 +62,34 @@ function FilterPopup({ formatOptions, merchantOptions, dateOptions, onApply }) {
         <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>Narrow it down, or leave on "All" to see everything.</p>
 
         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Format</label>
-        <select
+        <Select
           value={format}
           onChange={e => setFormat(e.target.value)}
           style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff', marginBottom: 16 }}
         >
           <option value={ALL}>All formats</option>
           {formatOptions.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
+        </Select>
 
         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Merchant</label>
-        <select
+        <Select
           value={merchant}
           onChange={e => setMerchant(e.target.value)}
           style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff', marginBottom: 16 }}
         >
           <option value={ALL}>All merchants</option>
           {merchantOptions.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
+        </Select>
 
         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Date saved</label>
-        <select
+        <Select
           value={date}
           onChange={e => setDate(e.target.value)}
           style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
         >
           <option value={ALL}>All dates</option>
           {dateOptions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-        </select>
+        </Select>
 
         <button
           onClick={() => onApply({ format, merchant, date })}

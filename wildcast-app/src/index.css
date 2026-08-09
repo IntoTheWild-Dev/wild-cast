@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #F4F3EF;
+  --bg: #FAFAFA;
   --surface: #FFFFFF;
   --primary: #df6f6d;
   --primary-dark: #c85a58;
@@ -15,7 +15,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Satoshi', -apple-system, sans-serif;
   background: var(--bg);
   color: var(--dark);
   -webkit-font-smoothing: antialiased;

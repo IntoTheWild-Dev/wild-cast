@@ -159,8 +159,20 @@ export default function App() {
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
-  // activation: null = not yet validated, object = { key, clientName, credits, role }
-  const [activation, setActivation]           = useState(null)
+  // activation: null = not logged in, object = { key, clientName, credits, role }.
+  // Seeded synchronously from localStorage (not just in the useEffect below) so
+  // an already-logged-in user's refresh renders straight into the app instead
+  // of flashing the ActivationGate for the second or so the /api/validate-key
+  // round trip takes — the effect still runs after mount to re-validate the
+  // key server-side and fill in clientName, but the optimistic value here is
+  // what the very first paint uses.
+  const [activation, setActivation]           = useState(() => {
+    const savedKey = localStorage.getItem('wildcast_activation_key')
+    if (!savedKey) return null
+    const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
+    if (!Number.isFinite(savedCredits)) return null
+    return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
+  })
   const [showHelp, setShowHelp]               = useState(false)
   // true only when the editor was entered via a brief-generated candidate —
   // gates the locked-down FieldEditor mode (Phase 2). Reset to false by every
@@ -275,19 +287,19 @@ export default function App() {
           localStorage.setItem('wildcast_role', role)
           setActivation({ key: savedKey, clientName: data.client_name, credits, role })
         } else {
+          // Key was revoked/invalid server-side — the optimistic state seeded
+          // from localStorage above was wrong, so undo it and drop back to
+          // the activation gate.
           localStorage.removeItem('wildcast_activation_key')
           localStorage.removeItem('wildcast_credits')
           localStorage.removeItem('wildcast_role')
+          setActivation(null)
         }
       })
       .catch(() => {
-        // Network error on restore — treat as activated using cached credits so the
-        // app still works offline/slow connections after a valid prior session.
-        const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
-        if (Number.isFinite(savedCredits)) {
-          const role = localStorage.getItem('wildcast_role') || 'partner'
-          setActivation({ key: savedKey, clientName: '', credits: savedCredits, role })
-        }
+        // Network error on restore — the optimistic state from localStorage
+        // (set synchronously in useState above) already has the app running
+        // on cached credits, so there's nothing to do here.
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -831,7 +843,9 @@ export default function App() {
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={screen === 'editor'
+      ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+      : { minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
         onLogoClick={() => setScreen('brief')}
         screen={screen}
@@ -841,21 +855,23 @@ export default function App() {
       />
 
       {screen === 'brief' && (
-        <BriefingForm
-          key={briefResetKey}
-          submitted={briefSubmission}
-          onSubmitted={brief => { setSavedCandidateIds({}); setSavedCandidatePreviews({}); setBriefSubmission(brief) }}
-          onPick={handleSelectGeneratedCandidate}
-          onSendForReview={handleSendCandidatesForReview}
-          savedCandidateIds={savedCandidateIds}
-          savedCandidatePreviews={savedCandidatePreviews}
-          credits={activation?.credits}
-          onCreditUsed={handleAiCreditUsed}
-        />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <BriefingForm
+            key={briefResetKey}
+            submitted={briefSubmission}
+            onSubmitted={brief => { setSavedCandidateIds({}); setSavedCandidatePreviews({}); setBriefSubmission(brief) }}
+            onPick={handleSelectGeneratedCandidate}
+            onSendForReview={handleSendCandidatesForReview}
+            savedCandidateIds={savedCandidateIds}
+            savedCandidatePreviews={savedCandidatePreviews}
+            credits={activation?.credits}
+            onCreditUsed={handleAiCreditUsed}
+          />
+        </div>
       )}
 
       {screen === 'catalogue' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <TemplatePicker
             mode="catalogue"
             onSelect={handleSelectTemplate}
@@ -869,25 +885,25 @@ export default function App() {
       )}
 
       {screen === 'designs' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} />
         </div>
       )}
 
       {screen === 'library' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <LibraryPage />
         </div>
       )}
 
       {screen === 'import' && activation?.role === 'agency' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
         </div>
       )}
 
       {screen === 'review' && reviewProjectId && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <ReviewPage projectId={reviewProjectId} />
         </div>
       )}
@@ -1032,9 +1048,9 @@ export default function App() {
       {/* Help modal */}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
-      <footer style={{ background: 'var(--dark)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
-          <span style={{ whiteSpace: 'nowrap' }}>WildCast — Print templates for Wolt partners.</span>
+      <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'var(--mid)', fontSize: 13 }}>
+          <span style={{ whiteSpace: 'nowrap' }}>WildCast - Print templates for Wolt partners.</span>
           <span style={{ whiteSpace: 'nowrap' }}>Built by Wild Stack</span>
         </div>
       </footer>

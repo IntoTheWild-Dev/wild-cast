@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Select from './Select'
 
 function formatDateTime(ts) {
   return new Date(ts).toLocaleString('en-GB', {
@@ -376,14 +377,14 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
                 style={{ flex: 1, fontSize: 13, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', outline: 'none' }}
               />
               {libraryMerchants.length > 1 && (
-                <select
+                <Select
                   value={libraryMerchantFilter}
                   onChange={e => setLibraryMerchantFilter(e.target.value)}
                   style={{ fontSize: 13, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)' }}
                 >
                   <option value={ALL_MERCHANTS}>All merchants</option>
                   {libraryMerchants.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+                </Select>
               )}
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>

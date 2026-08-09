@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { PlusSignIcon } from '@hugeicons/core-free-icons'
 
 // Shown instead of navigating for any nav item passed disabled=true below —
 // small and local rather than its own file since it's a single temporary
@@ -39,12 +41,12 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         title={disabled ? 'Coming soon' : undefined}
         style={{
           fontSize: 13, fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
-          color: disabled ? 'rgba(255,255,255,0.25)' : (active ? '#fff' : 'rgba(255,255,255,0.5)'),
-          background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
+          color: disabled ? 'var(--light)' : (active ? 'var(--dark)' : 'var(--mid)'),
+          background: active ? 'rgba(2,6,24,0.06)' : 'transparent',
           transition: 'all 0.15s',
         }}
-        onMouseEnter={e => { if (!active && !disabled) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
-        onMouseLeave={e => { if (!active && !disabled) e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+        onMouseEnter={e => { if (!active && !disabled) e.currentTarget.style.color = 'var(--dark)' }}
+        onMouseLeave={e => { if (!active && !disabled) e.currentTarget.style.color = 'var(--mid)' }}
       >
         {label}
       </span>
@@ -52,41 +54,47 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
   }
 
   return (
-    <header style={{ background: 'var(--dark)', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'sticky', top: 0, zIndex: 100 }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <>
+    <header style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100 }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
         <div onClick={onLogoClick} style={{ cursor: 'pointer' }}>
-          <img src="/assets/Logo (Only Font) PNG 4.png" alt="Wild Stack" style={{ height: 28 }} />
+          <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
+        <nav style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 4 }}>
+          {navItem(
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <HugeiconsIcon icon={PlusSignIcon} size={14} />
+              New Brief
+            </span>,
+            'new-brief'
+          )}
+          {navItem('Templates', 'catalogue')}
+          {navItem('Library', 'library')}
+          {navItem('Designs', 'designs')}
+          {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
+              role:'designer' (client-facing test keys) sees it greyed out with
+              a Coming Soon popup — everything else designer-tier stays the
+              same for both roles. See api/_lib/auth.js. */}
+          {activation?.role === 'agency' && navItem('Import', 'import')}
+          {activation?.role === 'designer' && navItem('Import', 'import', true)}
+          <span
+            onClick={onHelp}
+            style={{ fontSize: 13, fontWeight: 500, color: 'var(--mid)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+          >Help</span>
+        </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <nav style={{ display: 'flex', gap: 4 }}>
-            {navItem('+ New Brief', 'new-brief')}
-            {navItem('Templates', 'catalogue')}
-            {navItem('Library', 'library')}
-            {navItem('Designs', 'designs')}
-            {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
-                role:'designer' (client-facing test keys) sees it greyed out with
-                a Coming Soon popup — everything else designer-tier stays the
-                same for both roles. See api/_lib/auth.js. */}
-            {activation?.role === 'agency' && navItem('Import', 'import')}
-            {activation?.role === 'designer' && navItem('Import', 'import', true)}
-            <span
-              onClick={onHelp}
-              style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.5)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
-            >Help</span>
-          </nav>
-          {showComingSoon && <ComingSoonModal onClose={() => setShowComingSoon(false)} />}
           {activation?.clientName && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>
-                {activation.clientName}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12 }}>
+              <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
+                {/* {activation.clientName} */}
               </span>
               <span style={{
                 fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
-                background: activation.credits <= 5 ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.08)',
-                color: activation.credits <= 5 ? '#FCA5A5' : 'rgba(255,255,255,0.5)',
-                border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                background: activation.credits <= 5 ? 'rgba(239,68,68,0.1)' : 'rgba(2,6,24,0.06)',
+                color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
+                border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
               }}>
                 {activation.credits} credit{activation.credits !== 1 ? 's' : ''}
               </span>
@@ -97,10 +105,10 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
                   localStorage.removeItem('wildcast_role')
                   window.location.reload()
                 }}
-                title="Sign out"
-                style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, transition: 'color 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+                title="Sign Out"
+                style={{ fontSize: 13, color: 'var(--light)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, transition: 'color 0.15s', color: 'var(--mid)' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--light)'}
               >
                 Sign out
               </button>
@@ -109,5 +117,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         </div>
       </div>
     </header>
+    {showComingSoon && <ComingSoonModal onClose={() => setShowComingSoon(false)} />}
+    </>
   )
 }

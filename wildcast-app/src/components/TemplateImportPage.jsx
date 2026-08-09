@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Select from './Select'
 import { BASE_TEMPLATES } from './TemplatePicker'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
@@ -397,7 +398,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
 
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Target slot (must be empty)</label>
-            <select
+            <Select
               value={slotLabel}
               onChange={e => setSlotLabel(e.target.value)}
               style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
@@ -406,7 +407,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
               {emptySlots.map(s => (
                 <option key={s.label} value={s.label}>{s.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <button

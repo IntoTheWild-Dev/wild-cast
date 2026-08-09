@@ -3,6 +3,10 @@ import TemplateCandidatePicker from './TemplateCandidatePicker'
 import AISuggest from './AISuggest'
 import PresetPicker from './PresetPicker'
 import LibraryAssetPickerField from './LibraryAssetPickerField'
+import WordCarousel from './WordCarousel'
+import Select from './Select'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
 import { GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
 
@@ -38,8 +42,9 @@ function HeroColumn() {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
-      <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0, lineHeight: 1.08 }}>Design. Export.</h1>
-      <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--primary)', margin: '0 0 20px', lineHeight: 1.08 }}>Print.</h1>
+      <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
+        We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
+      </h1>
       <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
         Tell us what you need, the same way you'd brief a designer — we'll turn it into finished designs to choose from.
       </p>
@@ -76,6 +81,7 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
       type="button"
       onClick={onClick}
       style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8, cursor: 'pointer',
         border: `1.5px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
         background: active ? 'var(--primary-glow)' : '#fff',
@@ -83,7 +89,7 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
         transition: 'all 0.15s',
       }}
     >
-      {checkbox ? (active ? '☑ ' : '☐ ') : null}{children}
+      {checkbox ? <HugeiconsIcon icon={active ? CheckmarkSquare01Icon : SquareIcon} size={15} /> : null}{children}
     </button>
   )
 }
@@ -178,11 +184,11 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
         {step === 1 && (
           <>
         <Field label="Partner name">
-          <select style={inputStyle} value={brief.partner} onChange={e => set('partner', e.target.value)}>
+          <Select style={inputStyle} value={brief.partner} onChange={e => set('partner', e.target.value)}>
             <option value="" disabled>Select a partner…</option>
             {PLACEHOLDER_PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
             <option value={ADD_NEW}>+ Add new partner</option>
-          </select>
+          </Select>
           {brief.partner === ADD_NEW && (
             <input style={{ ...inputStyle, marginTop: 8 }} placeholder="New partner name" value={brief.partnerNew} onChange={e => set('partnerNew', e.target.value)} />
           )}

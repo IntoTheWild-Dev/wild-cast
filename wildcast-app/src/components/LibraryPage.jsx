@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import Select from './Select'
 import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset, uniqueMerchants } from '../lib/assetLibrary'
 import { hasTransparency } from '../lib/image'
 
@@ -89,13 +90,13 @@ function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onCo
         </div>
 
         {mode === 'existing' ? (
-          <select
+          <Select
             value={existingChoice}
             onChange={e => setExistingChoice(e.target.value)}
             style={{ width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', boxSizing: 'border-box' }}
           >
             {merchants.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+          </Select>
         ) : (
           <input
             type="text"
@@ -400,22 +401,22 @@ export default function LibraryPage() {
           <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Viewing
           </label>
-          <select
+          <Select
             value={merchant}
             onChange={e => handleMerchantChange(e.target.value)}
             style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
           >
             <option value={ALL_MERCHANTS}>All merchants</option>
             {merchants.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <select
+          </Select>
+          <Select
             value={typeFilter}
             onChange={e => setTypeFilter(e.target.value)}
             style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
           >
             <option value={ALL_TYPES}>All types</option>
             {Object.entries(FOLDERS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
+          </Select>
           <input
             type="text"
             value={search}
