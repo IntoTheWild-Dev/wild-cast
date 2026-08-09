@@ -41,9 +41,9 @@ export default function ActivationGate({ onActivated }) {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       {/* Header — matches the main app header */}
-      <header style={{ background: 'var(--dark)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <header style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px', height: 58, display: 'flex', alignItems: 'center' }}>
-          <img src="/assets/Logo (Only Font) PNG 4.png" alt="Wild Stack" style={{ height: 28 }} />
+          <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
       </header>
 
@@ -126,9 +126,9 @@ export default function ActivationGate({ onActivated }) {
       </main>
 
       {/* Footer */}
-      <footer style={{ background: 'var(--dark)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
-          <span style={{ whiteSpace: 'nowrap' }}>Wild Cast — Print templates for Wolt partners.</span>
+      <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'var(--mid)', fontSize: 12 }}>
+          <span style={{ whiteSpace: 'nowrap' }}>Wild Cast - Print templates for Wolt partners.</span>
           <span style={{ whiteSpace: 'nowrap' }}>Built by Wild Stack</span>
         </div>
       </footer>
