@@ -159,6 +159,116 @@ export function toCanvasZone(node, frameBox, allNodes = []) {
   return zone
 }
 
+// Figma Plugin API text nodes expose font weight as a style NAME
+// ("Bold", "SemiBold", "Medium Italic") on node.fontName.style, not a
+// number the way the REST API's node.style.fontWeight does — this maps
+// that name to the same numeric scale the rest of the app already uses.
+// Unrecognized names fall back to 400 rather than blocking the import;
+// the zone still gets real position/size/family, just an unconfirmed
+// weight — a smaller gap than the no-text-at-all case _needsFontReview
+// exists for.
+const FONT_WEIGHT_NAME_MAP = {
+  thin: 100, hairline: 100,
+  extralight: 200, ultralight: 200,
+  light: 300,
+  regular: 400, normal: 400, book: 400,
+  medium: 500,
+  semibold: 600, demibold: 600,
+  bold: 700,
+  extrabold: 800, heavy: 800,
+  black: 900, ultrabold: 900,
+}
+function weightFromStyleName(styleName) {
+  if (!styleName) return 400
+  const cleaned = styleName.toLowerCase().replace(/italic|oblique/g, '').replace(/[^a-z]/g, '').trim()
+  return FONT_WEIGHT_NAME_MAP[cleaned] ?? 400
+}
+
+// Twin of toCanvasZone() above, for the WildCast Figma plugin
+// (figma-plugin/code.js) instead of the REST-API path. The plugin can't
+// run this geometry/font math itself — duplicating it in a different JS
+// runtime (Figma's plugin sandbox, no access to this file) risks a subtly
+// different bug — so it just sends raw node data and this function does
+// the exact same work toCanvasZone() does. Only the INPUT SHAPE differs:
+// Plugin API text nodes expose fontSize/fontFamily/textAlignHorizontal
+// flat on the node (not nested under `.style` like the REST API), and
+// weight comes as the style name above, not a number.
+export function toCanvasZoneFromPluginNode(node, frameBox, allNodes = []) {
+  const id = node.name.slice('zone:'.length)
+  const isImage = Object.prototype.hasOwnProperty.call(IMAGE_ZONE_CONFIG, id)
+
+  const scaleX = CANVAS_W / (frameBox.width - BLEED_UNITS * 2)
+  const scaleY = CANVAS_H / (frameBox.height - BLEED_UNITS * 2)
+
+  const zone = {
+    id,
+    type: isImage ? 'image' : 'text',
+    ...boxToZoneRect(node.absoluteBoundingBox, frameBox, scaleX, scaleY),
+  }
+
+  if (isImage) {
+    Object.assign(zone, IMAGE_ZONE_CONFIG[id])
+    return zone
+  }
+
+  if (node.type === 'TEXT' && node.fontSize && node.fontFamily) {
+    // fontSize as-is, not scaled — see the identical comment in
+    // toCanvasZone() above, same reasoning applies unchanged.
+    zone.fontSize = Math.round(node.fontSize)
+    zone.fontFamily = node.fontFamily
+    zone.fontWeight = weightFromStyleName(node.fontWeightName)
+    zone.color = '#FFFFFF'
+    zone.align = (node.textAlignHorizontal ?? 'CENTER').toLowerCase()
+    zone.autoShrink = true
+    return zone
+  }
+
+  const sibling = allNodes.find(n => n.name === id && n.type === 'TEXT' && n.fontSize && n.fontFamily)
+  if (sibling) {
+    Object.assign(zone, boxToZoneRect(sibling.absoluteBoundingBox, frameBox, scaleX, scaleY))
+    zone.fontSize = Math.round(sibling.fontSize)
+    zone.fontFamily = sibling.fontFamily
+    zone.fontWeight = weightFromStyleName(sibling.fontWeightName)
+    zone.color = '#FFFFFF'
+    zone.align = (sibling.textAlignHorizontal ?? 'CENTER').toLowerCase()
+    zone.autoShrink = true
+    return zone
+  }
+
+  const rotatedDefaults = ROTATED_TEXT_DEFAULTS[id]
+  Object.assign(zone, {
+    fontSize: 24,
+    fontFamily: 'omnes-cond',
+    fontWeight: 400,
+    color: '#FFFFFF',
+    align: 'center',
+    autoShrink: true,
+    _needsFontReview: true,
+    ...rotatedDefaults,
+  })
+  if (rotatedDefaults) zone.textWidth = zone.height
+
+  return zone
+}
+
+// Same trim-crop math importFigmaTemplate() uses below, factored out so the
+// plugin path (api/import-figma-plugin.js — no Figma REST fetch, the
+// plugin already exported the PNG itself via node.exportAsync) can reuse it
+// without duplicating the sharp-specific logic.
+export async function cropToTrim(rawImageBuffer, scale) {
+  const bleedPx = Math.round(BLEED_UNITS * scale)
+  const rawMeta = await sharp(rawImageBuffer).metadata()
+  return sharp(rawImageBuffer)
+    .extract({
+      left: bleedPx,
+      top: bleedPx,
+      width: rawMeta.width - bleedPx * 2,
+      height: rawMeta.height - bleedPx * 2,
+    })
+    .png()
+    .toBuffer()
+}
+
 // Full extraction: fetch the Figma frame, compute zones, export the
 // background image bytes. Does NOT persist anything — callers (CLI script,
 // API route) decide where the results go (local disk vs. Vercel Blob).
@@ -201,21 +311,7 @@ export async function importFigmaTemplate({ figmaUrl, token }) {
   // Crop that same BLEED_UNITS margin off each edge here so the saved
   // background genuinely is trim-only, matching what the rest of the app
   // already assumes it is.
-  const bleedPx = Math.round(BLEED_UNITS * scale)
-  const rawMeta = await sharp(rawImageBuffer).metadata()
-  const imageBuffer = await sharp(rawImageBuffer)
-    .extract({
-      left: bleedPx,
-      top: bleedPx,
-      // Clamp to the image's own actual dimensions rather than the
-      // calculated frameBox×scale — Figma's real export can be a pixel or
-      // two off from that calculation, and .extract() throws on an
-      // out-of-bounds region.
-      width: rawMeta.width - bleedPx * 2,
-      height: rawMeta.height - bleedPx * 2,
-    })
-    .png()
-    .toBuffer()
+  const imageBuffer = await cropToTrim(rawImageBuffer, scale)
 
   return {
     fileKey,

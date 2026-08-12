@@ -44,3 +44,18 @@ export function requireAgencyKey(req, res) {
   }
   return true
 }
+
+// Gate for the Figma plugin's own upload endpoint (api/import-figma-plugin.js)
+// — a private/internal Figma plugin has no logged-in WildCast user at all,
+// so the activation-key/role system above doesn't fit it. This is a single
+// static shared secret instead (same pattern the existing Wild CMYK plugin
+// already uses against its own backend), set once as the FIGMA_PLUGIN_KEY
+// Vercel env var and baked into figma-plugin/code.js.
+export function requirePluginKey(req, res) {
+  const key = req.headers['x-plugin-key']
+  if (!process.env.FIGMA_PLUGIN_KEY || key !== process.env.FIGMA_PLUGIN_KEY) {
+    res.status(403).json({ error: 'A valid plugin key is required for this endpoint.' })
+    return false
+  }
+  return true
+}

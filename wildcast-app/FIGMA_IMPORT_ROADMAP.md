@@ -1,6 +1,6 @@
 # Figma Template Import — Roadmap
 
-**Status:** Not started. The pieces it depends on ARE ready (see "What's already in place" below) — no plugin code exists yet.
+**Status:** Build steps 1–4 have a first pass written (2026-08-07) — untested against a real Figma file, since that needs Julia's Figma desktop to actually run. Step 5 (delete the old token path) not started, correctly — don't touch that until the plugin path is confirmed working end to end.
 
 **Note (2026-08-07):** an earlier conversation this same week floated a simpler alternative — auto-fill the existing paste-a-URL Import screen's field from the plugin's current selection, reusing `api/import-figma-template.js` as-is, no port of zone-detection logic needed. That would work, but it does NOT solve either problem this doc exists to solve (token staleness, the crop-math bug class) — it's a faster-to-type version of the same REST+token flow, not a replacement of it. **The plan below (Plugin API-native, no token) is the one to build.** Flagging this explicitly so Monday doesn't start from the wrong doc.
 
@@ -14,46 +14,72 @@ than patching the token flow again.
 Figma's own authenticated session, so there's no token to expire, rotate, or misconfigure — this
 removes the failure class entirely rather than managing it better.
 
-## What's already in place (2026-08-07)
+## What's built (2026-08-07) — untested against a real Figma file
 
-Nothing plugin-specific has been built, but two things this plan depends on now exist:
+A first pass of the whole pipeline exists, written without access to a real Figma master file
+(no live Plugin API session available to test against from here) — **treat every property name
+and the CORS assumption as needing a real test run, not confirmed fact.** Files:
 
-- **A role tier to gate the new endpoint with.** `role:'agency'` (Wild Stack only) vs.
-  `role:'designer'` (client-facing test keys — template management yes, Import no) already exists
-  and is enforced both in the UI and server-side (`api/_lib/auth.js`'s `requireAgencyKey`/
-  `requireDesignerKey`). The new plugin-upload endpoint (Build step 4 below) still needs its OWN
-  check — `x-api-key` (a single shared secret baked into the plugin, matching the existing Wild
-  CMYK plugin's pattern) is a better fit for a tool with no logged-in WildCast user at all than
-  reusing the activation-key system. Don't reuse `requireAgencyKey` for it; it solves a different
-  problem (a human with a WildCast key vs. a plugin with a service credential).
-- **The review screen is now genuinely more capable than "stays exactly as-is."** Every zone
-  (text AND image, e.g. Logo/Photo — previously invisible in review) now gets X/Y/Width/Height
-  fields plus a live overlay drawn on the background preview, so a bad bounding box from a new
-  import is something you catch and fix in the review step, not something that forces a re-import.
-  This still applies unchanged under the plugin plan — the review step consumes whatever's in the
-  draft record regardless of which endpoint created it.
+- **`figma-plugin/manifest.json`, `code.js`, `ui.html`** — the plugin itself. `code.js` reads the
+  selected frame, walks every descendant node, serializes the ones that matter (name, type,
+  bounding box, and — for TEXT nodes — fontSize/fontFamily/fontWeight-as-a-style-NAME/
+  textAlignHorizontal), exports the frame as a PNG via `node.exportAsync`, and POSTs all of it as
+  JSON to the new endpoint. `ui.html` is just a slot dropdown (populated by fetching
+  `/api/list-templates` and diffing against a hardcoded copy of `BASE_TEMPLATES` — see the comment
+  in `code.js`, **must be kept in sync by hand** if the slot catalogue ever changes) + an Import
+  button.
+- **Deliberate change from the original plan below:** the plugin does NOT export at trim size
+  directly. Figma's plugin sandbox has no image-processing library (no `sharp`, no Node APIs at
+  all) — cropping has to happen somewhere with real image-manipulation capability. So the plugin
+  exports the full bleed frame as-is (identical to what the REST path always did) and the crop
+  happens server-side, same as before — just fed the PNG bytes directly instead of fetching them
+  from Figma's images API. New shared `cropToTrim()` in `api/_lib/figma-import.js` — the REST
+  path's own crop step was refactored to call it too, so there's one crop implementation, not two.
+- **`api/_lib/figma-import.js`: new `toCanvasZoneFromPluginNode()`.** A twin of the existing
+  `toCanvasZone()`, adapted for the plugin's raw JSON node shape instead of the REST API's shape —
+  **the geometry/font math itself runs server-side, reusing `boxToZoneRect()`/`IMAGE_ZONE_CONFIG`/
+  `ROTATED_TEXT_DEFAULTS` directly**, rather than porting that math into the plugin's own JS
+  runtime (a second copy in a different environment risks a second, different bug). The plugin's
+  only job is extracting raw node data and exporting the PNG; the backend does everything else,
+  same as the REST path always has. Also new: `FONT_WEIGHT_NAME_MAP`/`weightFromStyleName()` —
+  Plugin API text nodes give weight as a style NAME (`"Bold"`, `"SemiBold"`) via `node.fontName`,
+  not a number the way REST's `node.style.fontWeight` does; unrecognized names fall back to 400
+  rather than blocking the import. **Verified directly** (not just read-through): a Node script
+  fed realistic mock plugin-node data through `toCanvasZoneFromPluginNode()` and confirmed all of
+  — text zone font extraction, image zone config, the "marker box + separately-named real text
+  sibling" fallback, weight-name mapping (Bold→700, SemiBold→600), and the no-text-anywhere
+  rotated-default fallback — behave correctly (12/12 checks passed). `cropToTrim()` also verified
+  directly against a real generated PNG (correct pixel dimensions after crop).
+- **`api/import-figma-plugin.js`** — the new endpoint. Gated by `requirePluginKey()` (new, in
+  `api/_lib/auth.js`) — checks a single header (`x-plugin-key`) against the `FIGMA_PLUGIN_KEY`
+  Vercel env var. **Not the same as `requireAgencyKey`** — that's for a human with a WildCast
+  activation key; this is a static service credential for a tool with no logged-in user at all,
+  matching how the existing Wild CMYK plugin authenticates against its own backend. Writes the
+  exact same draft record shape `api/import-figma-template.js` writes today, so
+  `TemplateImportPage.jsx`'s review screen (zone position/size editor, overlay, publish flow)
+  needs zero changes to work with plugin-created drafts.
 
-**Likely non-issue, confirm when building:** CORS was a real open question for the *URL-paste*
-alternative (a browser page calling our API cross-origin). Under this plan, if the plugin's upload
-call happens from the plugin's main sandboxed code (not its UI iframe) with the target domain
-listed in `manifest.json`'s `networkAccess.allowedDomains`, Figma's plugin runtime does not enforce
-standard browser CORS the way a page load does — meaning the new endpoint may not need CORS
-headers at all. Not verified against a real plugin yet; check this early in Build step 1, since it
-changes whether Build step 4 needs any CORS work.
+**Still an open question, now more specifically scoped:** does `fetch()` from Figma plugin *main*
+sandbox code (not the UI iframe) actually bypass browser CORS when the target domain is listed in
+the manifest's `networkAccess.allowedDomains`? `code.js` is written assuming yes. If it turns out
+no, the fallback is adding CORS headers to `api/import-figma-plugin.js` and `api/list-templates.js`
+— a small, contained change, not a redesign. **This can only be confirmed by actually running the
+plugin in Figma desktop** — first thing to check once it's loaded.
 
 ## Scope (deliberately minimal — MVP only)
 
-- One command, one button: select a frame in Figma, click "Import to WildCast." No settings
-  screen, no OAuth flow.
-- Zone detection logic (`zone:<id>` naming convention, image vs. text zone rules) ports from
-  `figma-import.js` to the Plugin API — same rules, read off the live node tree instead of
-  Figma's REST JSON (property names differ slightly, e.g. `absoluteBoundingBox` vs
-  `absoluteRenderBounds`).
-- Plugin exports the background PNG at **trim size directly** (`node.exportAsync`), not
-  bleed-inclusive + server-side crop. Removes the "double bleed" bug class described in
-  STATUS.md entirely, since there's no crop math left to get wrong.
-- One new WildCast endpoint accepts `{ zones JSON, PNG bytes, slotKey, label, cat, format }`
-  directly from the plugin and writes the same draft record the current import writes today.
+- One button: select a frame in Figma, pick a target slot, click Import. No OAuth flow, no
+  per-user auth — a single shared plugin key.
+- Zone detection logic (`zone:<id>` naming convention, image vs. text zone rules) runs
+  server-side against raw node data the plugin sends — see "What's built" above for why this
+  ended up as reuse-via-raw-data-passthrough rather than a literal port of the REST functions.
+- ~~Plugin exports the background PNG at trim size directly~~ — **changed during build**: exports
+  the full bleed frame (plugin sandbox has no crop capability), same server-side crop as before,
+  just fed bytes directly instead of fetched from Figma's images API. Still removes the token
+  dependency, which was the actual point; the "double bleed" bug class was already fixed in the
+  REST path months ago and stays fixed either way, since both paths now share one crop function.
+- New WildCast endpoint (`api/import-figma-plugin.js`) accepts raw node data + PNG bytes + slot
+  info from the plugin and writes the same draft record shape the current import writes today.
 - Draft → review → publish flow (`live: false` until reviewed via `/api/publish-template`)
   stays exactly as-is — no change to that safety gate.
 
@@ -62,40 +88,43 @@ changes whether Build step 4 needs any CORS work.
 - `resolveFigmaToken()`, the Blob-stored `config/figma-token.json`, the token GET/PUT handlers
   in `api/import-figma-template.js`.
 - The token entry UI in `src/components/TemplateImportPage.jsx`.
-- `figmaFetch()`, `parseFigmaUrl()`, and the `/files/` + `/images/` REST calls in
-  `api/_lib/figma-import.js` — the zone-computation logic (`collectZoneNodes`, `toCanvasZone`,
-  `boxToZoneRect`) is what ports forward, not the fetching.
+- `figmaFetch()`, `parseFigmaUrl()`, `importFigmaTemplate()`, and the `/files/` + `/images/` REST
+  calls in `api/_lib/figma-import.js`, plus `api/import-figma-template.js` itself once nothing
+  calls it. Everything else in `figma-import.js` (`boxToZoneRect`, `IMAGE_ZONE_CONFIG`,
+  `ROTATED_TEXT_DEFAULTS`, `cropToTrim`, `toCanvasZoneFromPluginNode`) is shared with or used only
+  by the plugin path — keep it. (`toCanvasZone`, the REST-shaped original, only has one caller —
+  `importFigmaTemplate()` — so it goes when that does.)
 
-## Build steps — start here Monday
+## Start here Monday — set up + first real test
 
-1. **New Figma plugin project** (`manifest.json` + sandbox code + minimal UI) — separate repo/
-   folder from the existing Wild CMYK plugin (different audience: internal template import, not
-   an end-user tool). First thing to actually check, before writing zone logic: confirm the
-   CORS question above by making one throwaway `fetch()` call from plugin sandbox code to any
-   WildCast API route and seeing whether it succeeds without CORS headers on our end. This
-   answers whether step 4 needs CORS work at all.
-2. **Port zone-detection logic** to Plugin API node shapes — `collectZoneNodes`, `toCanvasZone`,
-   `boxToZoneRect` in `api/_lib/figma-import.js` are the functions to port; same `zone:<id>` rules,
-   different property names off the live node (e.g. Plugin API's own bounding-box property, not
-   `absoluteBoundingBox` from the REST JSON — check the exact name against Figma's current Plugin
-   API docs, it's changed naming before).
-3. **Wire `node.exportAsync`** for trim-size PNG export. Depends on the actual Figma master's node
-   structure having a distinct trim-size node to export (not just an inferred inset from the bleed
-   frame's edges) — check this against a real master file first; if no such node exists today,
-   either add one to the Figma file convention or fall back to exporting the bleed frame and
-   cropping (same math already in `figma-import.js`, just ported).
-4. **New WildCast backend endpoint** — accepts `{ zones JSON, PNG bytes, slotKey, label, cat,
-   format }`, gated by `x-api-key` (see "What's already in place" above — a service credential,
-   not an activation key), writes the same draft record shape `api/import-figma-template.js`
-   writes today so the review screen needs zero changes.
-5. **Delete the token-based path** (see above) once the plugin path is confirmed working end to
-   end — don't delete it before then, the current screen is still the only way to import until
-   the plugin actually ships.
+1. **Add the `FIGMA_PLUGIN_KEY` Vercel env var** — same place `WILDCAST_KEYS` lives. Value must
+   exactly match the constant at the top of `figma-plugin/code.js` (`PLUGIN_KEY`). **Redeploy
+   after saving it** — same gotcha as `WILDCAST_KEYS` last time, Vercel env vars don't apply to
+   already-deployed functions until the next deploy.
+2. **Load the plugin in Figma desktop**: menu → Plugins → Development → Import plugin from
+   manifest… → point at `wildcast-app/figma-plugin/manifest.json`.
+3. **Open a real WildCast master file, select one bleed-size frame with real `zone:<id>` layers**,
+   run the plugin, pick an empty slot, click Import. This is the real first test — nothing above
+   has been run against live Figma data yet.
+4. **Watch for, in rough order of likely failure point:**
+   - Does the slot dropdown populate at all? (Tests: manifest's `networkAccess` is accepted by
+     Figma, `code.js`'s `fetch` to `/api/list-templates` works from plugin sandbox code.)
+   - Does clicking Import get past "Uploading to WildCast…" without an error? (Tests: the CORS
+     assumption above, and that `x-plugin-key` matches.)
+   - Once it reports success, open WildCast's Import/Designs review and check the zones actually
+     landed in sane positions — this is where a wrong Plugin API property name would show up as a
+     zone in the wrong place rather than a thrown error.
+5. **Once that works**, move to deleting the token-based path (see "To delete once the plugin
+   ships" above) — not before.
 
-## Open question — confirm before/while building
+## Open questions — confirm during Monday's first test
 
-This changes the workflow from "paste a Figma URL into a web page, from anywhere" to "open the
-Figma file and run the plugin from inside it, then switch to WildCast to review." Given someone
-already needs Figma file access to generate a working token today, this is probably a net
-improvement — but it's a real workflow change, not just plumbing, and should be confirmed as
-acceptable before/while building.
+- The CORS assumption (see "What's built" above) — first thing that'll actually get answered.
+- Do the real Figma masters' `zone:<id>` marker boxes tend to BE the styled text themselves, or
+  a separate boundary box next to a plainly-named text layer (the "sibling" fallback path in
+  `toCanvasZoneFromPluginNode`)? Both are handled, but knowing which is the common case in
+  practice would help prioritize testing.
+- This changes the workflow from "paste a Figma URL into a web page, from anywhere" to "open the
+  Figma file and run the plugin from inside it, then switch to WildCast to review." Given someone
+  already needs Figma file access to generate a working token today, this is probably a net
+  improvement — but confirm it's still the workflow you want once you've actually used it once.

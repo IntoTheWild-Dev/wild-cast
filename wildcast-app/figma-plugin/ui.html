@@ -1,0 +1,88 @@
+<style>
+  body { font-family: Inter, -apple-system, sans-serif; margin: 0; padding: 16px; color: #1a1a1a; background: #fff; }
+  h1 { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+  p.hint { font-size: 11px; color: #888; margin: 0 0 14px; line-height: 1.5; }
+  label { display: block; font-size: 11px; font-weight: 600; color: #444; margin-bottom: 4px; }
+  select, button { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 12px; }
+  select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 14px; background: #fff; }
+  button { padding: 10px; border: none; border-radius: 6px; background: #DF6F6D; color: #fff; font-weight: 700; cursor: pointer; }
+  button:disabled { background: #e5e5e5; color: #999; cursor: not-allowed; }
+  #status { margin-top: 12px; font-size: 12px; line-height: 1.5; }
+  #status.error { color: #B91C1C; }
+  #status.done { color: #16a34a; }
+</style>
+
+<h1>WildCast Import</h1>
+<p class="hint">Select one frame in Figma (with zone:&lt;id&gt; layers), pick a target slot, then Import. Lands as a draft — review and publish it from WildCast.</p>
+
+<label for="slot">Target slot (empty only)</label>
+<select id="slot" disabled><option>Loading slots…</option></select>
+
+<button id="importBtn" disabled>Import</button>
+<div id="status"></div>
+
+<script>
+  const slotSelect = document.getElementById('slot')
+  const importBtn = document.getElementById('importBtn')
+  const statusEl = document.getElementById('status')
+  let slots = []
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text || ''
+    statusEl.className = kind || ''
+  }
+
+  window.onmessage = event => {
+    const msg = event.data.pluginMessage
+    if (!msg) return
+
+    if (msg.type === 'slots') {
+      slots = msg.slots
+      slotSelect.innerHTML = ''
+      if (!slots.length) {
+        slotSelect.innerHTML = '<option value="">No empty slots left</option>'
+        return
+      }
+      slotSelect.innerHTML = slots.map(s => `<option value="${s.slotKey}">${s.label}</option>`).join('')
+      slotSelect.disabled = false
+      importBtn.disabled = false
+    }
+
+    if (msg.type === 'slots-error') {
+      setStatus('Could not load slot list: ' + msg.message, 'error')
+    }
+
+    if (msg.type === 'status') {
+      setStatus(msg.message)
+    }
+
+    if (msg.type === 'error') {
+      setStatus(msg.message, 'error')
+      importBtn.disabled = false
+    }
+
+    if (msg.type === 'done') {
+      const reviewNote = msg.needsReview.length
+        ? ` — check font settings for: ${msg.needsReview.join(', ')}`
+        : ''
+      setStatus(`Imported "${msg.label}" as a draft${reviewNote}. Review and publish it in WildCast.`, 'done')
+      importBtn.disabled = false
+    }
+  }
+
+  importBtn.onclick = () => {
+    const slot = slots.find(s => s.slotKey === slotSelect.value)
+    if (!slot) return
+    importBtn.disabled = true
+    setStatus('Starting…')
+    parent.postMessage({
+      pluginMessage: {
+        type: 'import',
+        slotKey: slot.slotKey,
+        label: slot.label,
+        cat: slot.category,
+        format: slot.format,
+      },
+    }, '*')
+  }
+</script>
