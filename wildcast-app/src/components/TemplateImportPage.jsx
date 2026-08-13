@@ -164,8 +164,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   // badge below was easy to miss, and it wasn't clear an import is always
   // safe (never live) until you deliberately choose to publish it.
   const [showDraftModal, setShowDraftModal] = useState(false)
-  const [actionSlot, setActionSlot] = useState(null)
-  const [actionError, setActionError] = useState('')
   // Per-zone overrides staged in the "Zone settings" review panel below,
   // keyed by zone id — lets a designer correct font size/rotation right here
   // instead of pixel-hunting via screenshots and waiting on a code change.
@@ -174,17 +172,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   const [zoneEdits, setZoneEdits] = useState({})
   const [savingZones, setSavingZones] = useState(false)
   const [zonesSaved, setZonesSaved] = useState(false)
-  // "Previously imported" groups collapse by default — with enough imports
-  // this list gets busy fast, so only the group a designer clicks into opens.
-  const [openGroups, setOpenGroups] = useState(() => new Set())
-
-  function toggleGroup(label) {
-    setOpenGroups(prev => {
-      const next = new Set(prev)
-      next.has(label) ? next.delete(label) : next.add(label)
-      return next
-    })
-  }
 
   // Every "coming soon" slot is a valid import target — Option A/B are hardcoded
   // and never show up here, so an import can never clobber a real live template.
@@ -195,19 +182,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   const liveSlotKeys = new Set((customRecords ?? []).filter(r => r.live).map(r => r.slotKey))
   const emptySlots = BASE_TEMPLATES.filter(t => !t.live && !liveSlotKeys.has(slugify(t.label)))
   const selectedSlot = emptySlots.find(s => s.label === slotLabel)
-
-  // "Previously imported" grouped by category + format (same grouping the
-  // Templates catalogue already uses) instead of one long flat list — this
-  // was Julia's ask once there were enough imports to make the flat list
-  // unwieldy. Sorted alphabetically for a stable, predictable order.
-  const recordGroups = Object.entries(
-    (customRecords ?? []).reduce((groups, r) => {
-      const cap = r.cat ? r.cat.charAt(0).toUpperCase() + r.cat.slice(1) : 'Other'
-      const label = r.format ? `${cap} ${r.format}` : cap
-      ;(groups[label] ??= []).push(r)
-      return groups
-    }, {})
-  ).sort(([a], [b]) => a.localeCompare(b))
 
   async function handleImport(e) {
     e.preventDefault()
@@ -307,42 +281,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     setShowDraftModal(false)
   }
 
-  // Used by the "Previously imported" list — publish/unpublish/archive/restore
-  // any past record, not just the one currently shown in the result panel above.
-  async function handleRecordAction(record, action) {
-    // An override record (Option A/B) has no `.live` field of its own — it's
-    // "live" to partners whenever it isn't archived, since the underlying
-    // template is always hardcoded-visible unless this flag hides it.
-    const isVisibleToPartners = record.isOverrideOnly ? !record.archived : record.live
-    if (action === 'archive' && isVisibleToPartners) {
-      const ok = window.confirm(
-        `"${record.label}" is currently live — partners can see it. Archive it anyway? It disappears from the catalogue immediately; you can restore it as a draft later.`
-      )
-      if (!ok) return
-    }
-    setActionSlot(record.slotKey)
-    setActionError('')
-    try {
-      const res = await fetch('/api/publish-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({ slotKey: record.slotKey, action }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Action failed')
-      // Apply the response immediately — Vercel Blob's list()-based reads
-      // (which is what customRecords/onRefetch ultimately come from) can lag
-      // behind a write by up to ~30s, which made a working action look like
-      // it needed several clicks before this.
-      onOptimisticPatch?.(record.slotKey, { live: data.live, archived: data.archived, isOverrideOnly: data.isOverrideOnly, label: record.label })
-      onRefetch?.()
-    } catch (err) {
-      setActionError(err.message)
-    } finally {
-      setActionSlot(null)
-    }
-  }
-
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
       {showDraftModal && result && (
@@ -378,9 +316,16 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
           Import from Figma
         </h1>
-        <p style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 28 }}>
+        <p style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20 }}>
           Designer-only. Pulls zone geometry + a real bleed background from a Figma master (named <code>zone:&lt;id&gt;</code> boxes) into an empty catalogue slot. Lands as a draft — publish it yourself once you've checked it over.
         </p>
+
+        <div style={{ display: 'flex', gap: 10, padding: '12px 14px', background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 10, marginBottom: 28 }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>🔌</span>
+          <div style={{ fontSize: 12.5, color: 'var(--dark)', lineHeight: 1.6 }}>
+            <strong>Please import via the Figma plugin.</strong> Open the master file in Figma, select a frame, and run "WildCast Import" from the Plugins menu — it lands here as a draft, same as below. The form underneath is the older token-based method.
+          </div>
+        </div>
 
         <FigmaTokenSettings />
 
@@ -526,88 +471,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
           </div>
         )}
 
-        {customRecords?.length > 0 && (
-          <div style={{ marginTop: 40 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', marginBottom: 12 }}>Previously imported</h2>
-            {actionError && (
-              <div style={{ padding: '8px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, color: '#B91C1C', marginBottom: 10 }}>
-                {actionError}
-              </div>
-            )}
-            {recordGroups.map(([groupLabel, records]) => {
-              const isOpen = openGroups.has(groupLabel)
-              return (
-              <div key={groupLabel} style={{ marginBottom: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                <button
-                  onClick={() => toggleGroup(groupLabel)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--dark)', padding: '10px 12px', background: '#fff', border: 'none', textAlign: 'left' }}
-                >
-                  <span style={{ display: 'inline-block', transition: 'transform 0.15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10, color: 'var(--mid)' }}>▶</span>
-                  {groupLabel} <span style={{ fontWeight: 500, color: 'var(--mid)' }}>({records.length})</span>
-                </button>
-                {isOpen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 12px 12px' }}>
-                  {records.map(r => {
-                // Override records (see api/publish-template.js) exist only for
-                // Option A/B — hardcoded static templates with no real draft/
-                // live data of their own, just an archived on/off switch.
-                const status = r.archived ? 'Archived' : r.isOverrideOnly ? 'Built-in' : r.live ? 'Live' : 'Draft'
-                const statusStyle = r.archived
-                  ? { background: '#F3F4F6', color: 'var(--mid)' }
-                  : (r.isOverrideOnly || r.live)
-                    ? { background: '#D1FAE5', color: '#065F46' }
-                    : { background: '#FEF3C7', color: '#92400E' }
-                const busy = actionSlot === r.slotKey
-                const btnStyle = {
-                  padding: '6px 11px', fontSize: 11, fontWeight: 700, borderRadius: 7,
-                  border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)',
-                  cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1, whiteSpace: 'nowrap',
-                }
-                return (
-                  <div key={r.slotKey} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, opacity: r.archived ? 0.65 : 1 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', flex: 1 }}>{r.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100, ...statusStyle }}>
-                      {status}
-                    </span>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {r.archived ? (
-                        <button disabled={busy} onClick={() => handleRecordAction(r, 'restore')} style={btnStyle}>
-                          {busy ? '…' : 'Restore'}
-                        </button>
-                      ) : r.isOverrideOnly ? (
-                        <button disabled={busy} onClick={() => handleRecordAction(r, 'archive')} style={btnStyle}>
-                          {busy ? '…' : 'Archive'}
-                        </button>
-                      ) : r.live ? (
-                        <>
-                          <button disabled={busy} onClick={() => handleRecordAction(r, 'unpublish')} style={btnStyle}>
-                            {busy ? '…' : 'Unpublish'}
-                          </button>
-                          <button disabled={busy} onClick={() => handleRecordAction(r, 'archive')} style={btnStyle}>
-                            {busy ? '…' : 'Archive'}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button disabled={busy} onClick={() => handleRecordAction(r, 'publish')} style={{ ...btnStyle, border: 'none', background: 'var(--primary)', color: '#fff' }}>
-                            {busy ? '…' : 'Publish'}
-                          </button>
-                          <button disabled={busy} onClick={() => handleRecordAction(r, 'archive')} style={btnStyle}>
-                            {busy ? '…' : 'Archive'}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )
-                  })}
-                </div>
-                )}
-              </div>
-              )
-            })}
-          </div>
-        )}
       </div>
     </div>
   )

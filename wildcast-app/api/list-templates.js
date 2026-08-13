@@ -3,6 +3,13 @@
 import { list } from '@vercel/blob'
 
 export default async function handler(req, res) {
+  // The Figma plugin (figma-plugin/code.js) calls this from inside Figma's
+  // own webview, which enforces normal browser CORS — unlike the rest of
+  // this app's endpoints, this one has no per-request secret to check, so a
+  // wildcard origin costs nothing (see FIGMA_IMPORT_ROADMAP.md's "open
+  // questions": this was the anticipated fallback once main-thread fetch
+  // turned out not to bypass CORS after all).
+  res.setHeader('Access-Control-Allow-Origin', '*')
   if (req.method !== 'GET') return res.status(405).end()
 
   const token = process.env.BLOB_READ_WRITE_TOKEN

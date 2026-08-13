@@ -17,6 +17,18 @@ import { requirePluginKey } from './_lib/auth.js'
 import { toCanvasZoneFromPluginNode, cropToTrim } from './_lib/figma-import.js'
 
 export default async function handler(req, res) {
+  // Called from inside Figma's webview, which enforces normal browser CORS.
+  // The POST carries a custom x-plugin-key header, so the browser sends a
+  // preflight OPTIONS request first — that has to succeed (and get these
+  // same headers) before the real POST is even attempted. See
+  // FIGMA_IMPORT_ROADMAP.md's "open questions" — the anticipated fallback
+  // once main-thread fetch turned out not to bypass CORS after all. Auth is
+  // still enforced by requirePluginKey below, not by origin, so a wildcard
+  // origin doesn't weaken it.
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-plugin-key')
+  if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).end()
   if (!requirePluginKey(req, res)) return
 
