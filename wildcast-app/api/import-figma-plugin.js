@@ -1,10 +1,12 @@
 // Receives a completed import directly from the WildCast Figma plugin
 // (figma-plugin/code.js) — the plugin already read the live node tree via
 // the Plugin API and exported the background PNG itself via
-// node.exportAsync, so unlike api/import-figma-template.js (the legacy
-// paste-a-URL path this is meant to replace, see FIGMA_IMPORT_ROADMAP.md)
-// this endpoint makes no Figma API calls of its own and needs no Figma
-// token at all.
+// node.exportAsync, so unlike the old paste-a-URL + personal-access-token
+// path this replaced (api/import-figma-template.js, removed — see
+// FIGMA_IMPORT_ROADMAP.md), this endpoint makes no Figma API calls of its
+// own and needs no Figma token at all. This is now the only way to import
+// a template into the app itself (a separate local CLI script still uses
+// the REST+token path — see scripts/import-figma-template.js).
 //
 // The plugin sends RAW node data (bounding boxes, font info, the exported
 // PNG bytes) rather than pre-computed zone geometry — the actual

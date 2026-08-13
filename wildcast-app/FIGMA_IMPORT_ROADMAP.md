@@ -1,6 +1,6 @@
 # Figma Template Import — Roadmap
 
-**Status:** Build steps 1–4 have a first pass written (2026-08-07) — untested against a real Figma file, since that needs Julia's Figma desktop to actually run. Step 5 (delete the old token path) not started, correctly — don't touch that until the plugin path is confirmed working end to end.
+**Status:** Build steps 1–4 have a first pass written (2026-08-07). A CORS bug blocking the plugin's slot-list fetch was found and fixed 2026-08-13 (see "Open questions" below — the fallback that section anticipated). Step 5 (delete the old token path) is done as of 2026-08-13 — see the note below "To delete once the plugin ships." **The plugin still hasn't been run against a real Figma file end to end** — that's still the next real test, now with no fallback import method if it turns something up.
 
 **Note (2026-08-07):** an earlier conversation this same week floated a simpler alternative — auto-fill the existing paste-a-URL Import screen's field from the plugin's current selection, reusing `api/import-figma-template.js` as-is, no port of zone-detection logic needed. That would work, but it does NOT solve either problem this doc exists to solve (token staleness, the crop-math bug class) — it's a faster-to-type version of the same REST+token flow, not a replacement of it. **The plan below (Plugin API-native, no token) is the one to build.** Flagging this explicitly so Monday doesn't start from the wrong doc.
 
@@ -83,17 +83,28 @@ plugin in Figma desktop** — first thing to check once it's loaded.
 - Draft → review → publish flow (`live: false` until reviewed via `/api/publish-template`)
   stays exactly as-is — no change to that safety gate.
 
-## To delete once the plugin ships
+## Step 5 — deleted 2026-08-13, before the plugin had been tested against a real Figma file
 
-- `resolveFigmaToken()`, the Blob-stored `config/figma-token.json`, the token GET/PUT handlers
-  in `api/import-figma-template.js`.
-- The token entry UI in `src/components/TemplateImportPage.jsx`.
-- `figmaFetch()`, `parseFigmaUrl()`, `importFigmaTemplate()`, and the `/files/` + `/images/` REST
-  calls in `api/_lib/figma-import.js`, plus `api/import-figma-template.js` itself once nothing
-  calls it. Everything else in `figma-import.js` (`boxToZoneRect`, `IMAGE_ZONE_CONFIG`,
-  `ROTATED_TEXT_DEFAULTS`, `cropToTrim`, `toCanvasZoneFromPluginNode`) is shared with or used only
-  by the plugin path — keep it. (`toCanvasZone`, the REST-shaped original, only has one caller —
-  `importFigmaTemplate()` — so it goes when that does.)
+Done ahead of the original plan's own caution ("don't touch until the plugin path is confirmed
+working end to end") — Julia asked for it explicitly, aware that it removes the fallback import
+method until the plugin's first real test happens.
+
+- **Deleted:** `api/import-figma-template.js` whole file (`resolveFigmaToken()`, the token
+  GET/PUT handlers, and the paste-a-URL POST import handler), the Blob-stored
+  `config/figma-token.json` object (now orphaned, harmless), `requireAgencyKey()` in
+  `api/_lib/auth.js` (its only caller), and the token-entry UI + paste-a-URL import form in
+  `src/components/TemplateImportPage.jsx`. That page is now review-only: it lists drafts/live
+  records the plugin created and reuses the exact same zone-overlay/editor/publish panel that
+  used to only populate right after a same-page import.
+- **Kept, deviating from the original plan below:** `figmaFetch()`, `parseFigmaUrl()`,
+  `importFigmaTemplate()`, and `toCanvasZone()` (the REST-shaped original) in
+  `api/_lib/figma-import.js` — turns out `scripts/import-figma-template.js`, a local CLI script
+  still actively recommended (see `project_template_rules` memory) as a fallback for adding a
+  template without going through the web app, depends on all four. Deleting them would have
+  broken that script for no reason connected to what was actually asked (removing the *web app's*
+  token dependency). `boxToZoneRect`, `IMAGE_ZONE_CONFIG`, `ROTATED_TEXT_DEFAULTS`, `cropToTrim`,
+  `toCanvasZoneFromPluginNode` were always shared with/used only by the plugin path and are
+  unaffected either way.
 
 ## Start here Monday — set up + first real test
 
@@ -117,9 +128,15 @@ plugin in Figma desktop** — first thing to check once it's loaded.
 5. **Once that works**, move to deleting the token-based path (see "To delete once the plugin
    ships" above) — not before.
 
-## Open questions — confirm during Monday's first test
+## Open questions — confirm during the first real test
 
-- The CORS assumption (see "What's built" above) — first thing that'll actually get answered.
+- ~~The CORS assumption (see "What's built" above)~~ — **answered, 2026-08-13.** Main-thread
+  `fetch()` does NOT bypass browser CORS in the Figma webview after all — Julia's first plugin
+  load hit "Could not load slot list: Failed to fetch" exactly as this section predicted might
+  happen. Fixed by adding `Access-Control-Allow-Origin` to `api/list-templates.js` and
+  `api/import-figma-plugin.js`, plus explicit `OPTIONS` preflight handling on the latter (its
+  POST carries a custom `x-plugin-key` header, which triggers a preflight). Confirmed live via
+  `curl` against both endpoints after deploy.
 - Do the real Figma masters' `zone:<id>` marker boxes tend to BE the styled text themselves, or
   a separate boundary box next to a plainly-named text layer (the "sibling" fallback path in
   `toCanvasZoneFromPluginNode`)? Both are handled, but knowing which is the common case in

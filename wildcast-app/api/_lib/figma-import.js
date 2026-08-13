@@ -1,6 +1,13 @@
-// Shared Figma-to-WildCast extraction logic — used by both the local CLI
-// script (scripts/import-figma-template.js) and the deployed serverless
-// import route (api/import-figma-template.js). One implementation, no drift.
+// Shared Figma-to-WildCast extraction logic. `parseFigmaUrl`/`figmaFetch`/
+// `toCanvasZone`/`importFigmaTemplate` (the Figma REST API path) are used
+// only by the local CLI script (scripts/import-figma-template.js) now — the
+// deployed self-serve web route that used to share them, requiring a Figma
+// personal access token, was removed once the WildCast Figma plugin
+// (figma-plugin/, api/import-figma-plugin.js) replaced it as the only import
+// path in the app itself; the plugin runs inside Figma's own session, so it
+// needs no token. Everything else here — `boxToZoneRect`, `IMAGE_ZONE_CONFIG`,
+// `ROTATED_TEXT_DEFAULTS`, `cropToTrim`, `toCanvasZoneFromPluginNode` — is
+// used by (or shared with) the plugin's endpoint. See FIGMA_IMPORT_ROADMAP.md.
 //
 // Convention: any node meant to become an editable WildCast zone must be
 // named "zone:<id>" (e.g. "zone:headline", "zone:logo", "zone:photo").

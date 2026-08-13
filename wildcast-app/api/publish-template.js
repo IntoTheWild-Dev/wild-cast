@@ -1,5 +1,5 @@
 // Flips a Figma-imported template's draft/live/archived status. Nothing from
-// /api/import-figma-template.js is partner-visible until this is called
+// /api/import-figma-plugin.js is partner-visible until this is called
 // with action:'publish' — a deliberate review gate before anything goes public.
 import { list, put } from '@vercel/blob'
 import { requireDesignerKey } from './_lib/auth.js'

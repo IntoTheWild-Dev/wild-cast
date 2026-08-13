@@ -34,17 +34,6 @@ export function requireDesignerKey(req, res) {
   return true
 }
 
-// Stricter than requireDesignerKey — only role:'agency' passes. Use for the
-// actual Figma import endpoint, not general template-management ones.
-export function requireAgencyKey(req, res) {
-  const key = req.headers['x-activation-key']
-  if (resolveKeyRole(key) !== 'agency') {
-    res.status(403).json({ error: 'An agency activation key is required for this endpoint.' })
-    return false
-  }
-  return true
-}
-
 // Gate for the Figma plugin's own upload endpoint (api/import-figma-plugin.js)
 // — a private/internal Figma plugin has no logged-in WildCast user at all,
 // so the activation-key/role system above doesn't fit it. This is a single

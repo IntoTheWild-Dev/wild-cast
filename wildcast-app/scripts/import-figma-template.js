@@ -2,9 +2,10 @@
 // Pulls a template's zone geometry + a print-resolution background PNG straight
 // out of Figma, via Figma's REST API — replaces manual pixel-scanning.
 //
-// Extraction logic lives in api/_lib/figma-import.js, shared with the deployed
-// self-serve import route (api/import-figma-template.js). This script just
-// handles the local-CLI concerns: loading the token, writing files to disk.
+// Extraction logic lives in api/_lib/figma-import.js. This script just
+// handles the local-CLI concerns: loading the token, writing files to disk —
+// the deployed web app imports via the WildCast Figma plugin instead (no
+// token needed there); this REST+token path now only exists here.
 //
 // Usage:
 //   node --env-file=.env.local scripts/import-figma-template.js <figma-url> <output-name>

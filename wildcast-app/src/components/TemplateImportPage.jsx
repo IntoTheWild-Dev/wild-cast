@@ -1,19 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Select from './Select'
-import { BASE_TEMPLATES } from './TemplatePicker'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
 
-function slugify(label) {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-}
-
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
 // Matches every live template config's canvasW/canvasH (src/data/templateZones.js)
-// and the record api/import-figma-template.js builds — no single shared
+// and the record api/import-figma-plugin.js builds — no single shared
 // constant exists for it anywhere in the app, this just follows the same
 // hardcoded-316x441 convention already used everywhere else.
 const CANVAS_W = 316
@@ -54,116 +45,10 @@ function ZoneOverlay({ zones, backgroundUrl }) {
   )
 }
 
-// Figma tokens expire every few months — this used to mean a Vercel env var
-// edit + redeploy each time. Now stored in Blob and updatable right here.
-function FigmaTokenSettings() {
-  const [tokenStatus, setTokenStatus] = useState(null) // { configured, source, updatedAt }
-  const [editing, setEditing] = useState(false)
-  const [draftToken, setDraftToken] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
-
-  async function refresh() {
-    try {
-      const res = await fetch('/api/import-figma-template', { headers: activationHeaders() })
-      setTokenStatus(await res.json())
-    } catch {
-      setTokenStatus(null)
-    }
-  }
-
-  useEffect(() => { refresh() }, [])
-
-  async function handleSave(e) {
-    e.preventDefault()
-    if (!draftToken.trim()) return
-    setSaving(true)
-    setSaveError('')
-    try {
-      const res = await fetch('/api/import-figma-template', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({ token: draftToken.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not save token')
-      setDraftToken('')
-      setEditing(false)
-      await refresh()
-    } catch (err) {
-      setSaveError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 28, background: '#fff' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>Figma access token</div>
-          <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 2 }}>
-            {tokenStatus == null
-              ? 'Checking…'
-              : tokenStatus.configured
-                ? `✓ Configured${tokenStatus.updatedAt ? ` — updated ${formatDate(tokenStatus.updatedAt)}` : ' (from server env var)'}`
-                : '⚠ Not configured — imports will fail until one is set'}
-          </div>
-        </div>
-        {!editing && (
-          <button
-            onClick={() => setEditing(true)}
-            style={{ padding: '7px 14px', fontSize: 12, fontWeight: 600, borderRadius: 7, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer' }}
-          >
-            {tokenStatus?.configured ? 'Update token' : 'Set token'}
-          </button>
-        )}
-      </div>
-
-      {editing && (
-        <form onSubmit={handleSave} style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <input
-            type="password"
-            value={draftToken}
-            onChange={e => setDraftToken(e.target.value)}
-            placeholder="figd_… (Figma → Settings → Personal access tokens)"
-            autoFocus
-            style={{ flex: 1, padding: '9px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none' }}
-          />
-          <button
-            type="submit"
-            disabled={saving || !draftToken.trim()}
-            style={{ padding: '9px 16px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: saving || !draftToken.trim() ? '#E5E7EB' : 'var(--primary)', color: saving || !draftToken.trim() ? 'var(--mid)' : '#fff', cursor: saving || !draftToken.trim() ? 'not-allowed' : 'pointer' }}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setEditing(false); setDraftToken(''); setSaveError('') }}
-            style={{ padding: '9px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--mid)', cursor: 'pointer' }}
-          >
-            Cancel
-          </button>
-        </form>
-      )}
-      {saveError && (
-        <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C' }}>{saveError}</div>
-      )}
-    </div>
-  )
-}
-
 export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch }) {
-  const [figmaUrl, setFigmaUrl] = useState('')
-  const [slotLabel, setSlotLabel] = useState('')
-  const [status, setStatus] = useState('idle') // idle | importing | done | error
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [publishing, setPublishing] = useState(false)
-  // A separate, explicit pop-up right after import — the inline "Draft"
-  // badge below was easy to miss, and it wasn't clear an import is always
-  // safe (never live) until you deliberately choose to publish it.
-  const [showDraftModal, setShowDraftModal] = useState(false)
   // Per-zone overrides staged in the "Zone settings" review panel below,
   // keyed by zone id — lets a designer correct font size/rotation right here
   // instead of pixel-hunting via screenshots and waiting on a code change.
@@ -173,49 +58,20 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   const [savingZones, setSavingZones] = useState(false)
   const [zonesSaved, setZonesSaved] = useState(false)
 
-  // Every "coming soon" slot is a valid import target — Option A/B are hardcoded
-  // and never show up here, so an import can never clobber a real live template.
-  // A custom slot that's already LIVE is excluded too (BASE_TEMPLATES' own
-  // live:false never changes for these, so this can't be read off it alone) —
-  // draft and archived custom slots stay valid targets, so re-importing over
-  // an unpublished or archived draft is still allowed.
-  const liveSlotKeys = new Set((customRecords ?? []).filter(r => r.live).map(r => r.slotKey))
-  const emptySlots = BASE_TEMPLATES.filter(t => !t.live && !liveSlotKeys.has(slugify(t.label)))
-  const selectedSlot = emptySlots.find(s => s.label === slotLabel)
+  // Records worth reviewing here — real Figma imports (drafts or already
+  // live) with actual zone geometry, not the synthetic Option A/B override
+  // records TemplatePicker.jsx uses just for its archive toggle. Drafts
+  // first — those are the ones actually waiting on a decision — then most
+  // recent first within each group.
+  const reviewable = (customRecords ?? [])
+    .filter(r => !r.archived && !r.isOverrideOnly && r.zones)
+    .sort((a, b) => (a.live === b.live ? 0 : a.live ? 1 : -1) || (b.createdAt || '').localeCompare(a.createdAt || ''))
 
-  async function handleImport(e) {
-    e.preventDefault()
-    if (!selectedSlot || !figmaUrl.trim()) return
-    setStatus('importing')
+  function selectForReview(slotKey) {
+    setResult(reviewable.find(r => r.slotKey === slotKey) || null)
+    setZoneEdits({})
+    setZonesSaved(false)
     setError('')
-    setResult(null)
-
-    try {
-      const slotKey = slugify(selectedSlot.label)
-      const res = await fetch('/api/import-figma-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({
-          figmaUrl: figmaUrl.trim(),
-          slotKey,
-          label: selectedSlot.label,
-          cat: selectedSlot.category,
-          format: selectedSlot.format,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Import failed')
-      setResult(data)
-      setZoneEdits({})
-      setZonesSaved(false)
-      setStatus('done')
-      setShowDraftModal(true)
-      onOptimisticPatch?.(slotKey, data)
-      onRefetch?.()
-    } catch (err) {
-      setError(err.message)
-      setStatus('error')
-    }
   }
 
   // Merges staged zoneEdits on top of the import result — what's actually
@@ -276,98 +132,37 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     }
   }
 
-  async function handlePublishFromModal() {
-    await handlePublish()
-    setShowDraftModal(false)
-  }
-
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      {showDraftModal && result && (
-        <div
-          onClick={() => setShowDraftModal(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-        >
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 420, maxWidth: '100%' }}>
-            <div style={{ fontSize: 20, marginBottom: 8 }}>📝</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--dark)', marginBottom: 6 }}>Saved as a draft</div>
-            <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.5, marginBottom: 20 }}>
-              "{result.label}" is imported but <strong>not visible to partners yet</strong> — only you can see it here, on this page. Review the background and zones below whenever you like, then publish when you're happy with it.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setShowDraftModal(false)}
-                style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer' }}
-              >
-                Keep as draft — review first
-              </button>
-              <button
-                onClick={handlePublishFromModal}
-                disabled={publishing}
-                style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: publishing ? 'default' : 'pointer' }}
-              >
-                {publishing ? 'Publishing…' : 'Publish now'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 32px 64px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
-          Import from Figma
+          Review Figma imports
         </h1>
         <p style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20 }}>
-          Designer-only. Pulls zone geometry + a real bleed background from a Figma master (named <code>zone:&lt;id&gt;</code> boxes) into an empty catalogue slot. Lands as a draft — publish it yourself once you've checked it over.
+          Designer-only. Check the zone layout an import pulled from Figma, then publish it to the catalogue.
         </p>
 
         <div style={{ display: 'flex', gap: 10, padding: '12px 14px', background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 10, marginBottom: 28 }}>
           <span style={{ fontSize: 16, lineHeight: 1 }}>🔌</span>
           <div style={{ fontSize: 12.5, color: 'var(--dark)', lineHeight: 1.6 }}>
-            <strong>Please import via the Figma plugin.</strong> Open the master file in Figma, select a frame, and run "WildCast Import" from the Plugins menu — it lands here as a draft, same as below. The form underneath is the older token-based method.
+            <strong>Importing happens in Figma.</strong> Open the master file, select a frame (with <code>zone:&lt;id&gt;</code> layers), and run "WildCast Import" from the Plugins menu. It lands here as a draft — pick it below to review and publish.
           </div>
         </div>
 
-        <FigmaTokenSettings />
-
-        <form onSubmit={handleImport} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Figma frame URL</label>
-            <input
-              type="text"
-              value={figmaUrl}
-              onChange={e => setFigmaUrl(e.target.value)}
-              placeholder="https://www.figma.com/design/.../?node-id=..."
-              style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none' }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Target slot (must be empty)</label>
-            <Select
-              value={slotLabel}
-              onChange={e => setSlotLabel(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
-            >
-              <option value="">Select a slot…</option>
-              {emptySlots.map(s => (
-                <option key={s.label} value={s.label}>{s.label}</option>
-              ))}
-            </Select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={status === 'importing' || !selectedSlot || !figmaUrl.trim()}
-            style={{
-              padding: '11px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none',
-              background: status === 'importing' || !selectedSlot || !figmaUrl.trim() ? '#E5E7EB' : 'var(--primary)',
-              color: status === 'importing' || !selectedSlot || !figmaUrl.trim() ? 'var(--mid)' : '#fff',
-              cursor: status === 'importing' || !selectedSlot || !figmaUrl.trim() ? 'not-allowed' : 'pointer',
-            }}
+        <div style={{ marginBottom: 32 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Import to review</label>
+          <Select
+            value={result?.slotKey || ''}
+            onChange={e => selectForReview(e.target.value)}
+            disabled={!reviewable.length}
+            style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
           >
-            {status === 'importing' ? 'Importing…' : 'Import'}
-          </button>
-        </form>
+            <option value="">{reviewable.length ? 'Select an import…' : 'No imports yet — run the plugin in Figma first'}</option>
+            {reviewable.map(r => (
+              <option key={r.slotKey} value={r.slotKey}>{r.label} — {r.live ? 'Live' : 'Draft'}</option>
+            ))}
+          </Select>
+        </div>
 
         {error && (
           <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 13, color: '#B91C1C', marginBottom: 24 }}>
@@ -470,7 +265,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
             </div>
           </div>
         )}
-
       </div>
     </div>
   )
