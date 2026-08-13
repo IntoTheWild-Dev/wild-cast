@@ -254,7 +254,7 @@ function CatalogueView({ groups, onViewGroup }) {
 // ── Designer-only manage menu (Publish / Unpublish / Archive) ────────────────
 // Lets a designer act on a Figma-imported card right where they're browsing,
 // instead of needing the separate Import screen for every routine action.
-function ManageMenu({ record, onAction }) {
+function ManageMenu({ record, onAction, onDelete }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -268,7 +268,11 @@ function ManageMenu({ record, onAction }) {
       if (!ok) return
     }
     setBusy(true)
-    await onAction(record.slotKey, action, record.label)
+    if (action === 'delete') {
+      await onDelete(record.slotKey, record.label)
+    } else {
+      await onAction(record.slotKey, action, record.label)
+    }
     setBusy(false)
     setOpen(false)
   }
@@ -291,21 +295,27 @@ function ManageMenu({ record, onAction }) {
               // this was a real bug: the old logic only ever checked `archived`
               // for override records, so an archived REAL Figma-import record
               // still showed Publish/Archive instead of Restore, with no way
-              // to actually bring it back from this menu.
-              ? [{ label: 'Restore', action: 'restore' }]
+              // to actually bring it back from this menu. Delete only offered
+              // for real records (isOverrideOnly ones have no zones/background
+              // of their own to delete) — Julia's ask, 2026-08-13: archiving
+              // alone left stale test imports around forever with no way to
+              // actually clear them out.
+              ? record.isOverrideOnly
+                ? [{ label: 'Restore', action: 'restore' }]
+                : [{ label: 'Restore', action: 'restore' }, { label: 'Delete permanently', action: 'delete', danger: true }]
               : record.isOverrideOnly
                 // A hardcoded slot (Option A/B) has no draft/live concept of its
                 // own to publish/unpublish — archiving just hides it.
                 ? [{ label: 'Archive', action: 'archive' }]
                 : record.live
                   ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
-                  : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }]
+                  : [{ label: 'Publish', action: 'publish' }, { label: 'Archive', action: 'archive' }, { label: 'Delete permanently', action: 'delete', danger: true }]
             ).map(opt => (
               <button
                 key={opt.action}
                 disabled={busy}
                 onClick={() => run(opt.action)}
-                style={{ display: 'block', width: '100%', padding: '9px 14px', fontSize: 12, fontWeight: 600, textAlign: 'left', border: 'none', background: 'transparent', color: 'var(--dark)', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1, fontFamily: 'inherit' }}
+                style={{ display: 'block', width: '100%', padding: '9px 14px', fontSize: 12, fontWeight: 600, textAlign: 'left', border: 'none', background: 'transparent', color: opt.danger ? '#B91C1C' : 'var(--dark)', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {busy ? '…' : opt.label}
               </button>
@@ -318,7 +328,7 @@ function ManageMenu({ record, onAction }) {
 }
 
 // ── Options view (drilled in) ─────────────────────────────────────────────────
-function OptionsView({ group, customCards, customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onBack, onSelect }) {
+function OptionsView({ group, customCards, customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const { format, category, members } = group
   const cap = category.charAt(0).toUpperCase() + category.slice(1)
@@ -360,6 +370,23 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       // can lag behind a write by up to ~30s), which made this look like it
       // needed several clicks when the first one had already worked.
       onOptimisticPatch?.(slotKey, { live: data.live, archived: data.archived, isOverrideOnly: data.isOverrideOnly, label })
+      onRefetch?.()
+    } catch (err) {
+      window.alert(err.message)
+    }
+  }
+
+  async function handleDelete(slotKey, label) {
+    const ok = window.confirm(`Permanently delete "${label}"? This removes its imported background and zone data for good — unlike Archive, this can't be undone.`)
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/delete-template?slotKey=${encodeURIComponent(slotKey)}`, {
+        method: 'DELETE',
+        headers: activationHeaders(),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Delete failed')
+      onRecordDeleted?.(slotKey)
       onRefetch?.()
     } catch (err) {
       window.alert(err.message)
@@ -409,7 +436,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
               >
-                {record && <ManageMenu record={record} onAction={handleManageAction} />}
+                {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} />}
                 <div style={{ height: 240, background: '#00C2CB', overflow: 'hidden' }}>
                   <img src={t.thumb} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
                 </div>
@@ -427,53 +454,44 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
               </div>
             )
             const isArchived = !!record?.archived
-            // A non-archived draft can be opened and tested exactly like a
-            // live card — designer-only, since only canManage ever populates
-            // `record` here at all. This is the actual "preview a draft"
-            // feature: without it there was no supported way to check a
-            // draft's real layout before publishing it blind.
-            const isPreviewable = !!record && !isArchived
+            // A non-archived draft used to be clickable here, opening the
+            // real partner-facing editor as a way to preview it before
+            // publishing. Removed 2026-08-13 (Julia's call) — reviewing a
+            // draft's zones/background now happens only on the "Review
+            // Figma imports" page, so having a second, different preview
+            // path here just made the run-through more confusing. The card
+            // still shows its Draft badge and the manage menu
+            // (Publish/Archive/Delete) — designer-only, since only
+            // canManage ever populates `record` here at all — it just isn't
+            // clickable anymore.
+            const isDraft = !!record && !isArchived
             return (
               <div
                 key={i}
-                onClick={isPreviewable ? () => setModal(t) : undefined}
                 style={{
                   position: 'relative', background: '#fff', borderRadius: 14,
                   border: record ? '1.5px dashed var(--primary)' : '1px dashed var(--border)',
                   overflow: 'hidden', opacity: record ? 0.85 : 0.55,
-                  cursor: isPreviewable ? 'pointer' : 'default',
-                  transition: isPreviewable ? 'transform 0.15s, box-shadow 0.15s' : undefined,
                 }}
-                onMouseEnter={isPreviewable ? e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' } : undefined}
-                onMouseLeave={isPreviewable ? e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' } : undefined}
               >
-                {record && <ManageMenu record={record} onAction={handleManageAction} />}
-                {isPreviewable && (
+                {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} />}
+                {isDraft && (
                   <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Draft
                   </div>
                 )}
                 <div style={{ height: 240, background: '#F3F4F6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, overflow: 'hidden' }}>
-                  {isPreviewable && t.thumb ? (
-                    <img src={t.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-                  ) : (
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
-                    </div>
-                  )}
-                  {!isPreviewable && (
-                    <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {isArchived ? 'Archived' : 'Coming soon'}
-                    </span>
-                  )}
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: record ? 'var(--primary)' : 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {isArchived ? 'Archived' : isDraft ? 'Draft' : 'Coming soon'}
+                  </span>
                 </div>
                 <div style={{ padding: '16px 18px 18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
-                    {isPreviewable && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>Preview ↗</span>}
-                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
                   <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>
-                    {isArchived ? 'Hidden from partners — use ⋯ to restore it.' : isPreviewable ? 'Draft — click to open and check it, use ⋯ to publish.' : 'Template in progress'}
+                    {isArchived ? 'Hidden from partners — use ⋯ to restore it.' : isDraft ? 'Draft — review it on the Import page, then publish here.' : 'Template in progress'}
                   </div>
                 </div>
               </div>
@@ -605,7 +623,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) — reached via the header logo.
 // mode="catalogue": full template grid — reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
@@ -621,6 +639,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
         canManage={canManage}
         onRefetch={onRefetch}
         onOptimisticPatch={onOptimisticPatch}
+        onRecordDeleted={onRecordDeleted}
         onBack={() => setSelectedGroup(null)}
         onSelect={onSelect}
       />

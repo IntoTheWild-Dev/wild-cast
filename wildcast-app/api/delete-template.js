@@ -1,7 +1,9 @@
 import { list, del } from '@vercel/blob'
+import { requireDesignerKey } from './_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'DELETE') return res.status(405).end()
+  if (!requireDesignerKey(req, res)) return
 
   const { slotKey } = req.query
   if (!slotKey) return res.status(400).json({ error: 'Missing slotKey' })

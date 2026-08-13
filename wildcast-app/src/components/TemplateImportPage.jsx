@@ -10,6 +10,8 @@ import { activationHeaders } from '../lib/activationKey'
 const CANVAS_W = 316
 const CANVAS_H = 441
 
+const zoneColor = z => (z.type === 'image' ? '#3B82F6' : 'var(--primary)')
+
 // Draws each zone's actual box on top of the imported background, in the
 // same 316x441 coordinate space the geometry itself is already in — lets a
 // designer SEE a misaligned box instead of only guessing from raw numbers
@@ -28,19 +30,79 @@ function ZoneOverlay({ zones, backgroundUrl }) {
             top: `${(z.y / CANVAS_H) * 100}%`,
             width: `${(z.width / CANVAS_W) * 100}%`,
             height: `${(z.height / CANVAS_H) * 100}%`,
-            border: `1.5px dashed ${z.type === 'image' ? '#3B82F6' : 'var(--primary)'}`,
+            border: `1.5px dashed ${zoneColor(z)}`,
             background: z.type === 'image' ? 'rgba(59,130,246,0.12)' : 'rgba(223,111,109,0.12)',
             pointerEvents: 'none',
           }}
         >
           <span style={{
             position: 'absolute', top: -1, left: -1, fontSize: 9, fontWeight: 700, lineHeight: 1,
-            padding: '2px 4px', color: '#fff', background: z.type === 'image' ? '#3B82F6' : 'var(--primary)',
+            padding: '2px 4px', color: '#fff', background: zoneColor(z),
           }}>
             {z.id}
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// One zone's editable fields. Redesigned 2026-08-13 (Julia: "very cramped,
+// hard to see") — was a single flex-wrap row cramming X/Y/W/H/Size/Rotate
+// together with 48-52px-wide inputs that clipped their own decimal values
+// (e.g. "44.1" rendering as "44,"). Now a proper labeled grid with room for
+// full values, and a colored dot matching the zone's outline color on the
+// preview so a zone here is easy to match back to its box up there.
+function ZoneCard({ z, onChange }) {
+  const numberInputStyle = {
+    width: '100%', padding: '8px 10px', fontSize: 13, fontFamily: 'inherit',
+    border: '1.5px solid var(--border)', borderRadius: 7, outline: 'none', boxSizing: 'border-box',
+  }
+  const fieldLabelStyle = { display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--mid)', marginBottom: 4 }
+
+  return (
+    <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: zoneColor(z), flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{z.id}</span>
+        <span style={{ fontSize: 11, color: 'var(--light)' }}>{z.type === 'image' ? 'image' : 'text'}</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        {['x', 'y', 'width', 'height'].map(dim => (
+          <label key={dim}>
+            <span style={fieldLabelStyle}>{dim === 'width' ? 'W' : dim === 'height' ? 'H' : dim.toUpperCase()}</span>
+            <input
+              type="number"
+              value={z[dim] ?? ''}
+              onChange={e => onChange({ [dim]: e.target.value === '' ? 0 : Number(e.target.value) })}
+              style={numberInputStyle}
+            />
+          </label>
+        ))}
+      </div>
+
+      {z.type === 'text' && (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+          <label style={{ width: 90 }}>
+            <span style={fieldLabelStyle}>Font size</span>
+            <input
+              type="number"
+              value={z.fontSize ?? ''}
+              onChange={e => onChange({ fontSize: e.target.value === '' ? null : Number(e.target.value) })}
+              style={numberInputStyle}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--dark)', cursor: 'pointer', paddingBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={z.rotate === -90}
+              onChange={e => onChange({ rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
+            />
+            Rotate 90°
+          </label>
+        </div>
+      )}
     </div>
   )
 }
@@ -134,7 +196,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 32px 64px' }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '40px 32px 64px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
           Review Figma imports
         </h1>
@@ -149,7 +211,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
           </div>
         </div>
 
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 32, maxWidth: 420 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Import to review</label>
           <Select
             value={result?.slotKey || ''}
@@ -171,10 +233,13 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
         )}
 
         {result && (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <ZoneOverlay zones={zonesWithEdits()} backgroundUrl={result.backgroundUrl} />
-            <div style={{ padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 380px) 1fr', gap: 28, alignItems: 'start' }}>
+            {/* Left: preview, sticky so it stays in view while scrolling the zone list on the right */}
+            <div style={{ position: 'sticky', top: 24 }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+                <ZoneOverlay zones={zonesWithEdits()} backgroundUrl={result.backgroundUrl} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{result.label}</span>
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
@@ -184,66 +249,36 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                   {result.live ? 'Live' : 'Draft'}
                 </span>
               </div>
-
-              <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--mid)' }}>
                 {result.zones.length} zone(s): {result.zones.map(z => z.id).join(', ')}
               </div>
+            </div>
 
+            {/* Right: everything editable + the actions that act on it */}
+            <div>
               {result.needsReview?.length > 0 && (
-                <div style={{ padding: '8px 10px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, fontSize: 11, color: '#795548', marginBottom: 16 }}>
-                  ⚠ These zones had no live text to read font info from — double-check fontSize/rotation below: {result.needsReview.join(', ')}
+                <div style={{ padding: '10px 12px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, fontSize: 12, color: '#795548', marginBottom: 16 }}>
+                  ⚠ These zones had no live text in Figma to read font info from, so they're using a fallback size — double-check them: {result.needsReview.join(', ')}
                 </div>
               )}
 
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>Zone settings</div>
-                <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 8 }}>
-                  Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} — matches the boxes drawn on the preview above.
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {zonesWithEdits().map(z => (
-                    <div key={z.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', minWidth: 66 }}>{z.id}</span>
-                      {['x', 'y', 'width', 'height'].map(dim => (
-                        <label key={dim} style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {dim === 'width' ? 'W' : dim === 'height' ? 'H' : dim.toUpperCase()}
-                          <input
-                            type="number"
-                            value={z[dim] ?? ''}
-                            onChange={e => updateZoneEdit(z.id, { [dim]: e.target.value === '' ? 0 : Number(e.target.value) })}
-                            style={{ width: 48, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none' }}
-                          />
-                        </label>
-                      ))}
-                      {z.type === 'text' && (
-                        <>
-                          <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            Size
-                            <input
-                              type="number"
-                              value={z.fontSize ?? ''}
-                              onChange={e => updateZoneEdit(z.id, { fontSize: e.target.value === '' ? null : Number(e.target.value) })}
-                              style={{ width: 52, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none' }}
-                            />
-                          </label>
-                          <label style={{ fontSize: 11, color: 'var(--mid)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={z.rotate === -90}
-                              onChange={e => updateZoneEdit(z.id, { rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
-                            />
-                            Rotate 90°
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>Zone settings</div>
+              <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 10 }}>
+                Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} — matches the boxes drawn on the preview.
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                {zonesWithEdits().map(z => (
+                  <ZoneCard key={z.id} z={z} onChange={patch => updateZoneEdit(z.id, patch)} />
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleSaveZones}
                   disabled={savingZones || Object.keys(zoneEdits).length === 0}
                   style={{
-                    marginTop: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
+                    padding: '10px 16px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none',
                     background: savingZones || Object.keys(zoneEdits).length === 0 ? '#E5E7EB' : 'var(--dark)',
                     color: savingZones || Object.keys(zoneEdits).length === 0 ? 'var(--mid)' : '#fff',
                     cursor: savingZones || Object.keys(zoneEdits).length === 0 ? 'not-allowed' : 'pointer',
@@ -251,17 +286,17 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 >
                   {savingZones ? 'Saving…' : zonesSaved ? 'Saved ✓' : 'Save zone settings'}
                 </button>
-              </div>
 
-              {!result.live && (
-                <button
-                  onClick={handlePublish}
-                  disabled={publishing}
-                  style={{ padding: '10px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: publishing ? 'not-allowed' : 'pointer' }}
-                >
-                  {publishing ? 'Publishing…' : 'Publish — make this live'}
-                </button>
-              )}
+                {!result.live && (
+                  <button
+                    onClick={handlePublish}
+                    disabled={publishing}
+                    style={{ padding: '10px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: publishing ? 'not-allowed' : 'pointer' }}
+                  >
+                    {publishing ? 'Publishing…' : 'Publish — make this live'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

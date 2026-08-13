@@ -432,6 +432,13 @@ export default function App() {
     })
   }
 
+  // Same immediate-local-update reasoning as patchCustomRecord above, but for
+  // a real DELETE (api/delete-template.js) — the record needs to disappear
+  // entirely, not get a field merged in, so this filters it out instead.
+  function removeCustomRecord(slotKey) {
+    setCustomTemplates(prev => mergeCustomTemplates(prev.records.filter(r => r.slotKey !== slotKey)))
+  }
+
   function handleFontSizeChange(key, size) {
     pushUndoSnapshot()
     // Restricted review mode only allows a modest ±20% adjustment around the
@@ -880,6 +887,7 @@ export default function App() {
             canManage={activation?.role === 'designer' || activation?.role === 'agency'}
             onRefetch={refetchCustomTemplates}
             onOptimisticPatch={patchCustomRecord}
+            onRecordDeleted={removeCustomRecord}
           />
         </div>
       )}

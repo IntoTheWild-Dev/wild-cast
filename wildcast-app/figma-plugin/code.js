@@ -64,9 +64,15 @@ async function loadEmptySlots() {
   try {
     const res = await fetch(`${API_BASE}/api/list-templates`)
     const data = await res.json()
-    const usedKeys = new Set((data.templates || []).map(r => r.slotKey))
+    // Only an already-LIVE slot is actually unavailable — a draft or
+    // archived record is a valid re-import target (it gets overwritten),
+    // matching how the web app's own equivalent logic has always worked.
+    // An earlier version of this excluded ANY existing record regardless of
+    // status, which silently blocked reusing a slot after archiving it —
+    // real bug, found 2026-08-13 (Julia: "archive doesn't seem to work").
+    const liveKeys = new Set((data.templates || []).filter(r => r.live).map(r => r.slotKey))
     const empty = BASE_SLOTS
-      .filter(s => !s.live && !usedKeys.has(slugify(s.label)))
+      .filter(s => !s.live && !liveKeys.has(slugify(s.label)))
       .map(s => ({ ...s, slotKey: slugify(s.label) }))
     figma.ui.postMessage({ type: 'slots', slots: empty })
   } catch (err) {
