@@ -2,7 +2,21 @@
 
 > **Status: 🔄 Architecture pivot — Phase 1 PDF-injection MVP live on Vercel ✓. Pivoting to canvas-based editor (Fabric.js + Figma API import) for Phase 2. PDF approach deprecated as primary path.**
 > Repo: https://github.com/IntoTheWild-Dev/wild-cast
-> Live: https://wild-cast.vercel.app (check Vercel dashboard for current URL)
+> Live: https://cast.wildstack.studio (confirmed 2026-08-20 — the raw
+> wild-cast.vercel.app domain is squatted by an unrelated site, an Estero
+> High School podcast page; don't use it, use this custom domain instead)
+
+> **Reminder (2026-08-19, from WildLoop work):** if this project uses the
+> same "WOLT" custom font (Omnes-derived, stylistic sets baked in as
+> defaults), check whether its internal name table has the same bug found
+> in WildLoop — the `.otf` files were renamed on disk (`WOLT*.otf`) but
+> their internal Family/PostScript names still read "Omnes", which broke
+> font recognition in After Effects and Plainly's font validation. Fixed
+> for WildLoop by rewriting the name table with `fontTools` (originals
+> backed up to `~/Documents/WOLT-font-originals-backup/`). Apply the same
+> fix here if WildCast's copy has the same issue — check via
+> [fontdrop.info](https://fontdrop.info)'s Data tab before assuming it's
+> fine.
 
 ---
 
