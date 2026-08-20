@@ -1,5 +1,34 @@
 @import "tailwindcss";
 
+/* Template/flyer text fonts only — self-hosted WOLT files, replacing the
+   Adobe Fonts/Typekit "Omnes" embed (removed from index.html). These
+   family names (omnes-cond/omnes-pro) are kept as-is in
+   src/data/templateZones.js and api/_lib/figma-import.js on purpose —
+   only what these names point to changed, not the many zone configs that
+   reference them. The app's own UI font (Satoshi, set on `body` below) is
+   untouched, loaded separately via Fontshare in index.html. */
+@font-face {
+  font-family: 'omnes-cond';
+  src: url('/fonts/wolt/WOLTCond-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'omnes-pro';
+  src: url('/fonts/wolt/WOLTSemiBold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'omnes-pro';
+  src: url('/fonts/wolt/WOLTBold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #FAFAFA;
   --surface: #FFFFFF;

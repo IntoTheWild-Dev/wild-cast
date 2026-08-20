@@ -29,7 +29,10 @@ async function loadFonts() {
       document.fonts.load('500 16px omnes-pro'),
     ])
   } catch {
-    // Proceed if TypeKit is unavailable (ad blocker, network error, etc.)
+    // Proceed if a font file fails to load (network error, etc.) — also
+    // covers omnes-pro/500, which has no self-hosted WOLT face yet (see
+    // src/index.css); the browser falls back to the nearest registered
+    // weight rather than throwing.
   }
 }
 
