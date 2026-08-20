@@ -66,7 +66,7 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
       onClick={onClose}
       style={{
         position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(2,6,24,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6, borderRadius: 16,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 2, borderRadius: 16,
       }}
     >
       <div
