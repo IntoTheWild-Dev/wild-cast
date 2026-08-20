@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import TemplateCandidatePicker from './TemplateCandidatePicker'
+import TemplatePreviewModal, { TEMPLATE_PREVIEW_GROUPS } from './TemplatePreviewModal'
 import AISuggest from './AISuggest'
 import PresetPicker from './PresetPicker'
 import LibraryAssetPickerField from './LibraryAssetPickerField'
@@ -9,6 +10,13 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
 import { GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
+
+// Flattened lookup so picking a preview card can pre-fill the brief's
+// format/business-type answers — see TemplatePreviewModal.jsx for the
+// grouped source data.
+const TEMPLATE_PREVIEW_OPTIONS = TEMPLATE_PREVIEW_GROUPS.flatMap(g =>
+  g.options.map(o => ({ ...o, format: g.format, businessType: g.businessType }))
+)
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -38,16 +46,28 @@ const FEATURES = [
   },
 ]
 
-function HeroColumn() {
+function HeroColumn({ onPickTemplate, selectedCount }) {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
         We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
       </h1>
-      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
+      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 24 }}>
         Tell us what you need, the same way you'd brief a designer — we'll turn it into finished designs to choose from.
       </p>
+      <button
+        type="button"
+        onClick={onPickTemplate}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 36,
+          padding: '11px 20px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
+          border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)',
+        }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+        {selectedCount > 0 ? `Templates picked (${selectedCount})` : 'Pick your template first'}
+      </button>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {FEATURES.map(f => (
           <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -106,8 +126,29 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   const [step, setStep] = useState(1)
   const headlineInputRef = useRef(null)
   const sublineInputRef = useRef(null)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  // Which preview cards the partner has picked — doesn't skip the brief or
+  // candidate generation, just pre-fills the format/business-type answers
+  // (toggleTemplatePick below) so they're not asked something they've
+  // effectively already decided by picking a design to look at.
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState([])
 
   function set(key, value) { setBrief(prev => ({ ...prev, [key]: value })) }
+
+  function toggleTemplatePick(id) {
+    setSelectedTemplateIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      const picked = TEMPLATE_PREVIEW_OPTIONS.filter(o => next.includes(o.id))
+      if (picked.length > 0) {
+        setBrief(prevBrief => ({
+          ...prevBrief,
+          businessType: prevBrief.businessType || picked[0].businessType,
+          formats: Array.from(new Set([...prevBrief.formats, ...picked.map(p => p.format)])),
+        }))
+      }
+      return next
+    })
+  }
 
   function toggleFormat(value) {
     setBrief(prev => ({
@@ -164,8 +205,9 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn />
+          <HeroColumn onPickTemplate={() => setShowTemplateModal(true)} selectedCount={selectedTemplateIds.length} />
 
+          <div style={{ position: 'relative' }}>
           <form
             onSubmit={handleSubmit}
             // Pressing Enter in a plain text <input> natively submits the
@@ -218,11 +260,31 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
         </Field>
 
         <Field label="Formats needed" hint="Pick all that apply.">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
             {FORMATS.map(f => (
               <ChoiceButton key={f.value} active={brief.formats.includes(f.value)} onClick={() => toggleFormat(f.value)} checkbox>{f.label}</ChoiceButton>
             ))}
           </div>
+          {selectedTemplateIds.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowTemplateModal(true)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--primary)', padding: 0, textDecoration: 'underline' }}
+            >
+              Not sure? Pick your template →
+            </button>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--mid)' }}>
+              Picked: {TEMPLATE_PREVIEW_OPTIONS.filter(o => selectedTemplateIds.includes(o.id)).map(o => o.name).join(', ')} —{' '}
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(true)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--primary)', padding: 0, textDecoration: 'underline' }}
+              >
+                change
+              </button>
+            </div>
+          )}
         </Field>
 
         {/* Option A's flyer shows a restaurant name on the artwork — only ask
@@ -358,6 +420,15 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           </div>
         )}
           </form>
+
+          {showTemplateModal && (
+            <TemplatePreviewModal
+              selectedIds={selectedTemplateIds}
+              onToggle={toggleTemplatePick}
+              onClose={() => setShowTemplateModal(false)}
+            />
+          )}
+          </div>
 
         </div>
       </div>
