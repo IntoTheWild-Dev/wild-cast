@@ -437,8 +437,13 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
               >
                 {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} />}
-                <div style={{ height: 240, background: '#00C2CB', overflow: 'hidden' }}>
-                  <img src={t.thumb} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                {/* Matches preview_opt-a/b.png's real 1191x1679 aspect ratio so
+                    the full flyer shows uncropped, same fix as
+                    TemplatePreviewModal.jsx (Julia's fix request, 2026-08-20:
+                    "all template places" should show the full flyer, not just
+                    the new picker popup). */}
+                <div style={{ aspectRatio: '1191 / 1679', background: '#00C2CB', overflow: 'hidden' }}>
+                  <img src={t.thumb} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div style={{ padding: '16px 18px 18px' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{t.label}</div>
