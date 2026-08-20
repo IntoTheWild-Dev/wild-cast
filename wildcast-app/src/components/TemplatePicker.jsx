@@ -665,9 +665,39 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
             <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0, lineHeight: 1.08 }}>Design. Export.</h1>
             <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--primary)', margin: '0 0 20px', lineHeight: 1.08 }}>Print.</h1>
-            <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
+            <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 24 }}>
               Turn your menu or product updates into print-ready flyers in minutes — no designer needed.
             </p>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                background: 'var(--primary-glow)',
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                padding: '14px 16px',
+                marginBottom: 36,
+                maxWidth: 420,
+              }}
+            >
+              <span style={{ color: 'var(--primary)', fontSize: 16, lineHeight: '20px' }}>✦</span>
+              <p style={{ fontSize: 13, color: 'var(--dark)', margin: 0, lineHeight: 1.5 }}>
+                <strong>Before you upload:</strong> product photos should be
+                high resolution — use the <strong>Print</strong> preset in
+                Wild Scale (2400×2400px) — with the background removed
+                (transparent PNG).{' '}
+                <a
+                  href="https://scale.wildstack.studio"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'underline' }}
+                >
+                  Prep your assets with Wild Scale →
+                </a>
+              </p>
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {FEATURES.map(f => (
