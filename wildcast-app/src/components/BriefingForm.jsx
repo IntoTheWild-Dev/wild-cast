@@ -68,6 +68,30 @@ function HeroColumn({ onPickTemplate, selectedCount }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
         {selectedCount > 0 ? `Templates picked (${selectedCount})` : 'Pick your template first'}
       </button>
+
+      <div
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          background: 'var(--primary-glow)', border: '1px solid var(--border)', borderRadius: 12,
+          padding: '14px 16px', marginBottom: 36, maxWidth: 420,
+        }}
+      >
+        <span style={{ color: 'var(--primary)', fontSize: 16, lineHeight: '20px' }}>✦</span>
+        <p style={{ fontSize: 13, color: 'var(--dark)', margin: 0, lineHeight: 1.5 }}>
+          <strong>Before you upload:</strong> product photos should be high
+          resolution — use Wild Scale's <strong>Print</strong> preset
+          (2400×2400px) — with the background removed (transparent PNG).{' '}
+          <a
+            href="https://scale.wildstack.studio"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'underline' }}
+          >
+            Prep your assets with Wild Scale →
+          </a>
+        </p>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {FEATURES.map(f => (
           <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
