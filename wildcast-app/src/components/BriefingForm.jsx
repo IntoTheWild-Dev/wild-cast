@@ -127,24 +127,24 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   const headlineInputRef = useRef(null)
   const sublineInputRef = useRef(null)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
-  // Which preview cards the partner has picked — doesn't skip the brief or
-  // candidate generation, just pre-fills the format/business-type answers
-  // (toggleTemplatePick below) so they're not asked something they've
-  // effectively already decided by picking a design to look at.
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState([])
 
   function set(key, value) { setBrief(prev => ({ ...prev, [key]: value })) }
 
+  // Stored on `brief` itself (not separate local state) so it survives the
+  // round trip through onSubmitted({...brief}) into TemplateCandidatePicker,
+  // which uses it (via getMatchingTemplateIds) to only generate the
+  // design(s) actually picked here instead of always generating both
+  // Option A and B (Julia's fix request, 2026-08-20).
   function toggleTemplatePick(id) {
-    setSelectedTemplateIds(prev => {
+    setBrief(prevBrief => {
+      const prev = prevBrief.preSelectedTemplateIds
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
       const picked = TEMPLATE_PREVIEW_OPTIONS.filter(o => next.includes(o.id))
-      if (picked.length > 0) {
-        setBrief(prevBrief => ({
-          ...prevBrief,
-          businessType: prevBrief.businessType || picked[0].businessType,
-          formats: Array.from(new Set([...prevBrief.formats, ...picked.map(p => p.format)])),
-        }))
+      return {
+        ...prevBrief,
+        preSelectedTemplateIds: next,
+        businessType: picked.length > 0 ? (prevBrief.businessType || picked[0].businessType) : prevBrief.businessType,
+        formats: picked.length > 0 ? Array.from(new Set([...prevBrief.formats, ...picked.map(p => p.format)])) : prevBrief.formats,
       }
       return next
     })
@@ -205,7 +205,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn onPickTemplate={() => setShowTemplateModal(true)} selectedCount={selectedTemplateIds.length} />
+          <HeroColumn onPickTemplate={() => setShowTemplateModal(true)} selectedCount={brief.preSelectedTemplateIds.length} />
 
           <div style={{ position: 'relative' }}>
           <form
@@ -265,7 +265,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
               <ChoiceButton key={f.value} active={brief.formats.includes(f.value)} onClick={() => toggleFormat(f.value)} checkbox>{f.label}</ChoiceButton>
             ))}
           </div>
-          {selectedTemplateIds.length === 0 ? (
+          {brief.preSelectedTemplateIds.length === 0 ? (
             <button
               type="button"
               onClick={() => setShowTemplateModal(true)}
@@ -275,7 +275,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             </button>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--mid)' }}>
-              Picked: {TEMPLATE_PREVIEW_OPTIONS.filter(o => selectedTemplateIds.includes(o.id)).map(o => o.name).join(', ')} —{' '}
+              Picked: {TEMPLATE_PREVIEW_OPTIONS.filter(o => brief.preSelectedTemplateIds.includes(o.id)).map(o => o.name).join(', ')} —{' '}
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(true)}
@@ -423,7 +423,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
 
           {showTemplateModal && (
             <TemplatePreviewModal
-              selectedIds={selectedTemplateIds}
+              selectedIds={brief.preSelectedTemplateIds}
               onToggle={toggleTemplatePick}
               onClose={() => setShowTemplateModal(false)}
             />

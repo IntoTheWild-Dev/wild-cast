@@ -26,6 +26,11 @@ export const FORMATS = [
 
 export const DEFAULT_BRIEF = {
   partner: '', partnerNew: '',
+  // Set via the "Pick your template first" popup (TemplatePreviewModal) —
+  // narrows what TemplateCandidatePicker actually generates at the end
+  // (see getMatchingTemplateIds below) instead of always generating both
+  // Option A and B regardless of what was pre-picked.
+  preSelectedTemplateIds: [],
   businessType: '',
   about: '',
   objective: '', objectiveFollowUp: '',

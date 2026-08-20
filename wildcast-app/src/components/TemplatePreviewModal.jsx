@@ -1,20 +1,33 @@
+import { CANDIDATE_TEMPLATE_IDS } from '../lib/briefToCandidates'
+
+const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
+
 // Lets a partner browse/pick which design(s) they're interested in before
 // filling out the full brief — Julia's ask (2026-08-20): "just so that they
 // can see the templates" before committing to the 3-step form. Multi-select
 // (they can pick more than one to compare), grouped by format so future
 // posters/wild posters slot in as their own group without restructuring.
-// Picking here doesn't skip the brief or the later candidate-generation step
-// — it just previews designs and pre-fills the "Formats needed"/"Business
-// type" answers so the partner isn't asked something they've effectively
-// already decided.
+//
+// Picking here pre-fills the "Formats needed"/"Business type" answers AND
+// narrows what TemplateCandidatePicker actually generates at the end (see
+// brief.preSelectedTemplateIds threading in BriefingForm.jsx and the filter
+// in briefToCandidates.js's getMatchingTemplateIds) — Julia's fix request
+// (2026-08-20): picking just Option A here shouldn't still generate both.
+//
+// Option ids are the REAL candidate template ids (not arbitrary strings) so
+// this ties directly into that generation step with no extra mapping layer.
+// Thumbs match the ones already used on the "Templates" nav page
+// (TemplatePicker.jsx's BASE_TEMPLATES) for consistency — same source
+// images, not a separate set. Tile aspect ratio matches their real 1191x1679
+// px size exactly, so the full flyer shows uncropped.
 const GROUPS = [
   {
     format: 'flyer',
     businessType: 'Restaurant',
     label: 'Restaurant Flyers',
     options: [
-      { id: 'option-a', name: 'Option A', thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png' },
-      { id: 'option-b', name: 'Option B', thumb: '/templates/opt-b-designer-v3.png' },
+      { id: OPTION_A_ID, name: 'Option A', thumb: '/templates/preview_opt-a.png' },
+      { id: OPTION_B_ID, name: 'Option B', thumb: '/templates/preview_opt-b.png' },
     ],
   },
 ]
@@ -37,8 +50,8 @@ function OptionCard({ option, selected, onToggle }) {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
       )}
-      <div style={{ height: 160, background: '#F3F4F6' }}>
-        <img src={option.thumb} alt={option.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+      <div style={{ aspectRatio: '1191 / 1679', background: '#F3F4F6' }}>
+        <img src={option.thumb} alt={option.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
       <div style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{option.name}</div>
     </button>

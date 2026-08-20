@@ -70,7 +70,10 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
       // the first one" isn't always right) wins over the auto-pulled fallback.
       const photoUrl = brief.foodPhotoAsset?.src ?? autoPhotoUrl
       const fields = buildCandidateFields(brief, { logoUrl, photoUrl })
-      setCandidateFields({ [OPTION_A_ID]: fields, [OPTION_B_ID]: fields })
+      // Only build fields for what actually matched (Julia's fix request,
+      // 2026-08-20 — picking just Option A in the preview popup shouldn't
+      // still generate both).
+      setCandidateFields(Object.fromEntries(matchingIds.map(id => [id, fields])))
     }
     run()
     return () => { cancelled = true }
@@ -97,8 +100,12 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
     return <NoMatchFallback brief={brief} onEdit={onEdit} />
   }
 
-  const bothReady = previews[OPTION_A_ID] && previews[OPTION_B_ID]
-  const tickedIds = [OPTION_A_ID, OPTION_B_ID].filter(id => ticked[id])
+  // Renamed usage sites keep "bothReady" name for a minimal diff, but this
+  // now means "everything that actually matched is ready" — could be one
+  // id or two, not always both, since matchingIds is now filtered by any
+  // pre-selection made in the "Pick your template first" popup.
+  const bothReady = matchingIds.length > 0 && matchingIds.every(id => previews[id])
+  const tickedIds = matchingIds.filter(id => ticked[id])
 
   // Julia's confirmed choice (2026-08-03): Send for Review skips the editor
   // entirely, reusing the PNG already captured for the card preview — one
@@ -142,7 +149,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
         )}
 
         <div style={{ display: bothReady ? 'flex' : 'none', gap: 20, justifyContent: 'center' }}>
-          {[OPTION_A_ID, OPTION_B_ID].map(id => {
+          {matchingIds.map(id => {
             // savedPreviews[id] is a fresh capture from the last time this
             // option was saved in the editor — take it over the off-screen
             // render below, which always reflects the brief's original
@@ -217,9 +224,14 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
         )}
       </div>
 
-      {/* Off-screen renders used only to capture a static PNG of each candidate — never shown */}
+      {/* Off-screen renders used only to capture a static PNG of each candidate
+          — never shown. Only rendered for ids that actually matched (present
+          in candidateFields), so picking just Option A in the preview popup
+          doesn't still generate/capture Option B (Julia's fix request,
+          2026-08-20). */}
       {candidateFields && (
         <div style={{ position: 'absolute', left: -9999, top: 0, width: 1, height: 1, overflow: 'hidden' }}>
+          {candidateFields[OPTION_A_ID] && (
           <TemplateCanvas
             config={TEMPLATE_ZONES[OPTION_A_ID]}
             fields={candidateFields[OPTION_A_ID]}
@@ -227,6 +239,8 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
             exportRef={exportRefA}
             onReady={() => capture(OPTION_A_ID, exportRefA)}
           />
+          )}
+          {candidateFields[OPTION_B_ID] && (
           <TemplateCanvas
             config={TEMPLATE_ZONES[OPTION_B_ID]}
             fields={candidateFields[OPTION_B_ID]}
@@ -234,6 +248,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
             exportRef={exportRefB}
             onReady={() => capture(OPTION_B_ID, exportRefB)}
           />
+          )}
         </div>
       )}
     </div>

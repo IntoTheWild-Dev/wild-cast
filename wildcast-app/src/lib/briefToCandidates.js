@@ -13,6 +13,13 @@ export const CANDIDATE_TEMPLATE_IDS = ['wen-cheng-flyer2-simple', 'opt-b-flyer2-
 export function getMatchingTemplateIds(brief) {
   if (brief.businessType !== 'Restaurant') return []
   if (!brief.formats.includes('flyer')) return []
+  // If the partner pre-picked specific design(s) via the "Pick your
+  // template first" popup, only generate those - not every live template
+  // for this business type/format regardless of what was actually picked
+  // (Julia's fix request, 2026-08-20).
+  if (brief.preSelectedTemplateIds?.length > 0) {
+    return CANDIDATE_TEMPLATE_IDS.filter(id => brief.preSelectedTemplateIds.includes(id))
+  }
   return CANDIDATE_TEMPLATE_IDS
 }
 
