@@ -39,11 +39,11 @@ function OptionCard({ option, selected, onToggle }) {
       onClick={() => onToggle(option.id)}
       style={{
         position: 'relative', textAlign: 'left', cursor: 'pointer', padding: 0,
-        borderRadius: 14, overflow: 'hidden', border: selected ? '1.5px solid var(--border)' : '1.5px solid var(--border)',
+        borderRadius: 14, overflow: 'hidden', border: '1px solid var(--primary)',
         background: '#fff', opacity: selected ? 0.55 : 1, transition: 'all 0.15s',
       }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--primary)' }}
-      onMouseLeave={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--border)' }}
+      onMouseEnter={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--primary-dark)' }}
+      onMouseLeave={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--primary)' }}
     >
       {selected && (
         <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, width: 22, height: 22, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
