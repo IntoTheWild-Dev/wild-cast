@@ -362,6 +362,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               fontSize:   fontSizes?.[zone.id] ?? zone.fontSize ?? 24,
               fontFamily: zone.fontFamily || 'omnes-cond',
               fontWeight: zone.fontWeight ? String(zone.fontWeight) : 'normal',
+              // Fabric's default lineHeight (1.16) adds paragraph-style leading
+              // these single-line display zones don't need — several zones'
+              // configured heights are tight enough that the default leading
+              // alone was triggering shrinkToFit even for normal-length text
+              // (Julia's report, 2026-08-20: "headline and subline... always
+              // have to size up"). 1.05 keeps a small safety margin over the
+              // font's raw metrics (glyph descenders) without the extra leading.
+              lineHeight: 1.05,
               fill:    zone.color || '#FFFFFF',
               textAlign: modeRef.current === 'non-designer'
                 ? (zone.align ?? 'left')
