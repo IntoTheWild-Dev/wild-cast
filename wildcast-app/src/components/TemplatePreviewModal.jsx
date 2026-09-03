@@ -3,7 +3,7 @@ import { CANDIDATE_TEMPLATE_IDS } from '../lib/briefToCandidates'
 const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
 
 // Lets a partner browse/pick which design(s) they're interested in before
-// filling out the full brief — Julia's ask (2026-08-20): "just so that they
+// filling out the full brief - Julia's ask (2026-08-20): "just so that they
 // can see the templates" before committing to the 3-step form. Multi-select
 // (they can pick more than one to compare), grouped by format so future
 // posters/wild posters slot in as their own group without restructuring.
@@ -11,13 +11,13 @@ const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
 // Picking here pre-fills the "Formats needed"/"Business type" answers AND
 // narrows what TemplateCandidatePicker actually generates at the end (see
 // brief.preSelectedTemplateIds threading in BriefingForm.jsx and the filter
-// in briefToCandidates.js's getMatchingTemplateIds) — Julia's fix request
+// in briefToCandidates.js's getMatchingTemplateIds) - Julia's fix request
 // (2026-08-20): picking just Option A here shouldn't still generate both.
 //
 // Option ids are the REAL candidate template ids (not arbitrary strings) so
 // this ties directly into that generation step with no extra mapping layer.
 // Thumbs match the ones already used on the "Templates" nav page
-// (TemplatePicker.jsx's BASE_TEMPLATES) for consistency — same source
+// (TemplatePicker.jsx's BASE_TEMPLATES) for consistency - same source
 // images, not a separate set. Tile aspect ratio matches their real 1191x1679
 // px size exactly, so the full flyer shows uncropped.
 const GROUPS = [
@@ -58,23 +58,24 @@ function OptionCard({ option, selected, onToggle }) {
   )
 }
 
-// Renders as position:absolute — the parent (the form's wrapper div) must be
-// position:relative so this covers only the form column, not the hero copy.
+// Renders as position:fixed against the viewport so it's centered on the
+// whole page (and can be wide enough to avoid the grid scrolling), not just
+// the form column it's triggered from.
 export default function TemplatePreviewModal({ selectedIds, onToggle, onClose }) {
   return (
     <div
       onClick={onClose}
       style={{
-        position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(223,111,109,0.55)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 2, borderRadius: 16,
+        position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(223,111,109,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
       }}
     >
       {/* overflow:hidden here (not on the scrollable inner div) keeps the
-          rounded corner intact where it meets the scrollbar — previously
+          rounded corner intact where it meets the scrollbar - previously
           the corner was visibly clipped square by the native scrollbar. */}
       <div
         onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 16, width: '100%', maxHeight: '100%', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}
+        style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 900, maxHeight: '90vh', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}
       >
         <div style={{ padding: 28, overflowY: 'auto', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -82,13 +83,15 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
             <button
               type="button"
               onClick={onClose}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--mid)', padding: 0 }}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--light)', lineHeight: 1, padding: 4 }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--light)'}
             >
-              Close
+              ×
             </button>
           </div>
           <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>
-            Browse what's available — pick as many as you like to compare. You can change this later.
+            Browse what's available - pick as many as you like to compare. You can change this later.
           </p>
 
           {GROUPS.map(group => (
@@ -104,13 +107,13 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
             </div>
           ))}
 
-          {/* Coming soon groups — visible so partners know more is on the way,
+          {/* Coming soon groups - visible so partners know more is on the way,
               matching the same "coming soon" pattern used in TemplatePicker.jsx's
               catalogue view. */}
           {['Posters', 'Wild Posters'].map(label => (
             <div key={label} style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--light)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                {label} — coming soon
+                {label} - coming soon
               </div>
               <div style={{ height: 100, borderRadius: 12, border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--light)', fontSize: 12, fontWeight: 700 }}>
                 Coming soon
@@ -123,7 +126,7 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
             onClick={onClose}
             style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
           >
-            Done{selectedIds.length > 0 ? ` — ${selectedIds.length} selected` : ''}
+            Done{selectedIds.length > 0 ? ` - ${selectedIds.length} selected` : ''}
           </button>
         </div>
       </div>

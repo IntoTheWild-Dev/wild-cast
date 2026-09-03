@@ -7,7 +7,7 @@ const ALL_MERCHANTS = '__all__'
 const ALL_TYPES = '__all__'
 const LAST_MERCHANT_KEY = 'wildcast_library_last_merchant'
 
-// Folders a partner can upload straight into from this page — matches the
+// Folders a partner can upload straight into from this page - matches the
 // same rules the canvas already enforces per zone type (logos: any JPG/PNG,
 // product photos and stickers: must be a real transparent PNG, QR codes: no
 // transparency requirement since QR generators commonly export flat PNGs).
@@ -33,7 +33,7 @@ function EmptyState() {
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--dark)', marginBottom: 6 }}>No assets yet</div>
         <div style={{ fontSize: 13, color: 'var(--mid)', maxWidth: 320 }}>
-          Upload a logo or product photo above, or use one in the editor — either way it's saved here for reuse across designs.
+          Upload a logo or product photo above, or use one in the editor - either way it's saved here for reuse across designs.
         </div>
       </div>
     </div>
@@ -42,7 +42,7 @@ function EmptyState() {
 
 // Asked for by name: clicking an upload button used to silently tag the new
 // asset with whatever merchant happened to be selected in the page-level
-// filter above — not obvious at all, took real figuring-out to notice that
+// filter above - not obvious at all, took real figuring-out to notice that
 // connection existed. Now it asks explicitly, every time, right where the
 // decision actually needs to be made.
 function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onConfirm }) {
@@ -149,7 +149,7 @@ function UploadCard({ folderKey, label, requireTransparent, merchants, defaultMe
       setError(null)
 
       if (requireTransparent && file.type !== 'image/png') {
-        setError('This image has a background — please upload a transparent PNG.')
+        setError('This image has a background - please upload a transparent PNG.')
         return
       }
 
@@ -158,7 +158,7 @@ function UploadCard({ folderKey, label, requireTransparent, merchants, defaultMe
       if (requireTransparent) {
         const transparent = await hasTransparency(url)
         if (!transparent) {
-          setError('This image has a background — please upload a transparent PNG.')
+          setError('This image has a background - please upload a transparent PNG.')
           URL.revokeObjectURL(url)
           return
         }
@@ -264,7 +264,7 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
         ) : (
           <div
             onClick={() => !renaming && setEditing(true)}
-            title={`${asset.name} — click to rename`}
+            title={`${asset.name} - click to rename`}
             style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
           >
             {renaming ? 'Renaming…' : asset.name}
@@ -340,7 +340,7 @@ export default function LibraryPage() {
 
   function handleMerchantChange(next) {
     // Snap to an existing merchant's exact casing when typing a new one that
-    // matches case-insensitively — mirrors the server-side snap that happens
+    // matches case-insensitively - mirrors the server-side snap that happens
     // on actual upload, so the view doesn't show an empty "new" merchant for
     // a moment before the first upload resolves it back to the real one.
     // Recomputed fresh from `assets` here (not the memoized `merchants` below)
@@ -361,7 +361,7 @@ export default function LibraryPage() {
     if (renamed) setAssets(prev => prev.map(a => (a.id === asset.id ? renamed : a)))
   }
 
-  // Moves an asset to a different merchant folder — e.g. consolidating a
+  // Moves an asset to a different merchant folder - e.g. consolidating a
   // stray "wen cheng" duplicate into the real "Wen Cheng".
   async function handleMove(asset, newMerchant) {
     const moved = await renameLibraryAsset(asset.url, asset.name, newMerchant)
@@ -378,7 +378,7 @@ export default function LibraryPage() {
       .filter(a => !q || a.name.toLowerCase().includes(q))
   }, [assets, merchant, typeFilter, search])
 
-  // Default pre-fill for the upload picker's "existing merchant" dropdown —
+  // Default pre-fill for the upload picker's "existing merchant" dropdown -
   // whatever's currently being viewed, if it's a real merchant.
   const defaultUploadMerchant = merchant === ALL_MERCHANTS ? (merchants[0] || GENERAL_MERCHANT) : merchant
 
@@ -394,7 +394,7 @@ export default function LibraryPage() {
             : `${assets.length} saved asset${assets.length === 1 ? '' : 's'}`}
         </p>
 
-        {/* Merchant — filters which assets are shown below. Which merchant a
+        {/* Merchant - filters which assets are shown below. Which merchant a
             NEW upload gets tagged with is asked explicitly in a pop-up when
             you click one of the upload buttons, not decided by this filter. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>

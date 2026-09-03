@@ -10,7 +10,7 @@
 // Food + logo layers are baked into the background PNG for now.
 
 const BG_FLYER1     = '/templates/A6 _ text_swap_wildcast.png'
-// Real bleed exports via scripts/import-figma-template.js — 1259×1747px @288 DPI
+// Real bleed exports via scripts/import-figma-template.js - 1259×1747px @288 DPI
 // (Figma's image API caps scale at 4x = 288 DPI, not quite 300 but print-fine).
 const BG_WEN_CHENG_V3 = '/templates/wen-cheng-v3.png'
 const BG_OPT_B = '/templates/opt-b-designer-v3.png'
@@ -70,23 +70,23 @@ const WEN_CHENG_ZONES = [
   },
 ]
 
-// ── Option A V3 — real bleed master via scripts/import-figma-template.js ───
-// Source: Figma node 4859:24 ("FINAL — A6 Bleed Master, Template A"). Position
+// ── Option A V3 - real bleed master via scripts/import-figma-template.js ───
+// Source: Figma node 4859:24 ("FINAL - A6 Bleed Master, Template A"). Position
 // math is script-derived (not hand pixel-scanned); fontFamily/fontWeight
 // forced to 'omnes-cond'/700 since only that weight is Typekit-loaded (script
 // read the Figma file's real "Omnes Cond"/900, which isn't available to load).
 // sub_headline/headline/offer positions come from their dedicated (non-
-// overlapping) guide rectangles, not the raw text nodes — the text nodes'
+// overlapping) guide rectangles, not the raw text nodes - the text nodes'
 // own bounding boxes overlapped each other by 15-23px since they reflect
 // placeholder-text render height, not designed zone spacing.
 //
 // Coordinates below are further pre-scaled to match `backgroundScale` +
 // `backgroundOffset` on the wen-cheng-flyer2 template configs (see
-// TEMPLATE_ZONES) — same fix, same card art proportions, and the same
+// TEMPLATE_ZONES) - same fix, same card art proportions, and the same
 // Wolt-bag-bleeds-past-bottom issue as Option B's background (this asset
 // comes from the same Figma export batch). See OPT_B_ZONES's comment for
 // the full rationale. `tc` is rotated -90°, so it's transformed via its
-// center point + the average of sX/sY rather than per-axis — a rotated box
+// center point + the average of sX/sY rather than per-axis - a rotated box
 // can't be transformed by two different axis scales without shearing it.
 const WEN_CHENG_V3_ZONES = [
   {
@@ -156,7 +156,7 @@ const WEN_CHENG_V3_ZONES = [
     hint: 'PNG with transparent background',
     // Widened/shortened box (was 284.5×144, a 1.98:1 ratio taken straight from the
     // Figma placeholder) left very little vertical crop slack for most food photos
-    // — most photos aren't that wide, so 'cover' had to zoom in hard. Grown
+    // - most photos aren't that wide, so 'cover' had to zoom in hard. Grown
     // downward into available space (offer zone starts at y=333.2, pre-scale)
     // and narrowed to a gentler 1.7:1 ratio so more of the photo shows and
     // Position nudge actually has room to move.
@@ -166,7 +166,7 @@ const WEN_CHENG_V3_ZONES = [
   {
     id: 'restaurant_name',
     type: 'text',
-    // y nudged +4 from the raw Figma guide rect (pre-scale) — pixel-measured
+    // y nudged +4 from the raw Figma guide rect (pre-scale) - pixel-measured
     // against the baked "♥ WOLT" wordmark: at y:149 the name's own baseline
     // sat 4px above WOLT's baseline, reading as not-inline. Confirmed via
     // canvas pixel scan, not guesswork.
@@ -179,15 +179,15 @@ const WEN_CHENG_V3_ZONES = [
     align: 'right',
     autoShrink: true,
     // No manual font-size control exists for this zone in any mode (FieldEditor
-    // renders it with showControls=false/showSize=false) — auto-shrink must run
+    // renders it with showControls=false/showSize=false) - auto-shrink must run
     // in designer mode too, or a long name has no way to avoid wrapping onto a
     // second line and breaking alignment with the baked "♥ WOLT" beside it.
     alwaysShrink: true,
   },
 ]
 
-// ── Option B zones — first template built via the Figma import pipeline ─────
-// Source: Figma node 4861:2 ("FINAL — A6 Bleed Master (Template B)"), derived
+// ── Option B zones - first template built via the Figma import pipeline ─────
+// Source: Figma node 4861:2 ("FINAL - A6 Bleed Master (Template B)"), derived
 // from the McDonald's Q4 Tactical Koblenz flyer. Zone coords computed (not
 // hand pixel-scanned) from Figma's real geometry:
 //   canvasX = (figmaX - BLEED_UNITS) * (316 / TRIM_W_UNITS)
@@ -195,12 +195,12 @@ const WEN_CHENG_V3_ZONES = [
 // fontSize scaled the same way (55pt Figma × 441/419.53 ≈ 58).
 // The line that named McDonald's ("...bei McDonald's bestellen.") was masked
 // out of the background art and replaced by the free-text `cta` zone below,
-// so any partner can fill in their own line — no partner branding is baked in.
+// so any partner can fill in their own line - no partner branding is baked in.
 // Coordinates below are pre-scaled to match `backgroundScale` + `backgroundOffset`
 // on the opt-b template configs (see TEMPLATE_ZONES). The inner margin
 // (card to trim edge) is 4mm on every side, symmetric X and Y, matching the
 // approved "A6 Bleed Master" reference. The Wolt bag graphic still bleeds
-// past the bottom of the card (by design) and past the trim line itself —
+// past the bottom of the card (by design) and past the trim line itself -
 // `bleedExtraBottom` on the template config gives the canvas a few extra
 // real pixels below the trim line so that overflow renders instead of
 // getting hard-clipped by the canvas boundary (see TemplateCanvas.jsx).
@@ -237,18 +237,18 @@ const OPT_B_ZONES = [
     hint: 'PNG with transparent background',
     // Widened/shortened box (was 266.5×122, a 2.18:1 ratio taken straight from the
     // Figma placeholder) left very little horizontal crop slack for most food
-    // photos — grown downward into available space (cta zone starts at y=307)
+    // photos - grown downward into available space (cta zone starts at y=307)
     // and narrowed to a gentler 1.77:1 ratio so more of the photo shows and
     // Position nudge actually has room to move.
     x: 37.36, y: 167.15,
     width: 242.97, height: 135.2,
     // Photo sits directly below the headline with zero gap (169.2 = headline's
-    // own y+height, pre-scale) — extend the clip region up by the full
+    // own y+height, pre-scale) - extend the clip region up by the full
     // (pre-scaled) headline height so the photo can visually overlap it,
     // matching Julia's Figma reference.
     overlapAbove: 45.76,
   },
-  // Line 1 ("Jetzt Wolt App downloaden und") stays baked in the background —
+  // Line 1 ("Jetzt Wolt App downloaden und") stays baked in the background -
   // line 2 was McDonald's-specific ("...bei McDonald's bestellen.") and is now
   // masked out of the background art, replaced by this free-text zone so any
   // partner can fill in their own line instead of a fill-in-the-blank template.
@@ -258,7 +258,7 @@ const OPT_B_ZONES = [
     x: 53.95, y: 310.46,
     width: 209.69, height: 17.68,
     fontSize: 10.48,
-    // omnes-pro Semibold (Julia's ask, 2026-08-07) — omnes-cond has no real
+    // omnes-pro Semibold (Julia's ask, 2026-08-07) - omnes-cond has no real
     // 600-weight face (only 400/700 are registered in the Typekit kit), so
     // fontWeight: 600 on it was being browser-synthesized, not true
     // semibold. omnes-pro actually has a native 600 face.
@@ -279,7 +279,7 @@ export const TEMPLATE_ZONES = {
     zones: WEN_CHENG_ZONES,
   },
   // backgroundScale/backgroundOffset/bleedExtraBottom/trimGapBottom: see
-  // OPT_B_ZONES's comment — same source asset family, same fix (card margin
+  // OPT_B_ZONES's comment - same source asset family, same fix (card margin
   // was ~6.5-6.7mm at fill-exact scale, now a consistent 4mm; Wolt bag
   // bleeds past the bottom trim edge by design, so it gets a little real
   // canvas room instead of being clipped, and the trim-line dash skips
@@ -295,7 +295,7 @@ export const TEMPLATE_ZONES = {
     trimGapBottom: [100, 214],
     zones: WEN_CHENG_V3_ZONES,
   },
-  // Same layout as flyer2 but used with mode='non-designer' — canvas objects locked, guided right panel
+  // Same layout as flyer2 but used with mode='non-designer' - canvas objects locked, guided right panel
   'wen-cheng-flyer2-simple': {
     canvasW: 316,
     canvasH: 441,
@@ -316,13 +316,13 @@ export const TEMPLATE_ZONES = {
     zones: WEN_CHENG_ZONES,
   },
 
-  // ── Option B — real bleed export via the Figma import pipeline ────────────
+  // ── Option B - real bleed export via the Figma import pipeline ────────────
   // The card art (BG_OPT_B) already has a margin baked in, but at
   // fill-the-canvas-exactly scale it comes out to ~20px (~6-7mm). backgroundScale
   // zooms in (per-axis, since the art's own aspect isn't exactly the
   // canvas's) so the card's margin measures 4mm on every side (X centered,
   // Y via an explicit backgroundOffset that lands the same 4mm on top and
-  // bottom — the source card art is itself vertically symmetric, so this
+  // bottom - the source card art is itself vertically symmetric, so this
   // works out exact). The Wolt bag still bleeds ~9px past the trim line at
   // this scale; bleedExtraBottom gives the canvas that much real pixel
   // room below the trim line so the bag renders in full instead of getting
@@ -337,7 +337,7 @@ export const TEMPLATE_ZONES = {
     backgroundOffset: { x: -8.91, y: -8.82 },
     bleedExtraBottom: 9,
     // Skips the bottom trim-line dash across the Wolt bag's own horizontal
-    // span (measured off the art at this backgroundScale) — the bag bleeds
+    // span (measured off the art at this backgroundScale) - the bag bleeds
     // past the trim line intentionally, so the guide reads as a stray mark
     // cutting across it there rather than a real cut line. Padded a couple
     // px past the bag's measured 102.7–211.4 range.
@@ -353,7 +353,7 @@ export const TEMPLATE_ZONES = {
     backgroundOffset: { x: -8.91, y: -8.82 },
     bleedExtraBottom: 9,
     // Skips the bottom trim-line dash across the Wolt bag's own horizontal
-    // span (measured off the art at this backgroundScale) — the bag bleeds
+    // span (measured off the art at this backgroundScale) - the bag bleeds
     // past the trim line intentionally, so the guide reads as a stray mark
     // cutting across it there rather than a real cut line. Padded a couple
     // px past the bag's measured 102.7–211.4 range.

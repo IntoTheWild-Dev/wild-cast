@@ -19,7 +19,7 @@ function Row({ label, value }) {
 }
 
 // Shown when the brief's Business type / Formats don't match any live
-// template yet (today: only Restaurant + Flyer has real templates) — a
+// template yet (today: only Restaurant + Flyer has real templates) - a
 // plain, honest read-back rather than pretending candidates exist.
 function NoMatchFallback({ brief, onEdit }) {
   const objective = OBJECTIVES.find(o => o.value === brief.objective)
@@ -30,7 +30,7 @@ function NoMatchFallback({ brief, onEdit }) {
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>No matching template yet</h1>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)', maxWidth: 520 }}>
-          Right now only Restaurant + Flyer has live templates to generate from. Here's what you entered — nothing's been saved.
+          Right now only Restaurant + Flyer has live templates to generate from. Here's what you entered - nothing's been saved.
         </p>
       </div>
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 24px 60px' }}>
@@ -52,7 +52,7 @@ function NoMatchFallback({ brief, onEdit }) {
 export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendForReview, savedIds, savedPreviews }) {
   const [candidateFields, setCandidateFields] = useState(null) // null until resolved
   const [previews, setPreviews] = useState({}) // { [templateId]: pngDataUrl }
-  const [ticked, setTicked] = useState({}) // { [templateId]: boolean } — one or both
+  const [ticked, setTicked] = useState({}) // { [templateId]: boolean } - one or both
   const [sending, setSending] = useState(false)
   const matchingIds = getMatchingTemplateIds(brief)
   const exportRefA = useRef(null)
@@ -65,19 +65,19 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
       const partnerName = resolvePartnerName(brief)
       const { logoUrl, photoUrl: autoPhotoUrl } = await fetchMerchantAssets(partnerName)
       if (cancelled) return
-      // A food photo explicitly picked in the brief (brief.foodPhotoAsset — added
+      // A food photo explicitly picked in the brief (brief.foodPhotoAsset - added
       // because a merchant like Wen Cheng may have several dishes, so "just grab
       // the first one" isn't always right) wins over the auto-pulled fallback.
       const photoUrl = brief.foodPhotoAsset?.src ?? autoPhotoUrl
       const fields = buildCandidateFields(brief, { logoUrl, photoUrl })
       // Only build fields for what actually matched (Julia's fix request,
-      // 2026-08-20 — picking just Option A in the preview popup shouldn't
+      // 2026-08-20 - picking just Option A in the preview popup shouldn't
       // still generate both).
       setCandidateFields(Object.fromEntries(matchingIds.map(id => [id, fields])))
     }
     run()
     return () => { cancelled = true }
-    // brief is a one-shot snapshot passed in on submit — safe to depend on identity only.
+    // brief is a one-shot snapshot passed in on submit - safe to depend on identity only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brief])
 
@@ -101,14 +101,14 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
   }
 
   // Renamed usage sites keep "bothReady" name for a minimal diff, but this
-  // now means "everything that actually matched is ready" — could be one
+  // now means "everything that actually matched is ready" - could be one
   // id or two, not always both, since matchingIds is now filtered by any
   // pre-selection made in the "Pick your template first" popup.
   const bothReady = matchingIds.length > 0 && matchingIds.every(id => previews[id])
   const tickedIds = matchingIds.filter(id => ticked[id])
 
   // Julia's confirmed choice (2026-08-03): Send for Review skips the editor
-  // entirely, reusing the PNG already captured for the card preview — one
+  // entirely, reusing the PNG already captured for the card preview - one
   // review link per ticked design (both ticked = two links, shown together).
   async function handleSend() {
     if (!tickedIds.length || !candidateFields) return
@@ -151,7 +151,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
         <div style={{ display: bothReady ? 'flex' : 'none', gap: 20, justifyContent: 'center' }}>
           {matchingIds.map(id => {
             // savedPreviews[id] is a fresh capture from the last time this
-            // option was saved in the editor — take it over the off-screen
+            // option was saved in the editor - take it over the off-screen
             // render below, which always reflects the brief's original
             // fields and would otherwise silently show pre-edit content
             // after a save (Julia's "preview doesn't show my changes" report,
@@ -215,7 +215,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
               </button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center', marginTop: 8 }}>
-              Send for Review skips editing — it goes straight out as-is.
+              Send for Review skips editing - it goes straight out as-is.
             </div>
             <button onClick={onEdit} style={{ marginTop: 16, width: '100%', padding: '11px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--mid)', cursor: 'pointer' }}>
               ← Edit answers
@@ -225,7 +225,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
       </div>
 
       {/* Off-screen renders used only to capture a static PNG of each candidate
-          — never shown. Only rendered for ids that actually matched (present
+          - never shown. Only rendered for ids that actually matched (present
           in candidateFields), so picking just Option A in the preview popup
           doesn't still generate/capture Option B (Julia's fix request,
           2026-08-20). */}

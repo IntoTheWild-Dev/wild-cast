@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 
-// Shown instead of navigating for any nav item passed disabled=true below —
+// Shown instead of navigating for any nav item passed disabled=true below -
 // small and local rather than its own file since it's a single temporary
 // message, not a reusable modal.
 function ComingSoonModal({ onClose }) {
@@ -17,7 +17,7 @@ function ComingSoonModal({ onClose }) {
       >
         <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--dark)', marginBottom: 6 }}>Coming Soon</div>
         <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.6, marginBottom: 20 }}>
-          The Import tab is being reworked — check back soon.
+          The Import tab is being reworked - check back soon.
         </div>
         <button
           onClick={onClose}
@@ -30,8 +30,52 @@ function ComingSoonModal({ onClose }) {
   )
 }
 
+// Confirms before signing out - clearing the activation key mid-session
+// (e.g. an accidental click) meant re-entering the key to get back in, so a
+// one-step-back confirmation is worth the extra click.
+function SignOutConfirmModal({ onConfirm, onClose }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 340, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--dark)', marginBottom: 6 }}>Sign out?</div>
+        <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.6, marginBottom: 20 }}>
+          You'll need your activation key to sign back in.
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={onClose}
+            style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, background: '#fff', color: 'var(--dark)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+
+  function handleSignOut() {
+    localStorage.removeItem('wildcast_activation_key')
+    localStorage.removeItem('wildcast_credits')
+    localStorage.removeItem('wildcast_role')
+    window.location.reload()
+  }
 
   const navItem = (label, target, disabled) => {
     const active = !disabled && (screen === target || (target === 'catalogue' && screen === 'editor'))
@@ -73,7 +117,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           {navItem('Designs', 'designs')}
           {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
               role:'designer' (client-facing test keys) sees it greyed out with
-              a Coming Soon popup — everything else designer-tier stays the
+              a Coming Soon popup - everything else designer-tier stays the
               same for both roles. See api/_lib/auth.js. */}
           {activation?.role === 'agency' && navItem('Import', 'import')}
           {activation?.role === 'designer' && navItem('Import', 'import', true)}
@@ -99,12 +143,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
                 {activation.credits} credit{activation.credits !== 1 ? 's' : ''}
               </span>
               <button
-                onClick={() => {
-                  localStorage.removeItem('wildcast_activation_key')
-                  localStorage.removeItem('wildcast_credits')
-                  localStorage.removeItem('wildcast_role')
-                  window.location.reload()
-                }}
+                onClick={() => setShowSignOutConfirm(true)}
                 title="Sign Out"
                 style={{ fontSize: 13, color: 'var(--light)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, transition: 'color 0.15s', color: 'var(--mid)' }}
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
@@ -118,6 +157,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
       </div>
     </header>
     {showComingSoon && <ComingSoonModal onClose={() => setShowComingSoon(false)} />}
+    {showSignOutConfirm && <SignOutConfirmModal onConfirm={handleSignOut} onClose={() => setShowSignOutConfirm(false)} />}
     </>
   )
 }

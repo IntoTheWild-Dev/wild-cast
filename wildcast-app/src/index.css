@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Template/flyer text fonts only — self-hosted WOLT files, replacing the
+/* Template/flyer text fonts only - self-hosted WOLT files, replacing the
    Adobe Fonts/Typekit "Omnes" embed (removed from index.html). These
    family names (omnes-cond/omnes-pro) are kept as-is in
-   src/data/templateZones.js and api/_lib/figma-import.js on purpose —
+   src/data/templateZones.js and api/_lib/figma-import.js on purpose -
    only what these names point to changed, not the many zone configs that
    reference them. The app's own UI font (Satoshi, set on `body` below) is
    untouched, loaded separately via Fontshare in index.html. */

@@ -1,17 +1,17 @@
 import { useState } from 'react'
 
 // Real historical Wolt campaign copy pulled straight from the Google Sheet
-// (api/presets.js) — no AI, no generation, exact lines that have already
+// (api/presets.js) - no AI, no generation, exact lines that have already
 // been used and approved. The instant/free/guaranteed-safe counterpart to
 // AISuggest.jsx, which generates new tailored copy instead of reusing exact
 // past lines. Sheet content is German-only, so there's no language toggle
-// here (unlike AISuggest) — showing an empty "EN" tab would be misleading.
+// here (unlike AISuggest) - showing an empty "EN" tab would be misleading.
 //
-// partnerName — when set, results are scoped to that merchant's own past
+// partnerName - when set, results are scoped to that merchant's own past
 // campaigns (matched server-side against the sheet's "Tasks" column), so
 // picking "McD" doesn't surface an unrelated churro or bowl campaign line.
 // Falls back to the full library when nothing matches that partner yet.
-// Shown collapsed to this many entries first — free/no-AI-cost, so "More
+// Shown collapsed to this many entries first - free/no-AI-cost, so "More
 // options" just reveals the rest of what's already fetched, no refetch.
 const VISIBLE_COUNT = 4
 
@@ -76,7 +76,7 @@ export default function PresetPicker({ field, onApply, partnerName }) {
           }}>
             <div style={{ padding: '10px 12px 8px' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {partnerName ? `Past copy — ${partnerName}` : 'Real past Wolt copy'}
+                {partnerName ? `Past copy - ${partnerName}` : 'Real past Wolt copy'}
               </span>
             </div>
 

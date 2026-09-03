@@ -17,7 +17,7 @@ function dayKey(ts) {
 }
 
 // Merges the static template cards with any Figma-imported ones into one
-// id -> {cat, format} lookup — both arrays already carry these fields per
+// id -> {cat, format} lookup - both arrays already carry these fields per
 // card (see src/data/templates.js and customTemplateCards() in
 // src/lib/customTemplates.js), so no extra data needs to be saved onto a
 // project itself to know what kind of design it is.
@@ -46,7 +46,7 @@ function EmptyState({ title, desc }) {
   )
 }
 
-// Shown before any design renders — Julia's ask: search by format + merchant
+// Shown before any design renders - Julia's ask: search by format + merchant
 // as a popup gate, not just inline filters, now that Designs shows everyone's
 // saved work instead of just whoever's browser it's in. Defaults to "All" on
 // both, so clicking straight through shows everything, same as skipping.
@@ -103,7 +103,7 @@ function FilterPopup({ formatOptions, merchantOptions, dateOptions, onApply }) {
 }
 
 // Designs are shared across every activation key now, with no ownership
-// boundary — so opening one always asks first rather than editing the
+// boundary - so opening one always asks first rather than editing the
 // original in place, since anyone might be picking up someone else's saved
 // work. Duplicating creates an independent copy up front; only "Edit
 // original" touches the source record.
@@ -115,7 +115,7 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
           {project.projectName || project.templateName}
         </h3>
         <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>
-          This design is shared — anyone can open it. Edit the original in place, or duplicate it and keep the original untouched.
+          This design is shared - anyone can open it. Edit the original in place, or duplicate it and keep the original untouched.
         </p>
 
         <button
@@ -207,7 +207,7 @@ function DesignCard({ project, loading, onOpen, onDelete }) {
 }
 
 // Designs used to only ever be discoverable via a per-browser localStorage
-// registry — nobody but whoever saved a design, on that exact browser, could
+// registry - nobody but whoever saved a design, on that exact browser, could
 // ever see it existed. Now backed by a real server-side listing
 // (GET /api/save-project), so every activation key sees every saved design.
 export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [] }) {
@@ -255,7 +255,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         (filters.date === ALL || dayKey(p.savedAt) === filters.date) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
-      // Newest first — the blob listing this comes from has no inherent
+      // Newest first - the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
   }, [enriched, filters, nameSearch])
@@ -335,8 +335,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
             {status === 'loading' && 'Loading designs…'}
-            {status === 'error' && 'Could not load designs — try refreshing the page.'}
-            {status === 'ready' && projects.length === 0 && 'Saved designs will appear here — pick up where anyone left off.'}
+            {status === 'error' && 'Could not load designs - try refreshing the page.'}
+            {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
             {status === 'ready' && projects.length > 0 && filters && (
               activeFilterSummary
                 ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
@@ -364,7 +364,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       </div>
 
       {status === 'ready' && projects.length === 0 && (
-        <EmptyState title="No saved designs yet" desc="Open a template, fill in your content, and click Save — it will appear here." />
+        <EmptyState title="No saved designs yet" desc="Open a template, fill in your content, and click Save - it will appear here." />
       )}
 
       {status === 'ready' && projects.length > 0 && filters && filtered.length === 0 && (

@@ -2,7 +2,7 @@ export const TEMPLATES = [
   {
     id: 'wen-cheng-flyer1-simple',
     name: 'Restaurant Flyer · Option A',
-    desc: 'Step-by-step guided editing — fill in your headline, sub-headline and offer. Layout is locked so your flyer always looks on-brand.',
+    desc: 'Step-by-step guided editing - fill in your headline, sub-headline and offer. Layout is locked so your flyer always looks on-brand.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-only',
     mode: 'non-designer',
@@ -14,7 +14,7 @@ export const TEMPLATES = [
   {
     id: 'wen-cheng-flyer2-simple',
     name: 'Restaurant Flyer · Option A',
-    desc: 'Step-by-step guided editing — upload your logo and food photo, fill in your text. Layout is locked so your flyer always looks on-brand.',
+    desc: 'Step-by-step guided editing - upload your logo and food photo, fill in your text. Layout is locked so your flyer always looks on-brand.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-image',
     mode: 'non-designer',
@@ -47,12 +47,12 @@ export const TEMPLATES = [
     thumb: '/templates/Preview&Catalogue_A6 _ 105x148 mm Example.png',
     live: true,
   },
-  // ── Restaurant Flyer Option B — replaced with the Koblenz-based build,
+  // ── Restaurant Flyer Option B - replaced with the Koblenz-based build,
   // the first template brought in through the Figma import pipeline ─────────
   {
     id: 'opt-b-flyer2-simple',
     name: 'Restaurant Flyer · Option B',
-    desc: 'Guided step-by-step editing — upload your logo and food photo, fill in your text. Layout locked.',
+    desc: 'Guided step-by-step editing - upload your logo and food photo, fill in your text. Layout locked.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-image',
     mode: 'non-designer',
@@ -64,7 +64,7 @@ export const TEMPLATES = [
   {
     id: 'opt-b-flyer2',
     name: 'Restaurant Flyer · Option B',
-    desc: 'Full designer control — food photo, logo and all text fields. Drag, resize, restyle anything.',
+    desc: 'Full designer control - food photo, logo and all text fields. Drag, resize, restyle anything.',
     tags: ['A6', 'CMYK', '3mm bleed'],
     type: 'text-image',
     mode: 'designer',
