@@ -76,7 +76,7 @@ function SizeControl({ size, onSize }) {
   )
 }
 
-// Same arrow-button layout as ImageUpload's Position control below — reused
+// Same arrow-button layout as ImageUpload's Position control below - reused
 // here for text zones (headline/sub_headline) in the restricted review mode,
 // where a canvas drag isn't available (see TemplateCanvas.jsx's textPositions).
 function NudgeControl({ onNudge }) {
@@ -108,7 +108,7 @@ function NudgeControl({ onNudge }) {
 // showControls=true adds font-size, alignment and reset position (designer mode)
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
-// AI Suggest — only Scale (showSize) and onNudge, if passed, stay available.
+// AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
 function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed }) {
   const limit = CHAR_LIMITS[fieldKey]
   const hint = FIELD_HINTS[fieldKey]
@@ -136,7 +136,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         </div>
       </div>
 
-      {/* Controls row — full (designer) or size-only (guided/restricted) */}
+      {/* Controls row - full (designer) or size-only (guided/restricted) */}
       {(showControls || showSize) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 34 }}>
           {showControls && align != null && <AlignControl align={align} onAlign={onAlign} />}
@@ -211,7 +211,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 
   // Default the library modal's merchant filter to whichever restaurant is
   // currently being edited (re-applied on every open, in case the restaurant
-  // name changed since last time) — most of the time that's exactly what you
+  // name changed since last time) - most of the time that's exactly what you
   // want to reuse from.
   function openLibrary() {
     setLibraryMerchantFilter(merchant)
@@ -223,7 +223,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
     .filter(a => libraryMerchantFilter === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === libraryMerchantFilter)
     .filter(a => !librarySearch.trim() || a.name.toLowerCase().includes(librarySearch.trim().toLowerCase()))
 
-  // The displayed min-resolution text always matches the real 300 DPI check below —
+  // The displayed min-resolution text always matches the real 300 DPI check below -
   // never hardcode a pixel count in a zone's hint string, it will drift from this.
   const fullHint = minWidth && minHeight ? `${hint} · min ${minWidth}×${minHeight}px` : hint
 
@@ -234,7 +234,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       img.onload = () => {
         if (img.naturalWidth < minWidth || img.naturalHeight < minHeight) {
           const effectiveDpi = Math.round((img.naturalWidth / (minWidth / 300)))
-          setResWarning(`Low resolution — approx. ${effectiveDpi} DPI (300 DPI recommended for print). Images may appear pixelated when printed.`)
+          setResWarning(`Low resolution - approx. ${effectiveDpi} DPI (300 DPI recommended for print). Images may appear pixelated when printed.`)
         } else {
           setResWarning(null)
         }
@@ -253,7 +253,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       setBgError(null)
 
       if (requireTransparent && file.type !== 'image/png') {
-        setBgError('This image has a background — please upload a transparent PNG.')
+        setBgError('This image has a background - please upload a transparent PNG.')
         return
       }
 
@@ -262,14 +262,14 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
       if (requireTransparent) {
         const transparent = await hasTransparency(url)
         if (!transparent) {
-          setBgError('This image has a background — please upload a transparent PNG.')
+          setBgError('This image has a background - please upload a transparent PNG.')
           URL.revokeObjectURL(url)
           return
         }
       }
 
       // Many QR generators export with a big white "quiet zone" margin baked
-      // into the file — crop it away so a plain "contain" fit fills the zone
+      // into the file - crop it away so a plain "contain" fit fills the zone
       // tightly instead of leaving visible gaps, no manual scale/position
       // needed from a non-designer partner.
       if (autoCropContent) url = await cropToContent(url)
@@ -283,10 +283,10 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
   const handlePickFromLibrary = async asset => {
     setBgError(null)
     if (requireTransparent && !(await hasTransparency(asset.src))) {
-      setBgError('This image has a background — please pick a transparent PNG.')
+      setBgError('This image has a background - please pick a transparent PNG.')
       return
     }
-    // Covers library assets uploaded before this cropping existed — cropToContent
+    // Covers library assets uploaded before this cropping existed - cropToContent
     // is a no-op (returns the same url) if it's already a tight fit.
     const src = autoCropContent ? await cropToContent(asset.src) : asset.src
     applyImage(src, asset.name)
@@ -325,7 +325,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         {value ? (
           <>
             <img src={value} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: square ? 4 : 6 }} />
-            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>{restricted ? 'Uploaded ✓' : 'Uploaded ✓ — click to replace'}</span>
+            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>{restricted ? 'Uploaded ✓' : 'Uploaded ✓ - click to replace'}</span>
           </>
         ) : (
           <>
@@ -342,7 +342,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         )}
       </div>
 
-      {/* Library picker toggle — only shown when this zone's folder already has saved assets */}
+      {/* Library picker toggle - only shown when this zone's folder already has saved assets */}
       {!restricted && libraryAssets.length > 0 && (
         <button
           onClick={openLibrary}
@@ -417,21 +417,21 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         </div>
       )}
 
-      {/* Background rejection — shown when a transparent-PNG zone gets a flattened/promo image */}
+      {/* Background rejection - shown when a transparent-PNG zone gets a flattened/promo image */}
       {bgError && (
         <div style={{ marginTop: 8, padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, fontSize: 11, color: '#B91C1C', lineHeight: 1.5 }}>
           ✕ {bgError}
         </div>
       )}
 
-      {/* Low-resolution warning — shown when uploaded image is below 300 DPI for print */}
+      {/* Low-resolution warning - shown when uploaded image is below 300 DPI for print */}
       {resWarning && (
         <div style={{ marginTop: 8, padding: '8px 10px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, fontSize: 11, color: '#795548', lineHeight: 1.5 }}>
           ⚠ {resWarning}
         </div>
       )}
 
-      {/* Image scale control — shown after upload when in guided mode */}
+      {/* Image scale control - shown after upload when in guided mode */}
       {value && onScaleChange && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
           <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Scale</span>
@@ -455,11 +455,11 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         </div>
       )}
 
-      {/* Nudge control — repositions the photo within its zone. The image can
+      {/* Nudge control - repositions the photo within its zone. The image can
           never be nudged far enough to reveal empty space behind it, so how
           far it can move depends on Scale: at 100% there's often only a few
           clicks' worth of room before it silently stops (by design, not a
-          bug) — the hint below is the only feedback for that today. */}
+          bug) - the hint below is the only feedback for that today. */}
       {value && onNudge && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
           <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Position</span>
@@ -582,12 +582,12 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         {isNonDesigner && (
           <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
             {restricted
-              ? 'This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review — text and images are locked.'
-              : 'Fill in each step below — your text will appear on the preview automatically.'}
+              ? 'This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.'
+              : 'Fill in each step below - your text will appear on the preview automatically.'}
           </div>
         )}
 
-        {/* Text fields — same numbered layout for both modes */}
+        {/* Text fields - same numbered layout for both modes */}
         <StepFieldRow
           step={1} label="Headline" fieldKey="headline"
           value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
@@ -683,7 +683,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                 folder={assetFolderForZone(zone.id)}
                 // Templates without a restaurant_name field (e.g. Figma imports
                 // that don't define one) have nothing to auto-tag the merchant
-                // with — fall back to the project name instead of dumping
+                // with - fall back to the project name instead of dumping
                 // everything into "General", still with zero extra clicks.
                 merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
                 autoCropContent={zone.id === 'qr'}
@@ -698,10 +698,10 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>ICC Profile</div>
-          {/* Every export is FOGRA39 — the only client is Wolt DE (Germany), so
+          {/* Every export is FOGRA39 - the only client is Wolt DE (Germany), so
               this was never a real choice. A dropdown offering other profiles
-              (GRACoL/SWOP/Japan Color) wasn't wired to anything anyway — the
-              export always used FOGRA39 regardless of what was selected — so
+              (GRACoL/SWOP/Japan Color) wasn't wired to anything anyway - the
+              export always used FOGRA39 regardless of what was selected - so
               showing it as a fixed value is more honest than a fake picker. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--dark)' }}>
             <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span>
@@ -712,7 +712,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       </div>
 
       {/* Action footer: Export PDF → Send for Review → Save (restricted review
-          mode hides Export PDF only — Save stays, and returns to the "pick a
+          mode hides Export PDF only - Save stays, and returns to the "pick a
           design" screen so a merchant wanting both A and B isn't stuck) */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!restricted && (

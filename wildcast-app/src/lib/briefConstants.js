@@ -1,10 +1,10 @@
 // Shared between BriefingForm.jsx (collects answers) and briefToCandidates.js
-// (maps answers onto real template zones) — kept in one place so the two
+// (maps answers onto real template zones) - kept in one place so the two
 // never drift apart on what an objective/format value actually means.
 
 export const ADD_NEW = '__add_new__'
 
-// Placeholder partner list — no backend wiring yet, this is just so the
+// Placeholder partner list - no backend wiring yet, this is just so the
 // dropdown feels real while Julia checks the form itself is correct.
 export const PLACEHOLDER_PARTNERS = ['Wen Cheng', 'McD', 'Fressnapf Koblenz', 'AKKO Chicken & Grilled']
 
@@ -16,7 +16,7 @@ export const OBJECTIVES = [
   { value: 'limited_campaign', label: 'Limited campaign', followUp: null },
 ]
 
-// LED Backpack deliberately excluded — decided out of scope (motion format,
+// LED Backpack deliberately excluded - decided out of scope (motion format,
 // WildCast's pipeline only produces static print). See project memory.
 export const FORMATS = [
   { value: 'flyer', label: 'Flyer (A6, A5)' },
@@ -26,7 +26,7 @@ export const FORMATS = [
 
 export const DEFAULT_BRIEF = {
   partner: '', partnerNew: '',
-  // Set via the "Pick your template first" popup (TemplatePreviewModal) —
+  // Set via the "Pick your template first" popup (TemplatePreviewModal) -
   // narrows what TemplateCandidatePicker actually generates at the end
   // (see getMatchingTemplateIds below) instead of always generating both
   // Option A and B regardless of what was pre-picked.
@@ -35,12 +35,12 @@ export const DEFAULT_BRIEF = {
   about: '',
   objective: '', objectiveFollowUp: '',
   formats: [],
-  // Shown on the flyer artwork (Option A's restaurant_name zone) — distinct
+  // Shown on the flyer artwork (Option A's restaurant_name zone) - distinct
   // from Partner name, which just scopes the Library/internal tracking.
   // Left blank, it falls back to Partner name (buildCandidateFields).
   restaurantName: '',
   headline: '', subline: '',
-  // Option B's second CTA line ("Jetzt Wolt App downloaden und <cta>") — its
+  // Option B's second CTA line ("Jetzt Wolt App downloaden und <cta>") - its
   // own field, distinct from Subline. Option A has no equivalent zone at all
   // (it uses `offer` instead), so this only ever reaches Option B's canvas.
   // Left blank, buildCandidateFields falls back to Subline, then the

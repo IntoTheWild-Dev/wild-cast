@@ -1,21 +1,21 @@
 import { useState } from 'react'
 
-// variant="pill" (default) — small colored pill, used inline next to a field
-// (FieldEditor.jsx). variant="button-group" — matches BriefingForm.jsx's
+// variant="pill" (default) - small colored pill, used inline next to a field
+// (FieldEditor.jsx). variant="button-group" - matches BriefingForm.jsx's
 // plain-outlined ChoiceButton style, for sitting alongside "Write my own" /
 // "Choose preset" as one consistent row of mode buttons.
 //
-// context — optional brief details (businessType, about, objective,
+// context - optional brief details (businessType, about, objective,
 // partnerName) passed through to the backend so suggestions are grounded in
 // the actual brief, not just the field type. Omitted by FieldEditor.jsx,
 // which doesn't have easy access to the full brief.
 //
-// credits/onCreditUsed — each generation is a real Claude API call we pay
+// credits/onCreditUsed - each generation is a real Claude API call we pay
 // for, so it costs the activation key one credit (mirrors the export credit
 // deduction in App.jsx). Both are undefined when no activation is in scope,
 // which leaves generation ungated rather than blocking on a false 0.
 //
-// mode="improve" — a separate "Improve with AI" affordance next to the
+// mode="improve" - a separate "Improve with AI" affordance next to the
 // default "Generate" mode: instead of writing fresh copy from the brief, it
 // sends whatever the partner already typed (seedText) as `seed`, and
 // api/ai-suggest.js polishes it or translates it into the target language
@@ -29,7 +29,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   // Cache per language so toggling DE/EN back and forth doesn't refetch.
   const [byLang, setByLang] = useState({})
   // Tracks whether "Suggest more" has already been used for a given
-  // language — capped at one extra round per open, so at most 2 credits
+  // language - capped at one extra round per open, so at most 2 credits
   // (initial + one more) can be spent per language per generation.
   const [moreUsed, setMoreUsed] = useState({})
 
@@ -71,14 +71,14 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
     fetchSuggestions(activeLang, { more: true })
   }
 
-  // Improve mode never trusts the cache — seedText can change between
+  // Improve mode never trusts the cache - seedText can change between
   // opens, so a stale byLang entry would silently show suggestions for
   // whatever was typed last time.
   function needsFetch(l) {
     return isImprove || !byLang[l]
   }
 
-  // Gate before any actual API call (a cache hit in byLang is free — no
+  // Gate before any actual API call (a cache hit in byLang is free - no
   // fetch happens, so no confirmation needed to reopen it).
   function canGenerate(kind = 'initial') {
     if (credits != null && credits <= 0) {
@@ -209,7 +209,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
 
             {!loading && !error && suggestions.length === 0 && (
               <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--light)' }}>
-                No suggestions came back — try again.
+                No suggestions came back - try again.
               </div>
             )}
 
@@ -229,7 +229,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
             )}
 
             <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--light)', borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
-              AI copy — review before publishing
+              AI copy - review before publishing
             </div>
           </div>
         </>

@@ -1,6 +1,6 @@
 import { blobUrlToDataUrl } from './image'
 
-// Shared library, backed by Vercel Blob (not localStorage) — same asset is
+// Shared library, backed by Vercel Blob (not localStorage) - same asset is
 // reusable across designs AND across browsers/devices, and stored at real
 // print resolution instead of a small browsing-thumbnail size.
 const LIBRARY_MAX_DIM = 2400
@@ -17,7 +17,7 @@ export const FOLDERS = {
 // merchant (e.g. a shared Wolt app-store badge reused across restaurants).
 export const GENERAL_MERCHANT = 'General'
 
-// Sorted, deduped merchant names present in a set of assets — "General" always
+// Sorted, deduped merchant names present in a set of assets - "General" always
 // sorts first since it's the fallback bucket, not a real merchant.
 export function uniqueMerchants(assets) {
   const names = new Set(assets.map(a => a.merchant || GENERAL_MERCHANT))
@@ -38,7 +38,7 @@ export function assetFolderForZone(zoneId) {
 }
 
 // The stored blob is private (store-level setting, can't be overridden per-blob),
-// so a plain <img src> can't read it directly — route through the proxy GET
+// so a plain <img src> can't read it directly - route through the proxy GET
 // on this same route, which attaches the Authorization header server-side.
 export function libraryAssetSrc(url) {
   return `/api/library-assets?url=${encodeURIComponent(url)}`
@@ -58,7 +58,7 @@ export async function getLibraryAssets() {
 
 // Saves a blob: URL into the library under the given folder, at full (capped
 // only to a sane hi-res ceiling, not a browsing-thumbnail size) resolution.
-// Fire-and-forget — failures are logged, not surfaced, since this runs
+// Fire-and-forget - failures are logged, not surfaced, since this runs
 // alongside the primary upload-into-the-design flow.
 export async function saveAssetToLibrary(folder, name, blobUrl, merchant) {
   try {
@@ -84,7 +84,7 @@ export async function deleteLibraryAsset(url) {
   }
 }
 
-// Renames an asset in place — several QR codes look identical, so a label
+// Renames an asset in place - several QR codes look identical, so a label
 // is the only way to tell them apart. Vercel Blob has no in-place rename;
 // this copies to a new pathname (same folder/id, new name) and deletes the old one.
 // Passing `merchant` also reassigns/moves the asset to a different merchant folder

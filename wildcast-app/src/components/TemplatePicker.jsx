@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { TEMPLATES } from '../data/templates'
 import { activationHeaders } from '../lib/activationKey'
 
-// Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label —
+// Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label -
 // duplicated (not imported) to keep this file's only dependency on that one
 // small and obvious; must stay byte-identical to match slotKeys correctly.
 function slotKeyFor(label) {
@@ -12,7 +12,7 @@ function slotKeyFor(label) {
 // ── Template data ─────────────────────────────────────────────────────────────
 // This is the fixed 30-slot skeleton (labels/categories/formats never change).
 // Which slots are actually "live" can come from here (Option A/B, hardcoded)
-// or be overlaid at runtime from Figma-imported templates — see
+// or be overlaid at runtime from Figma-imported templates - see
 // overlayCustomCards() below, used by the default-exported TemplatePicker.
 export const BASE_TEMPLATES = [
   {
@@ -65,12 +65,12 @@ export const BASE_TEMPLATES = [
 ]
 
 // Fills empty ("coming soon") slots with matching Figma-imported templates,
-// and separately lets a HARDCODED live slot (Option A/B) be archived too —
+// and separately lets a HARDCODED live slot (Option A/B) be archived too -
 // via a lightweight "override" record (isOverrideOnly:true, no real
 // zones/background, see src/lib/customTemplates.js) keyed by the same
 // slugified label a real Figma import uses. Never touches a hardcoded
 // slot's underlying data, only whether it's shown. Matched by exact label +
-// category + format — the designer picks the target slot by label when
+// category + format - the designer picks the target slot by label when
 // importing, so this only needs a direct match, not fuzzy logic.
 function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
   return baseTemplates.map(slot => {
@@ -83,7 +83,7 @@ function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
     const designerCard = customCards.find(c =>
       c.mode === 'designer' && c.name === slot.label && c.cat === slot.category && c.format === slot.format
     )
-    // Archived records stay invisible everywhere — same as if nothing had
+    // Archived records stay invisible everywhere - same as if nothing had
     // ever been imported into this slot, freeing it up for a fresh import.
     if (!designerCard || designerCard.archived) return slot
     return {
@@ -115,14 +115,14 @@ function deriveGroups(templates) {
 
 // ── Layout picker modal ───────────────────────────────────────────────────────
 function LayoutModal({ entry, onPick, onClose }) {
-  // Text-only modes are disabled for now (design decision — not worth maintaining
+  // Text-only modes are disabled for now (design decision - not worth maintaining
   // both text-only and text+image variants per flyer). Kept in the list with
   // disabled:true rather than deleted so they're easy to re-enable later.
   const options = [
     {
       key: 'guided-text',
       type: 'Text only',
-      desc: 'Headline, sub-headline, offer and T&Cs — no image upload needed.',
+      desc: 'Headline, sub-headline, offer and T&Cs - no image upload needed.',
       templateId: entry.templateIdGuidedText,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="15" x2="18" y2="15"/><line x1="4" y1="19" x2="12" y2="19"/></svg>,
       disabled: true,
@@ -137,7 +137,7 @@ function LayoutModal({ entry, onPick, onClose }) {
     {
       key: 'designer-text',
       type: 'Text only · Designer',
-      desc: 'Full control — move, resize and restyle any element freely.',
+      desc: 'Full control - move, resize and restyle any element freely.',
       templateId: entry.templateIdDesignerText,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
       disabled: true,
@@ -259,12 +259,12 @@ function ManageMenu({ record, onAction, onDelete }) {
   const [busy, setBusy] = useState(false)
 
   async function run(action) {
-    // An override record (Option A/B) has no `.live` of its own — it's
+    // An override record (Option A/B) has no `.live` of its own - it's
     // visible to partners whenever it isn't archived, since the underlying
     // template is hardcoded-visible unless this flag hides it.
     const isVisibleToPartners = record.isOverrideOnly ? !record.archived : record.live
     if (action === 'archive' && isVisibleToPartners) {
-      const ok = window.confirm(`"${record.label}" is currently live — partners can see it. Archive it anyway? You can restore it as a draft later.`)
+      const ok = window.confirm(`"${record.label}" is currently live - partners can see it. Archive it anyway? You can restore it as a draft later.`)
       if (!ok) return
     }
     setBusy(true)
@@ -291,13 +291,13 @@ function ManageMenu({ record, onAction, onDelete }) {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 4 }} />
           <div style={{ position: 'absolute', top: 32, right: 0, zIndex: 6, background: '#fff', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.18)', border: '1px solid var(--border)', overflow: 'hidden', minWidth: 132 }}>
             {(record.archived
-              // Archived beats everything else, override or real record alike —
+              // Archived beats everything else, override or real record alike -
               // this was a real bug: the old logic only ever checked `archived`
               // for override records, so an archived REAL Figma-import record
               // still showed Publish/Archive instead of Restore, with no way
               // to actually bring it back from this menu. Delete only offered
               // for real records (isOverrideOnly ones have no zones/background
-              // of their own to delete) — Julia's ask, 2026-08-13: archiving
+              // of their own to delete) - Julia's ask, 2026-08-13: archiving
               // alone left stale test imports around forever with no way to
               // actually clear them out.
               ? record.isOverrideOnly
@@ -305,7 +305,7 @@ function ManageMenu({ record, onAction, onDelete }) {
                 : [{ label: 'Restore', action: 'restore' }, { label: 'Delete permanently', action: 'delete', danger: true }]
               : record.isOverrideOnly
                 // A hardcoded slot (Option A/B) has no draft/live concept of its
-                // own to publish/unpublish — archiving just hides it.
+                // own to publish/unpublish - archiving just hides it.
                 ? [{ label: 'Archive', action: 'archive' }]
                 : record.live
                   ? [{ label: 'Unpublish', action: 'unpublish' }, { label: 'Archive', action: 'archive' }]
@@ -341,11 +341,11 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
   }
 
   // Every BASE_TEMPLATES slot (custom import or hardcoded) is keyed by the
-  // same slugified label a real Figma import uses as its slotKey — a real
+  // same slugified label a real Figma import uses as its slotKey - a real
   // custom-import record is found this way whether it's live or still a
   // draft. A hardcoded live slot (Option A/B) usually has no backing record
   // at all (nothing to archive yet); synthesize a virtual one so the menu
-  // still shows, offering just "Archive" — clicking it creates the real
+  // still shows, offering just "Archive" - clicking it creates the real
   // override record server-side on first use (see api/publish-template.js).
   function customRecordFor(t) {
     if (!canManage) return null
@@ -365,7 +365,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Action failed')
-      // Apply the action's own response immediately — a refetch right after
+      // Apply the action's own response immediately - a refetch right after
       // can still read back the pre-action status (Vercel Blob's list() reads
       // can lag behind a write by up to ~30s), which made this look like it
       // needed several clicks when the first one had already worked.
@@ -377,7 +377,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
   }
 
   async function handleDelete(slotKey, label) {
-    const ok = window.confirm(`Permanently delete "${label}"? This removes its imported background and zone data for good — unlike Archive, this can't be undone.`)
+    const ok = window.confirm(`Permanently delete "${label}"? This removes its imported background and zone data for good - unlike Archive, this can't be undone.`)
     if (!ok) return
     try {
       const res = await fetch(`/api/delete-template?slotKey=${encodeURIComponent(slotKey)}`, {
@@ -422,7 +422,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
           {members.map((t, i) => {
             // An archived record is treated as if the slot were empty on this
-            // catalogue page — no "Archived" label, no manage menu here. Julia's
+            // catalogue page - no "Archived" label, no manage menu here. Julia's
             // call: archiving should free the slot up visually too, exactly like
             // it was never imported; restoring only happens from the Import
             // page's "Previously imported" list, which still lists it either way.
@@ -461,13 +461,13 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
             const isArchived = !!record?.archived
             // A non-archived draft used to be clickable here, opening the
             // real partner-facing editor as a way to preview it before
-            // publishing. Removed 2026-08-13 (Julia's call) — reviewing a
+            // publishing. Removed 2026-08-13 (Julia's call) - reviewing a
             // draft's zones/background now happens only on the "Review
             // Figma imports" page, so having a second, different preview
             // path here just made the run-through more confusing. The card
             // still shows its Draft badge and the manage menu
-            // (Publish/Archive/Delete) — designer-only, since only
-            // canManage ever populates `record` here at all — it just isn't
+            // (Publish/Archive/Delete) - designer-only, since only
+            // canManage ever populates `record` here at all - it just isn't
             // clickable anymore.
             const isDraft = !!record && !isArchived
             return (
@@ -496,7 +496,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 <div style={{ padding: '16px 18px 18px' }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mid)' }}>{t.label}</div>
                   <div style={{ fontSize: 12, color: 'var(--light)', marginTop: 4 }}>
-                    {isArchived ? 'Hidden from partners — use ⋯ to restore it.' : isDraft ? 'Draft — review it on the Import page, then publish here.' : 'Template in progress'}
+                    {isArchived ? 'Hidden from partners - use ⋯ to restore it.' : isDraft ? 'Draft - review it on the Import page, then publish here.' : 'Template in progress'}
                   </div>
                 </div>
               </div>
@@ -512,7 +512,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
 const FEATURES = [
   {
     title: 'Pre-approved templates',
-    desc: 'On-brand designs, ready to customize — no designer needed.',
+    desc: 'On-brand designs, ready to customize - no designer needed.',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>,
   },
   {
@@ -522,7 +522,7 @@ const FEATURES = [
   },
   {
     title: 'Print-ready CMYK export',
-    desc: 'PDF/X-4 with 3mm bleed — send straight to print.',
+    desc: 'PDF/X-4 with 3mm bleed - send straight to print.',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
   },
   {
@@ -626,8 +626,8 @@ function BriefingForm({ onSubmit }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-// mode="hero": marketing landing (hero copy + briefing form) — reached via the header logo.
-// mode="catalogue": full template grid — reached via the "Templates" nav link.
+// mode="hero": marketing landing (hero copy + briefing form) - reached via the header logo.
+// mode="catalogue": full template grid - reached via the "Templates" nav link.
 export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
@@ -671,7 +671,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
             <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0, lineHeight: 1.08 }}>Design. Export.</h1>
             <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--primary)', margin: '0 0 20px', lineHeight: 1.08 }}>Print.</h1>
             <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 24 }}>
-              Turn your menu or product updates into print-ready flyers in minutes — no designer needed.
+              Turn your menu or product updates into print-ready flyers in minutes - no designer needed.
             </p>
 
             <div
@@ -690,8 +690,8 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
               <span style={{ color: 'var(--primary)', fontSize: 16, lineHeight: '20px' }}>✦</span>
               <p style={{ fontSize: 13, color: 'var(--dark)', margin: 0, lineHeight: 1.5 }}>
                 <strong>Before you upload:</strong> product photos should be
-                high resolution — use the <strong>Print</strong> preset in
-                Wild Scale (2400×2400px) — with the background removed
+                high resolution - use the <strong>Print</strong> preset in
+                Wild Scale (2400×2400px) - with the background removed
                 (transparent PNG).{' '}
                 <a
                   href="https://scale.wildstack.studio"

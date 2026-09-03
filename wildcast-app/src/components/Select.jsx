@@ -4,7 +4,7 @@ import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 // Native <select> with the browser's default (inconsistently-spaced) arrow
 // replaced by a Hugeicons chevron, positioned with proper breathing room.
 export default function Select({ style = {}, ...props }) {
-  // Margin is pulled onto the wrapper instead of the <select> itself —
+  // Margin is pulled onto the wrapper instead of the <select> itself -
   // left on the select, it leaks into the wrapper's own auto height (an
   // inline-block contains its in-flow children's margins), throwing off
   // the icon's top:50% centering by exactly the margin amount.

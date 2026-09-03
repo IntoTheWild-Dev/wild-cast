@@ -24,9 +24,9 @@ export default function HelpModal({ onClose }) {
         {/* Steps */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 28 }}>
           {[
-            { n: 1, title: 'Brief your design', desc: 'Tell us about your partner, what it’s for, and which format you need — just like briefing a designer. Takes under a minute.' },
-            { n: 2, title: 'Pick & fine-tune', desc: 'We generate two ready-made designs (Option A & B) straight from your brief. Pick one, then nudge the text and photos into place. Want different wording? Use AI Suggest or Choose preset on the Headline/Subline — see below.' },
-            { n: 3, title: 'Export & print', desc: 'Click Export PDF to download a print-ready CMYK PDF/X-4 file. Send it straight to your printer — no designer needed.' },
+            { n: 1, title: 'Brief your design', desc: 'Tell us about your partner, what it’s for, and which format you need - just like briefing a designer. Takes under a minute.' },
+            { n: 2, title: 'Pick & fine-tune', desc: 'We generate two ready-made designs (Option A & B) straight from your brief. Pick one, then nudge the text and photos into place. Want different wording? Use AI Suggest or Choose preset on the Headline/Subline - see below.' },
+            { n: 3, title: 'Export & print', desc: 'Click Export PDF to download a print-ready CMYK PDF/X-4 file. Send it straight to your printer - no designer needed.' },
           ].map(({ n, title, desc }) => (
             <div key={n} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
@@ -48,9 +48,9 @@ export default function HelpModal({ onClose }) {
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Getting headline & subline copy</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { icon: '✦', title: 'AI Suggest', desc: 'Generates 6 fresh ideas for that field. Uses 1 credit per set — picking one to use is free. Want more options? "Suggest more" gets one extra set for 1 more credit.' },
+              { icon: '✦', title: 'AI Suggest', desc: 'Generates 6 fresh ideas for that field. Uses 1 credit per set - picking one to use is free. Want more options? "Suggest more" gets one extra set for 1 more credit.' },
               { icon: '✨', title: 'Improve with AI', desc: 'Already typed something? This polishes it, or translates it if you switch language tabs. 1 credit per use.' },
-              { icon: '☰', title: 'Choose preset', desc: 'Real copy from past approved campaigns — completely free, no credit used.' },
+              { icon: '☰', title: 'Choose preset', desc: 'Real copy from past approved campaigns - completely free, no credit used.' },
             ].map(({ icon, title, desc }) => (
               <div key={title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <div style={{ fontSize: 14, color: 'var(--primary)', flexShrink: 0, marginTop: 1, width: 16, textAlign: 'center' }}>{icon}</div>
@@ -62,7 +62,7 @@ export default function HelpModal({ onClose }) {
             ))}
           </div>
           <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 10 }}>
-            Your credit balance is shown top-right — contact Wild Stack if you're running low.
+            Your credit balance is shown top-right - contact Wild Stack if you're running low.
           </div>
         </div>
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 
 // Visual-only bleed margin drawn around the canvas in the editor, matching
-// the Figma master's own look (solid page edge + inset dashed trim line) —
+// the Figma master's own look (solid page edge + inset dashed trim line) -
 // canvas is 316px wide representing 105mm trim, so 3mm bleed ≈ 316/105*3 ≈
 // 9px at this same scale. Purely a CSS wrapper outside the actual canvas;
 // does not change canvasW/canvasH or any zone coordinate.
@@ -17,7 +17,7 @@ const BLEED_MARGIN = 9
 const snapHalf = v => Math.round(v) + 0.5
 
 async function loadFonts() {
-  // document.fonts.ready resolves when @font-face declarations are parsed —
+  // document.fonts.ready resolves when @font-face declarations are parsed -
   // but the actual font FILES may not be downloaded yet (especially on first
   // production load where they aren't cached). document.fonts.load() actively
   // fetches the specific font files and waits until they are usable.
@@ -29,7 +29,7 @@ async function loadFonts() {
       document.fonts.load('500 16px omnes-pro'),
     ])
   } catch {
-    // Proceed if a font file fails to load (network error, etc.) — also
+    // Proceed if a font file fails to load (network error, etc.) - also
     // covers omnes-pro/500, which has no self-hosted WOLT face yet (see
     // src/index.css); the browser falls back to the nearest registered
     // weight rather than throwing.
@@ -68,10 +68,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   // (cover) or push the image outside its own box (contain).
   //
   // Cover-fit images are scaled >= the zone in both dimensions (overflow), so
-  // slack = (scaledDim - zoneDim)/2 — how far the oversized image can shift
+  // slack = (scaledDim - zoneDim)/2 - how far the oversized image can shift
   // before its edge reaches the zone edge. Contain-fit images (e.g. logos) are
   // scaled <= the zone in the non-binding dimension (letterboxed underflow),
-  // so the same formula went negative and Math.max(0, …) floored it to zero —
+  // so the same formula went negative and Math.max(0, …) floored it to zero -
   // nudge was permanently a no-op for any contain-fit zone. Math.abs() unifies
   // both cases: it's the same "how far can this edge travel" distance either way.
   function clampOffset(zone, scaledW, scaledH, rawOffset) {
@@ -92,13 +92,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     const { canvasW, canvasH, backgroundUrl, backgroundFill, backgroundScale, backgroundOffset, bleedExtraBottom, zones } = config
 
     // The fabric canvas normally renders exactly the trim area (canvasW ×
-    // canvasH) — this app deliberately doesn't draw real bleed in the
+    // canvasH) - this app deliberately doesn't draw real bleed in the
     // editor (see trim-guide comment below). bleedExtraBottom is a narrow,
     // opt-in escape hatch: a few extra pixels of real canvas below the trim
     // line so art that intentionally bleeds past the bottom edge (e.g. a
     // product photo hanging off a card) isn't hard-clipped by the canvas
     // boundary itself. Every zone/guide coordinate below still uses
-    // canvasH (the trim height) unchanged — only the fabric canvas's own
+    // canvasH (the trim height) unchanged - only the fabric canvas's own
     // pixel height grows. getPng() crops back to canvasH before export, so
     // nothing about the print output changes.
     const renderH = canvasH + (bleedExtraBottom || 0)
@@ -113,7 +113,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     fabricRef.current = canvas
     zoneObjsRef.current = {}
 
-    // Smart centre guide — show while dragging, hide otherwise (Figma-style). Not needed in non-designer mode.
+    // Smart centre guide - show while dragging, hide otherwise (Figma-style). Not needed in non-designer mode.
     if (mode !== 'non-designer') {
       canvas.on('object:moving', () => {
         const g = zoneObjsRef.current['_centre-guide']
@@ -123,7 +123,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         const g = zoneObjsRef.current['_centre-guide']
         if (g) { g.set('visible', false); canvas.requestRenderAll() }
       })
-      // Snapshot the pre-drag position so a text-zone move/resize is undoable —
+      // Snapshot the pre-drag position so a text-zone move/resize is undoable -
       // fires on mousedown (before any position change), not on the eventual
       // object:modified, so the snapshot captures the state to undo BACK TO.
       canvas.on('mouse:down', opt => {
@@ -184,14 +184,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           return sizes
         },
         getPng: () => {
-          // Hide all guide rects + centre guide — save state to restore after export
+          // Hide all guide rects + centre guide - save state to restore after export
           const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide)
           const prevVis = guideObjs.map(o => o.visible !== false)
           guideObjs.forEach(o => o.set('visible', false))
           const cg = zoneObjsRef.current['_centre-guide']
           if (cg) cg.set('visible', false)
           canvas.renderAll()
-          // left/top/width/height crop back to the trim area — bleedExtraBottom
+          // left/top/width/height crop back to the trim area - bleedExtraBottom
           // (if any) added real canvas pixels below the trim line purely so
           // overflow art isn't hard-clipped on screen; export must still only
           // ever contain the trim-sized image the rest of the pipeline expects.
@@ -236,7 +236,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Shrink a textbox's fontSize until its rendered height fits within the zone.
         // Resets to the base size first so it can grow back if text is deleted.
         // A rotated zone's pre-rotation `height` becomes the visual THICKNESS once
-        // drawn at -90°, so it must fit within zone.width, not zone.height — the
+        // drawn at -90°, so it must fit within zone.width, not zone.height - the
         // axes are swapped by the rotation.
         function shrinkToFit(tb, zone) {
           if (!zone.autoShrink) return
@@ -265,7 +265,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         canvas.add(guide)
         zoneObjsRef.current['_centre-guide'] = guide
 
-        // Trim-line guide — the canvas itself IS the trim size (this app never
+        // Trim-line guide - the canvas itself IS the trim size (this app never
         // renders real bleed in the editor; bleed is only added at export time
         // by mirroring the trim edge outward, see api/export-cmyk.js). A thin
         // dashed outline right at the canvas edge marks that cut line so nothing
@@ -276,7 +276,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // true canvas edge rather than running flush along it. Measured with
         // a pixel-level probe: a stroke whose outer edge sits exactly at the
         // canvas boundary (x=0 or x=canvasW) renders at half the physical
-        // width of one that doesn't — reproducible identically whether drawn
+        // width of one that doesn't - reproducible identically whether drawn
         // as a Rect or as separate Lines, so it's Fabric/canvas clipping the
         // edge-touching half of the stroke, not a rect-vs-line rasterization
         // quirk. Staying 1px clear of every boundary avoids the clip
@@ -284,7 +284,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // (the classic crisp-line trick) keeps each line itself anti-alias-free.
         const trimX0 = 1.5, trimY0 = 1.5, trimX1 = canvasW - 1.5, trimY1 = canvasH - 1.5
         // trimGapBottom: [x0, x1] skips drawing the bottom trim line across
-        // that span — for art that intentionally bleeds past the bottom
+        // that span - for art that intentionally bleeds past the bottom
         // edge (bleedExtraBottom), the dashed line reading on top of that
         // art looks like a stray mark cutting across it rather than a cut
         // guide, since there's nothing to actually cut there in that span.
@@ -316,7 +316,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         zones.forEach(zone => {
           zoneCfgRef.current[zone.id] = zone
 
-          // Zone boundary guide for text zones — visible in editor (designer + guided), hidden on export
+          // Zone boundary guide for text zones - visible in editor (designer + guided), hidden on export
           if (zone.type === 'text' && !zone.rotate) {
             const gLeft = snapHalf(zone.x)
             const gTop  = snapHalf(zone.y)
@@ -353,7 +353,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               width:   textW,
               // A Figma import zone whose source node had no live text to sample
               // (_needsFontReview, see api/_lib/figma-import.js) saves fontSize/
-              // fontFamily as null pending a human filling them in — but Fabric's
+              // fontFamily as null pending a human filling them in - but Fabric's
               // Textbox crashes hard measuring text with a null fontFamily
               // ("Cannot read properties of null (reading 'toLowerCase')" deep in
               // its text-measurement code), which stops the WHOLE canvas from
@@ -363,7 +363,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               fontFamily: zone.fontFamily || 'omnes-cond',
               fontWeight: zone.fontWeight ? String(zone.fontWeight) : 'normal',
               // Fabric's default lineHeight (1.16) adds paragraph-style leading
-              // these single-line display zones don't need — several zones'
+              // these single-line display zones don't need - several zones'
               // configured heights are tight enough that the default leading
               // alone was triggering shrinkToFit even for normal-length text
               // (Julia's report, 2026-08-20: "headline and subline... always
@@ -386,7 +386,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               splitByGrapheme: false,
               _wcZoneId: zone.id,
             })
-            // Show only the right-edge handle — dragging it reflows text width (Fabric.js Textbox built-in)
+            // Show only the right-edge handle - dragging it reflows text width (Fabric.js Textbox built-in)
             if (!locked) tb.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mtr: false })
 
             tb.on('changed', () => {
@@ -400,7 +400,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             zoneObjsRef.current[zone.id] = tb
 
           } else if (zone.type === 'image') {
-            // Image zone guide — stays visible as a boundary indicator even after upload, hidden on export
+            // Image zone guide - stays visible as a boundary indicator even after upload, hidden on export
             const pLeft = snapHalf(zone.x)
             const pTop  = snapHalf(zone.y)
             const rect = new fabric.Rect({
@@ -423,11 +423,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         })
 
-        // Shrink text zones with pre-filled content on initial load — guided mode
+        // Shrink text zones with pre-filled content on initial load - guided mode
         // always; designer mode too for zones marked `alwaysShrink` (no manual
         // size controls exposed in FieldEditor, e.g. restaurant_name, so there's
         // no other way for the user to fix an overflow).
-        // If a saved font size exists, apply it directly — it already represents
+        // If a saved font size exists, apply it directly - it already represents
         // the exact displayed state from last save (post-shrink + any manual adjustments).
         // Only run the shrink loop when there is NO saved size (first open of a fresh template).
         zones.forEach(zone => {
@@ -437,14 +437,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           if (!tb || !tb.text) return
           const savedSize = fontSizesRef.current?.[zone.id]
           // A rotated zone's pre-rotation height becomes the visual thickness once
-          // drawn at -90° — must fit zone.width, not zone.height (axes swap).
+          // drawn at -90° - must fit zone.width, not zone.height (axes swap).
           const fitLimit = zone.rotate ? zone.width : zone.height
           if (savedSize != null) {
-            // Saved size is the source of truth — skip auto-shrink entirely.
+            // Saved size is the source of truth - skip auto-shrink entirely.
             tb.set('fontSize', savedSize)
             tb.initDimensions()
           } else {
-            // First open with no saved state — shrink from the zone default to fit.
+            // First open with no saved state - shrink from the zone default to fit.
             let size = zone.fontSize ?? 24
             tb.set('fontSize', size)
             tb.initDimensions()
@@ -493,13 +493,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           // behaviour.
           //
           // Positioning defaults to centered, but backgroundOffset can
-          // override left/top explicitly per axis — needed when the art
+          // override left/top explicitly per axis - needed when the art
           // isn't symmetric (e.g. Option B's Wolt bag graphic bleeds all the
           // way to the source PNG's own bottom edge with zero spare pixels,
           // so centering a Y zoom pushes it past the canvas and clips it;
           // an explicit top-anchored offset keeps the top margin precise
           // without dragging the bag down with it).
-          // canvasW/canvasH (the trim size), not canvas.getWidth()/getHeight() —
+          // canvasW/canvasH (the trim size), not canvas.getWidth()/getHeight() -
           // the fabric canvas's own pixel height is renderH when
           // bleedExtraBottom is set, which would throw off scale/centering
           // math that's meant to be relative to the trim area.
@@ -557,7 +557,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.set('text', value || '')
         changed = true
       }
-      // Auto-shrink in guided mode — only when THIS field's text actually changed.
+      // Auto-shrink in guided mode - only when THIS field's text actually changed.
       // Uploading a photo changes fields.photoUrl, not the text content, so we must
       // not re-shrink text zones the user may have manually sized up.
       const textChanged = prevFieldsRef.current[id] !== value
@@ -567,7 +567,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.set('fontSize', size)
         obj.initDimensions()
         // A rotated zone's pre-rotation height becomes the visual thickness once
-        // drawn at -90° — must fit zone.width, not zone.height (axes swap).
+        // drawn at -90° - must fit zone.width, not zone.height (axes swap).
         const fitLimit = zone.rotate ? zone.width : zone.height
         while (obj.height > fitLimit + 2 && size > 6) {
           size -= 0.5
@@ -587,12 +587,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   // subline"): this used to fall back to zone.fontSize (the static default)
   // for any zone with no entry in `fontSizes`. `fontSizes` is a brand-new
   // object reference every time ANY zone's size changes, so this whole effect
-  // re-ran on every single font-size edit — and for a zone that had been
+  // re-ran on every single font-size edit - and for a zone that had been
   // auto-shrunk on load (its real Fabric fontSize applied directly, never
   // written back into this React state), that meant its shrunk size got
   // silently overwritten back to the unfit static default the moment a
   // DIFFERENT zone's size was touched. Only ever apply an explicit entry in
-  // `fontSizes` — a zone with no entry keeps whatever size it currently has.
+  // `fontSizes` - a zone with no entry keeps whatever size it currently has.
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !config) return
@@ -624,8 +624,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
   // ── Sync text-zone nudge offsets → canvas ─────────────────────────────────
   // Mirrors the image nudge pattern below, but for specific text zones (e.g.
-  // headline/sub_headline in the restricted review mode — see FieldEditor.jsx)
-  // — the only other way to move text is a Designer-mode canvas drag, which
+  // headline/sub_headline in the restricted review mode - see FieldEditor.jsx)
+  // - the only other way to move text is a Designer-mode canvas drag, which
   // this mode disallows entirely. Only zones present as a key in
   // `textPositions` are touched; every other flow passes {} and this is a no-op.
   useEffect(() => {
@@ -675,7 +675,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     canvas.renderAll()
   }, [imageScales, imagePositions, config])
 
-  // ── Zoom controls (button-driven only — no scroll wheel) ───────────────────
+  // ── Zoom controls (button-driven only - no scroll wheel) ───────────────────
   const handleZoomIn  = useCallback(() => setZoom(z => Math.min(400, Math.round(z / 10) * 10 + 10)), [])
   const handleZoomOut = useCallback(() => setZoom(z => Math.max(40,  Math.round(z / 10) * 10 - 10)), [])
   const handleZoomReset = useCallback(() => setZoom(100), [])
@@ -696,7 +696,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
       const existing = zoneObjsRef.current[`${zone.id}-image`]
 
-      // URL unchanged — image already on canvas, don't touch it (preserves user resize/move)
+      // URL unchanged - image already on canvas, don't touch it (preserves user resize/move)
       if (existing && existing._wcUrl === url) return
 
       if (existing) {
@@ -716,7 +716,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Photos use cover (fill zone, crop center); logos use contain (full logo visible)
         const isCover = zone.fit === 'cover'
         // Small always-on overscan so the Position nudge has a little crop room in
-        // BOTH directions from the start — otherwise whichever dimension "cover" binds
+        // BOTH directions from the start - otherwise whichever dimension "cover" binds
         // to (matches the zone exactly) has zero slack until the user also bumps Scale.
         const NUDGE_MARGIN = 1.06
         const scale = isCover
@@ -753,7 +753,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             originY: 'top',
           }),
         })
-        // Corner handles only — no edge or rotation handles
+        // Corner handles only - no edge or rotation handles
         if (!imgLocked) img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
         img._wcZoneId = zone.id
         img._wcBaseScale = scale
@@ -781,7 +781,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Z-order: images → guide rects (so border shows on top of image) → textboxes
         // → overlap images (float above text for layering effect).
         // Re-applied in full (not just for this zone) every time ANY image zone
-        // loads — each zone's fabric.Image.fromURL callback fires independently
+        // loads - each zone's fabric.Image.fromURL callback fires independently
         // and asynchronously, so re-uploading e.g. the logo after the photo was
         // already loaded would otherwise re-bring textboxes above the photo and
         // silently break its overlap until the photo was re-uploaded too.
@@ -812,7 +812,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const canvasH = config?.canvasH ?? 441
   const renderH = canvasH + (config?.bleedExtraBottom ?? 0)
   // When bleedExtraBottom is set, the canvas itself now renders real
-  // content into that space — stacking the decorative BLEED_MARGIN white
+  // content into that space - stacking the decorative BLEED_MARGIN white
   // padding underneath it too would leave a second, contentless white gap
   // between that art and the true outer edge. Drop the bottom padding in
   // that case so the canvas's own bottom edge doubles as the outer edge.
@@ -877,9 +877,9 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }}>
           {/* Bleed margin, drawn around the canvas exactly like the Figma
               master (solid outer edge = true page/bleed boundary; the pink
-              dashed trim line is drawn just inside the canvas's own edge —
+              dashed trim line is drawn just inside the canvas's own edge -
               see the trim-guide fabric.Rect in the effect above). This is
-              purely a visual guide outside the actual canvas — canvas
+              purely a visual guide outside the actual canvas - canvas
               dimensions and every zone coordinate stay trim-only/unchanged. */}
           <div style={{
             paddingTop: BLEED_MARGIN, paddingLeft: BLEED_MARGIN, paddingRight: BLEED_MARGIN,

@@ -109,7 +109,7 @@ export default function ReviewPage({ projectId }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {comments.length === 0 ? (
             <div style={{ color: 'var(--mid)', fontSize: 13, textAlign: 'center', paddingTop: 24 }}>
-              No comments yet — leave the first one below.
+              No comments yet - leave the first one below.
             </div>
           ) : (
             comments.map(c => (

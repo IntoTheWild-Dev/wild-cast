@@ -1,11 +1,11 @@
 // Converts a Figma-imported template record (from GET /api/list-templates)
 // into the exact shapes the static templateZones.js/templates.js already
 // use, so custom templates merge into the app the same way the hardcoded
-// ones work — same TEMPLATE_ZONES id lookup, same TEMPLATES card shape.
+// ones work - same TEMPLATE_ZONES id lookup, same TEMPLATES card shape.
 // Every import produces both a designer and guided variant, matching the
 // existing convention (e.g. 'opt-b-flyer2' / 'opt-b-flyer2-simple').
 
-// The stored background is a private Blob URL — a plain <img>/fabric.Image
+// The stored background is a private Blob URL - a plain <img>/fabric.Image
 // can't load it directly (no way to attach the Authorization header a
 // private blob requires), so every use of it routes through this proxy,
 // same pattern as src/lib/assetLibrary.js's libraryAssetSrc().
@@ -14,7 +14,7 @@ export function templateAssetSrc(url) {
 }
 
 // "Override" records (see api/publish-template.js) exist only to let a
-// hardcoded static slot — Option A/B — be archived; they carry no real
+// hardcoded static slot - Option A/B - be archived; they carry no real
 // zones/background and must never enter the zonesById/cards merge (there's
 // nothing real to render, and Option A/B's actual data is the static
 // templateZones.js/templates.js import, untouched by any of this).

@@ -58,7 +58,7 @@ async function makeThumbnail(fullPng) {
   })
 }
 
-// items: [{ url, label? }] — label is only shown when reviewing more than one
+// items: [{ url, label? }] - label is only shown when reviewing more than one
 // design at once (e.g. ticking both candidates on the brief's picker screen).
 function ReviewModal({ items, onClose }) {
   const [copiedIdx, setCopiedIdx] = useState(null)
@@ -108,23 +108,23 @@ function ReviewModal({ items, onClose }) {
 export default function App() {
   const [screen, setScreen]                   = useState('brief')
   // Lifted out of BriefingForm so it survives a round trip to the editor and
-  // back — Julia's ask (2026-08-03): saving a candidate mid-edit should
+  // back - Julia's ask (2026-08-03): saving a candidate mid-edit should
   // return to the "pick a design" screen (e.g. a merchant wants both A and
-  // B), not lose it. BriefingForm no longer owns this — it's just the
+  // B), not lose it. BriefingForm no longer owns this - it's just the
   // submitted brief snapshot ({...brief} at Submit), or null before that.
   const [briefSubmission, setBriefSubmission] = useState(null)
   // Bumped by the "+ New Brief" nav item to force BriefingForm to remount
   // (resetting its own in-progress field values) even when it's already
   // mounted and showing the brief screen.
   const [briefResetKey, setBriefResetKey] = useState(0)
-  // { [templateId]: savedProjectId } — recorded when "Save & pick another
+  // { [templateId]: savedProjectId } - recorded when "Save & pick another
   // design" saves a brief-generated candidate. Lets re-clicking Edit on the
   // same option reopen what was actually saved (nudge/scale + the project id
-  // to update) instead of regenerating a fresh, un-edited candidate — Julia's
+  // to update) instead of regenerating a fresh, un-edited candidate - Julia's
   // "the designs have reset after editing" report (2026-08-03). Cleared on
   // every fresh brief submission so a new brief never inherits a stale save.
   const [savedCandidateIds, setSavedCandidateIds] = useState({})
-  // { [templateId]: previewPngDataUrl } — the picker's card thumbnail is
+  // { [templateId]: previewPngDataUrl } - the picker's card thumbnail is
   // captured off-screen from the brief's original (never-edited) fields, so
   // without this it silently shows the pre-edit design after a save. Set
   // alongside savedCandidateIds from the same just-saved project, cleared
@@ -135,20 +135,20 @@ export default function App() {
   const [lang, setLang]                       = useState('de')
   const [exporting, setExporting]             = useState(false)
   const [fontSizes, setFontSizes]             = useState({})
-  // The REAL font size each auto-shrink zone actually rendered at on load —
+  // The REAL font size each auto-shrink zone actually rendered at on load -
   // captured once via handleCanvasReady, never mutated afterward for that
   // session. Needed because auto-shrink is applied directly to the Fabric
   // object and never written back into `fontSizes`, so without this,
   // `fontSizes[zoneId]` (and the restricted-mode clamp below) would be
   // anchored to the unshrunk static default instead of what's actually on
-  // screen — a long headline could show "54pt" while really rendering at
+  // screen - a long headline could show "54pt" while really rendering at
   // 21pt, so clicking + once jumped straight to ~55pt instead of ~22pt.
   const [generatedFontSizes, setGeneratedFontSizes] = useState({})
   const [alignments, setAlignments]           = useState({})
   const [imageScales, setImageScales]         = useState({})
   const [imagePositions, setImagePositions]   = useState({})
   // Nudge offsets for specific text zones (headline/sub_headline) in the
-  // restricted review mode — see handleTextNudge and TemplateCanvas.jsx.
+  // restricted review mode - see handleTextNudge and TemplateCanvas.jsx.
   const [textPositions, setTextPositions]     = useState({})
   const [zonePositions, setZonePositions]     = useState({})
   const [projectName, setProjectName]         = useState('')
@@ -163,7 +163,7 @@ export default function App() {
   // Seeded synchronously from localStorage (not just in the useEffect below) so
   // an already-logged-in user's refresh renders straight into the app instead
   // of flashing the ActivationGate for the second or so the /api/validate-key
-  // round trip takes — the effect still runs after mount to re-validate the
+  // round trip takes - the effect still runs after mount to re-validate the
   // key server-side and fill in clientName, but the optimistic value here is
   // what the very first paint uses.
   const [activation, setActivation]           = useState(() => {
@@ -174,12 +174,12 @@ export default function App() {
     return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
   })
   const [showHelp, setShowHelp]               = useState(false)
-  // true only when the editor was entered via a brief-generated candidate —
+  // true only when the editor was entered via a brief-generated candidate -
   // gates the locked-down FieldEditor mode (Phase 2). Reset to false by every
   // other entry point so the lock never leaks into normal editing.
   const [restrictedReview, setRestrictedReview] = useState(false)
   // Figma-imported templates (draft + live), fetched once and merged with the
-  // static TEMPLATE_ZONES/TEMPLATES — see src/lib/customTemplates.js
+  // static TEMPLATE_ZONES/TEMPLATES - see src/lib/customTemplates.js
   const [customTemplates, setCustomTemplates] = useState({ zonesById: {}, cards: [], records: [] })
   const exportRef = useRef(null)
 
@@ -206,7 +206,7 @@ export default function App() {
         alignments: { ...alignmentsRef2.current },
         imageScales: { ...imageScalesRef2.current },
         imagePositions: { ...imagePositionsRef2.current },
-        // Text-zone drag/resize positions live only on the canvas, not in React state —
+        // Text-zone drag/resize positions live only on the canvas, not in React state -
         // read them live so a drag (see onZoneDragStart) is undoable too.
         zonePositions: exportRef.current?.getZonePositions?.() ?? {},
       },
@@ -214,7 +214,7 @@ export default function App() {
     setCanUndo(true)
   }
 
-  // Called on mousedown on a text zone, before any drag/resize moves it — captures
+  // Called on mousedown on a text zone, before any drag/resize moves it - captures
   // the pre-drag position as an undo point. Debounced per-zone like text fields so
   // repeated clicks on the same zone within a second don't spam the history.
   function handleZoneDragStart(zoneId) {
@@ -243,7 +243,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }) // no deps — always uses latest handleUndo via closure refresh
+  }) // no deps - always uses latest handleUndo via closure refresh
 
   // Detect ?review=<id> in URL and switch to review screen
   useEffect(() => {
@@ -253,7 +253,7 @@ export default function App() {
   }, [])
 
   // Fetch Figma-imported templates once on mount. Failure just means the app
-  // runs with the static built-in templates only — never blocks/breaks the app.
+  // runs with the static built-in templates only - never blocks/breaks the app.
   useEffect(() => {
     refetchCustomTemplates()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -287,7 +287,7 @@ export default function App() {
           localStorage.setItem('wildcast_role', role)
           setActivation({ key: savedKey, clientName: data.client_name, credits, role })
         } else {
-          // Key was revoked/invalid server-side — the optimistic state seeded
+          // Key was revoked/invalid server-side - the optimistic state seeded
           // from localStorage above was wrong, so undo it and drop back to
           // the activation gate.
           localStorage.removeItem('wildcast_activation_key')
@@ -297,7 +297,7 @@ export default function App() {
         }
       })
       .catch(() => {
-        // Network error on restore — the optimistic state from localStorage
+        // Network error on restore - the optimistic state from localStorage
         // (set synchronously in useState above) already has the app running
         // on cached credits, so there's nothing to do here.
       })
@@ -335,12 +335,12 @@ export default function App() {
   }
 
   // Entry point for a candidate generated from the briefing form
-  // (src/components/TemplateCandidatePicker.jsx) — mirrors handleSelectTemplate
+  // (src/components/TemplateCandidatePicker.jsx) - mirrors handleSelectTemplate
   // above but pre-fills the editor with the brief's answers instead of resetting
   // to DEFAULT_FIELDS, and opens into the locked-down review mode (Phase 2).
   //
   // savedId: if this exact candidate was already saved once this brief session
-  // (via "Save & pick another design" — see savedCandidateIds above), reopen
+  // (via "Save & pick another design" - see savedCandidateIds above), reopen
   // that saved state instead of regenerating a fresh, un-edited one. Falls
   // through to the fresh path if the sessionStorage cache is missing/corrupt.
   async function handleSelectGeneratedCandidate(template, prefilledFields, savedId) {
@@ -351,7 +351,7 @@ export default function App() {
           await openLoadedProject(JSON.parse(cached), { restricted: true })
           return
         }
-      } catch { /* corrupted cache — fall through to fresh generation */ }
+      } catch { /* corrupted cache - fall through to fresh generation */ }
     }
 
     historyRef.current = []; setCanUndo(false)
@@ -383,14 +383,14 @@ export default function App() {
 
   // Julia's ask (2026-08-07): the top nav (Templates/Library/Designs/etc.)
   // used to jump straight away from an open editor with no warning, silently
-  // dropping any unsaved edits. Guard every nav target here — but not the
+  // dropping any unsaved edits. Guard every nav target here - but not the
   // logo click (onLogoClick, wired separately in the JSX below), which is
   // meant to just resume whatever brief/picker was already in progress.
   function handleNavigate(target) {
     if (screen === 'editor' && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
     if (target === 'brief') setScreen('brief')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
-    // picker was already in progress) — this always starts a genuinely fresh
+    // picker was already in progress) - this always starts a genuinely fresh
     // brief, per Julia's ask for "another offer form again." Clearing
     // briefSubmission alone isn't enough if BriefingForm is already mounted
     // (its own in-progress field values are local state that a prop change
@@ -415,7 +415,7 @@ export default function App() {
   }
 
   // Applies a publish-template.js response directly to local state instead of
-  // waiting on a refetch — Vercel Blob's list() reads can lag up to ~30s behind
+  // waiting on a refetch - Vercel Blob's list() reads can lag up to ~30s behind
   // a write it was just given (see STATUS.md), so a refetch right after an
   // action can silently show the PRE-action status, making Publish/Archive
   // look like it needs several clicks when the first one already worked. The
@@ -424,7 +424,7 @@ export default function App() {
     setCustomTemplates(prev => {
       const exists = prev.records.some(r => r.slotKey === slotKey)
       // Archiving a hardcoded slot (Option A/B) for the first time creates a
-      // brand-new override record server-side — nothing to patch locally yet.
+      // brand-new override record server-side - nothing to patch locally yet.
       const records = exists
         ? prev.records.map(r => r.slotKey === slotKey ? { ...r, ...patch } : r)
         : [...prev.records, { slotKey, ...patch }]
@@ -433,7 +433,7 @@ export default function App() {
   }
 
   // Same immediate-local-update reasoning as patchCustomRecord above, but for
-  // a real DELETE (api/delete-template.js) — the record needs to disappear
+  // a real DELETE (api/delete-template.js) - the record needs to disappear
   // entirely, not get a field merged in, so this filters it out instead.
   function removeCustomRecord(slotKey) {
     setCustomTemplates(prev => mergeCustomTemplates(prev.records.filter(r => r.slotKey !== slotKey)))
@@ -442,8 +442,8 @@ export default function App() {
   function handleFontSizeChange(key, size) {
     pushUndoSnapshot()
     // Restricted review mode only allows a modest ±20% adjustment around the
-    // size the zone actually rendered at on load (generatedFontSizes — see its
-    // declaration above for why this can't just be zone.fontSize) — enough to
+    // size the zone actually rendered at on load (generatedFontSizes - see its
+    // declaration above for why this can't just be zone.fontSize) - enough to
     // nudge-fit, not enough to grow large enough to wrap/overlap into a
     // neighboring zone. Normal Designer/Guided mode keeps the full 6-120 range.
     let min = 6, max = 120
@@ -457,11 +457,11 @@ export default function App() {
   }
 
   // Fires once the interactive editor's TemplateCanvas finishes mounting (its
-  // own auto-shrink for this template's zones has already run by then — see
+  // own auto-shrink for this template's zones has already run by then - see
   // TemplateCanvas.jsx's onReady). Seeds `fontSizes` with what's REALLY
   // rendered, not the static per-zone default, so the panel's displayed pt
   // number and the +/- stepper's starting point are both accurate from the
-  // first render — not just for restricted mode, this was equally wrong
+  // first render - not just for restricted mode, this was equally wrong
   // (just less visible) in normal Guided mode.
   function handleCanvasReady() {
     const effective = exportRef.current?.getEffectiveFontSizes?.()
@@ -482,7 +482,7 @@ export default function App() {
 
   // Nudges the photo within its zone (px, in canvas units). TemplateCanvas clamps
   // the applied value to whatever crop slack the current scale allows, so this can't
-  // reveal background — over-nudging just has no further visible effect.
+  // reveal background - over-nudging just has no further visible effect.
   function handleImageOffsetChange(zoneId, axis, delta) {
     pushUndoSnapshot()
     setImagePositions(prev => {
@@ -491,7 +491,7 @@ export default function App() {
     })
   }
 
-  // Nudges a text zone within its box (px, in canvas units) — only meaningful
+  // Nudges a text zone within its box (px, in canvas units) - only meaningful
   // in the restricted review mode (see FieldEditor.jsx), where it's the only
   // way to reposition headline/sub_headline since Designer-mode canvas drag
   // is disallowed there. Clamped to a modest range so restricted-mode text
@@ -521,7 +521,7 @@ export default function App() {
     })
   }
 
-  // "Reset layout" resets every zone's position on the canvas directly — but image
+  // "Reset layout" resets every zone's position on the canvas directly - but image
   // zones' Scale/Position are also driven by imageScales/imagePositions state, which
   // this must clear too. Otherwise the panel keeps showing the old %/offset, and the
   // next unrelated scale/position edit re-syncs the stale values back onto the canvas,
@@ -533,7 +533,7 @@ export default function App() {
     setTextPositions({})
   }
 
-  // Guided mode locks the canvas — nothing can be dragged, so a position-only reset
+  // Guided mode locks the canvas - nothing can be dragged, so a position-only reset
   // has nothing to do. There "Reset" means starting the template over from blank:
   // clears every field/image plus all overrides, and remounts the canvas (loadKey)
   // for a guaranteed-clean slate, same as picking the template fresh.
@@ -560,7 +560,7 @@ export default function App() {
 
   async function handleExport() {
     if (!exportRef.current?.getPng) {
-      alert('Canvas not ready — please wait a moment and try again.')
+      alert('Canvas not ready - please wait a moment and try again.')
       return
     }
     if (activation && activation.credits <= 0) {
@@ -605,7 +605,7 @@ export default function App() {
     }
   }
 
-  // Same decrement pattern as handleExport's credit deduction — each AI
+  // Same decrement pattern as handleExport's credit deduction - each AI
   // Suggest generation is a real Claude API call we pay for, so it costs
   // a credit too. AISuggest.jsx gates the actual confirmation/blocking.
   function handleAiCreditUsed() {
@@ -615,9 +615,9 @@ export default function App() {
     localStorage.setItem('wildcast_credits', newCredits)
   }
 
-  // Core save — returns the project id. Used by both handleSave and handleSendForReview.
+  // Core save - returns the project id. Used by both handleSave and handleSendForReview.
   async function doSave() {
-    if (!exportRef.current?.getPng) throw new Error('Canvas not ready — please wait a moment and try again.')
+    if (!exportRef.current?.getPng) throw new Error('Canvas not ready - please wait a moment and try again.')
 
     const fullPng = exportRef.current.getPng()
     const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
@@ -650,7 +650,7 @@ export default function App() {
     if (!response.ok) throw new Error(await response.text())
 
     // Write the full project to sessionStorage so re-opens within this session
-    // always get the exact saved state — no CDN or browser cache involved.
+    // always get the exact saved state - no CDN or browser cache involved.
     try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
 
     setCurrentProjectId(id)
@@ -671,9 +671,9 @@ export default function App() {
     }
   }
 
-  // Save from the restricted review editor (a brief-generated candidate) —
+  // Save from the restricted review editor (a brief-generated candidate) -
   // Julia's ask (2026-08-03): persists via the same doSave()/Designs
-  // mechanism as any other save (so an interrupted session isn't lost — it's
+  // mechanism as any other save (so an interrupted session isn't lost - it's
   // findable/reopenable/editable from Designs like anything else), but then
   // returns to the "pick a design" screen instead of staying in the editor,
   // since a merchant may want both Option A and B handled, not just one.
@@ -719,7 +719,7 @@ export default function App() {
   }
 
   // Saves + generates a review link directly from a brief-generated candidate,
-  // WITHOUT ever opening the interactive editor — Julia's confirmed choice for
+  // WITHOUT ever opening the interactive editor - Julia's confirmed choice for
   // "Send for Review" on the picker screen (2026-08-03). Deliberately doesn't
   // reuse doSave(): that function depends on exportRef/fields/etc. being the
   // CURRENTLY OPEN editor's live state, which doesn't exist here. Takes the
@@ -743,7 +743,7 @@ export default function App() {
     return id
   }
 
-  // items: [{ template, fields, png, label }] — one entry per ticked candidate.
+  // items: [{ template, fields, png, label }] - one entry per ticked candidate.
   // Ticking both Option A and B produces two independent saved designs and two
   // review links, shown together in the same ReviewModal.
   async function handleSendCandidatesForReview(items) {
@@ -762,14 +762,14 @@ export default function App() {
     }
   }
 
-  // Fetches a project's full saved state — sessionStorage first (written on
+  // Fetches a project's full saved state - sessionStorage first (written on
   // every save, always reflects the exact last-saved state with no CDN or
   // browser cache involved), falling back to a fresh server fetch.
   async function loadFullProject(projectMeta) {
     try {
       const cached = sessionStorage.getItem(`wildcast_project_${projectMeta.id}`)
       if (cached) return JSON.parse(cached)
-    } catch { /* corrupted or unavailable — fall through to fetch */ }
+    } catch { /* corrupted or unavailable - fall through to fetch */ }
 
     const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
     if (!response.ok) throw new Error('Could not load project')
@@ -777,7 +777,7 @@ export default function App() {
   }
 
   // Puts an already-loaded project's full state into the editor. Shared by
-  // opening the original and opening a freshly-made duplicate — the only
+  // opening the original and opening a freshly-made duplicate - the only
   // difference between the two is which project object got loaded/created
   // before this runs.
   async function openLoadedProject(project, { restricted = false } = {}) {
@@ -785,7 +785,7 @@ export default function App() {
       ?? customTemplates.cards.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
 
-    // Fetch comments directly — can't rely on the useEffect because the
+    // Fetch comments directly - can't rely on the useEffect because the
     // project id may not have changed (same project re-opened from Designs)
     let freshComments = []
     try {
@@ -816,7 +816,7 @@ export default function App() {
     await openLoadedProject(project)
   }
 
-  // Designs are shared across every activation key now — anyone can open
+  // Designs are shared across every activation key now - anyone can open
   // anyone else's. Duplicating first (rather than editing in place) is the
   // safety net: it saves a brand-new, independent copy under a fresh id
   // *before* opening it, so continuing to edit can never overwrite someone
@@ -919,7 +919,7 @@ export default function App() {
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
-          {/* Reviewer feedback — left panel, visible when comments exist */}
+          {/* Reviewer feedback - left panel, visible when comments exist */}
           {comments.length > 0 && (
             <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -980,7 +980,7 @@ export default function App() {
                 Undo
               </button>
               {/* Restricted review mode (opened from a brief-generated candidate) has
-                  nothing meaningful to reset back to — no blank/start-over concept
+                  nothing meaningful to reset back to - no blank/start-over concept
                   applies once a finished design was auto-generated, so the whole
                   button is hidden rather than wired to either reset flow. */}
               {!restrictedReview && (

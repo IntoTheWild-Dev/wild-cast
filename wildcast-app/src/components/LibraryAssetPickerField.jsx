@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { getLibraryAssets, saveAssetToLibrary, libraryAssetSrc } from '../lib/assetLibrary'
 import { hasTransparency } from '../lib/image'
 
-// "Nothing in the library yet" reads as broken if you don't know why — these
+// "Nothing in the library yet" reads as broken if you don't know why - these
 // folders only ever get populated by uploading through the Library page
 // (Header nav → Library), since Option A/B have no sticker/QR zone to
 // auto-upload one via the normal in-canvas flow. Julia hit exactly this
@@ -15,11 +15,11 @@ const EMPTY_HINTS = {
 }
 
 // A compact "pick an existing asset from the shared Library, or upload a new
-// one" field — used for Sticker, QR code and Food photo in the briefing
+// one" field - used for Sticker, QR code and Food photo in the briefing
 // form. Uploads go through the exact same validation as everywhere else in
 // the app (see LibraryPage.jsx's UPLOADABLE_FOLDERS / lib/image.js's
 // hasTransparency): requireTransparent fields must be a real transparent
-// PNG, not a flattened image with a solid background — same "no misfit
+// PNG, not a flattened image with a solid background - same "no misfit
 // backgrounds" rule Julia set for the canvas/Library page uploads. A
 // successful upload both saves to the shared Library AND selects it for
 // this field in one step, since picking is the point here (unlike the
@@ -55,7 +55,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
       if (!file) return
 
       if (requireTransparent && file.type !== 'image/png') {
-        setUploadError('This image has a background — please upload a transparent PNG.')
+        setUploadError('This image has a background - please upload a transparent PNG.')
         return
       }
 
@@ -64,7 +64,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
       if (requireTransparent) {
         const transparent = await hasTransparency(blobUrl)
         if (!transparent) {
-          setUploadError('This image has a background — please upload a transparent PNG.')
+          setUploadError('This image has a background - please upload a transparent PNG.')
           URL.revokeObjectURL(blobUrl)
           return
         }
@@ -76,7 +76,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
       setUploading(false)
 
       if (!saved) {
-        setUploadError('Upload failed — please try again.')
+        setUploadError('Upload failed - please try again.')
         return
       }
 
@@ -99,7 +99,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
         {value ? (
           <>
             <img src={value.src} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
-            <span style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>{value.name} — click to change</span>
+            <span style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>{value.name} - click to change</span>
           </>
         ) : (
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>Choose from library or upload…</span>

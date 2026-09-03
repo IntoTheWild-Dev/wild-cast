@@ -24,7 +24,7 @@ export async function blobUrlToDataUrl(blobUrl, { maxDim = 1500 } = {}) {
   })
 }
 
-// Crops away empty padding around an uploaded image's real content — many QR
+// Crops away empty padding around an uploaded image's real content - many QR
 // generators export with a big white "quiet zone" margin baked into the file
 // itself, so a plain "contain" fit shows all that empty space instead of
 // filling the zone. Scans a small downsampled copy to cheaply find the
@@ -52,7 +52,7 @@ export function cropToContent(url) {
       try {
         data = sctx.getImageData(0, 0, sw, sh).data
       } catch {
-        resolve(url) // tainted (cross-origin) — can't inspect, leave the image as-is
+        resolve(url) // tainted (cross-origin) - can't inspect, leave the image as-is
         return
       }
 
@@ -70,7 +70,7 @@ export function cropToContent(url) {
           }
         }
       }
-      if (maxX < minX || maxY < minY) { resolve(url); return } // fully blank — nothing to crop to
+      if (maxX < minX || maxY < minY) { resolve(url); return } // fully blank - nothing to crop to
 
       const PAD = 0.02 // small margin so anti-aliased edge pixels don't get shaved off
       const fx0 = Math.max(0, minX / sw - PAD)
@@ -115,7 +115,7 @@ export function hasTransparency(url) {
         }
         resolve(false)
       } catch {
-        // Canvas tainted (cross-origin) — can't inspect, don't block the upload.
+        // Canvas tainted (cross-origin) - can't inspect, don't block the upload.
         resolve(true)
       }
     }

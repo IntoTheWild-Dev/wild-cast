@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const DURATION = 300
 
-// Lightweight rotating-word effect (no animation library) — each word slides/fades
+// Lightweight rotating-word effect (no animation library) - each word slides/fades
 // out upward, swaps, then slides/fades in from below.
 export default function WordCarousel({ words, interval = 2200, style }) {
   const [index, setIndex] = useState(0)

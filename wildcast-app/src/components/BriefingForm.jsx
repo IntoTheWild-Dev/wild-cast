@@ -12,7 +12,7 @@ import { GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
 
 // Flattened lookup so picking a preview card can pre-fill the brief's
-// format/business-type answers — see TemplatePreviewModal.jsx for the
+// format/business-type answers - see TemplatePreviewModal.jsx for the
 // grouped source data.
 const TEMPLATE_PREVIEW_OPTIONS = TEMPLATE_PREVIEW_GROUPS.flatMap(g =>
   g.options.map(o => ({ ...o, format: g.format, businessType: g.businessType }))
@@ -20,13 +20,13 @@ const TEMPLATE_PREVIEW_OPTIONS = TEMPLATE_PREVIEW_GROUPS.flatMap(g =>
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
-// Left-column hero copy — reused from the old landing page (TemplatePicker.jsx's
+// Left-column hero copy - reused from the old landing page (TemplatePicker.jsx's
 // now-unused mode="hero" path) per Julia's ask (2026-08-03) to bring back that
 // left-text/right-form layout for the new briefing form.
 const FEATURES = [
   {
     title: 'Pre-approved templates',
-    desc: 'On-brand designs, ready to customize — no designer needed.',
+    desc: 'On-brand designs, ready to customize - no designer needed.',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>,
   },
   {
@@ -36,7 +36,7 @@ const FEATURES = [
   },
   {
     title: 'Print-ready CMYK export',
-    desc: 'PDF/X-4 with 3mm bleed — send straight to print.',
+    desc: 'PDF/X-4 with 3mm bleed - send straight to print.',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
   },
   {
@@ -54,7 +54,7 @@ function HeroColumn({ onPickTemplate, selectedCount }) {
         We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
       </h1>
       <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 24 }}>
-        Tell us what you need, the same way you'd brief a designer — we'll turn it into finished designs to choose from.
+        Tell us what you need, the same way you'd brief a designer - we'll turn it into finished designs to choose from.
       </p>
       <button
         type="button"
@@ -79,8 +79,8 @@ function HeroColumn({ onPickTemplate, selectedCount }) {
         <span style={{ color: 'var(--primary)', fontSize: 16, lineHeight: '20px' }}>✦</span>
         <p style={{ fontSize: 13, color: 'var(--dark)', margin: 0, lineHeight: 1.5 }}>
           <strong>Before you upload:</strong> product photos should be high
-          resolution — use Wild Scale's <strong>Print</strong> preset
-          (2400×2400px) — with the background removed (transparent PNG).{' '}
+          resolution - use Wild Scale's <strong>Print</strong> preset
+          (2400×2400px) - with the background removed (transparent PNG).{' '}
           <a
             href="https://scale.wildstack.studio"
             target="_blank"
@@ -142,7 +142,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // (e.g. clicking Edit on a candidate opens the editor) and remounts fresh
-  // when you come back — without this, `brief` would reset to blank even
+  // when you come back - without this, `brief` would reset to blank even
   // though `submitted` still holds the real answers, so clicking "Edit
   // answers" after that round trip showed an empty form instead of what was
   // actually submitted (Julia's report, 2026-08-04).
@@ -186,7 +186,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
   const partnerName = resolvePartnerName(brief)
   const aiContext = { businessType: brief.businessType, about: brief.about, objective: selectedObjective?.label, partnerName }
 
-  // Split per-step so "Next" can gate on just that step's fields — the full
+  // Split per-step so "Next" can gate on just that step's fields - the full
   // isValid (below) still gates final submit exactly like before.
   const step1Valid =
     partnerFilled &&
@@ -235,7 +235,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           <form
             onSubmit={handleSubmit}
             // Pressing Enter in a plain text <input> natively submits the
-            // enclosing form (since a submit button exists) — with a form this
+            // enclosing form (since a submit button exists) - with a form this
             // long, that reads as "it randomly jumped to the picker halfway
             // through." Block it there; textareas/selects/the submit button
             // itself are untouched (Enter in a textarea just adds a newline).
@@ -268,7 +268,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           </div>
         </Field>
 
-        <Field label="What is this brief about?" hint="A short intro — helps us pick the right template.">
+        <Field label="What is this brief about?" hint="A short intro - helps us pick the right template.">
           <textarea style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} value={brief.about} onChange={e => set('about', e.target.value)} placeholder="e.g. We're opening a second location in Koblenz…" />
         </Field>
 
@@ -299,7 +299,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             </button>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--mid)' }}>
-              Picked: {TEMPLATE_PREVIEW_OPTIONS.filter(o => brief.preSelectedTemplateIds.includes(o.id)).map(o => o.name).join(', ')} —{' '}
+              Picked: {TEMPLATE_PREVIEW_OPTIONS.filter(o => brief.preSelectedTemplateIds.includes(o.id)).map(o => o.name).join(', ')} -{' '}
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(true)}
@@ -311,12 +311,12 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
           )}
         </Field>
 
-        {/* Option A's flyer shows a restaurant name on the artwork — only ask
+        {/* Option A's flyer shows a restaurant name on the artwork - only ask
             for it when Flyer is actually picked. Defaults to Partner name if
             left blank (buildCandidateFields), but the display name can differ
             (e.g. partner "McD" internally, flyer reads "McDonald's Zentrum"). */}
         {brief.formats.includes('flyer') && (
-          <Field label="Restaurant name" hint="Only used on Option A — leave blank to just use the partner name above.">
+          <Field label="Restaurant name" hint="Only used on Option A - leave blank to just use the partner name above.">
             <input style={inputStyle} placeholder={partnerName || 'e.g. Wen Cheng'} value={brief.restaurantName} onChange={e => set('restaurantName', e.target.value)} />
           </Field>
         )}
@@ -337,7 +337,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             ← Back
           </button>
 
-          <Field label="Headline" hint="The bigger line — sits below the subline on the flyer.">
+          <Field label="Headline" hint="The bigger line - sits below the subline on the flyer.">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => headlineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="headline" onApply={v => set('headline', v)} partnerName={partnerName} />
@@ -347,7 +347,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
             <input ref={headlineInputRef} style={inputStyle} placeholder="e.g. Fresh pasta, made daily" value={brief.headline} onChange={e => set('headline', e.target.value)} />
           </Field>
 
-          <Field label="Subline" hint="The smaller line — sits above the headline on the flyer.">
+          <Field label="Subline" hint="The smaller line - sits above the headline on the flyer.">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <ChoiceButton onClick={() => sublineInputRef.current?.focus()}>✎ Write my own</ChoiceButton>
               <PresetPicker field="subline" onApply={v => set('subline', v)} partnerName={partnerName} />
@@ -379,7 +379,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
 
           <div style={{ marginBottom: 22 }}>
             {brief.stickerRequestMode ? (
-              <Field label="Sticker" hint="Describe the new sticker you need — we'll add it to the library.">
+              <Field label="Sticker" hint="Describe the new sticker you need - we'll add it to the library.">
                 <input style={inputStyle} placeholder="e.g. '26% OFF' badge" value={brief.stickerRequest} onChange={e => set('stickerRequest', e.target.value)} />
                 <button type="button" onClick={() => set('stickerRequestMode', false)} style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--mid)', padding: 0 }}>
                   ← choose from library instead
@@ -405,7 +405,7 @@ export default function BriefingForm({ submitted, onSubmitted, onPick, onSendFor
 
           <LibraryAssetPickerField
             label="Food photo"
-            hint="Pick a photo from your library — helps when a partner has more than one dish to choose from."
+            hint="Pick a photo from your library - helps when a partner has more than one dish to choose from."
             folder="product-images"
             merchant={partnerName || GENERAL_MERCHANT}
             value={brief.foodPhotoAsset}
