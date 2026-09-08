@@ -36,7 +36,7 @@ async function loadFonts() {
   }
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -58,6 +58,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   onZoneDragStartRef.current = onZoneDragStart
   const onReadyRef = useRef(onReady) // always current, read inside canvas-init closure
   onReadyRef.current = onReady
+  const onAutoShrinkRef = useRef(onAutoShrink) // always current, read inside the fields-sync effect
+  onAutoShrinkRef.current = onAutoShrink
   const syncing = useRef(false)
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
@@ -563,7 +565,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const textChanged = prevFieldsRef.current[id] !== value
       const zone = zoneCfgRef.current[id]
       if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
-        let size = fontSizesRef.current?.[zone.id] ?? zone.fontSize
+        const startSize = fontSizesRef.current?.[zone.id] ?? zone.fontSize
+        let size = startSize
         obj.set('fontSize', size)
         obj.initDimensions()
         // A rotated zone's pre-rotation height becomes the visual thickness once
@@ -575,6 +578,15 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           obj.initDimensions()
         }
         changed = true
+        // This shrink only ever touches the live Fabric object, never the
+        // `fontSizes` React state it started from - so the panel's number
+        // (and the +/- stepper's next click) went stale the moment typing
+        // triggered a shrink, making "+" jump from the STALE displayed size
+        // straight up rather than nudging the REAL rendered size (Julia's
+        // report, 2026-09-08: "scale up jumps to a high amount"). Report the
+        // real size back whenever it actually changed so the panel and the
+        // stepper both stay truthful while you type.
+        if (size !== startSize) onAutoShrinkRef.current?.(zone.id, size)
       }
       syncing.current = false
     })

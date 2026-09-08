@@ -164,7 +164,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           maxLength={limit}
           rows={3}
           placeholder={`Enter ${label.toLowerCase()}…`}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text' }}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text', overflowWrap: 'break-word', wordBreak: 'break-word' }}
         />
       ) : (
         <input
@@ -633,7 +633,12 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
             align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
             onResetPosition={() => onResetZone?.('offer')}
-            onNudge={restricted ? (axis, delta) => onTextNudge?.('offer', axis, delta) : undefined}
+            // Guided mode's canvas is locked (no drag), same as restricted
+            // review - Offer needs the same Position nudge that headline/
+            // sub_headline restricted mode already has, or there's no way to
+            // fix overlap without switching to Designer mode (Julia's ask,
+            // 2026-09-08).
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('offer', axis, delta) : undefined}
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'tc') && (

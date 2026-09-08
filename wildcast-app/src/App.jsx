@@ -518,6 +518,17 @@ export default function App() {
     setFontSizes(prev => ({ ...effective, ...prev }))
   }
 
+  // Fires whenever TemplateCanvas's own auto-shrink kicks in while typing
+  // (not just on mount) - keeps `fontSizes` truthful to what's actually
+  // rendered so the panel's pt number, and the next +/- click, aren't based
+  // on a stale pre-shrink value (Julia's report, 2026-09-08 - see
+  // TemplateCanvas.jsx's fields-sync effect for the full story). Deliberately
+  // no pushUndoSnapshot here - it's a side effect of the text edit that
+  // already snapshotted itself in handleFieldChange, not a separate action.
+  function handleAutoShrink(zoneId, size) {
+    setFontSizes(prev => ({ ...prev, [zoneId]: size }))
+  }
+
   function handleAlignChange(key, align) {
     pushUndoSnapshot()
     setAlignments(prev => ({ ...prev, [key]: align }))
@@ -1074,6 +1085,7 @@ export default function App() {
               zonePositions={zonePositions}
               onZoneDragStart={handleZoneDragStart}
               onReady={handleCanvasReady}
+              onAutoShrink={handleAutoShrink}
             />
           </div>
 

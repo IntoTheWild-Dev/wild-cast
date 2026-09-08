@@ -3,7 +3,7 @@ import WordCarousel from './WordCarousel'
 import Select from './Select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
-import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
+import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF } from '../lib/briefConstants'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -139,7 +139,6 @@ export default function BriefingForm({ submitted, onSubmitted }) {
 
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
-  const partnerName = resolvePartnerName(brief)
 
   const isValid =
     partnerFilled &&
@@ -213,16 +212,6 @@ export default function BriefingForm({ submitted, onSubmitted }) {
                 ))}
               </div>
             </Field>
-
-            {/* Option A's flyer shows a restaurant name on the artwork - only ask
-                for it when Flyer is actually picked. Defaults to Partner name if
-                left blank, but the display name can differ (e.g. partner "McD"
-                internally, flyer reads "McDonald's Zentrum"). */}
-            {brief.formats.includes('flyer') && (
-              <Field label="Restaurant name" hint="Only used on Option A - leave blank to just use the partner name above.">
-                <input style={inputStyle} placeholder={partnerName || 'e.g. Wen Cheng'} value={brief.restaurantName} onChange={e => set('restaurantName', e.target.value)} />
-              </Field>
-            )}
 
             <button type="submit" disabled={!isValid} style={{
               width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: isValid ? 'pointer' : 'not-allowed',
