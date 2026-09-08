@@ -24,6 +24,12 @@ export const FORMATS = [
   { value: 'wild_poster', label: 'Wild Poster' },
 ]
 
+// Maps a brief's format checkboxes (FORMATS values above) onto
+// TemplatePicker.jsx's BASE_TEMPLATES `format` strings - one shared mapping
+// so BriefTemplatePicker (picking a template) and App.jsx (the "want more
+// layouts?" prompt after saving) can't drift apart on what each code means.
+export const FORMAT_TEMPLATE_GROUP = { flyer: 'Flyer', poster: 'Poster', wild_poster: 'Wild Poster' }
+
 export const DEFAULT_BRIEF = {
   partner: '', partnerNew: '',
   // Set via the "Pick your template first" popup (TemplatePreviewModal) -

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { TEMPLATES } from '../data/templates'
 import { activationHeaders } from '../lib/activationKey'
+import { FORMAT_TEMPLATE_GROUP } from '../lib/briefConstants'
 
 // Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label -
 // duplicated (not imported) to keep this file's only dependency on that one
@@ -508,22 +509,26 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
   )
 }
 
-// Maps a brief's format checkboxes (lib/briefConstants.js FORMATS values)
-// onto BASE_TEMPLATES' `format` strings.
-const BRIEF_FORMAT_TO_GROUP = { flyer: 'Flyer', poster: 'Poster', wild_poster: 'Wild Poster' }
-
 // Screen 2 of the brief → template → mode → editor workflow (Julia's ask,
 // 2026-09-08): jumps straight to the OptionsView for whichever group matches
 // the brief's Business type + Formats, skipping the category/format chooser
 // entirely since the brief already answered that. Picking a card still opens
 // the same "Choose your mode" modal (LayoutModal, inside OptionsView) as the
 // Templates catalogue page.
-export function BriefTemplatePicker({ brief, onSelect, onBack, customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
+//
+// formatOverride: a single FORMATS value (e.g. 'wild_poster') instead of
+// deriving wantedFormats from every format checked in the brief - used by
+// App.jsx's "want more layouts?" prompt (2026-09-08) to jump straight to ONE
+// specific format the partner just picked from that popup, rather than
+// falling back to whichever format the brief happens to match first.
+export function BriefTemplatePicker({ brief, onSelect, onBack, formatOverride, customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
   const allGroups     = useMemo(() => deriveGroups(allTemplates), [allTemplates])
 
   const category = brief.businessType.toLowerCase()
-  const wantedFormats = brief.formats.map(f => BRIEF_FORMAT_TO_GROUP[f]).filter(Boolean)
+  const wantedFormats = formatOverride
+    ? [FORMAT_TEMPLATE_GROUP[formatOverride]].filter(Boolean)
+    : brief.formats.map(f => FORMAT_TEMPLATE_GROUP[f]).filter(Boolean)
   const group = allGroups.find(g => g.category === category && wantedFormats.includes(g.format))
 
   // Matches TemplateCandidatePicker's NoMatchFallback (still used elsewhere) —

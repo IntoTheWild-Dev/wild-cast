@@ -14,7 +14,7 @@ import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
 import { mergeCustomTemplates } from './lib/customTemplates'
-import { resolvePartnerName } from './lib/briefConstants'
+import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
 
 const DEFAULT_FIELDS = {
@@ -107,6 +107,42 @@ function ReviewModal({ items, onClose }) {
   )
 }
 
+// "Need more layouts?" popup - shown after Save/Export/Send for Review
+// succeed, offering any OTHER format the partner checked in their brief
+// that hasn't been made yet (Julia's ask, 2026-09-08). formats: brief
+// FORMATS values (e.g. ['poster', 'wild_poster']), not display labels.
+function MoreFormatsModal({ formats, onPick, onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Need more layouts?</div>
+        <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
+          Your brief also asked for {formats.length > 1 ? 'these formats' : 'this format'} — start it now with the same answers, or skip for later.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          {formats.map(f => (
+            <button
+              key={f}
+              onClick={() => onPick(f)}
+              style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
+            >
+              Yes, start {FORMATS.find(x => x.value === f)?.label ?? f}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: 'var(--mid)', fontFamily: 'inherit' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--dark)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [screen, setScreen]                   = useState('brief')
   // Lifted out of BriefingForm so it survives a round trip to the editor and
@@ -119,6 +155,25 @@ export default function App() {
   // (resetting its own in-progress field values) even when it's already
   // mounted and showing the brief screen.
   const [briefResetKey, setBriefResetKey] = useState(0)
+  // "Need more layouts?" prompt after Save/Export/Send for Review (Julia's
+  // ask, 2026-09-08) - offers to jump straight to the template picker for
+  // any OTHER format checked in the same brief, reusing briefSubmission
+  // instead of re-filling the form. reachedViaBrief gates this off entirely
+  // for templates opened straight from the Templates catalogue (no brief
+  // context to offer more formats from). completedFormats tracks which
+  // brief-format codes have been saved/exported/sent at least once this
+  // brief session, so a format already done never gets re-offered.
+  // formatPromptShown caps the popup to once per template-editing session
+  // (reset whenever a new template is opened) so repeat Save clicks on the
+  // same design don't nag every time.
+  const [reachedViaBrief, setReachedViaBrief] = useState(false)
+  const [completedFormats, setCompletedFormats] = useState(new Set())
+  const [formatPromptShown, setFormatPromptShown] = useState(false)
+  const [formatPromptOptions, setFormatPromptOptions] = useState([])
+  // Set from the "want more layouts?" popup - scopes BriefTemplatePicker to
+  // this ONE format instead of its default of matching whichever checked
+  // format it finds first. Reset once you're back editing the brief itself.
+  const [templateSelectFormat, setTemplateSelectFormat] = useState(null)
   // { [templateId]: savedProjectId } - recorded when "Save & pick another
   // design" saves a brief-generated candidate. Lets re-clicking Edit on the
   // same option reopen what was actually saved (nudge/scale + the project id
@@ -331,6 +386,7 @@ export default function App() {
   function handleSelectTemplate(template) {
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
+    setReachedViaBrief(false) // opened straight from Templates - no brief to offer more formats from
     setSelectedTemplate(template)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
@@ -409,6 +465,8 @@ export default function App() {
 
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
+    setReachedViaBrief(true)
+    setFormatPromptShown(false)
     setSelectedTemplate(template)
     setFields({ ...DEFAULT_FIELDS, ...prefilledFields })
     setFontSizes({})
@@ -446,6 +504,8 @@ export default function App() {
     else if (target === 'new-brief') {
       setBriefSubmission(null)
       setSavedCandidateIds({})
+      setCompletedFormats(new Set())
+      setTemplateSelectFormat(null)
       setBriefResetKey(k => k + 1)
       setScreen('brief')
     }
@@ -656,6 +716,7 @@ export default function App() {
         setActivation(prev => ({ ...prev, credits: newCredits }))
         localStorage.setItem('wildcast_credits', newCredits)
       }
+      offerMoreFormats()
     } catch (err) {
       console.error('Export error:', err)
       alert('Export failed: ' + err.message)
@@ -716,12 +777,38 @@ export default function App() {
     return { id, preview }
   }
 
+  // "Need more layouts?" popup (Julia's ask, 2026-09-08) - called after
+  // Save/Export/Send for Review all succeed. Only for templates reached via
+  // the brief (reachedViaBrief), and capped to once per template-editing
+  // session (formatPromptShown) so repeat Saves on the same design don't
+  // nag every time. Marks the just-finished format as done first, then only
+  // offers whatever's left of what was actually checked in the brief.
+  function offerMoreFormats() {
+    if (!reachedViaBrief || !briefSubmission || formatPromptShown) return
+    const doneCode = Object.entries(FORMAT_TEMPLATE_GROUP).find(([, group]) => group === selectedTemplate?.format)?.[0]
+    const newCompleted = new Set(completedFormats)
+    if (doneCode) newCompleted.add(doneCode)
+    setCompletedFormats(newCompleted)
+    const remaining = (briefSubmission.formats || []).filter(f => !newCompleted.has(f))
+    if (remaining.length > 0) {
+      setFormatPromptOptions(remaining)
+      setFormatPromptShown(true)
+    }
+  }
+
+  function handlePickAnotherFormat(formatCode) {
+    setFormatPromptOptions([])
+    setTemplateSelectFormat(formatCode)
+    setScreen('template-select')
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
       await doSave()
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
+      offerMoreFormats()
     } catch (err) {
       console.error('Save error:', err)
       alert('Save failed: ' + err.message)
@@ -762,13 +849,19 @@ export default function App() {
     }
   }
 
+  // Confirmed before doing anything (checklist i7, 2026-09-08): this skips
+  // straight to a shareable link instead of exporting/continuing to edit
+  // here, and used to be explained only in small gray footer text - easy to
+  // click without realizing it's the one-way option.
   async function handleSendForReview() {
+    if (!window.confirm('Send this design for review as-is? You can still find and edit it later from Designs, but this skips exporting or reviewing it here first.')) return
     setSaving(true)
     try {
       const { id } = await doSave()
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
       setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
+      offerMoreFormats()
     } catch (err) {
       console.error('Send for Review error:', err)
       alert('Send for Review failed: ' + err.message)
@@ -929,7 +1022,12 @@ export default function App() {
           <BriefingForm
             key={briefResetKey}
             submitted={briefSubmission}
-            onSubmitted={brief => { setBriefSubmission(brief); setScreen('template-select') }}
+            onSubmitted={brief => {
+              setBriefSubmission(brief)
+              setCompletedFormats(new Set())
+              setTemplateSelectFormat(null)
+              setScreen('template-select')
+            }}
           />
         </div>
       )}
@@ -938,8 +1036,9 @@ export default function App() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <BriefTemplatePicker
             brief={briefSubmission}
+            formatOverride={templateSelectFormat}
             onSelect={handleSelectTemplateFromBrief}
-            onBack={() => setScreen('brief')}
+            onBack={() => { setTemplateSelectFormat(null); setScreen('brief') }}
             customCards={customTemplates.cards}
             customRecords={customTemplates.records}
             canManage={activation?.role === 'designer' || activation?.role === 'agency'}
@@ -1126,6 +1225,13 @@ export default function App() {
 
       {/* Share / Send for Review modal */}
       {reviewItems && <ReviewModal items={reviewItems} onClose={() => setReviewItems(null)} />}
+      {formatPromptOptions.length > 0 && (
+        <MoreFormatsModal
+          formats={formatPromptOptions}
+          onPick={handlePickAnotherFormat}
+          onClose={() => setFormatPromptOptions([])}
+        />
+      )}
 
       {/* Help modal */}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}

@@ -731,15 +731,25 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           design" screen so a merchant wanting both A and B isn't stuck) */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!restricted && (
-          <button
-            onClick={onExport}
-            disabled={exporting}
-            style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: exporting ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'background 0.15s' }}
-            onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary-dark)' }}
-            onMouseLeave={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary)' }}
-          >
-            {exporting ? 'Exporting…' : 'Export PDF'}
-          </button>
+          <>
+            <button
+              onClick={onExport}
+              disabled={exporting}
+              style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: exporting ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary-dark)' }}
+              onMouseLeave={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary)' }}
+            >
+              {exporting ? 'Exporting…' : 'Export PDF'}
+            </button>
+            {/* Cost surfaced before clicking, not just implied by the credits
+                pill up in the breadcrumb (checklist i6, 2026-09-08) - AI
+                Suggest already states its own cost the same way. */}
+            {credits != null && (
+              <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center', marginTop: -4 }}>
+                Uses 1 export credit — {credits} remaining
+              </div>
+            )}
+          </>
         )}
 
         <button
