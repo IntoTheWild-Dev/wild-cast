@@ -5,10 +5,15 @@ import { blobUrlToDataUrl } from './image'
 // print resolution instead of a small browsing-thumbnail size.
 const LIBRARY_MAX_DIM = 2400
 
+// Display names shown to partners - the object KEYS (folder routing,
+// zone-id matching in assetFolderForZone, Blob storage paths) stay "stickers"
+// throughout the codebase; only this label changes. "Sticker" isn't a term
+// used internally and confused testers (Julia's ask, 2026-09-08) - "Discount"
+// is what that badge/callout zone actually represents.
 export const FOLDERS = {
   logos: 'Logos',
   'product-images': 'Product images',
-  stickers: 'Stickers',
+  stickers: 'Discount',
   'qr-codes': 'QR codes',
   other: 'Other',
 }

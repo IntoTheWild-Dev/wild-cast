@@ -14,7 +14,7 @@ const LAST_MERCHANT_KEY = 'wildcast_library_last_merchant'
 const UPLOADABLE_FOLDERS = [
   { key: 'logos', label: 'Upload a logo', requireTransparent: false },
   { key: 'product-images', label: 'Upload a product photo', requireTransparent: true },
-  { key: 'stickers', label: 'Upload a sticker / badge', requireTransparent: true },
+  { key: 'stickers', label: 'Upload a discount badge', requireTransparent: true },
   { key: 'qr-codes', label: 'Upload a QR code', requireTransparent: false },
 ]
 

@@ -15,6 +15,16 @@ const ALL_MERCHANTS = '__all__'
 
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
 
+// No live template has a sticker-type zone yet, but the underlying id/folder/
+// Library category stay "sticker" throughout the codebase (assetLibrary.js,
+// assetFolderForZone) once one gets built - only what a partner actually
+// reads in the editor should say "Discount" instead (Julia's ask,
+// 2026-09-08: the word "sticker" isn't used internally and confuses testers).
+function imageZoneLabel(zone) {
+  if (zone.id?.includes('sticker')) return 'Discount'
+  return zone.label ?? zone.id
+}
+
 const FIELD_HINTS = {
   headline:         "The bigger line, below the subline, e.g. 'DREAMTEAM'",
   sub_headline:     "The smaller line, above the headline, e.g. 'POTSDAMS NEUES'",
@@ -673,7 +683,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
               <ImageUpload
                 key={zone.id}
                 step={6 + i}
-                label={zone.label ?? zone.id}
+                label={imageZoneLabel(zone)}
                 hint={zone.hint ?? 'JPG or PNG'}
                 value={fields[`${zone.id}Url`]}
                 onChange={url => onChange(`${zone.id}Url`, url)}
