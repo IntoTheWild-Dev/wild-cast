@@ -114,6 +114,20 @@ function deriveGroups(templates) {
   return groups
 }
 
+// Which BASE_TEMPLATES `format` strings actually have at least one live
+// template for a given category, factoring in Figma imports the same way
+// the real picker does (overlayCustomCards) - so this stays correct as
+// templates get published, not just for the two hardcoded flyers today.
+// Used by BriefingForm.jsx to grey out/disable "coming soon" formats in the
+// brief instead of letting a partner pick one the tool can't produce yet
+// (checklist i10, 2026-09-08).
+export function liveFormatsFor(category, customCards = [], customRecords = []) {
+  const allTemplates = overlayCustomCards(BASE_TEMPLATES, customCards, customRecords)
+  return deriveGroups(allTemplates)
+    .filter(g => g.category === category && g.liveCount > 0)
+    .map(g => g.format)
+}
+
 // ── Layout picker modal ───────────────────────────────────────────────────────
 function LayoutModal({ entry, onPick, onClose }) {
   // Text-only modes are disabled for now (design decision - not worth maintaining

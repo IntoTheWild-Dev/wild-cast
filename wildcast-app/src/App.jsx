@@ -1022,6 +1022,8 @@ export default function App() {
           <BriefingForm
             key={briefResetKey}
             submitted={briefSubmission}
+            customCards={customTemplates.cards}
+            customRecords={customTemplates.records}
             onSubmitted={brief => {
               setBriefSubmission(brief)
               setCompletedFormats(new Set())

@@ -3,7 +3,8 @@ import WordCarousel from './WordCarousel'
 import Select from './Select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
-import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, DEFAULT_BRIEF } from '../lib/briefConstants'
+import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
+import { liveFormatsFor } from './TemplatePicker'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -94,21 +95,29 @@ function Field({ label, hint, children }) {
   )
 }
 
-function ChoiceButton({ active, onClick, children, checkbox }) {
+// disabled: can't be picked at all - used for formats with no live template
+// yet (checklist i10, 2026-09-08), rather than letting a partner select
+// something the tool can't actually produce.
+function ChoiceButton({ active, onClick, children, checkbox, disabled }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={disabled ? "Coming soon - not available to pick yet" : undefined}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8, cursor: 'pointer',
+        padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8,
+        cursor: disabled ? 'not-allowed' : 'pointer',
         border: `1.5px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
         background: active ? 'var(--primary-glow)' : '#fff',
-        color: active ? 'var(--primary-dark)' : 'var(--dark)',
+        color: disabled ? 'var(--light)' : (active ? 'var(--primary-dark)' : 'var(--dark)'),
+        opacity: disabled ? 0.6 : 1,
         transition: 'all 0.15s',
       }}
     >
       {checkbox ? <HugeiconsIcon icon={active ? CheckmarkSquare01Icon : SquareIcon} size={15} /> : null}{children}
+      {disabled && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--light)' }}>· Coming soon</span>}
     </button>
   )
 }
@@ -120,7 +129,7 @@ function ChoiceButton({ active, onClick, children, checkbox }) {
 // template + mode is picked, so this form only ever has one screen and one
 // action: hand off to the template picker (Julia's workflow change,
 // 2026-09-08).
-export default function BriefingForm({ submitted, onSubmitted }) {
+export default function BriefingForm({ submitted, onSubmitted, customCards, customRecords }) {
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // and remounts fresh when you come back (e.g. via the logo, or the
@@ -139,6 +148,15 @@ export default function BriefingForm({ submitted, onSubmitted }) {
 
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
+  // Which format checkboxes actually have a live template to pick next -
+  // same live-check the template picker itself uses, so a partner never
+  // picks a "coming soon" format that just dead-ends there (checklist i10,
+  // 2026-09-08). Empty until Business type is chosen - nothing's live for
+  // an unknown category.
+  const liveFormats = brief.businessType
+    ? liveFormatsFor(brief.businessType.toLowerCase(), customCards, customRecords)
+    : []
+  const isFormatLive = value => liveFormats.includes(FORMAT_TEMPLATE_GROUP[value])
 
   const isValid =
     partnerFilled &&
@@ -209,10 +227,18 @@ export default function BriefingForm({ submitted, onSubmitted }) {
               )}
             </Field>
 
-            <Field label="Formats needed" hint="Pick all that apply.">
+            <Field label="Formats needed" hint={brief.businessType ? 'Pick all that apply.' : 'Pick a business type above to see what\'s available.'}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {FORMATS.map(f => (
-                  <ChoiceButton key={f.value} active={brief.formats.includes(f.value)} onClick={() => toggleFormat(f.value)} checkbox>{f.label}</ChoiceButton>
+                  <ChoiceButton
+                    key={f.value}
+                    active={brief.formats.includes(f.value)}
+                    onClick={() => toggleFormat(f.value)}
+                    checkbox
+                    disabled={!isFormatLive(f.value)}
+                  >
+                    {f.label}
+                  </ChoiceButton>
                 ))}
               </div>
             </Field>
