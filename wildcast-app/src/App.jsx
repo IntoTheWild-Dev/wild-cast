@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
-import TemplatePicker from './components/TemplatePicker'
+import TemplatePicker, { BriefTemplatePicker } from './components/TemplatePicker'
 import BriefingForm from './components/BriefingForm'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
@@ -14,6 +14,8 @@ import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
 import { mergeCustomTemplates } from './lib/customTemplates'
+import { resolvePartnerName } from './lib/briefConstants'
+import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -123,12 +125,22 @@ export default function App() {
   // to update) instead of regenerating a fresh, un-edited candidate - Julia's
   // "the designs have reset after editing" report (2026-08-03). Cleared on
   // every fresh brief submission so a new brief never inherits a stale save.
+  //
+  // Both of these currently have no reader — the brief → template → mode →
+  // editor workflow change (2026-09-08) stopped wiring TemplateCandidatePicker
+  // into the primary flow (its own file is untouched, just not reachable from
+  // BriefingForm anymore), so nothing currently renders picker cards that
+  // would show this. Left in place, still kept up to date by
+  // handleSaveAndReturnToPicker/handleNavigate below, since reconnecting the
+  // picker later shouldn't require re-deriving this bookkeeping.
+  // eslint-disable-next-line no-unused-vars
   const [savedCandidateIds, setSavedCandidateIds] = useState({})
   // { [templateId]: previewPngDataUrl } - the picker's card thumbnail is
   // captured off-screen from the brief's original (never-edited) fields, so
   // without this it silently shows the pre-edit design after a save. Set
   // alongside savedCandidateIds from the same just-saved project, cleared
   // together on a fresh brief submission.
+  // eslint-disable-next-line no-unused-vars
   const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
@@ -343,6 +355,10 @@ export default function App() {
   // (via "Save & pick another design" - see savedCandidateIds above), reopen
   // that saved state instead of regenerating a fresh, un-edited one. Falls
   // through to the fresh path if the sessionStorage cache is missing/corrupt.
+  //
+  // No current caller — see savedCandidateIds above for why this is kept
+  // rather than deleted (2026-09-08 workflow change).
+  // eslint-disable-next-line no-unused-vars
   async function handleSelectGeneratedCandidate(template, prefilledFields, savedId) {
     if (savedId) {
       try {
@@ -370,6 +386,38 @@ export default function App() {
     // brief-generated candidate. Falls back to the plain template name if
     // the brief left both blank.
     const nameTag = [prefilledFields?.restaurant_name, prefilledFields?.offer].filter(Boolean).join(' – ')
+    setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
+    setCurrentProjectId(null)
+    setSaveStatus(null)
+    setLoadKey(k => k + 1)
+    setScreen('editor')
+  }
+
+  // Entry point for the new brief → template → mode → editor flow (Julia's
+  // workflow change, 2026-09-08). Mirrors handleSelectTemplate, but pre-fills
+  // what the brief actually collected — partner/restaurant name, plus the
+  // merchant's logo/food photo auto-pulled from the Library — instead of
+  // resetting to blank DEFAULT_FIELDS. Headline/subline/sticker/QR are left
+  // for the live editor, same as buildCandidateFields already does when the
+  // brief never collected them.
+  async function handleSelectTemplateFromBrief(template) {
+    const brief = briefSubmission
+    const partnerName = resolvePartnerName(brief)
+    const { logoUrl, photoUrl: autoPhotoUrl } = await fetchMerchantAssets(partnerName)
+    const photoUrl = brief.foodPhotoAsset?.src ?? autoPhotoUrl
+    const prefilledFields = buildCandidateFields(brief, { logoUrl, photoUrl })
+
+    historyRef.current = []; setCanUndo(false)
+    setRestrictedReview(false)
+    setSelectedTemplate(template)
+    setFields({ ...DEFAULT_FIELDS, ...prefilledFields })
+    setFontSizes({})
+    setGeneratedFontSizes({})
+    setAlignments({})
+    setImageScales({})
+    setTextPositions({})
+    setZonePositions({})
+    const nameTag = [prefilledFields.restaurant_name, prefilledFields.offer].filter(Boolean).join(' – ')
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
     setSaveStatus(null)
@@ -746,6 +794,10 @@ export default function App() {
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
   // Ticking both Option A and B produces two independent saved designs and two
   // review links, shown together in the same ReviewModal.
+  //
+  // No current caller — see savedCandidateIds above for why this is kept
+  // rather than deleted (2026-09-08 workflow change).
+  // eslint-disable-next-line no-unused-vars
   async function handleSendCandidatesForReview(items) {
     setSaving(true)
     try {
@@ -854,7 +906,7 @@ export default function App() {
       ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
       : { minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
-        onLogoClick={() => setScreen('brief')}
+        onLogoClick={() => setScreen(briefSubmission ? 'template-select' : 'brief')}
         screen={screen}
         onNavigate={handleNavigate}
         activation={activation}
@@ -866,13 +918,23 @@ export default function App() {
           <BriefingForm
             key={briefResetKey}
             submitted={briefSubmission}
-            onSubmitted={brief => { setSavedCandidateIds({}); setSavedCandidatePreviews({}); setBriefSubmission(brief) }}
-            onPick={handleSelectGeneratedCandidate}
-            onSendForReview={handleSendCandidatesForReview}
-            savedCandidateIds={savedCandidateIds}
-            savedCandidatePreviews={savedCandidatePreviews}
-            credits={activation?.credits}
-            onCreditUsed={handleAiCreditUsed}
+            onSubmitted={brief => { setBriefSubmission(brief); setScreen('template-select') }}
+          />
+        </div>
+      )}
+
+      {screen === 'template-select' && briefSubmission && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <BriefTemplatePicker
+            brief={briefSubmission}
+            onSelect={handleSelectTemplateFromBrief}
+            onBack={() => setScreen('brief')}
+            customCards={customTemplates.cards}
+            customRecords={customTemplates.records}
+            canManage={activation?.role === 'designer' || activation?.role === 'agency'}
+            onRefetch={refetchCustomTemplates}
+            onOptimisticPatch={patchCustomRecord}
+            onRecordDeleted={removeCustomRecord}
           />
         </div>
       )}

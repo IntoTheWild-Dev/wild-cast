@@ -508,6 +508,60 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
   )
 }
 
+// Maps a brief's format checkboxes (lib/briefConstants.js FORMATS values)
+// onto BASE_TEMPLATES' `format` strings.
+const BRIEF_FORMAT_TO_GROUP = { flyer: 'Flyer', poster: 'Poster', wild_poster: 'Wild Poster' }
+
+// Screen 2 of the brief → template → mode → editor workflow (Julia's ask,
+// 2026-09-08): jumps straight to the OptionsView for whichever group matches
+// the brief's Business type + Formats, skipping the category/format chooser
+// entirely since the brief already answered that. Picking a card still opens
+// the same "Choose your mode" modal (LayoutModal, inside OptionsView) as the
+// Templates catalogue page.
+export function BriefTemplatePicker({ brief, onSelect, onBack, customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
+  const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
+  const allGroups     = useMemo(() => deriveGroups(allTemplates), [allTemplates])
+
+  const category = brief.businessType.toLowerCase()
+  const wantedFormats = brief.formats.map(f => BRIEF_FORMAT_TO_GROUP[f]).filter(Boolean)
+  const group = allGroups.find(g => g.category === category && wantedFormats.includes(g.format))
+
+  // Matches TemplateCandidatePicker's NoMatchFallback (still used elsewhere) —
+  // a plain, honest read-back rather than pretending a template exists.
+  if (!group) {
+    return (
+      <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto', padding: '64px 24px' }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>No matching template yet</h1>
+          <p style={{ margin: '8px 0 24px', fontSize: 13, color: 'var(--mid)' }}>
+            Right now only Restaurant + Flyer has live templates — go back and adjust your answers, or check back soon.
+          </p>
+          <button
+            onClick={onBack}
+            style={{ padding: '11px 20px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer' }}
+          >
+            ← Edit answers
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <OptionsView
+      group={group}
+      customCards={customCards}
+      customRecords={customRecords}
+      canManage={canManage}
+      onRefetch={onRefetch}
+      onOptimisticPatch={onOptimisticPatch}
+      onRecordDeleted={onRecordDeleted}
+      onBack={onBack}
+      onSelect={onSelect}
+    />
+  )
+}
+
 // ── Hero feature bullets ──────────────────────────────────────────────────────
 const FEATURES = [
   {
