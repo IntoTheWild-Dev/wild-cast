@@ -182,6 +182,10 @@ export default function BriefingForm({ submitted, onSubmitted }) {
               )}
             </Field>
 
+            <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 22, lineHeight: 1.5 }}>
+              The next few answers help us match you with the right template - you'll pick it on the next screen, then fill in the rest live.
+            </div>
+
             <Field label="Business type">
               <div style={{ display: 'flex', gap: 10 }}>
                 {['Restaurant', 'Retail'].map(t => (
