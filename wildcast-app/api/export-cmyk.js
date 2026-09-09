@@ -35,11 +35,32 @@ const TRIM_PX_H = PX_H - BLEED_PX * 2                         // 1749
 // Increase body limit — the 4× canvas PNG can be 3–5 MB as base64
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 
+// Selectable output intents — both ICC files are the free, redistributable
+// characterisation profiles from eci.org (same source/license as the
+// original FOGRA39 file). FOGRA51 (PSO Coated v3, ISO 12647-2:2013) is the
+// newer offset standard; FOGRA39 (ISO Coated v2, ISO 12647-2:2004) stays the
+// default so existing exports don't change unless a caller opts in.
+const ICC_PROFILES = {
+  fogra39: {
+    file: 'ISOcoated_v2_eci.icc',
+    identifier: 'FOGRA39',
+    info: 'Coated FOGRA39 \\(ISO 12647-2:2004\\)',
+  },
+  fogra51: {
+    file: 'PSOcoated_v3.icc',
+    identifier: 'FOGRA51',
+    info: 'PSO Coated v3 FOGRA51 \\(ISO 12647-2:2013\\)',
+  },
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { png, filename = 'wildcast-flyer' } = req.body
+  const { png, filename = 'wildcast-flyer', profile = 'fogra39' } = req.body
   if (!png) return res.status(400).json({ error: 'Missing png' })
+
+  const profileMeta = ICC_PROFILES[profile]
+  if (!profileMeta) return res.status(400).json({ error: `Unknown profile "${profile}"` })
 
   try {
     const pngBuffer = Buffer.from(
@@ -47,8 +68,8 @@ export default async function handler(req, res) {
       'base64',
     )
 
-    // Load FOGRA39 ICC profile (bundled alongside this function)
-    const iccPath = join(__dirname, 'icc', 'ISOcoated_v2_eci.icc')
+    // Load the selected output ICC profile (bundled alongside this function)
+    const iccPath = join(__dirname, 'icc', profileMeta.file)
     const iccProfile = readFileSync(iccPath)
 
     // ── sRGB → FOGRA39 CMYK (raw bytes + FlateDecode) ────────────────────────
@@ -77,14 +98,14 @@ export default async function handler(req, res) {
         background: { r: 255, g: 255, b: 255 },
         extendWith: 'mirror',
       })
-      .withIccProfile(iccPath)   // sRGB → FOGRA39 CMYK (4 channels, 0=no ink)
+      .withIccProfile(iccPath)   // sRGB → CMYK via the selected profile (4 channels, 0=no ink)
       .raw()
       .toBuffer()
 
     const cmykZ = deflateSync(rawCmyk)  // FlateDecode for PDF
 
     // ── Build PDF/X-4 ────────────────────────────────────────────────────────
-    const pdfBuffer = buildPdfX4({ cmykZ, iccProfile })
+    const pdfBuffer = buildPdfX4({ cmykZ, iccProfile, profileMeta })
 
     const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()
     res.setHeader('Content-Type', 'application/pdf')
@@ -98,7 +119,7 @@ export default async function handler(req, res) {
 }
 
 // ── PDF/X-4 builder ───────────────────────────────────────────────────────────
-function buildPdfX4({ cmykZ, iccProfile }) {
+function buildPdfX4({ cmykZ, iccProfile, profileMeta }) {
   const chunks  = []
   const offsets = {}
 
@@ -119,14 +140,14 @@ function buildPdfX4({ cmykZ, iccProfile }) {
   mark(2)
   push('2 0 obj\n<< /Type /Pages /Kids [5 0 R] /Count 1 >>\nendobj\n')
 
-  // 3 — OutputIntent (FOGRA39 / ISO 12647-2)
+  // 3 — OutputIntent (selected profile / ISO 12647-2)
   mark(3)
   push(
     '3 0 obj\n' +
     '<< /Type /OutputIntent\n' +
     '   /S /GTS_PDFIX\n' +
-    '   /OutputConditionIdentifier (FOGRA39)\n' +
-    '   /Info (Coated FOGRA39 \\(ISO 12647-2:2004\\))\n' +
+    `   /OutputConditionIdentifier (${profileMeta.identifier})\n` +
+    `   /Info (${profileMeta.info})\n` +
     '   /RegistryName (http://www.color.org)\n' +
     '   /DestOutputProfile 6 0 R\n' +
     '>>\nendobj\n',

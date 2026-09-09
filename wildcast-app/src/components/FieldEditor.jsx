@@ -197,6 +197,15 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
   )
 }
 
+// Output ICC profiles for CMYK export (api/export-cmyk.js has the matching
+// ICC_PROFILES map + bundled .icc files). fogra39 stays the default so
+// existing exports don't change unless a merchant/print shop asks for the
+// newer standard.
+const ICC_PROFILE_OPTIONS = [
+  { id: 'fogra39', label: 'FOGRA39', hint: 'ISO Coated v2 · ISO 12647-2:2004' },
+  { id: 'fogra51', label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' },
+]
+
 // ── Image upload ─────────────────────────────────────────────────────────────
 // Canvas is 316×441px = A6 105×148mm → canvas PPI ≈ 76.4
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
@@ -502,7 +511,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange, credits, onCreditUsed }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange, credits, onCreditUsed, iccProfile, onIccProfileChange }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -713,14 +722,33 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>ICC Profile</div>
-          {/* Every export is FOGRA39 - the only client is Wolt DE (Germany), so
-              this was never a real choice. A dropdown offering other profiles
-              (GRACoL/SWOP/Japan Color) wasn't wired to anything anyway - the
-              export always used FOGRA39 regardless of what was selected - so
-              showing it as a fixed value is more honest than a fake picker. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--dark)' }}>
-            <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span>
-            FOGRA39 (European offset)
+          {/* Both options actually change the export now (api/export-cmyk.js
+              picks the matching bundled .icc + OutputIntent) - unlike the old
+              fixed FOGRA39-only display, this is a real choice. FOGRA39 stays
+              the default since it's what every export used before this. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ICC_PROFILE_OPTIONS.map(opt => {
+              const active = (iccProfile ?? 'fogra39') === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onIccProfileChange?.(opt.id)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+                    padding: '10px 12px', fontSize: 13, textAlign: 'left', cursor: 'pointer',
+                    border: `1px solid ${active ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 8,
+                    background: active ? 'var(--primary-glow)' : 'var(--surface)', color: 'var(--dark)',
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+                    <span style={{ color: active ? '#16a34a' : 'var(--light)', fontWeight: 700 }}>✓</span>
+                    {opt.label}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--mid)', paddingLeft: 22 }}>{opt.hint}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
