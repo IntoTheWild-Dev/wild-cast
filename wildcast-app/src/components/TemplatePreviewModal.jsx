@@ -66,7 +66,8 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(223,111,109,0.55)',
+        position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(17,17,17,0.25)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
       }}
     >
