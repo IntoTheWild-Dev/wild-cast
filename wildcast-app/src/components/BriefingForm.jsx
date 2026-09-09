@@ -5,6 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
 import { liveFormatsFor } from './TemplatePicker'
+import TemplatePreviewModal from './TemplatePreviewModal'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -34,13 +35,14 @@ const FEATURES = [
   },
 ]
 
-// onBrowseTemplates: brought back per Julia's ask (2026-09-09) - was removed
-// in the 2026-09-08 workflow change since the brief always leads to a
-// template picker next anyway, but partners still want a way to look before
-// committing to filling out the brief. Goes to the same Templates catalogue
-// the top-nav link opens (App.jsx's onNavigate('catalogue')), not a
-// brief-scoped picker - browsing here doesn't pre-fill anything.
-function HeroColumn({ onBrowseTemplates }) {
+// onOpenTemplateModal: brought back per Julia's ask (2026-09-09) - the
+// button itself was restored first pointing at the full Templates catalogue
+// (App.jsx's onNavigate('catalogue')), but Julia clarified she meant the
+// original in-form popup (TemplatePreviewModal - existed pre-2026-09-08,
+// unwired by that round's pivot, never deleted) that lets a partner browse
+// and pre-pick a design before finishing the brief, not a full page nav away
+// from the form.
+function HeroColumn({ onOpenTemplateModal }) {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
@@ -52,7 +54,7 @@ function HeroColumn({ onBrowseTemplates }) {
       </p>
       <button
         type="button"
-        onClick={onBrowseTemplates}
+        onClick={onOpenTemplateModal}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 36,
           padding: '11px 20px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
@@ -147,13 +149,14 @@ function ChoiceButton({ active, onClick, children, checkbox, disabled }) {
 // template + mode is picked, so this form only ever has one screen and one
 // action: hand off to the template picker (Julia's workflow change,
 // 2026-09-08).
-export default function BriefingForm({ submitted, onSubmitted, onBrowseTemplates, customCards, customRecords }) {
+export default function BriefingForm({ submitted, onSubmitted, customCards, customRecords }) {
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // and remounts fresh when you come back (e.g. via the logo, or the
   // template picker's "Edit answers") - without this, `brief` would reset to
   // blank even though `submitted` still holds the real answers.
   const [brief, setBrief] = useState(() => submitted ?? DEFAULT_BRIEF)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
 
   function set(key, value) { setBrief(prev => ({ ...prev, [key]: value })) }
 
@@ -162,6 +165,28 @@ export default function BriefingForm({ submitted, onSubmitted, onBrowseTemplates
       ...prev,
       formats: prev.formats.includes(value) ? prev.formats.filter(f => f !== value) : [...prev.formats, value],
     }))
+  }
+
+  // Picking a design in the "Pick your template first" popup also pre-fills
+  // the Business type/Formats answers it implies (both live options today
+  // are Restaurant/Flyer) - matches the popup's original 2026-08-20 intent,
+  // so a partner who already knows which design they want doesn't have to
+  // separately re-answer questions the pick already implies. Only fills
+  // forward on select, never un-fills on deselect - unpicking a design
+  // shouldn't undo an otherwise-valid answer.
+  function toggleTemplatePick(id) {
+    setBrief(prev => {
+      const preSelectedTemplateIds = prev.preSelectedTemplateIds.includes(id)
+        ? prev.preSelectedTemplateIds.filter(x => x !== id)
+        : [...prev.preSelectedTemplateIds, id]
+      const willHaveAny = preSelectedTemplateIds.length > 0
+      return {
+        ...prev,
+        preSelectedTemplateIds,
+        businessType: willHaveAny ? 'Restaurant' : prev.businessType,
+        formats: willHaveAny && !prev.formats.includes('flyer') ? [...prev.formats, 'flyer'] : prev.formats,
+      }
+    })
   }
 
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
@@ -200,7 +225,7 @@ export default function BriefingForm({ submitted, onSubmitted, onBrowseTemplates
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn onBrowseTemplates={onBrowseTemplates} />
+          <HeroColumn onOpenTemplateModal={() => setShowTemplateModal(true)} />
 
           <form
             onSubmit={handleSubmit}
@@ -297,6 +322,14 @@ export default function BriefingForm({ submitted, onSubmitted, onBrowseTemplates
 
         </div>
       </div>
+
+      {showTemplateModal && (
+        <TemplatePreviewModal
+          selectedIds={brief.preSelectedTemplateIds}
+          onToggle={toggleTemplatePick}
+          onClose={() => setShowTemplateModal(false)}
+        />
+      )}
     </div>
   )
 }
