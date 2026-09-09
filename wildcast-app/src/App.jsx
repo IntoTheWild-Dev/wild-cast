@@ -457,16 +457,22 @@ export default function App() {
   // Entry point for the new brief → template → mode → editor flow (Julia's
   // workflow change, 2026-09-08). Mirrors handleSelectTemplate, but pre-fills
   // what the brief actually collected — partner/restaurant name, plus the
-  // merchant's logo/food photo auto-pulled from the Library — instead of
-  // resetting to blank DEFAULT_FIELDS. Headline/subline/sticker/QR are left
-  // for the live editor, same as buildCandidateFields already does when the
-  // brief never collected them.
+  // merchant's logo auto-pulled from the Library — instead of resetting to
+  // blank DEFAULT_FIELDS. Headline/subline/sticker/QR are left for the live
+  // editor, same as buildCandidateFields already does when the brief never
+  // collected them.
+  //
+  // Food photo deliberately NOT auto-pulled (Julia's ask, 2026-09-09) - it
+  // always starts blank here, even when the Library has a real photo for
+  // this merchant, so a partner explicitly picks the dish for THIS design
+  // rather than silently inheriting whatever was uploaded last. Logo stays
+  // auto-pulled since it's one fixed brand asset per merchant, not something
+  // that varies per design the way a food photo does.
   async function handleSelectTemplateFromBrief(template) {
     const brief = briefSubmission
     const partnerName = resolvePartnerName(brief)
-    const { logoUrl, photoUrl: autoPhotoUrl } = await fetchMerchantAssets(partnerName)
-    const photoUrl = brief.foodPhotoAsset?.src ?? autoPhotoUrl
-    const prefilledFields = buildCandidateFields(brief, { logoUrl, photoUrl })
+    const { logoUrl } = await fetchMerchantAssets(partnerName)
+    const prefilledFields = buildCandidateFields(brief, { logoUrl })
 
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
@@ -678,7 +684,15 @@ export default function App() {
 
   function handleFieldChange(key, value) {
     pushUndoSnapshot(key)
-    setFields(prev => ({ ...prev, [key]: value }))
+    // Wolt's Omnes Cond treatment (headline/sub_headline/offer/restaurant_name
+    // today) is always uppercase on the real print artwork - briefToCandidates.js
+    // already enforced this for brief-mapped text, but typing directly into a
+    // live-editor field bypassed it (Julia's ask, 2026-09-09). Driven off the
+    // zone's actual fontFamily rather than a hardcoded field-id list, so any
+    // future Omnes Cond zone picks this up with no separate edit needed.
+    const zone = templateConfig?.zones?.find(z => z.id === key)
+    const nextValue = zone?.fontFamily === 'omnes-cond' && typeof value === 'string' ? value.toUpperCase() : value
+    setFields(prev => ({ ...prev, [key]: nextValue }))
     setSaveStatus(null) // unsaved changes
   }
 

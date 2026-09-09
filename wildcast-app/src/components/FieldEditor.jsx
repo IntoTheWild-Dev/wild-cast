@@ -189,7 +189,11 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         />
       )}
       {!readOnly && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+        // position:relative here (not on AISuggest itself) so its dropdown
+        // anchors to this full-width row instead of whichever narrow button
+        // triggered it - keeps a 300px dropdown from starting left of the
+        // panel's own edge and getting clipped (see AISuggest.jsx).
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative' }}>
           <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} credits={credits} onCreditUsed={onCreditUsed} />
           <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} mode="improve" seedText={value} credits={credits} onCreditUsed={onCreditUsed} />
         </div>

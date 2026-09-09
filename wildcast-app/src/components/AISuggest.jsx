@@ -125,8 +125,19 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
 
   const disabled = isImprove && !trimmedSeed
 
+  // No own position:relative wrapper - the dropdown (position:absolute,
+  // right:0 below) is meant to resolve against the shared button-row
+  // wrapper in FieldEditor.jsx (which IS position:relative and spans the
+  // panel's full content width), not against this one button's own narrow
+  // bounding box. Two AISuggest instances render side by side there (AI
+  // Suggest + Improve with AI) - anchoring the dropdown to whichever
+  // individual button was clicked let a 300px-wide dropdown start well
+  // left of the panel's own left edge and get clipped by the panel's
+  // overflow:hidden (Julia's report, 2026-09-09: "AI Suggestions are off
+  // page we can't see it" - the dropdown WAS generating suggestions fine,
+  // just invisible).
   return (
-    <div style={{ position: 'relative' }}>
+    <>
       <button
         type="button"
         onClick={handleToggle}
@@ -234,6 +245,6 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }
