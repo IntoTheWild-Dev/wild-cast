@@ -50,7 +50,12 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
     // "McDonald's Zentrum") - falls back to Partner name otherwise.
     restaurant_name: brief.restaurantName?.trim() || partnerName || '',
     tc: brief.tcs || '',
-    offer: offerText,
+    // Left blank rather than pre-filled with the objective text (Julia's ask,
+    // 2026-09-09) - "New Dish"/"Limited campaign" etc. read as a real typed
+    // offer, not a placeholder, so partners kept it without noticing. The
+    // editor now shows a greyed example instead (FieldEditor.jsx's Offer
+    // placeholder). offerText still feeds `cta`'s fallback below.
+    offer: '',
     // Own field, distinct from Subline (Julia's ask, 2026-08-04) - falls back
     // to Subline, then the objective text, so a brief filled out before this
     // field existed (or left blank) still fills Option B's second line.

@@ -3,7 +3,7 @@ import WordCarousel from './WordCarousel'
 import Select from './Select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
-import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
+import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
 import { liveFormatsFor } from './TemplatePicker'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
@@ -34,16 +34,34 @@ const FEATURES = [
   },
 ]
 
-function HeroColumn() {
+// onBrowseTemplates: brought back per Julia's ask (2026-09-09) - was removed
+// in the 2026-09-08 workflow change since the brief always leads to a
+// template picker next anyway, but partners still want a way to look before
+// committing to filling out the brief. Goes to the same Templates catalogue
+// the top-nav link opens (App.jsx's onNavigate('catalogue')), not a
+// brief-scoped picker - browsing here doesn't pre-fill anything.
+function HeroColumn({ onBrowseTemplates }) {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
         We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
       </h1>
-      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
+      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 24 }}>
         Tell us what you need, the same way you'd brief a designer - we'll show you templates that fit, ready to fill in live.
       </p>
+      <button
+        type="button"
+        onClick={onBrowseTemplates}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 36,
+          padding: '11px 20px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
+          border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)',
+        }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+        Pick your template first
+      </button>
 
       <div
         style={{
@@ -129,7 +147,7 @@ function ChoiceButton({ active, onClick, children, checkbox, disabled }) {
 // template + mode is picked, so this form only ever has one screen and one
 // action: hand off to the template picker (Julia's workflow change,
 // 2026-09-08).
-export default function BriefingForm({ submitted, onSubmitted, customCards, customRecords }) {
+export default function BriefingForm({ submitted, onSubmitted, onBrowseTemplates, customCards, customRecords }) {
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // and remounts fresh when you come back (e.g. via the logo, or the
@@ -148,6 +166,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
 
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
+  const partnerName = resolvePartnerName(brief)
   // Which format checkboxes actually have a live template to pick next -
   // same live-check the template picker itself uses, so a partner never
   // picks a "coming soon" format that just dead-ends there (checklist i10,
@@ -163,13 +182,17 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
     brief.businessType &&
     brief.about.trim() &&
     brief.objective &&
-    (!selectedObjective?.followUp || brief.objectiveFollowUp.trim()) &&
+    (!selectedObjective?.followUp || brief.objectiveFollowUp.trim() || (brief.followUpSameAsPartner && partnerFilled)) &&
     brief.formats.length > 0
 
   function handleSubmit(e) {
     e.preventDefault()
     if (!isValid) return
-    onSubmitted({ ...brief })
+    // "Use same name as Partner name" resolves to the actual name here, not
+    // just in the field's own display value - buildCandidateFields and
+    // everything downstream reads brief.objectiveFollowUp directly and has
+    // no idea the checkbox exists (Annika's ask, 2026-09-09).
+    onSubmitted({ ...brief, objectiveFollowUp: brief.followUpSameAsPartner ? partnerName : brief.objectiveFollowUp })
   }
 
   return (
@@ -177,7 +200,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn />
+          <HeroColumn onBrowseTemplates={onBrowseTemplates} />
 
           <form
             onSubmit={handleSubmit}
@@ -223,7 +246,27 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
                 ))}
               </div>
               {selectedObjective?.followUp && (
-                <input style={{ ...inputStyle, marginTop: 10 }} placeholder={selectedObjective.followUp} value={brief.objectiveFollowUp} onChange={e => set('objectiveFollowUp', e.target.value)} />
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 4 }}>
+                    {selectedObjective.followUp} <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <input
+                    style={inputStyle}
+                    placeholder={selectedObjective.followUp}
+                    value={brief.followUpSameAsPartner ? partnerName : brief.objectiveFollowUp}
+                    disabled={brief.followUpSameAsPartner}
+                    onChange={e => set('objectiveFollowUp', e.target.value)}
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 12, color: 'var(--mid)', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={brief.followUpSameAsPartner}
+                      onChange={e => set('followUpSameAsPartner', e.target.checked)}
+                      style={{ width: 14, height: 14, cursor: 'pointer' }}
+                    />
+                    Use same name as Partner name
+                  </label>
+                </div>
               )}
             </Field>
 

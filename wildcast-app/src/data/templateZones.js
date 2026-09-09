@@ -162,6 +162,15 @@ const WEN_CHENG_V3_ZONES = [
     // Position nudge actually has room to move.
     x: 18.98, y: 171.52,
     width: 278.36, height: 161.2,
+    // Lets the photo visually overlap the headline above it, "Wolt style"
+    // (Julia's ask, 2026-09-09) - same mechanism Option B already uses
+    // (TemplateCanvas.jsx auto-extends the clip region up by this amount and
+    // brings the image in front of all text). Sized to reach the headline
+    // zone's own top edge: the 22.88pt gap between headline's bottom (108.18
+    // + 40.46) and this zone's own y (171.52), plus the headline's full
+    // height (40.46) - so the photo CAN cover the whole headline if its
+    // content extends that far, without ever clipping into sub_headline.
+    overlapAbove: 63.34,
   },
   {
     id: 'restaurant_name',

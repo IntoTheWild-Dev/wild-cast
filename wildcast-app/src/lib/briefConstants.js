@@ -40,6 +40,11 @@ export const DEFAULT_BRIEF = {
   businessType: '',
   about: '',
   objective: '', objectiveFollowUp: '',
+  // "Use same name as Partner name" checkbox on the objective follow-up
+  // field (e.g. "What's the new name of the restaurant?") - Annika's ask,
+  // 2026-09-09. Resolved to the real partner name in BriefingForm's
+  // handleSubmit, so nothing downstream needs to know this flag exists.
+  followUpSameAsPartner: false,
   formats: [],
   // Shown on the flyer artwork (Option A's restaurant_name zone) - distinct
   // from Partner name, which just scopes the Library/internal tracking.

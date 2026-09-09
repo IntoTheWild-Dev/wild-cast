@@ -119,10 +119,11 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder }) {
   const limit = CHAR_LIMITS[fieldKey]
   const hint = FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
+  const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -173,7 +174,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           readOnly={readOnly}
           maxLength={limit}
           rows={3}
-          placeholder={`Enter ${label.toLowerCase()}…`}
+          placeholder={fieldPlaceholder}
           style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text', overflowWrap: 'break-word', wordBreak: 'break-word' }}
         />
       ) : (
@@ -183,7 +184,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           onChange={e => onChange(e.target.value)}
           readOnly={readOnly}
           maxLength={limit}
-          placeholder={`Enter ${label.toLowerCase()}…`}
+          placeholder={fieldPlaceholder}
           style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
         />
       )}
@@ -637,6 +638,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={4} label="Offer" fieldKey="offer"
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
+            placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
