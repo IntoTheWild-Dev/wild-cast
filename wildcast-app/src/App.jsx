@@ -145,6 +145,11 @@ function MoreFormatsModal({ formats, onPick, onClose }) {
 
 export default function App() {
   const [screen, setScreen]                   = useState('brief')
+  // Which output ICC profile export-cmyk.js should convert to - see the
+  // matching ICC Profile picker in FieldEditor.jsx and ICC_PROFILES in
+  // api/export-cmyk.js. Defaults to fogra39 (what every export used before
+  // FOGRA51 was added as a second option).
+  const [iccProfile, setIccProfile] = useState('fogra39')
   // Lifted out of BriefingForm so it survives a round trip to the editor and
   // back - Julia's ask (2026-08-03): saving a candidate mid-edit should
   // return to the "pick a design" screen (e.g. a merchant wants both A and
@@ -694,7 +699,7 @@ export default function App() {
       const response = await fetch('/api/export-cmyk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ png, filename }),
+        body: JSON.stringify({ png, filename, profile: iccProfile }),
       })
 
       if (!response.ok) {
@@ -1199,6 +1204,8 @@ export default function App() {
             onLangChange={setLang}
             onExport={handleExport}
             exporting={exporting}
+            iccProfile={iccProfile}
+            onIccProfileChange={setIccProfile}
             template={selectedTemplate}
             templateConfig={templateConfig}
             fontSizes={fontSizes}
