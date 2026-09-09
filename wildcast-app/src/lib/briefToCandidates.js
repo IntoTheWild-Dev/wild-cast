@@ -1,5 +1,5 @@
 import { getLibraryAssets } from './assetLibrary'
-import { OBJECTIVES, resolvePartnerName } from './briefConstants'
+import { resolvePartnerName } from './briefConstants'
 
 // The two live templates a brief can generate a candidate from today. Both
 // are Restaurant/Flyer only (src/data/templates.js) - there's no live
@@ -23,11 +23,6 @@ export function getMatchingTemplateIds(brief) {
   return CANDIDATE_TEMPLATE_IDS
 }
 
-function objectiveText(brief) {
-  const objective = OBJECTIVES.find(o => o.value === brief.objective)
-  return brief.objectiveFollowUp?.trim() || objective?.label || ''
-}
-
 // Maps a submitted brief onto the {fields} shape TemplateCanvas/App.jsx
 // expect. Deliberately does NOT special-case Option A vs B - a field with no
 // matching zone on a given template is simply inert (TemplateCanvas only
@@ -36,7 +31,6 @@ function objectiveText(brief) {
 // there) without any per-template branching here.
 export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
   const partnerName = resolvePartnerName(brief)
-  const offerText = objectiveText(brief)
 
   return {
     // Wolt's Omnes Cond headline/subline treatment is always uppercase -
@@ -54,12 +48,15 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
     // 2026-09-09) - "New Dish"/"Limited campaign" etc. read as a real typed
     // offer, not a placeholder, so partners kept it without noticing. The
     // editor now shows a greyed example instead (FieldEditor.jsx's Offer
-    // placeholder). offerText still feeds `cta`'s fallback below.
+    // placeholder).
     offer: '',
     // Own field, distinct from Subline (Julia's ask, 2026-08-04) - falls back
-    // to Subline, then the objective text, so a brief filled out before this
-    // field existed (or left blank) still fills Option B's second line.
-    cta: brief.cta?.trim() || brief.subline?.trim() || offerText,
+    // to Subline only, not further to the objective text (same "New Dish"
+    // problem as Offer above, just discovered on Option B's cta zone instead
+    // - Julia's ask, 2026-09-09: it read as "Jetzt Wolt App downloaden und
+    // New Dish", a nonsense sentence a partner could easily miss and publish
+    // as-is). Left blank shows FieldEditor's own greyed example instead.
+    cta: brief.cta?.trim() || brief.subline?.trim() || '',
     logoUrl: logoUrl || null,
     photoUrl: photoUrl || null,
     // No live template has a `qr` zone yet (checked directly against

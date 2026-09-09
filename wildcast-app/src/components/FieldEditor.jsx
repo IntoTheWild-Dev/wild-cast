@@ -31,8 +31,16 @@ const FIELD_HINTS = {
   restaurant_name:  "Your restaurant name, e.g. 'Wen Cheng'",
   offer:            "Your promotion, e.g. '30% SPAREN'",
   tc:               'Small-print terms, rotated vertically on the flyer',
-  cta:              "Second line under the app-download prompt, e.g. 'Lieblingsessen bei Burger King bestellen.'",
+  cta:              "Completes \"Jetzt Wolt App downloaden und ...\" as one sentence, e.g. 'Lieblingsessen bei McDonald's bestellen.'",
 }
+
+// Option B's headline completes the fixed "Wie wär's mit ..." line baked
+// into its background art as a question (e.g. "WIE WÄR'S MIT MCDONALD'S?")
+// - a completely different pattern from Option A's standalone headline, so
+// the shared generic hint/example ('DREAMTEAM') was actively misleading
+// there (Julia's ask, 2026-09-09: "the form isn't clear on Option A and
+// Option B" for what each field expects).
+const OPT_B_HEADLINE_HINT = "Completes the fixed \"Wie wär's mit ...\" line above it as a question, e.g. 'MCDONALD'S?'"
 
 function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
@@ -119,9 +127,9 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, hint: hintOverride }) {
   const limit = CHAR_LIMITS[fieldKey]
-  const hint = FIELD_HINTS[fieldKey]
+  const hint = hintOverride ?? FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
 
@@ -615,6 +623,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         <StepFieldRow
           step={1} label="Headline" fieldKey="headline"
           value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
+          hint={template?.id === 'opt-b-flyer2-simple' ? OPT_B_HEADLINE_HINT : undefined}
+          placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
           credits={credits} onCreditUsed={onCreditUsed}
           readOnly={restricted}
           showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
@@ -682,6 +692,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={5} label="App download line" fieldKey="cta"
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
+            placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
