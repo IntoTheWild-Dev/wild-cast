@@ -76,13 +76,25 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   // so the same formula went negative and Math.max(0, …) floored it to zero -
   // nudge was permanently a no-op for any contain-fit zone. Math.abs() unifies
   // both cases: it's the same "how far can this edge travel" distance either way.
+  //
+  // A zone with overlapAbove can validly render further up than the base
+  // cover-fit slack allows - its clip region already extends that far (see
+  // the clipPath below), so nudge needs to be able to reach it too. Without
+  // this, the overlap feature existed in the clip mask but was practically
+  // unreachable: whichever dimension "cover" binds to for a given photo's own
+  // aspect ratio could end up with only a few px of slack (one nudge click,
+  // Julia's report 2026-09-10: "can't nudge up or down, left and right works
+  // however" - the photo she uploaded happened to bind on height). Only the
+  // upward (negative-y) direction gets the extra room - downward stays bound
+  // to the zone's own real edge, since there's nothing valid to reveal below it.
   function clampOffset(zone, scaledW, scaledH, rawOffset) {
     const slackX = Math.abs(scaledW  - zone.width)  / 2
     const slackY = Math.abs(scaledH - zone.height) / 2
+    const upSlack = slackY + (zone.overlapAbove ?? 0)
     const raw = rawOffset ?? { x: 0, y: 0 }
     return {
       x: Math.max(-slackX, Math.min(slackX, raw.x)),
-      y: Math.max(-slackY, Math.min(slackY, raw.y)),
+      y: Math.max(-upSlack, Math.min(slackY, raw.y)),
     }
   }
 
@@ -747,10 +759,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         if (!fabricRef.current) return
         // Photos use cover (fill zone, crop center); logos use contain (full logo visible)
         const isCover = zone.fit === 'cover'
-        // Small always-on overscan so the Position nudge has a little crop room in
-        // BOTH directions from the start - otherwise whichever dimension "cover" binds
-        // to (matches the zone exactly) has zero slack until the user also bumps Scale.
-        const NUDGE_MARGIN = 1.06
+        // Always-on overscan so the Position nudge has real crop room in BOTH
+        // directions from the start - otherwise whichever dimension "cover"
+        // binds to (matches the zone exactly) has near-zero slack until the
+        // user also bumps Scale. 1.06 (a ~3px margin on a ~135pt zone) turned
+        // out too small to be usable - Position nudges in 4px steps, so it
+        // hit the clamp on the very first click either direction (Julia's
+        // report, 2026-09-10: Option B's food photo felt "very restricted,"
+        // couldn't nudge up/down at all for a photo whose cover-fit height
+        // happened to bind tight). 1.15 gives a few real clicks of room.
+        const NUDGE_MARGIN = 1.15
         const scale = isCover
           ? Math.max(zone.width / img.width, zone.height / img.height) * NUDGE_MARGIN
           : Math.min(zone.width / img.width, zone.height / img.height)
