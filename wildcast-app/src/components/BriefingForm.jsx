@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import WordCarousel from './WordCarousel'
 import Select from './Select'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -193,10 +193,28 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
   // blank even though `submitted` still holds the real answers.
   const [brief, setBrief] = useState(() => submitted ?? DEFAULT_BRIEF)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
+  // Fires once, the moment someone touches the form without having picked a
+  // template yet - Julia's ask, 2026-09-10: "if someone missed the button
+  // and goes straight to the form, make a popup come up." The Continue-time
+  // check (handleSubmit below) was already there but only ever surfaced at
+  // the very end - this catches it at the actual moment they skip Step 1.
+  // A ref, not state, so it doesn't fire again on every subsequent
+  // keystroke while still unpicked - once is a nudge, not a nag.
+  const warnedNoTemplateRef = useRef(false)
 
-  function set(key, value) { setBrief(prev => ({ ...prev, [key]: value })) }
+  function warnIfNoTemplate() {
+    if (brief.preSelectedTemplateIds.length || warnedNoTemplateRef.current) return
+    warnedNoTemplateRef.current = true
+    window.alert('Please pick your template first.')
+  }
+
+  function set(key, value) {
+    warnIfNoTemplate()
+    setBrief(prev => ({ ...prev, [key]: value }))
+  }
 
   function toggleFormat(value) {
+    warnIfNoTemplate()
     setBrief(prev => ({
       ...prev,
       formats: prev.formats.includes(value) ? prev.formats.filter(f => f !== value) : [...prev.formats, value],
