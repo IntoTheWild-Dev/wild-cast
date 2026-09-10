@@ -232,7 +232,15 @@ export default function App() {
   const [projectName, setProjectName]         = useState('')
   const [currentProjectId, setCurrentProjectId] = useState(null)
   const [saving, setSaving]                   = useState(false)
-  const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved'
+  const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved' - purely cosmetic, auto-clears after 3s (see handleSave etc.)
+  // Separate from saveStatus, which is a 3-second flash badge and NOT a
+  // reliable "is there anything to lose" signal - the nav-guard below was
+  // using saveStatus for exactly that, so leaving the editor more than 3s
+  // after a successful save still warned "leave without saving?" even
+  // though nothing had changed since (Julia's report, 2026-09-10). This
+  // flag only flips true on a real edit and false on a real save/fresh
+  // load, with no timer.
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [loadKey, setLoadKey]                 = useState(0)    // increments on project load to reset auto-shrink
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
@@ -409,6 +417,7 @@ export default function App() {
     setProjectName(template.name)
     setCurrentProjectId(null)
     setSaveStatus(null)
+    setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -456,6 +465,7 @@ export default function App() {
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
     setSaveStatus(null)
+    setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -496,6 +506,7 @@ export default function App() {
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
     setSaveStatus(null)
+    setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -510,7 +521,7 @@ export default function App() {
   // logo click (onLogoClick, wired separately in the JSX below), which is
   // meant to just resume whatever brief/picker was already in progress.
   function handleNavigate(target) {
-    if (screen === 'editor' && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
+    if (screen === 'editor' && hasUnsavedChanges && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
     // The "Choose your mode" popup overlays the still-mounted 'brief' screen
     // (screen itself never changes while it's open) - dismiss it on any nav
     // away so it can't end up floating over whatever screen comes next.
@@ -583,6 +594,7 @@ export default function App() {
       max = Math.round(base * 1.2)
     }
     setFontSizes(prev => ({ ...prev, [key]: Math.max(min, Math.min(max, size)) }))
+    setHasUnsavedChanges(true)
   }
 
   // Fires once the interactive editor's TemplateCanvas finishes mounting (its
@@ -613,11 +625,13 @@ export default function App() {
   function handleAlignChange(key, align) {
     pushUndoSnapshot()
     setAlignments(prev => ({ ...prev, [key]: align }))
+    setHasUnsavedChanges(true)
   }
 
   function handleImageScaleChange(zoneId, pct) {
     pushUndoSnapshot()
     setImageScales(prev => ({ ...prev, [zoneId]: Math.max(20, Math.min(300, pct)) }))
+    setHasUnsavedChanges(true)
   }
 
   // Nudges the photo within its zone (px, in canvas units). TemplateCanvas clamps
@@ -629,6 +643,7 @@ export default function App() {
       const cur = prev[zoneId] ?? { x: 0, y: 0 }
       return { ...prev, [zoneId]: { ...cur, [axis]: cur[axis] + delta } }
     })
+    setHasUnsavedChanges(true)
   }
 
   // Nudges a text zone within its box (px, in canvas units) - only meaningful
@@ -643,6 +658,7 @@ export default function App() {
       const next = { ...cur, [axis]: Math.max(-40, Math.min(40, cur[axis] + delta)) }
       return { ...prev, [zoneId]: next }
     })
+    setHasUnsavedChanges(true)
   }
 
   function handleResetZone(zoneId) {
@@ -659,6 +675,7 @@ export default function App() {
       if (!(zoneId in prev)) return prev
       const next = { ...prev }; delete next[zoneId]; return next
     })
+    setHasUnsavedChanges(true)
   }
 
   // "Reset layout" resets every zone's position on the canvas directly - but image
@@ -671,6 +688,7 @@ export default function App() {
     setImageScales({})
     setImagePositions({})
     setTextPositions({})
+    setHasUnsavedChanges(true)
   }
 
   // Guided mode locks the canvas - nothing can be dragged, so a position-only reset
@@ -689,6 +707,7 @@ export default function App() {
     setTextPositions({})
     setZonePositions({})
     setSaveStatus(null)
+    setHasUnsavedChanges(true)
     setLoadKey(k => k + 1)
   }
 
@@ -704,6 +723,7 @@ export default function App() {
     const nextValue = zone?.fontFamily === 'omnes-cond' && typeof value === 'string' ? value.toUpperCase() : value
     setFields(prev => ({ ...prev, [key]: nextValue }))
     setSaveStatus(null) // unsaved changes
+    setHasUnsavedChanges(true)
   }
 
   async function handleExport() {
@@ -836,6 +856,7 @@ export default function App() {
     try {
       await doSave()
       setSaveStatus('saved')
+      setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
       offerMoreFormats()
     } catch (err) {
@@ -868,6 +889,7 @@ export default function App() {
       // pre-edit design captured from the original brief fields.
       setSavedCandidatePreviews(prev => ({ ...prev, [selectedTemplate.id]: preview }))
       setSaveStatus('saved')
+      setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
       setScreen('brief')
     } catch (err) {
@@ -888,6 +910,7 @@ export default function App() {
     try {
       const { id } = await doSave()
       setSaveStatus('saved')
+      setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
       setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
       offerMoreFormats()
@@ -992,6 +1015,7 @@ export default function App() {
     setCurrentProjectId(project.id)
     setComments(freshComments)
     setSaveStatus(null)
+    setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -1249,7 +1273,7 @@ export default function App() {
             onExport={handleExport}
             exporting={exporting}
             iccProfile={iccProfile}
-            onIccProfileChange={setIccProfile}
+            onIccProfileChange={profile => { setIccProfile(profile); setHasUnsavedChanges(true) }}
             template={selectedTemplate}
             templateConfig={templateConfig}
             fontSizes={fontSizes}
@@ -1271,7 +1295,7 @@ export default function App() {
             comments={comments}
             currentProjectId={currentProjectId}
             projectName={projectName}
-            onProjectNameChange={setProjectName}
+            onProjectNameChange={name => { setProjectName(name); setHasUnsavedChanges(true) }}
           />
         </div>
       )}

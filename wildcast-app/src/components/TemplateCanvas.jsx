@@ -158,6 +158,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.set({
           left: isRotated ? cx : zone.x,
           top:  isRotated ? cy : zone.y,
+          // Also restore width - a Designer-mode drag-resize changes this
+          // independently of position, so a position-only reset left a
+          // previously-stretched zone stretched (see applyZonePositions
+          // above for the actual bug this let go unnoticed).
+          width: zone.textWidth ?? zone.width,
         })
         obj.setCoords()
       }
@@ -214,13 +219,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // restore in the canvas-init effect, but callable at any time with arbitrary data).
         applyZonePositions: (positions) => {
           if (!positions) return
+          // Same Guided-mode width guard as the canvas-init restore below -
+          // an undo step should never be able to reintroduce a stray
+          // Designer-mode width into a locked Guided canvas either.
+          const locked = mode === 'non-designer'
           zones.forEach(zone => {
             if (zone.type !== 'text') return
             const p = positions[zone.id]
             if (!p) return
             const obj = zoneObjsRef.current[zone.id]
             if (!obj) return
-            obj.set({ left: p.left, top: p.top, width: p.width })
+            obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
             obj.setCoords()
           })
           canvas.renderAll()
@@ -465,17 +474,28 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }
       }
 
-      // Restore saved drag positions for text zones (designer mode re-open)
+      // Restore saved drag positions for text zones (designer mode re-open).
+      // Width is Designer-only - Guided mode's canvas is locked, so a zone's
+      // width there can never have been legitimately changed by the user,
+      // only ever carried over from a stray/accidental Designer-mode resize
+      // saved into this same project at some point (a single bad drag on a
+      // tiny rotated zone like `tc` persists forever otherwise, since every
+      // later save just re-captures whatever width is currently applied -
+      // Julia's report, 2026-09-10: the T&Cs zone had been dragged wide
+      // enough that a whole sentence rendered as one unwrapped line, most of
+      // it pushed off-canvas). Guided mode always uses the template's own
+      // configured width instead of trusting a saved one.
       function applyZonePositions() {
         const saved = zonePositionsRef.current
         if (!saved || !Object.keys(saved).length) return
+        const locked = mode === 'non-designer'
         zones.forEach(zone => {
           if (zone.type !== 'text') return
           const p = saved[zone.id]
           if (!p) return
           const obj = zoneObjsRef.current[zone.id]
           if (!obj) return
-          obj.set({ left: p.left, top: p.top, width: p.width })
+          obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
           obj.setCoords()
         })
         canvas.renderAll()

@@ -35,7 +35,12 @@ const FEATURES = [
   },
 ]
 
-function HeroColumn() {
+// pickedOption/onOpenTemplateModal: TemplatePickStep renders right here, between
+// the hero copy and the tip box - Julia's ask (2026-09-10): the hero's own
+// headline/subline should read first, with "Pick your template" right after
+// it, not above everything (its very first placement, above the whole
+// hero+form grid).
+function HeroColumn({ pickedOption, onOpenTemplateModal }) {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
@@ -45,6 +50,8 @@ function HeroColumn() {
       <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
         Tell us what you need, the same way you'd brief a designer - we'll show you templates that fit, ready to fill in live.
       </p>
+
+      <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={onOpenTemplateModal} />
 
       <div
         style={{
@@ -260,12 +267,9 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
-
-        <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} />
-
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn />
+          <HeroColumn pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} />
 
           <form
             onSubmit={handleSubmit}
