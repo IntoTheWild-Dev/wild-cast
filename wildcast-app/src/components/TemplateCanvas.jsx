@@ -762,16 +762,37 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // Always-on overscan so the Position nudge has real crop room in BOTH
         // directions from the start - otherwise whichever dimension "cover"
         // binds to (matches the zone exactly) has near-zero slack until the
-        // user also bumps Scale. 1.06 (a ~3px margin on a ~135pt zone) turned
-        // out too small to be usable - Position nudges in 4px steps, so it
-        // hit the clamp on the very first click either direction (Julia's
-        // report, 2026-09-10: Option B's food photo felt "very restricted,"
-        // couldn't nudge up/down at all for a photo whose cover-fit height
-        // happened to bind tight). 1.15 gives a few real clicks of room.
-        const NUDGE_MARGIN = 1.15
-        const scale = isCover
-          ? Math.max(zone.width / img.width, zone.height / img.height) * NUDGE_MARGIN
+        // user also bumps Scale. A flat percentage margin here was tried
+        // twice (1.06, then 1.15 - Julia's 2026-09-10 report: Option B's
+        // food photo felt "very restricted") and both times still bottomed
+        // out at just 2-3 clicks of room for a photo whose aspect ratio
+        // happens to closely match the zone's own - confirmed by simulating
+        // this exact formula against Option A/B's real dimensions across a
+        // range of photo aspect ratios (4:3 through ultra-wide panoramic),
+        // not just guessed: the tight (binding) dimension's slack is
+        // *entirely* a function of the margin, so a flat percentage on a
+        // ~135-161pt zone genuinely can be as little as ~12px total travel,
+        // regardless of how much bigger the margin number looks on paper.
+        // Guaranteeing an ABSOLUTE minimum instead of a percentage fixes
+        // this class of bug structurally - every zone/photo combination now
+        // gets real, clickable room, rather than needing another guess at
+        // the next magic percentage when a differently-shaped photo hits
+        // the same wall again.
+        const MIN_NUDGE_SLACK = 24 // canvas units - ~6 clicks of 4px-step room
+        const baseScale = isCover
+          ? Math.max(zone.width / img.width, zone.height / img.height)
           : Math.min(zone.width / img.width, zone.height / img.height)
+        let scale = baseScale
+        if (isCover) {
+          // Whichever dimension the base (no-margin) scale is exactly tight
+          // against is the one margin alone has to open slack in - see
+          // clampOffset's comment above for why the other dimension already
+          // has natural slack from the aspect mismatch and doesn't need this.
+          const bindsOnWidth = (zone.width / img.width) >= (zone.height / img.height)
+          const tightDim = bindsOnWidth ? zone.width : zone.height
+          const marginForMinSlack = 1 + (2 * MIN_NUDGE_SLACK) / tightDim
+          scale = baseScale * Math.max(1.15, marginForMinSlack)
+        }
         const scaledW = img.width  * scale
         const scaledH = img.height * scale
         const imgLocked = !fabricRef.current || mode === 'non-designer'
