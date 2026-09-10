@@ -9,11 +9,11 @@ export const ADD_NEW = '__add_new__'
 export const PLACEHOLDER_PARTNERS = ['Wen Cheng', 'McD', 'Fressnapf Koblenz', 'AKKO Chicken & Grilled']
 
 export const OBJECTIVES = [
-  { value: 'new_opening', label: 'New opening', followUp: "What's the new name of the restaurant?" },
-  { value: 'promotion', label: 'Promotion', followUp: "What's the promotion?" },
-  { value: 'special_offer', label: 'Special offer', followUp: "What's the offer?" },
-  { value: 'new_dish', label: 'New Dish', followUp: null },
-  { value: 'limited_campaign', label: 'Limited campaign', followUp: null },
+  { value: 'new_opening', label: 'New opening' },
+  { value: 'promotion', label: 'Promotion' },
+  { value: 'special_offer', label: 'Special offer' },
+  { value: 'new_dish', label: 'New Dish' },
+  { value: 'limited_campaign', label: 'Limited campaign' },
 ]
 
 // LED Backpack deliberately excluded - decided out of scope (motion format,
@@ -39,12 +39,7 @@ export const DEFAULT_BRIEF = {
   preSelectedTemplateIds: [],
   businessType: '',
   about: '',
-  objective: '', objectiveFollowUp: '',
-  // "Use same name as Partner name" checkbox on the objective follow-up
-  // field (e.g. "What's the new name of the restaurant?") - Annika's ask,
-  // 2026-09-09. Resolved to the real partner name in BriefingForm's
-  // handleSubmit, so nothing downstream needs to know this flag exists.
-  followUpSameAsPartner: false,
+  objective: '',
   formats: [],
   // Shown on the flyer artwork (Option A's restaurant_name zone) - distinct
   // from Partner name, which just scopes the Library/internal tracking.

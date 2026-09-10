@@ -3,7 +3,7 @@ import WordCarousel from './WordCarousel'
 import Select from './Select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
-import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
+import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
 import { liveFormatsFor } from './TemplatePicker'
 import TemplatePreviewModal, { TEMPLATE_PREVIEW_GROUPS } from './TemplatePreviewModal'
 
@@ -243,9 +243,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
     ? TEMPLATE_PREVIEW_GROUPS.flatMap(g => g.options).find(o => o.id === pickedTemplateId) ?? null
     : null
 
-  const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
-  const partnerName = resolvePartnerName(brief)
   // Which format checkboxes actually have a live template to pick next -
   // same live-check the template picker itself uses, so a partner never
   // picks a "coming soon" format that just dead-ends there (checklist i10,
@@ -261,7 +259,6 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
     brief.businessType &&
     brief.about.trim() &&
     brief.objective &&
-    (!selectedObjective?.followUp || brief.objectiveFollowUp.trim() || (brief.followUpSameAsPartner && partnerFilled)) &&
     brief.formats.length > 0
 
   function handleSubmit(e) {
@@ -275,11 +272,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
       return
     }
     if (!isValid) return
-    // "Use same name as Partner name" resolves to the actual name here, not
-    // just in the field's own display value - buildCandidateFields and
-    // everything downstream reads brief.objectiveFollowUp directly and has
-    // no idea the checkbox exists (Annika's ask, 2026-09-09).
-    onSubmitted({ ...brief, objectiveFollowUp: brief.followUpSameAsPartner ? partnerName : brief.objectiveFollowUp })
+    onSubmitted(brief)
   }
 
   return (
@@ -332,29 +325,6 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
                   <ChoiceButton key={o.value} active={brief.objective === o.value} onClick={() => set('objective', o.value)}>{o.label}</ChoiceButton>
                 ))}
               </div>
-              {selectedObjective?.followUp && (
-                <div style={{ marginTop: 10 }}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 4 }}>
-                    {selectedObjective.followUp} <span style={{ color: '#EF4444' }}>*</span>
-                  </label>
-                  <input
-                    style={inputStyle}
-                    placeholder={selectedObjective.followUp}
-                    value={brief.followUpSameAsPartner ? partnerName : brief.objectiveFollowUp}
-                    disabled={brief.followUpSameAsPartner}
-                    onChange={e => set('objectiveFollowUp', e.target.value)}
-                  />
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 12, color: 'var(--mid)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={brief.followUpSameAsPartner}
-                      onChange={e => set('followUpSameAsPartner', e.target.checked)}
-                      style={{ width: 14, height: 14, cursor: 'pointer' }}
-                    />
-                    Use same name as Partner name
-                  </label>
-                </div>
-              )}
             </Field>
 
             <Field label="Formats needed" hint={brief.businessType ? 'Pick all that apply.' : 'Pick a business type above to see what\'s available.'}>
