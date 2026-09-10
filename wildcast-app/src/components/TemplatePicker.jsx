@@ -97,6 +97,18 @@ function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
   })
 }
 
+// Resolves a candidate id from the front-of-brief template pick (Julia's
+// ask, 2026-09-10: picking a template is now Step 1, and submitting the
+// brief opens LayoutModal directly for it, skipping the card-grid screen
+// entirely) to the "entry" shape LayoutModal expects - same overlay logic
+// BriefTemplatePicker already runs, so a Figma-imported override still
+// resolves correctly here too, not just for the two hardcoded options.
+export function entryForGuidedId(templateId, customCards = [], customRecords = []) {
+  if (!templateId) return null
+  const overlaid = overlayCustomCards(BASE_TEMPLATES, customCards, customRecords)
+  return overlaid.find(e => e.templateIdGuided === templateId) ?? null
+}
+
 // Derive unique groups from a templates array, preserving order.
 function deriveGroups(templates) {
   const seen = new Set()
@@ -129,7 +141,7 @@ export function liveFormatsFor(category, customCards = [], customRecords = []) {
 }
 
 // ── Layout picker modal ───────────────────────────────────────────────────────
-function LayoutModal({ entry, onPick, onClose }) {
+export function LayoutModal({ entry, onPick, onClose }) {
   // Text-only modes are disabled for now (design decision - not worth maintaining
   // both text-only and text+image variants per flyer). Kept in the list with
   // disabled:true rather than deleted so they're easy to re-enable later.

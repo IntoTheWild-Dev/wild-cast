@@ -2,17 +2,21 @@ import { CANDIDATE_TEMPLATE_IDS } from '../lib/briefToCandidates'
 
 const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
 
-// Lets a partner browse/pick which design(s) they're interested in before
-// filling out the full brief - Julia's ask (2026-08-20): "just so that they
-// can see the templates" before committing to the 3-step form. Multi-select
-// (they can pick more than one to compare), grouped by format so future
-// posters/wild posters slot in as their own group without restructuring.
+// Lets a partner pick which design they want BEFORE filling out the brief -
+// this is now the mandatory first step of the whole flow (Julia's ask,
+// 2026-09-10: template choice moves from after the brief to before it, and
+// picking here is a single decisive choice, not a "browse to compare" step).
+// Clicking a card commits it and closes the popup immediately - no separate
+// "Done" step. Grouped by format so future posters/wild posters slot in as
+// their own group without restructuring.
 //
-// Picking here pre-fills the "Formats needed"/"Business type" answers AND
-// narrows what TemplateCandidatePicker actually generates at the end (see
-// brief.preSelectedTemplateIds threading in BriefingForm.jsx and the filter
-// in briefToCandidates.js's getMatchingTemplateIds) - Julia's fix request
-// (2026-08-20): picking just Option A here shouldn't still generate both.
+// Picking here pre-fills the "Formats needed"/"Business type" answers (see
+// BriefingForm.jsx's pickTemplate) and IS what the rest of the flow uses to
+// skip straight to the "Choose your mode" popup after the brief is
+// submitted (App.jsx's onSubmitted) - Julia's fix request (2026-08-20) that
+// picking just Option A here shouldn't still generate both candidates
+// applies even more directly now that there's no candidate-generation step
+// left at all.
 //
 // Option ids are the REAL candidate template ids (not arbitrary strings) so
 // this ties directly into that generation step with no extra mapping layer.
@@ -32,11 +36,11 @@ const GROUPS = [
   },
 ]
 
-function OptionCard({ option, selected, onToggle }) {
+function OptionCard({ option, selected, onPick }) {
   return (
     <button
       type="button"
-      onClick={() => onToggle(option.id)}
+      onClick={() => onPick(option.id)}
       style={{
         position: 'relative', textAlign: 'left', cursor: 'pointer', padding: 0,
         borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)',
@@ -61,7 +65,7 @@ function OptionCard({ option, selected, onToggle }) {
 // Renders as position:fixed against the viewport so it's centered on the
 // whole page (and can be wide enough to avoid the grid scrolling), not just
 // the form column it's triggered from.
-export default function TemplatePreviewModal({ selectedIds, onToggle, onClose }) {
+export default function TemplatePreviewModal({ selectedId, onPick, onClose }) {
   return (
     <div
       onClick={onClose}
@@ -92,7 +96,7 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
             </button>
           </div>
           <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>
-            Browse what's available - pick as many as you like to compare. You can change this later.
+            Pick the design you'd like to start with.
           </p>
 
           {GROUPS.map(group => (
@@ -102,7 +106,7 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
                 {group.options.map(opt => (
-                  <OptionCard key={opt.id} option={opt} selected={selectedIds.includes(opt.id)} onToggle={onToggle} />
+                  <OptionCard key={opt.id} option={opt} selected={selectedId === opt.id} onPick={onPick} />
                 ))}
               </div>
             </div>
@@ -121,14 +125,6 @@ export default function TemplatePreviewModal({ selectedIds, onToggle, onClose })
               </div>
             </div>
           ))}
-
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
-          >
-            Done{selectedIds.length > 0 ? ` - ${selectedIds.length} selected` : ''}
-          </button>
         </div>
       </div>
     </div>

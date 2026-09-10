@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF, resolvePartnerName } from '../lib/briefConstants'
 import { liveFormatsFor } from './TemplatePicker'
-import TemplatePreviewModal from './TemplatePreviewModal'
+import TemplatePreviewModal, { TEMPLATE_PREVIEW_GROUPS } from './TemplatePreviewModal'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -35,35 +35,16 @@ const FEATURES = [
   },
 ]
 
-// onOpenTemplateModal: brought back per Julia's ask (2026-09-09) - the
-// button itself was restored first pointing at the full Templates catalogue
-// (App.jsx's onNavigate('catalogue')), but Julia clarified she meant the
-// original in-form popup (TemplatePreviewModal - existed pre-2026-09-08,
-// unwired by that round's pivot, never deleted) that lets a partner browse
-// and pre-pick a design before finishing the brief, not a full page nav away
-// from the form.
-function HeroColumn({ onOpenTemplateModal }) {
+function HeroColumn() {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
         We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
       </h1>
-      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 24 }}>
+      <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
         Tell us what you need, the same way you'd brief a designer - we'll show you templates that fit, ready to fill in live.
       </p>
-      <button
-        type="button"
-        onClick={onOpenTemplateModal}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 36,
-          padding: '11px 20px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
-          border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)',
-        }}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
-        Pick your template first
-      </button>
 
       <div
         style={{
@@ -101,6 +82,54 @@ function HeroColumn({ onOpenTemplateModal }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Step 1, above the whole hero+form layout - picking a template is now the
+// FIRST thing a partner does, not a step at the end of the form (Julia's
+// ask, 2026-09-10: the flow used to end with a separate "pick your
+// template" screen after the brief; now that happens up front instead, and
+// submitting the brief goes straight to the "Choose your mode" popup).
+// Shows the plain call-to-action button until something's picked, then
+// swaps to a compact "selected" state with a way to change it.
+function TemplatePickStep({ pickedOption, onOpenTemplateModal }) {
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
+        Step 1 · Required
+      </div>
+      {pickedOption ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <img
+            src={pickedOption.thumb} alt={pickedOption.name}
+            style={{ width: 52, height: 73, objectFit: 'cover', borderRadius: 8, border: '1.5px solid var(--primary)', flexShrink: 0 }}
+          />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{pickedOption.name} selected</div>
+            <button
+              type="button"
+              onClick={onOpenTemplateModal}
+              style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2, textDecoration: 'underline' }}
+            >
+              Change template
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onOpenTemplateModal}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '13px 22px', fontSize: 14, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
+            border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)',
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+          Pick your template
+        </button>
+      )}
     </div>
   )
 }
@@ -167,27 +196,27 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
     }))
   }
 
-  // Picking a design in the "Pick your template first" popup also pre-fills
-  // the Business type/Formats answers it implies (both live options today
-  // are Restaurant/Flyer) - matches the popup's original 2026-08-20 intent,
-  // so a partner who already knows which design they want doesn't have to
-  // separately re-answer questions the pick already implies. Only fills
-  // forward on select, never un-fills on deselect - unpicking a design
-  // shouldn't undo an otherwise-valid answer.
-  function toggleTemplatePick(id) {
-    setBrief(prev => {
-      const preSelectedTemplateIds = prev.preSelectedTemplateIds.includes(id)
-        ? prev.preSelectedTemplateIds.filter(x => x !== id)
-        : [...prev.preSelectedTemplateIds, id]
-      const willHaveAny = preSelectedTemplateIds.length > 0
-      return {
-        ...prev,
-        preSelectedTemplateIds,
-        businessType: willHaveAny ? 'Restaurant' : prev.businessType,
-        formats: willHaveAny && !prev.formats.includes('flyer') ? [...prev.formats, 'flyer'] : prev.formats,
-      }
-    })
+  // Picking a template is a single, decisive choice now (not a "browse to
+  // compare" step) - replaces any prior pick rather than toggling, and
+  // closes the popup immediately. Also pre-fills the Business type/Formats
+  // answers it implies (both live options today are Restaurant/Flyer), so a
+  // partner who already knows which design they want doesn't have to
+  // separately re-answer questions the pick already implies (Julia's ask,
+  // 2026-09-10).
+  function pickTemplate(id) {
+    setBrief(prev => ({
+      ...prev,
+      preSelectedTemplateIds: [id],
+      businessType: 'Restaurant',
+      formats: prev.formats.includes('flyer') ? prev.formats : [...prev.formats, 'flyer'],
+    }))
+    setShowTemplateModal(false)
   }
+
+  const pickedTemplateId = brief.preSelectedTemplateIds[0] ?? null
+  const pickedOption = pickedTemplateId
+    ? TEMPLATE_PREVIEW_GROUPS.flatMap(g => g.options).find(o => o.id === pickedTemplateId) ?? null
+    : null
 
   const selectedObjective = OBJECTIVES.find(o => o.value === brief.objective)
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
@@ -212,6 +241,14 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
 
   function handleSubmit(e) {
     e.preventDefault()
+    // Template pick is required and enforced with an explicit popup rather
+    // than just disabling Submit (Julia's ask, 2026-09-10) - it's Step 1, so
+    // a partner who skips it and fills the rest of the form should be told
+    // plainly to go back and pick one, not left guessing why nothing happens.
+    if (!pickedTemplateId) {
+      window.alert('Please pick your template first.')
+      return
+    }
     if (!isValid) return
     // "Use same name as Partner name" resolves to the actual name here, not
     // just in the field's own display value - buildCandidateFields and
@@ -223,9 +260,12 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+
+        <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} />
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn onOpenTemplateModal={() => setShowTemplateModal(true)} />
+          <HeroColumn />
 
           <form
             onSubmit={handleSubmit}
@@ -249,7 +289,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
             </Field>
 
             <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 22, lineHeight: 1.5 }}>
-              The next few answers help us match you with the right template - you'll pick it on the next screen, then fill in the rest live.
+              A few more details to prepare your design for review, based on the template you picked above.
             </div>
 
             <Field label="Business type">
@@ -315,7 +355,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
               width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: isValid ? 'pointer' : 'not-allowed',
               background: isValid ? 'var(--primary)' : '#E5E7EB', color: isValid ? '#fff' : 'var(--mid)',
             }}>
-              Pick your template →
+              Continue →
             </button>
             {!isValid && <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', marginTop: 8 }}>Fill in the fields above to continue.</div>}
           </form>
@@ -325,8 +365,8 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
 
       {showTemplateModal && (
         <TemplatePreviewModal
-          selectedIds={brief.preSelectedTemplateIds}
-          onToggle={toggleTemplatePick}
+          selectedId={pickedTemplateId}
+          onPick={pickTemplate}
           onClose={() => setShowTemplateModal(false)}
         />
       )}

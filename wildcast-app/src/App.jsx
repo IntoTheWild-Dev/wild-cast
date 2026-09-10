@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
-import TemplatePicker, { BriefTemplatePicker } from './components/TemplatePicker'
+import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
 import BriefingForm from './components/BriefingForm'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
@@ -156,6 +156,12 @@ export default function App() {
   // B), not lose it. BriefingForm no longer owns this - it's just the
   // submitted brief snapshot ({...brief} at Submit), or null before that.
   const [briefSubmission, setBriefSubmission] = useState(null)
+  // Set right after a brief submit (template is already picked as Step 1 of
+  // the brief now, per Julia's ask 2026-09-10) to open "Choose your mode"
+  // directly, overlaid on the still-visible brief screen - skips the old
+  // card-grid template-select screen entirely, since there's only ever one
+  // template to choose a mode for at this point. Null when not showing.
+  const [briefModeEntry, setBriefModeEntry] = useState(null)
   // Bumped by the "+ New Brief" nav item to force BriefingForm to remount
   // (resetting its own in-progress field values) even when it's already
   // mounted and showing the brief screen.
@@ -505,6 +511,10 @@ export default function App() {
   // meant to just resume whatever brief/picker was already in progress.
   function handleNavigate(target) {
     if (screen === 'editor' && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
+    // The "Choose your mode" popup overlays the still-mounted 'brief' screen
+    // (screen itself never changes while it's open) - dismiss it on any nav
+    // away so it can't end up floating over whatever screen comes next.
+    setBriefModeEntry(null)
     if (target === 'brief') setScreen('brief')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
     // picker was already in progress) - this always starts a genuinely fresh
@@ -1029,7 +1039,7 @@ export default function App() {
       ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
       : { minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
-        onLogoClick={() => setScreen(briefSubmission ? 'template-select' : 'brief')}
+        onLogoClick={() => { setBriefModeEntry(null); setScreen(briefSubmission ? 'template-select' : 'brief') }}
         screen={screen}
         onNavigate={handleNavigate}
         activation={activation}
@@ -1047,10 +1057,30 @@ export default function App() {
               setBriefSubmission(brief)
               setCompletedFormats(new Set())
               setTemplateSelectFormat(null)
-              setScreen('template-select')
+              // Template is already picked (Step 1 of the brief, per Julia's
+              // ask 2026-09-10) - open "Choose your mode" directly instead of
+              // routing to the old card-grid template-select screen.
+              const entry = entryForGuidedId(brief.preSelectedTemplateIds?.[0], customTemplates.cards, customTemplates.records)
+              if (entry) setBriefModeEntry(entry)
+              // Shouldn't happen - BriefingForm now requires a pick before it
+              // submits - but fall back rather than a dead end if the picked
+              // id somehow doesn't resolve to a real entry.
+              else setScreen('template-select')
             }}
           />
         </div>
+      )}
+
+      {briefModeEntry && (
+        <LayoutModal
+          entry={briefModeEntry}
+          onPick={templateId => {
+            const template = TEMPLATES.find(t => t.id === templateId) ?? customTemplates.cards.find(t => t.id === templateId)
+            setBriefModeEntry(null)
+            if (template) handleSelectTemplateFromBrief(template)
+          }}
+          onClose={() => setBriefModeEntry(null)}
+        />
       )}
 
       {screen === 'template-select' && briefSubmission && (
