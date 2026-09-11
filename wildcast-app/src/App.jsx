@@ -267,6 +267,11 @@ export default function App() {
   // Figma-imported templates (draft + live), fetched once and merged with the
   // static TEMPLATE_ZONES/TEMPLATES - see src/lib/customTemplates.js
   const [customTemplates, setCustomTemplates] = useState({ zonesById: {}, cards: [], records: [] })
+  // Mirrors hasUnsavedChanges below, but for TemplateImportPage's staged
+  // zone-setting edits instead of the editor's fields - lets handleNavigate
+  // warn before leaving the Import page with unsaved zone edits the same
+  // way it already warns leaving the editor. Julia's ask, 2026-09-11.
+  const [importDirty, setImportDirty] = useState(false)
   const exportRef = useRef(null)
 
   // ── Undo history ─────────────────────────────────────────────────────────────
@@ -422,6 +427,24 @@ export default function App() {
     setScreen('editor')
   }
 
+  // Opens a Figma import (draft or live) straight in the real Designer-mode
+  // editor, exactly as a partner/designer would see it - not a separate
+  // preview renderer. Julia's ask, 2026-09-11: "Save zone settings" and
+  // "Publish" were the only two actions on the Import review page, with no
+  // way to actually click around a draft before deciding it's ready.
+  // customTemplates.zonesById already carries every draft's real zone
+  // geometry (mergeCustomTemplates includes drafts, not just live records -
+  // see src/lib/customTemplates.js), so this is just handleSelectTemplate
+  // with a record's slotKey as the id - the exact same lookup the real
+  // catalogue uses for a published template, no separate code path.
+  // Reset layout/exit both behave normally; nothing here is published or
+  // saved back to the draft record just by opening/testing it.
+  function handleTestDraft(record) {
+    if (importDirty && !window.confirm("Leave without saving? Any zone setting changes you've made will be lost.")) return
+    setImportDirty(false)
+    handleSelectTemplate({ id: record.slotKey, mode: 'designer', name: record.label })
+  }
+
   // Entry point for a candidate generated from the briefing form
   // (src/components/TemplateCandidatePicker.jsx) - mirrors handleSelectTemplate
   // above but pre-fills the editor with the brief's answers instead of resetting
@@ -522,6 +545,10 @@ export default function App() {
   // meant to just resume whatever brief/picker was already in progress.
   function handleNavigate(target) {
     if (screen === 'editor' && hasUnsavedChanges && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
+    if (screen === 'import' && importDirty && !window.confirm("Leave without saving? Any zone setting changes you've made will be lost.")) return
+    // Confirmed leaving (or wasn't dirty) - clear so a later return trip to
+    // Import doesn't inherit a stale flag from before this component remounts.
+    if (screen === 'import') setImportDirty(false)
     // The "Choose your mode" popup overlays the still-mounted 'brief' screen
     // (screen itself never changes while it's open) - dismiss it on any nav
     // away so it can't end up floating over whatever screen comes next.
@@ -1164,7 +1191,13 @@ export default function App() {
 
       {screen === 'import' && activation?.role === 'agency' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
-          <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
+          <TemplateImportPage
+            customRecords={customTemplates.records}
+            onRefetch={refetchCustomTemplates}
+            onOptimisticPatch={patchCustomRecord}
+            onTestDraft={handleTestDraft}
+            onDirtyChange={setImportDirty}
+          />
         </div>
       )}
 

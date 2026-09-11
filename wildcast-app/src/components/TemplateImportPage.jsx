@@ -134,7 +134,7 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange }) {
   )
 }
 
-export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch }) {
+export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch, onTestDraft, onDirtyChange }) {
   const [error, setError] = useState('')
   // A slotKey, not a snapshotted record - the actual record is looked up
   // fresh from `reviewable` on every render (see `result` below). Storing a
@@ -188,6 +188,27 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     await onRefetch?.()
     setRefreshing(false)
   }
+
+  // Report staged-zone-edit dirtiness up to App.jsx so its nav guard can warn
+  // before leaving this page the same way it already warns leaving the
+  // editor (Julia's ask, 2026-09-11: navigating away here silently dropped
+  // unsaved zone-setting edits with no warning at all).
+  useEffect(() => {
+    onDirtyChange?.(Object.keys(zoneEdits).length > 0)
+  }, [zoneEdits, onDirtyChange])
+
+  // Covers actual browser navigation (reload/close/back) with unsaved zone
+  // edits staged - the App.jsx nav guard above only covers in-app nav clicks,
+  // which go through React state and never fire this browser-level event.
+  useEffect(() => {
+    function handleBeforeUnload(e) {
+      if (Object.keys(zoneEdits).length === 0) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [zoneEdits])
 
   // Records worth reviewing here - real Figma imports (drafts or already
   // live) with actual zone geometry, not the synthetic Option A/B override
@@ -422,6 +443,15 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                   }}
                 >
                   {savingZones ? 'Saving…' : zonesSaved ? 'Saved ✓' : 'Save zone settings'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onTestDraft?.(result)}
+                  title="Open this draft in the real editor to click around it before publishing - nothing here gets saved back to the draft just by testing it"
+                  style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: '1.5px solid var(--dark)', background: '#fff', color: 'var(--dark)', cursor: 'pointer' }}
+                >
+                  Test draft
                 </button>
 
                 {!result.live && (
