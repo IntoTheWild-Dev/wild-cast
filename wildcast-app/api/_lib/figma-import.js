@@ -77,6 +77,28 @@ const ROTATED_TEXT_DEFAULTS = {
   tc: { fontSize: 18, fontFamily: 'omnes-pro', fontWeight: 500, align: 'left', rotate: -90 },
 }
 
+// Figma's own font-family name for a typeface (e.g. "Omnes Cond", "Omnes
+// Pro") never matches this app's actual registered @font-face names
+// (src/index.css: 'omnes-cond'/'omnes-pro', lowercase and hyphenated, not
+// Figma's Title Case + space) - passing Figma's raw name straight through
+// meant the browser could never find a matching font and silently fell
+// back to its own generic default, even though fontSize/weight/position
+// were all extracted correctly. Every text zone from every Figma import has
+// had this bug since the REST path first shipped (Julia's report,
+// 2026-09-11: Option C's headline rendered as "normal Wolt font and not
+// Cond" - confirmed directly against the saved record, which genuinely did
+// say fontFamily: "Omnes Cond"). Same normalization idea as
+// weightFromStyleName() below, just for family instead of weight - matches
+// on a loosely-cleaned name rather than an exact map, since Figma's exact
+// casing/spacing/suffix (Black/Bold/etc in the family name itself) varies
+// more than font weight names do.
+function normalizeFontFamily(figmaFontFamily) {
+  if (!figmaFontFamily) return figmaFontFamily
+  const cleaned = figmaFontFamily.toLowerCase().replace(/[^a-z]/g, '')
+  if (!cleaned.includes('omnes')) return figmaFontFamily // not an Omnes face - pass through rather than guess wrong
+  return cleaned.includes('cond') ? 'omnes-cond' : 'omnes-pro'
+}
+
 function boxToZoneRect(box, frameBox, scaleX, scaleY) {
   const trimX = (box.x - frameBox.x) - BLEED_UNITS
   const trimY = (box.y - frameBox.y) - BLEED_UNITS
@@ -116,7 +138,7 @@ export function toCanvasZone(node, frameBox, allNodes = []) {
     // Figma's own text panel. Confirmed against a real mismatch: scaling by
     // ~1.05 made every imported heading render ~5% larger than intended.
     zone.fontSize = Math.round(node.style.fontSize)
-    zone.fontFamily = node.style.fontFamily
+    zone.fontFamily = normalizeFontFamily(node.style.fontFamily)
     zone.fontWeight = node.style.fontWeight
     zone.color = '#FFFFFF'
     zone.align = (node.style.textAlignHorizontal ?? 'CENTER').toLowerCase()
@@ -135,7 +157,7 @@ export function toCanvasZone(node, frameBox, allNodes = []) {
     Object.assign(zone, boxToZoneRect(sibling.absoluteBoundingBox, frameBox, scaleX, scaleY))
     // Not scaled by scaleY — see the comment on the same line above (node.type === 'TEXT' branch).
     zone.fontSize = Math.round(sibling.style.fontSize)
-    zone.fontFamily = sibling.style.fontFamily
+    zone.fontFamily = normalizeFontFamily(sibling.style.fontFamily)
     zone.fontWeight = sibling.style.fontWeight
     zone.color = '#FFFFFF'
     zone.align = (sibling.style.textAlignHorizontal ?? 'CENTER').toLowerCase()
@@ -222,7 +244,7 @@ export function toCanvasZoneFromPluginNode(node, frameBox, allNodes = []) {
     // fontSize as-is, not scaled — see the identical comment in
     // toCanvasZone() above, same reasoning applies unchanged.
     zone.fontSize = Math.round(node.fontSize)
-    zone.fontFamily = node.fontFamily
+    zone.fontFamily = normalizeFontFamily(node.fontFamily)
     zone.fontWeight = weightFromStyleName(node.fontWeightName)
     zone.color = '#FFFFFF'
     zone.align = (node.textAlignHorizontal ?? 'CENTER').toLowerCase()
@@ -234,7 +256,7 @@ export function toCanvasZoneFromPluginNode(node, frameBox, allNodes = []) {
   if (sibling) {
     Object.assign(zone, boxToZoneRect(sibling.absoluteBoundingBox, frameBox, scaleX, scaleY))
     zone.fontSize = Math.round(sibling.fontSize)
-    zone.fontFamily = sibling.fontFamily
+    zone.fontFamily = normalizeFontFamily(sibling.fontFamily)
     zone.fontWeight = weightFromStyleName(sibling.fontWeightName)
     zone.color = '#FFFFFF'
     zone.align = (sibling.textAlignHorizontal ?? 'CENTER').toLowerCase()
