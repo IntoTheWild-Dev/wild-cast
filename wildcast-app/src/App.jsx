@@ -4,6 +4,7 @@ import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
 import BriefingForm from './components/BriefingForm'
+import LandingPage from './components/LandingPage'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
@@ -144,7 +145,10 @@ function MoreFormatsModal({ formats, onPick, onClose }) {
 }
 
 export default function App() {
-  const [screen, setScreen]                   = useState('brief')
+  // 'landing' (the new 3-button home screen, Julia's ask 2026-09-11) is the
+  // real first thing anyone sees now - 'brief' (the actual picker+form flow)
+  // only shows once "Start from scratch" is picked from there.
+  const [screen, setScreen]                   = useState('landing')
   // Which output ICC profile export-cmyk.js should convert to - see the
   // matching ICC Profile picker in FieldEditor.jsx and ICC_PROFILES in
   // api/export-cmyk.js. Defaults to fogra39 (what every export used before
@@ -554,19 +558,23 @@ export default function App() {
     // away so it can't end up floating over whatever screen comes next.
     setBriefModeEntry(null)
     if (target === 'brief') setScreen('brief')
+    else if (target === 'landing') setScreen('landing')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
     // picker was already in progress) - this always starts a genuinely fresh
     // brief, per Julia's ask for "another offer form again." Clearing
     // briefSubmission alone isn't enough if BriefingForm is already mounted
     // (its own in-progress field values are local state that a prop change
-    // won't reset), so briefResetKey forces a full remount too.
+    // won't reset), so briefResetKey forces a full remount too. Lands on
+    // 'landing' (the 3-button home screen), not straight into the form -
+    // Julia's ask, 2026-09-11: "New Brief" goes home now, not directly to
+    // the brief form the way it used to.
     else if (target === 'new-brief') {
       setBriefSubmission(null)
       setSavedCandidateIds({})
       setCompletedFormats(new Set())
       setTemplateSelectFormat(null)
       setBriefResetKey(k => k + 1)
-      setScreen('brief')
+      setScreen('landing')
     }
     else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
@@ -1109,6 +1117,10 @@ export default function App() {
         activation={activation}
         onHelp={() => setShowHelp(true)}
       />
+
+      {screen === 'landing' && (
+        <LandingPage onNavigate={handleNavigate} />
+      )}
 
       {screen === 'brief' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>

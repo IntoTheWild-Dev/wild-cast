@@ -40,7 +40,12 @@ const FEATURES = [
 // headline/subline should read first, with "Pick your template" right after
 // it, not above everything (its very first placement, above the whole
 // hero+form grid).
-function HeroColumn({ pickedOption, onOpenTemplateModal }) {
+// showTemplateStep=false: used by LandingPage.jsx's new 3-button home screen
+// (Julia's ask, 2026-09-11) - the "pick your template" step now only lives
+// inside the actual brief flow (reached via "Start from scratch"), not on
+// the landing page itself, which just routes to that flow instead of
+// starting it directly.
+export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep = true }) {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
@@ -51,7 +56,7 @@ function HeroColumn({ pickedOption, onOpenTemplateModal }) {
         Tell us what you need, the same way you'd brief a designer - we'll show you templates that fit, ready to fill in live.
       </p>
 
-      <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={onOpenTemplateModal} />
+      {showTemplateStep && <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={onOpenTemplateModal} />}
 
       <div
         style={{
