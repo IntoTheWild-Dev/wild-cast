@@ -18,14 +18,28 @@ export default async function handler(req, res) {
   // Same reason as api/library-assets.js's proxy: this Blob store only allows
   // private access, and a plain <img src> can't attach the Authorization
   // header a private blob requires.
+  //
+  // Cache-busted the same way the .json record fetch below already is
+  // (Cloudflare's CDN in front of Blob can otherwise serve a stale image),
+  // AND told not to let the BROWSER cache this response at all — a real bug
+  // found 2026-09-11: the previous `max-age=86400` here meant that since a
+  // template's backgroundUrl is a fixed, deterministic path (no random
+  // suffix - same URL on every re-import of the same slot), the browser's
+  // own cache could keep serving a stale pre-re-import background for up to
+  // a day after a genuinely clean re-import, even once both the Figma file
+  // and the freshly-uploaded Blob bytes were already correct. Julia hit this
+  // directly on Option C: a re-import she'd already cleaned up in Figma
+  // still showed the old guide-text-baked-in image on the review screen.
   if (req.query.url) {
     try {
-      const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
+      const cacheBustUrl = req.query.url + (req.query.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+      const upstream = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
       if (!upstream.ok) return res.status(upstream.status).end()
       const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
       const buffer = Buffer.from(await upstream.arrayBuffer())
       res.setHeader('Content-Type', contentType)
-      res.setHeader('Cache-Control', 'private, max-age=86400')
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      res.setHeader('Pragma', 'no-cache')
       return res.status(200).send(buffer)
     } catch (err) {
       console.error('template-asset proxy error:', err)
