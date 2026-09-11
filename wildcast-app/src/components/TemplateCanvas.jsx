@@ -16,6 +16,42 @@ const BLEED_MARGIN = 9
 // (hidden on export), so this never touches real content placement.
 const snapHalf = v => Math.round(v) + 0.5
 
+// Stacks every zone (text or image) in the order Julia actually arranged the
+// layers in Figma, instead of a hardcoded rule here that needed a code
+// change every time she wanted a different template's z-order changed (her
+// ask, 2026-09-11: "sticker above everything, then food, then headline..." -
+// a different order per template, meant to be set by her). A zone's `zIndex`
+// (api/_lib/figma-import.js) is that layer's actual position in Figma's own
+// Layers panel at the moment it was imported - lower zIndex = further back,
+// higher = further front, straight from document order. Falls back to each
+// zone's own position in `config.zones` (its declaration order) when zIndex
+// is missing - every template imported before this feature shipped, plus
+// Option A/B, which are hardcoded in templateZones.js and never went through
+// Figma import at all (confirmed both existing `overlapAbove` zones - Option
+// A/B's photo - are already declared after their headline zone in that
+// array, so this fallback doesn't change their established overlap
+// behavior). WildCast's own editing guides are always brought to the very
+// front after, regardless of content z-order, so zone boundaries stay
+// visible while editing even when a zone with a high zIndex covers real
+// content. Called after every zone-image load (not just the zone that just
+// loaded) - each image zone's fabric.Image.fromURL callback fires
+// independently and asynchronously, so re-uploading e.g. the logo after the
+// photo was already loaded would otherwise leave the photo's stacking stale
+// until the photo itself was re-uploaded too.
+function applyZoneStackingOrder(canvas, config, zoneObjs) {
+  const orderKey = zone => zone.zIndex ?? config.zones.findIndex(z => z.id === zone.id)
+  config.zones
+    .slice()
+    .sort((a, b) => orderKey(a) - orderKey(b))
+    .forEach(zone => {
+      const obj = zoneObjs[zone.type === 'image' ? `${zone.id}-image` : zone.id]
+      if (obj) canvas.bringToFront(obj)
+    })
+  Object.values(zoneObjs).forEach(o => {
+    if (o._wcGuide) canvas.bringToFront(o)
+  })
+}
+
 // Colored zone-id label chips on the editor canvas - Julia's ask, 2026-09-11
 // (her client: "editing a template needs more guidance"), matching the same
 // blue/pink color scheme TemplateImportPage.jsx's ZoneOverlay already uses
@@ -541,6 +577,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         })
 
+        // Establishes correct stacking order immediately, even before any
+        // image zone has an uploaded URL to trigger the sync effect's own
+        // call to this same helper (see its comment for the full reasoning).
+        applyZoneStackingOrder(canvas, config, zoneObjsRef.current)
+
         canvas.renderAll()
         if (!destroyed) {
           setLoading(false)
@@ -911,43 +952,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
         canvas.add(img)
         zoneObjsRef.current[`${zone.id}-image`] = img
-        // Z-order: photo → other plain images (logo/sticker/qr) → guide rects
-        // (so border shows on top of image) → textboxes → overlap images
-        // (float above text for layering effect).
-        // Re-applied in full (not just for this zone) every time ANY image zone
-        // loads - each zone's fabric.Image.fromURL callback fires independently
-        // and asynchronously, so re-uploading e.g. the logo after the photo was
-        // already loaded would otherwise re-bring textboxes above the photo and
-        // silently break its overlap until the photo was re-uploaded too.
-        Object.values(zoneObjsRef.current).forEach(o => {
-          if (o._wcGuide) canvas.bringToFront(o)
-        })
-        Object.values(zoneObjsRef.current).forEach(o => {
-          if (o.type === 'textbox') canvas.bringToFront(o)
-        })
-        config.zones.filter(z => z.type === 'image' && z.overlapAbove).forEach(z => {
-          const overlapImg = zoneObjsRef.current[`${z.id}-image`]
-          if (overlapImg) canvas.bringToFront(overlapImg)
-        })
-        // Food photo always renders on TOP of every other zone (logo/qr/
-        // sticker/text) - Julia's explicit call, 2026-09-11, reversing the
-        // send-to-back behavior built earlier the same day. Her original ask
-        // ("food item should always be the first layer") read as "furthest
-        // back" and was built that way; asked directly and she confirmed she
-        // actually meant the opposite - on top of everything. Brought to
-        // front LAST, after every other pass above (guides/text/overlap), so
-        // nothing else re-covers it - except the WildCast-only editing
-        // guides, brought to front again right after so zone boundaries stay
-        // visible while editing even with the photo now covering real
-        // content. Deterministic regardless of upload/load order for the
-        // same reason the old sendToBack was: a plain canvas.add() order
-        // depends on which image's async fetch resolves last, a real race
-        // this explicit reorder avoids entirely.
-        const photoImg = zoneObjsRef.current['photo-image']
-        if (photoImg) canvas.bringToFront(photoImg)
-        Object.values(zoneObjsRef.current).forEach(o => {
-          if (o._wcGuide) canvas.bringToFront(o)
-        })
+        applyZoneStackingOrder(canvas, config, zoneObjsRef.current)
         canvas.renderAll()
       }, { crossOrigin: 'anonymous' })
     })

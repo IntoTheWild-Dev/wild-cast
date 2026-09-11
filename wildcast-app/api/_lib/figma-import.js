@@ -126,6 +126,14 @@ export function toCanvasZone(node, frameBox, allNodes = []) {
     id,
     type: isImage ? 'image' : 'text',
     ...boxToZoneRect(node.absoluteBoundingBox, frameBox, scaleX, scaleY),
+    // Stacking order straight from Figma's own document order (allNodes is
+    // built by collectAllNodes()'s pre-order walk over the same frame) -
+    // earlier in the walk = lower in Figma's Layers panel = further back;
+    // later = higher in Layers = further front. Lets a zone's z-order be set
+    // by rearranging Figma layers and re-importing, rather than a hardcoded
+    // rule in TemplateCanvas.jsx that needs a code change every time a
+    // template wants a different stacking order (Julia's ask, 2026-09-11).
+    zIndex: allNodes.indexOf(node),
   }
 
   if (isImage) {
@@ -238,6 +246,12 @@ export function toCanvasZoneFromPluginNode(node, frameBox, allNodes = []) {
     id,
     type: isImage ? 'image' : 'text',
     ...boxToZoneRect(node.absoluteBoundingBox, frameBox, scaleX, scaleY),
+    // See toCanvasZone()'s identical comment above - same idea, just reading
+    // the plugin's own pre-computed _zIndex (figma-plugin/code.js tags every
+    // node with its position in the same pre-order walk) instead of an
+    // allNodes.indexOf() lookup, since plugin nodes are plain serialized
+    // JSON, not the live Plugin API objects reference-equality would need.
+    zIndex: node._zIndex,
   }
 
   if (isImage) {

@@ -631,7 +631,11 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
           align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
           onResetPosition={() => onResetZone?.('headline')}
-          onNudge={restricted ? (axis, delta) => onTextNudge?.('headline', axis, delta) : undefined}
+          // Guided mode's canvas is locked (no drag) same as restricted review -
+          // Headline needs the same Position nudge Offer already got (2026-09-08)
+          // or there's no way to fix overlap without switching to Designer mode
+          // (Julia's ask, 2026-09-11).
+          onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('headline', axis, delta) : undefined}
         />
         {templateConfig?.zones?.some(z => z.id === 'sub_headline') && (
           <StepFieldRow
@@ -643,7 +647,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
             align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
             onResetPosition={() => onResetZone?.('sub_headline')}
-            onNudge={restricted ? (axis, delta) => onTextNudge?.('sub_headline', axis, delta) : undefined}
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('sub_headline', axis, delta) : undefined}
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'restaurant_name') && (

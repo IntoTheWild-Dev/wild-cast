@@ -101,7 +101,21 @@ async function handleImport(slotKey, label, cat, format) {
     }
 
     figma.ui.postMessage({ type: 'status', message: 'Scanning zones…' })
-    const allNodes = collectAllNodes(frame, []).map(serializeNode)
+    // collectAllNodes walks in document order - a plain pre-order DFS (each
+    // node, then its children in their own array order). For the flat
+    // sibling structure every real zone:<id> marker actually uses (confirmed
+    // against Julia's real files - every zone marker sits as a direct child
+    // of the frame, not nested under separate groups), this exactly matches
+    // Figma's own paint order: earlier in this array = lower in the Layers
+    // panel = painted first = further back; later = higher in the Layers
+    // panel = painted last = further front. Tagging each node with its index
+    // here lets the backend derive a zone's stacking order directly from how
+    // Julia has actually arranged her Figma layers, instead of a hardcoded
+    // rule in the app - see the matching zIndex logic in figma-import.js and
+    // TemplateCanvas.jsx (Julia's ask, 2026-09-11: "sticker above everything,
+    // then food, then headline..." - a different order per template, meant
+    // to be set by her, not hardcoded by us each time she wants it changed).
+    const allNodes = collectAllNodes(frame, []).map((node, i) => ({ ...serializeNode(node), _zIndex: i }))
     const zoneNodes = allNodes.filter(n => n.name && n.name.indexOf('zone:') === 0)
 
     if (!zoneNodes.length) {
