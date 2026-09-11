@@ -919,17 +919,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // and asynchronously, so re-uploading e.g. the logo after the photo was
         // already loaded would otherwise re-bring textboxes above the photo and
         // silently break its overlap until the photo was re-uploaded too.
-        //
-        // The food photo specifically must always end up furthest back among
-        // the image zones, not wherever its own upload happened to finish
-        // loading relative to the others - without this, whichever image
-        // zone's fetch resolved last simply landed on top via plain
-        // canvas.add() order, a real race (network timing, not zone order)
-        // that could put the food photo ABOVE the sticker/logo/qr on some
-        // loads and not others (Julia's report, 2026-09-11: "food item
-        // should always be first layer").
-        const photoImg = zoneObjsRef.current['photo-image']
-        if (photoImg) canvas.sendToBack(photoImg)
         Object.values(zoneObjsRef.current).forEach(o => {
           if (o._wcGuide) canvas.bringToFront(o)
         })
@@ -939,6 +928,25 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         config.zones.filter(z => z.type === 'image' && z.overlapAbove).forEach(z => {
           const overlapImg = zoneObjsRef.current[`${z.id}-image`]
           if (overlapImg) canvas.bringToFront(overlapImg)
+        })
+        // Food photo always renders on TOP of every other zone (logo/qr/
+        // sticker/text) - Julia's explicit call, 2026-09-11, reversing the
+        // send-to-back behavior built earlier the same day. Her original ask
+        // ("food item should always be the first layer") read as "furthest
+        // back" and was built that way; asked directly and she confirmed she
+        // actually meant the opposite - on top of everything. Brought to
+        // front LAST, after every other pass above (guides/text/overlap), so
+        // nothing else re-covers it - except the WildCast-only editing
+        // guides, brought to front again right after so zone boundaries stay
+        // visible while editing even with the photo now covering real
+        // content. Deterministic regardless of upload/load order for the
+        // same reason the old sendToBack was: a plain canvas.add() order
+        // depends on which image's async fetch resolves last, a real race
+        // this explicit reorder avoids entirely.
+        const photoImg = zoneObjsRef.current['photo-image']
+        if (photoImg) canvas.bringToFront(photoImg)
+        Object.values(zoneObjsRef.current).forEach(o => {
+          if (o._wcGuide) canvas.bringToFront(o)
         })
         canvas.renderAll()
       }, { crossOrigin: 'anonymous' })
