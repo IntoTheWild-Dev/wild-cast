@@ -47,60 +47,87 @@ function ZoneOverlay({ zones, backgroundUrl }) {
   )
 }
 
-// One zone's editable fields. Redesigned 2026-08-13 (Julia: "very cramped,
-// hard to see") - was a single flex-wrap row cramming X/Y/W/H/Size/Rotate
-// together with 48-52px-wide inputs that clipped their own decimal values
-// (e.g. "44.1" rendering as "44,"). Now a proper labeled grid with room for
-// full values, and a colored dot matching the zone's outline color on the
-// preview so a zone here is easy to match back to its box up there.
-function ZoneCard({ z, onChange }) {
-  const numberInputStyle = {
-    width: '100%', padding: '8px 10px', fontSize: 13, fontFamily: 'inherit',
-    border: '1.5px solid var(--border)', borderRadius: 7, outline: 'none', boxSizing: 'border-box',
-  }
-  const fieldLabelStyle = { display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--mid)', marginBottom: 4 }
-
+// A labeled value with BOTH a slider (quick, visual adjustment) and a number
+// input (exact value) side by side - Julia's ask, 2026-09-11: raw X/Y/W/H
+// number boxes alone felt "a little bit confusing" to work with. The slider
+// covers "roughly here, drag until it looks right"; the number stays for
+// "I know the exact value I want."
+function SliderField({ label, value, min, max, step = 1, onChange, width }) {
   return (
-    <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+    <div style={width ? { width } : undefined}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--mid)' }}>{label}</span>
+        <input
+          type="number"
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+          style={{ width: 58, padding: '3px 6px', fontSize: 12, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 6, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
+        />
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value ?? 0}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ width: '100%', accentColor: 'var(--primary)', display: 'block' }}
+      />
+    </div>
+  )
+}
+
+// One zone's editable fields, collapsed into an accordion - only the header
+// row (dot + id + type) shows until clicked. Redesigned 2026-09-11 (Julia:
+// scrolling down to reach a zone further down the list, e.g. sub_headline,
+// scrolled the design preview out of view too, with no way to see both at
+// once). Every zone fully expanded by default made the column tall enough
+// that this was unavoidable regardless of the preview's own sticky
+// positioning - collapsing by default keeps the whole list short enough
+// that reaching any zone rarely needs much scrolling at all. Needs-review
+// zones (no live text in Figma to read font info from) start expanded,
+// since those are the ones that actually need a look.
+function ZoneCard({ z, expanded, onToggle, needsReview, onChange }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+      >
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: zoneColor(z), flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{z.id}</span>
         <span style={{ fontSize: 11, color: 'var(--light)' }}>{z.type === 'image' ? 'image' : 'text'}</span>
-      </div>
+        {needsReview && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '2px 7px', borderRadius: 100 }}>
+            Check font
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--light)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+      </button>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        {['x', 'y', 'width', 'height'].map(dim => (
-          <label key={dim}>
-            <span style={fieldLabelStyle}>{dim === 'width' ? 'W' : dim === 'height' ? 'H' : dim.toUpperCase()}</span>
-            <input
-              type="number"
-              value={z[dim] ?? ''}
-              onChange={e => onChange({ [dim]: e.target.value === '' ? 0 : Number(e.target.value) })}
-              style={numberInputStyle}
-            />
-          </label>
-        ))}
-      </div>
+      {expanded && (
+        <div style={{ padding: '2px 14px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px' }}>
+            <SliderField label="X" value={z.x} min={-50} max={CANVAS_W + 50} onChange={v => onChange({ x: v })} />
+            <SliderField label="Y" value={z.y} min={-50} max={CANVAS_H + 50} onChange={v => onChange({ y: v })} />
+            <SliderField label="W" value={z.width} min={1} max={CANVAS_W + 100} onChange={v => onChange({ width: v })} />
+            <SliderField label="H" value={z.height} min={1} max={CANVAS_H + 100} onChange={v => onChange({ height: v })} />
+          </div>
 
-      {z.type === 'text' && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-          <label style={{ width: 90 }}>
-            <span style={fieldLabelStyle}>Font size</span>
-            <input
-              type="number"
-              value={z.fontSize ?? ''}
-              onChange={e => onChange({ fontSize: e.target.value === '' ? null : Number(e.target.value) })}
-              style={numberInputStyle}
-            />
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--dark)', cursor: 'pointer', paddingBottom: 8 }}>
-            <input
-              type="checkbox"
-              checked={z.rotate === -90}
-              onChange={e => onChange({ rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
-            />
-            Rotate 90°
-          </label>
+          {z.type === 'text' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+              <SliderField label="Font size" value={z.fontSize} min={6} max={120} onChange={v => onChange({ fontSize: v })} width={170} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--dark)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={z.rotate === -90}
+                  onChange={e => onChange({ rotate: e.target.checked ? -90 : undefined, textWidth: e.target.checked ? z.height : undefined })}
+                />
+                Rotate 90°
+              </label>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -119,6 +146,9 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   const [zoneEdits, setZoneEdits] = useState({})
   const [savingZones, setSavingZones] = useState(false)
   const [zonesSaved, setZonesSaved] = useState(false)
+  // Which zone cards are expanded - see ZoneCard's comment for why this
+  // defaults to "just the needs-review ones" rather than all-open or all-closed.
+  const [expandedZoneIds, setExpandedZoneIds] = useState(() => new Set())
 
   // Records worth reviewing here - real Figma imports (drafts or already
   // live) with actual zone geometry, not the synthetic Option A/B override
@@ -130,10 +160,20 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     .sort((a, b) => (a.live === b.live ? 0 : a.live ? 1 : -1) || (b.createdAt || '').localeCompare(a.createdAt || ''))
 
   function selectForReview(slotKey) {
-    setResult(reviewable.find(r => r.slotKey === slotKey) || null)
+    const record = reviewable.find(r => r.slotKey === slotKey) || null
+    setResult(record)
     setZoneEdits({})
     setZonesSaved(false)
     setError('')
+    setExpandedZoneIds(new Set(record?.needsReview ?? []))
+  }
+
+  function toggleZoneExpanded(zoneId) {
+    setExpandedZoneIds(prev => {
+      const next = new Set(prev)
+      next.has(zoneId) ? next.delete(zoneId) : next.add(zoneId)
+      return next
+    })
   }
 
   // Merges staged zoneEdits on top of the import result - what's actually
@@ -194,8 +234,10 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     }
   }
 
+  const linkButtonStyle = { fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }
+
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--bg)' }}>
       <div style={{ maxWidth: 1160, margin: '0 auto', padding: '40px 32px 64px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
           Review Figma imports
@@ -233,24 +275,35 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
         )}
 
         {result && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 380px) 1fr', gap: 28, alignItems: 'start' }}>
-            {/* Left: preview, sticky so it stays in view while scrolling the zone list on the right */}
-            <div style={{ position: 'sticky', top: 24 }}>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
-                <ZoneOverlay zones={zonesWithEdits()} backgroundUrl={result.backgroundUrl} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{result.label}</span>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
-                  background: result.live ? '#D1FAE5' : '#FEF3C7',
-                  color: result.live ? '#065F46' : '#92400E',
-                }}>
-                  {result.live ? 'Live' : 'Draft'}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--mid)' }}>
-                {result.zones.length} zone(s): {result.zones.map(z => z.id).join(', ')}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 380px) 1fr', gap: 28 }}>
+            {/* Left: preview, sticky so it stays in view while scrolling the zone list on the right.
+                Deliberately NOT `position:sticky` directly on the grid item itself - a
+                grid item that's ALSO the sticky element runs into real, hard-to-predict
+                containing-block quirks (found live, 2026-09-11: even with the item
+                correctly stretched to the row's full height, sticky still silently did
+                nothing and just scrolled away with the page). The standard, reliable
+                fix: let this outer div be a plain grid item (stretches to the row's
+                full height via default align-items), and put the actual `position:
+                sticky` on a plain block-level div INSIDE it instead - sidesteps the
+                grid-item-as-sticky-element ambiguity entirely. */}
+            <div>
+              <div style={{ position: 'sticky', top: 24 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+                  <ZoneOverlay zones={zonesWithEdits()} backgroundUrl={result.backgroundUrl} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{result.label}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
+                    background: result.live ? '#D1FAE5' : '#FEF3C7',
+                    color: result.live ? '#065F46' : '#92400E',
+                  }}>
+                    {result.live ? 'Live' : 'Draft'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--mid)' }}>
+                  {result.zones.length} zone(s): {result.zones.map(z => z.id).join(', ')}
+                </div>
               </div>
             </div>
 
@@ -262,14 +315,27 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 </div>
               )}
 
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>Zone settings</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)' }}>Zone settings</div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button type="button" style={linkButtonStyle} onClick={() => setExpandedZoneIds(new Set(zonesWithEdits().map(z => z.id)))}>Expand all</button>
+                  <button type="button" style={linkButtonStyle} onClick={() => setExpandedZoneIds(new Set())}>Collapse all</button>
+                </div>
+              </div>
               <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 10 }}>
-                Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} - matches the boxes drawn on the preview.
+                Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} - matches the boxes drawn on the preview. Click a zone to open it.
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 {zonesWithEdits().map(z => (
-                  <ZoneCard key={z.id} z={z} onChange={patch => updateZoneEdit(z.id, patch)} />
+                  <ZoneCard
+                    key={z.id}
+                    z={z}
+                    expanded={expandedZoneIds.has(z.id)}
+                    onToggle={() => toggleZoneExpanded(z.id)}
+                    needsReview={!!result.needsReview?.includes(z.id)}
+                    onChange={patch => updateZoneEdit(z.id, patch)}
+                  />
                 ))}
               </div>
 

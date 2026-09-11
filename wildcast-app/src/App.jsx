@@ -1059,7 +1059,17 @@ export default function App() {
   }
 
   return (
-    <div style={screen === 'editor'
+    <div style={screen === 'editor' || screen === 'import'
+      // Bounded viewport height + overflow:hidden here is what lets a
+      // screen have its OWN internal scroll region(s) instead of the whole
+      // page/body scrolling - 'editor' already needed this for its
+      // canvas+panels layout; 'import' needs the same thing for the same
+      // reason (a sticky preview column that needs a real bounded scroll
+      // container to stick within - see TemplateImportPage.jsx's own root
+      // div for the other half of this fix, found live 2026-09-11: without
+      // both halves, content tall enough overflowed to the BODY instead of
+      // the intended inner div, and position:sticky doesn't work relative
+      // to a scroll that never actually happens on its real container).
       ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
       : { minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
@@ -1152,7 +1162,7 @@ export default function App() {
       )}
 
       {screen === 'import' && activation?.role === 'agency' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
           <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
         </div>
       )}
