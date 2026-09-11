@@ -1111,7 +1111,13 @@ export default function App() {
       ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
       : { minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header
-        onLogoClick={() => { setBriefModeEntry(null); setScreen(briefSubmission ? 'template-select' : 'brief') }}
+        // Used to resume whatever brief/picker was in progress - now just
+        // goes to the new landing home screen instead, same destination as
+        // "+ New Brief" (Julia's ask, 2026-09-11: logo should go home like
+        // New Brief does). Doesn't reset any in-progress brief state the way
+        // New Brief does - just navigates, since clicking the logo isn't an
+        // explicit "start over" the way New Brief is.
+        onLogoClick={() => { setBriefModeEntry(null); setScreen('landing') }}
         screen={screen}
         onNavigate={handleNavigate}
         activation={activation}
