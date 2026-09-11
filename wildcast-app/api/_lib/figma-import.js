@@ -74,7 +74,12 @@ const IMAGE_ZONE_CONFIG = {
 // given Figma file's tc marker looks like — safe to assume even with no live
 // text in Figma to confirm it, since this app has never had a non-rotated tc.
 const ROTATED_TEXT_DEFAULTS = {
-  tc: { fontSize: 18, fontFamily: 'omnes-pro', fontWeight: 500, align: 'left', rotate: -90 },
+  // fontSize was 18 - a real miscalibration, not a deliberate difference
+  // from Option A/B: the comment above already says this whole object is
+  // meant to match Option A/B's own tc zone, which is actually 4.5
+  // (src/data/templateZones.js) - a 4x-too-large fine-print fallback that
+  // stayed wrong until Julia caught it on Option C's export, 2026-09-11.
+  tc: { fontSize: 4.5, fontFamily: 'omnes-pro', fontWeight: 500, align: 'left', rotate: -90 },
 }
 
 // Figma's own font-family name for a typeface (e.g. "Omnes Cond", "Omnes
