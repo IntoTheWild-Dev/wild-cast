@@ -35,7 +35,10 @@ export const BASE_TEMPLATES = [
     templateIdGuided:   'opt-b-flyer2-simple',
     templateIdDesigner: 'opt-b-flyer2',
   },
-  { label: 'Restaurant Flyer · Option C', category: 'restaurant', format: 'Flyer',       live: false },
+  // thumb here is a curated catalogue tile, separate from the real Figma
+  // background overlayCustomCards() would otherwise default to - see that
+  // function's comment for how a slot's own thumb now wins when set.
+  { label: 'Restaurant Flyer · Option C', category: 'restaurant', format: 'Flyer',       live: false, thumb: '/templates/preview_opt-c.png' },
   { label: 'Restaurant Flyer · Option D', category: 'restaurant', format: 'Flyer',       live: false },
   { label: 'Restaurant Flyer · Option E', category: 'restaurant', format: 'Flyer',       live: false },
   { label: 'Restaurant Poster · Option A', category: 'restaurant', format: 'Poster',     live: false },
@@ -89,7 +92,12 @@ function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
     if (!designerCard || designerCard.archived) return slot
     return {
       ...slot,
-      thumb: designerCard.thumb,
+      // A slot's own curated thumb (set directly in BASE_TEMPLATES, e.g.
+      // Option C's preview_opt-c.png) wins over the raw Figma background
+      // designerCard.thumb would otherwise default to - same idea as
+      // Option A/B's hardcoded thumb, just also usable on an
+      // otherwise-dynamic Figma-imported slot. Julia's ask, 2026-09-11.
+      thumb: slot.thumb ?? designerCard.thumb,
       live: designerCard.live,
       templateIdGuided: `${designerCard.id}-simple`,
       templateIdDesigner: designerCard.id,
