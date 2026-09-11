@@ -547,8 +547,11 @@ export default function App() {
     else if (target === 'import' && activation?.role === 'agency') setScreen('import')
   }
 
+  // Returns the fetch's own promise (not just fire-and-forget) so a caller
+  // that wants to know when a refetch actually finished - e.g. a manual
+  // "Refresh" button's own loading state - can await it instead of guessing.
   function refetchCustomTemplates() {
-    fetch(`/api/list-templates?_t=${Date.now()}`, { cache: 'no-store' })
+    return fetch(`/api/list-templates?_t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(data => setCustomTemplates(mergeCustomTemplates(data.templates ?? [])))
       .catch(() => {})
@@ -1161,7 +1164,7 @@ export default function App() {
 
       {screen === 'import' && activation?.role === 'agency' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
-          <TemplateImportPage customRecords={customTemplates.records} onOptimisticPatch={patchCustomRecord} />
+          <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
         </div>
       )}
 

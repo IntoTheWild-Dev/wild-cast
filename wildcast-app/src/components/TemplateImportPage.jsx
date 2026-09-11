@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Select from './Select'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
@@ -134,7 +134,7 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange }) {
   )
 }
 
-export default function TemplateImportPage({ customRecords, onOptimisticPatch }) {
+export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch }) {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [publishing, setPublishing] = useState(false)
@@ -149,6 +149,35 @@ export default function TemplateImportPage({ customRecords, onOptimisticPatch })
   // Which zone cards are expanded - see ZoneCard's comment for why this
   // defaults to "just the needs-review ones" rather than all-open or all-closed.
   const [expandedZoneIds, setExpandedZoneIds] = useState(() => new Set())
+  const [refreshing, setRefreshing] = useState(false)
+
+  // The plugin writes a new import straight to the backend from INSIDE
+  // Figma - a completely separate process from this browser tab, which has
+  // no way to know that happened until it re-fetches. Julia's ask,
+  // 2026-09-11: after running the plugin she was stuck on "No imports yet"
+  // until she manually reloaded the whole page. Re-fetching whenever this
+  // tab regains focus covers the actual workflow (switch to Figma, run the
+  // plugin, switch back here) without polling while it's just sitting open
+  // and unattended. The manual button below covers everything else (Figma
+  // open in a different browser tab that doesn't blur this one, or just
+  // not wanting to wait for a tab switch).
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') onRefetch?.()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('focus', handleVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('focus', handleVisibility)
+    }
+  }, [onRefetch])
+
+  async function handleManualRefresh() {
+    setRefreshing(true)
+    await onRefetch?.()
+    setRefreshing(false)
+  }
 
   // Records worth reviewing here - real Figma imports (drafts or already
   // live) with actual zone geometry, not the synthetic Option A/B override
@@ -268,7 +297,18 @@ export default function TemplateImportPage({ customRecords, onOptimisticPatch })
         </div>
 
         <div style={{ marginBottom: 32, maxWidth: 420 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Import to review</label>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)' }}>Import to review</label>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              title="Check for new imports from the plugin"
+              style={{ fontSize: 11, fontWeight: 600, color: refreshing ? 'var(--light)' : 'var(--primary)', background: 'transparent', border: 'none', cursor: refreshing ? 'default' : 'pointer', padding: 0 }}
+            >
+              {refreshing ? 'Checking…' : '↻ Refresh'}
+            </button>
+          </div>
           <Select
             value={result?.slotKey || ''}
             onChange={e => selectForReview(e.target.value)}
