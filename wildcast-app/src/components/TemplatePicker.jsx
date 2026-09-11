@@ -355,7 +355,7 @@ function ManageMenu({ record, onAction, onDelete }) {
 }
 
 // ── Options view (drilled in) ─────────────────────────────────────────────────
-function OptionsView({ group, customCards, customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
+function OptionsView({ group, customCards, customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const { format, category, members } = group
   const cap = category.charAt(0).toUpperCase() + category.slice(1)
@@ -393,11 +393,14 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Action failed')
       // Apply the action's own response immediately - a refetch right after
-      // can still read back the pre-action status (Vercel Blob's list() reads
-      // can lag behind a write by up to ~30s), which made this look like it
-      // needed several clicks when the first one had already worked.
+      // reads back the pre-action status more often than not (Vercel Blob's
+      // list() reads can lag behind a write by up to ~30s), which made this
+      // look like it needed several clicks when the first one had already
+      // worked. This comment used to be here with the bug still right below
+      // it - the fix has to be to NOT call onRefetch() immediately, not just
+      // to know why it's a bad idea (real bug, found live 2026-09-11, Julia:
+      // "have to press it 3 times before it published").
       onOptimisticPatch?.(slotKey, { live: data.live, archived: data.archived, isOverrideOnly: data.isOverrideOnly, label })
-      onRefetch?.()
     } catch (err) {
       window.alert(err.message)
     }
@@ -413,8 +416,8 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Delete failed')
+      // Same reasoning as handleManageAction above - no immediate onRefetch().
       onRecordDeleted?.(slotKey)
-      onRefetch?.()
     } catch (err) {
       window.alert(err.message)
     }
@@ -547,7 +550,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
 // App.jsx's "want more layouts?" prompt (2026-09-08) to jump straight to ONE
 // specific format the partner just picked from that popup, rather than
 // falling back to whichever format the brief happens to match first.
-export function BriefTemplatePicker({ brief, onSelect, onBack, formatOverride, customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
+export function BriefTemplatePicker({ brief, onSelect, onBack, formatOverride, customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted }) {
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
   const allGroups     = useMemo(() => deriveGroups(allTemplates), [allTemplates])
 
@@ -584,7 +587,6 @@ export function BriefTemplatePicker({ brief, onSelect, onBack, formatOverride, c
       customCards={customCards}
       customRecords={customRecords}
       canManage={canManage}
-      onRefetch={onRefetch}
       onOptimisticPatch={onOptimisticPatch}
       onRecordDeleted={onRecordDeleted}
       onBack={onBack}
@@ -713,7 +715,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) - reached via the header logo.
 // mode="catalogue": full template grid - reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onRefetch, onOptimisticPatch, onRecordDeleted }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
@@ -727,7 +729,6 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
         customCards={customCards}
         customRecords={customRecords}
         canManage={canManage}
-        onRefetch={onRefetch}
         onOptimisticPatch={onOptimisticPatch}
         onRecordDeleted={onRecordDeleted}
         onBack={() => setSelectedGroup(null)}

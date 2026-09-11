@@ -16,6 +16,15 @@ const BLEED_MARGIN = 9
 // (hidden on export), so this never touches real content placement.
 const snapHalf = v => Math.round(v) + 0.5
 
+// Colored zone-id label chips on the editor canvas - Julia's ask, 2026-09-11
+// (her client: "editing a template needs more guidance"), matching the same
+// blue/pink color scheme TemplateImportPage.jsx's ZoneOverlay already uses
+// on the Import review screen, so this reads as the same visual language
+// rather than a new one. Literal hex, not var(--primary) - a raw <canvas>
+// 2D context can't resolve CSS custom properties, only the DOM's own style
+// system can (see src/index.css for the source of truth on this value).
+const ZONE_LABEL_COLOR = { image: '#3B82F6', text: '#DF6F6D' }
+
 async function loadFonts() {
   // document.fonts.ready resolves when @font-face declarations are parsed -
   // but the actual font FILES may not be downloaded yet (especially on first
@@ -275,6 +284,26 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         }
 
+        // Small colored chip naming a zone, anchored to its box's top-left
+        // corner in UN-rotated coordinates (zone.x/zone.y) even for a
+        // rotated zone's guide - stays upright and readable regardless of
+        // which way the box itself is turned, matching how ZoneOverlay on
+        // the Import review page keeps its own labels upright too.
+        function addZoneLabel(zone) {
+          const label = new fabric.Text(zone.id, {
+            left: zone.x, top: zone.y,
+            originX: 'left', originY: 'top',
+            fontSize: 9, fontWeight: '700', fontFamily: 'Arial, sans-serif',
+            fill: '#fff',
+            backgroundColor: ZONE_LABEL_COLOR[zone.type] || ZONE_LABEL_COLOR.text,
+            selectable: false,
+            evented: false,
+            _wcGuide: true,
+          })
+          canvas.add(label)
+          zoneObjsRef.current[`${zone.id}-guide-label`] = label
+        }
+
         // Guide goes in first so it renders below all text and image zones
         const guideX = snapHalf(canvasW / 2)
         const guide = new fabric.Line([guideX, 0, guideX, canvasH], {
@@ -339,27 +368,54 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         zones.forEach(zone => {
           zoneCfgRef.current[zone.id] = zone
 
-          // Zone boundary guide for text zones - visible in editor (designer + guided), hidden on export
-          if (zone.type === 'text' && !zone.rotate) {
-            const gLeft = snapHalf(zone.x)
-            const gTop  = snapHalf(zone.y)
-            const gr = new fabric.Rect({
-              left:   gLeft,
-              top:    gTop,
-              width:  snapHalf(zone.x + zone.width) - gLeft,
-              height: snapHalf(zone.y + zone.height) - gTop,
-              fill:   'transparent',
-              stroke: 'rgba(255,255,255,0.5)',
-              strokeWidth: 1.5,
-              strokeDashArray: [6, 4],
-              rx: 4, ry: 4,
-              selectable: false,
-              evented:    false,
-              _wcGuide: true,
-              _wcZoneId: `${zone.id}-guide`,
-            })
+          // Zone boundary guide for text zones - visible in editor (designer + guided), hidden on export.
+          // A rotated zone (e.g. tc) previously got no guide box at all - only
+          // the non-rotated case was ever handled - so it was invisible/
+          // unlabeled in the editor even though every other zone had a
+          // boundary shown. Added the rotated case here too (2026-09-11).
+          if (zone.type === 'text') {
+            let gr
+            if (zone.rotate) {
+              const cx = zone.x + zone.width / 2
+              const cy = zone.y + zone.height / 2
+              gr = new fabric.Rect({
+                left: cx, top: cy,
+                originX: 'center', originY: 'center',
+                width: zone.width,
+                height: zone.height,
+                angle: zone.rotate,
+                fill:   'transparent',
+                stroke: 'rgba(255,255,255,0.5)',
+                strokeWidth: 1.5,
+                strokeDashArray: [6, 4],
+                rx: 4, ry: 4,
+                selectable: false,
+                evented:    false,
+                _wcGuide: true,
+                _wcZoneId: `${zone.id}-guide`,
+              })
+            } else {
+              const gLeft = snapHalf(zone.x)
+              const gTop  = snapHalf(zone.y)
+              gr = new fabric.Rect({
+                left:   gLeft,
+                top:    gTop,
+                width:  snapHalf(zone.x + zone.width) - gLeft,
+                height: snapHalf(zone.y + zone.height) - gTop,
+                fill:   'transparent',
+                stroke: 'rgba(255,255,255,0.5)',
+                strokeWidth: 1.5,
+                strokeDashArray: [6, 4],
+                rx: 4, ry: 4,
+                selectable: false,
+                evented:    false,
+                _wcGuide: true,
+                _wcZoneId: `${zone.id}-guide`,
+              })
+            }
             canvas.add(gr)
             zoneObjsRef.current[`${zone.id}-guide`] = gr
+            addZoneLabel(zone)
           }
 
           if (zone.type === 'text') {
@@ -443,6 +499,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             })
             canvas.add(rect)
             zoneObjsRef.current[`${zone.id}-placeholder`] = rect
+            addZoneLabel(zone)
           }
         })
 

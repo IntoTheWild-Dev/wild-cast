@@ -1127,7 +1127,6 @@ export default function App() {
             customCards={customTemplates.cards}
             customRecords={customTemplates.records}
             canManage={activation?.role === 'designer' || activation?.role === 'agency'}
-            onRefetch={refetchCustomTemplates}
             onOptimisticPatch={patchCustomRecord}
             onRecordDeleted={removeCustomRecord}
           />
@@ -1142,7 +1141,6 @@ export default function App() {
             customCards={customTemplates.cards}
             customRecords={customTemplates.records}
             canManage={activation?.role === 'designer' || activation?.role === 'agency'}
-            onRefetch={refetchCustomTemplates}
             onOptimisticPatch={patchCustomRecord}
             onRecordDeleted={removeCustomRecord}
           />
@@ -1163,7 +1161,7 @@ export default function App() {
 
       {screen === 'import' && activation?.role === 'agency' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
-          <TemplateImportPage customRecords={customTemplates.records} onRefetch={refetchCustomTemplates} onOptimisticPatch={patchCustomRecord} />
+          <TemplateImportPage customRecords={customTemplates.records} onOptimisticPatch={patchCustomRecord} />
         </div>
       )}
 

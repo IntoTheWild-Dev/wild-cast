@@ -134,7 +134,7 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange }) {
   )
 }
 
-export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch }) {
+export default function TemplateImportPage({ customRecords, onOptimisticPatch }) {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [publishing, setPublishing] = useState(false)
@@ -204,8 +204,9 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       setResult(r => ({ ...r, zones: data.zones }))
       setZoneEdits({})
       setZonesSaved(true)
+      // Deliberately no onRefetch() here - see handlePublish's comment below,
+      // same reasoning applies.
       onOptimisticPatch?.(result.slotKey, { zones: data.zones })
-      onRefetch?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -225,8 +226,21 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Publish failed')
       setResult(r => ({ ...r, live: true, archived: false }))
+      // Real bug, found 2026-09-11 (Julia: "have to press it 3 times before
+      // it published"): calling onRefetch() right after onOptimisticPatch()
+      // raced Vercel Blob's own read-after-write lag on list() calls (up to
+      // ~30s, see api/list-templates.js and publish-template.js's own
+      // comments) - the refetch's fetch(/api/list-templates) could resolve
+      // AFTER this patch but still return the STALE pre-publish record, and
+      // since refetchCustomTemplates() fully REPLACES state rather than
+      // merging, that stale response clobbered the correct optimistic
+      // update. Each extra click just retried the race until one refetch
+      // happened to land after Blob had caught up. The optimistic patch
+      // below is already the known-fresh, authoritative result of this
+      // exact request (see patchCustomRecord's own comment in App.jsx) -
+      // an immediate refetch was never actually needed and only introduced
+      // this bug.
       onOptimisticPatch?.(result.slotKey, { live: true, archived: false })
-      onRefetch?.()
     } catch (err) {
       setError(err.message)
     } finally {
