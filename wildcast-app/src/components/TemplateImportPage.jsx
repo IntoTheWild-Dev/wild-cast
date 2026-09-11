@@ -136,7 +136,17 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange }) {
 
 export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch }) {
   const [error, setError] = useState('')
-  const [result, setResult] = useState(null)
+  // A slotKey, not a snapshotted record - the actual record is looked up
+  // fresh from `reviewable` on every render (see `result` below). Storing a
+  // full record snapshot here (the previous approach) meant a re-import of
+  // the same slot never showed up on this page even after a refetch: the
+  // dropdown's <select> already reflected the new customRecords fine, but
+  // its onChange only fires on a genuine user pick - picking the
+  // already-selected option again is a no-op in the DOM, so the stale
+  // snapshot just sat there looking like "still importing the old file".
+  // Real bug, found 2026-09-11 (Julia: "it wants to import the last file
+  // not a new one" right after a confirmed-clean re-import).
+  const [selectedSlotKey, setSelectedSlotKey] = useState('')
   const [publishing, setPublishing] = useState(false)
   // Per-zone overrides staged in the "Zone settings" review panel below,
   // keyed by zone id - lets a designer correct font size/rotation right here
@@ -188,9 +198,15 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     .filter(r => !r.archived && !r.isOverrideOnly && r.zones)
     .sort((a, b) => (a.live === b.live ? 0 : a.live ? 1 : -1) || (b.createdAt || '').localeCompare(a.createdAt || ''))
 
+  // Always the current record for whatever slot is selected - re-derived on
+  // every render from the latest customRecords, so a refetch (auto on focus,
+  // or the manual button) picks up a fresh re-import immediately with no
+  // need to touch the dropdown.
+  const result = reviewable.find(r => r.slotKey === selectedSlotKey) || null
+
   function selectForReview(slotKey) {
     const record = reviewable.find(r => r.slotKey === slotKey) || null
-    setResult(record)
+    setSelectedSlotKey(slotKey)
     setZoneEdits({})
     setZonesSaved(false)
     setError('')
@@ -230,11 +246,13 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not save zone settings')
-      setResult(r => ({ ...r, zones: data.zones }))
       setZoneEdits({})
       setZonesSaved(true)
       // Deliberately no onRefetch() here - see handlePublish's comment below,
-      // same reasoning applies.
+      // same reasoning applies. onOptimisticPatch updates the shared
+      // customRecords state that `result` above is derived from, so the
+      // panel picks up the new zones on next render with no local mutation
+      // needed here.
       onOptimisticPatch?.(result.slotKey, { zones: data.zones })
     } catch (err) {
       setError(err.message)
@@ -254,7 +272,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Publish failed')
-      setResult(r => ({ ...r, live: true, archived: false }))
       // Real bug, found 2026-09-11 (Julia: "have to press it 3 times before
       // it published"): calling onRefetch() right after onOptimisticPatch()
       // raced Vercel Blob's own read-after-write lag on list() calls (up to
