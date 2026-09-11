@@ -33,15 +33,20 @@ async function loadFonts() {
   await document.fonts.ready
   try {
     await Promise.all([
+      document.fonts.load('500 16px omnes-cond'),
       document.fonts.load('700 16px omnes-cond'),
+      document.fonts.load('900 16px omnes-cond'), // WOLTCondBlack - registered 2026-09-11, was deployed but unused before
+      document.fonts.load('400 16px omnes-pro'),
+      document.fonts.load('600 16px omnes-pro'),
       document.fonts.load('700 16px omnes-pro'),
-      document.fonts.load('500 16px omnes-pro'),
+      document.fonts.load('900 16px omnes-pro'), // WOLTBlack - same fix as above
     ])
   } catch {
     // Proceed if a font file fails to load (network error, etc.) - also
-    // covers omnes-pro/500, which has no self-hosted WOLT face yet (see
-    // src/index.css); the browser falls back to the nearest registered
-    // weight rather than throwing.
+    // covers omnes-pro/500, the one weight that still has no exact
+    // self-hosted WOLT face (only the condensed family has a Medium/500
+    // cut - see src/index.css); the browser falls back to the nearest
+    // registered weight rather than throwing.
   }
 }
 

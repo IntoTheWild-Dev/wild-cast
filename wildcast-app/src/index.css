@@ -9,8 +9,36 @@
    untouched, loaded separately via Fontshare in index.html. */
 @font-face {
   font-family: 'omnes-cond';
+  src: url('/fonts/wolt/WOLTCondMedium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'omnes-cond';
   src: url('/fonts/wolt/WOLTCond-Bold.otf') format('opentype');
   font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+/* WOLTCondBlack.otf was already deployed to public/fonts/wolt/ but never
+   actually registered here - any zone asking for omnes-cond at weight 900
+   (every Figma-imported headline/sub_headline does, see fontWeight: 900 in
+   real saved records) had no matching @font-face, so the browser picked the
+   nearest registered weight (700) instead of this real Black face. Found
+   2026-09-11 while confirming Julia's "we need to only use the WOLT fonts"
+   ask was already mostly true - the file was there the whole time, unused. */
+@font-face {
+  font-family: 'omnes-cond';
+  src: url('/fonts/wolt/WOLTCondBlack.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'omnes-pro';
+  src: url('/fonts/wolt/WOLTRegular.otf') format('opentype');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
@@ -25,6 +53,13 @@
   font-family: 'omnes-pro';
   src: url('/fonts/wolt/WOLTBold.otf') format('opentype');
   font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'omnes-pro';
+  src: url('/fonts/wolt/WOLTBlack.otf') format('opentype');
+  font-weight: 900;
   font-style: normal;
   font-display: swap;
 }
