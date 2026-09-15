@@ -237,8 +237,8 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 // existing exports don't change unless a merchant/print shop asks for the
 // newer standard.
 const ICC_PROFILE_OPTIONS = [
-  { id: 'fogra39', label: 'FOGRA39', hint: 'ISO Coated v2 · ISO 12647-2:2004' },
   { id: 'fogra51', label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' },
+  { id: 'fogra39', label: 'FOGRA39', hint: 'ISO Coated v2 · ISO 12647-2:2004' },
 ]
 
 // ── Image upload ─────────────────────────────────────────────────────────────

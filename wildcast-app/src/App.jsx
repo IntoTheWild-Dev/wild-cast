@@ -144,6 +144,46 @@ function MoreFormatsModal({ formats, onPick, onClose }) {
   )
 }
 
+// Shown after a plain editor Save succeeds (Julia's ask, 2026-09-15) - lets
+// someone immediately act on what they just did instead of the save only
+// ever being a quiet 3-second corner badge. Skipped when the "Need more
+// layouts?" modal above is about to show instead (see handleSave) so a
+// single save never stacks two popups.
+function SavedModal({ onContinue, onNewDesign, onExit }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 380, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Saved</div>
+        <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
+          Your design is saved to Designs. What next?
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            onClick={onContinue}
+            style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
+          >
+            Continue editing
+          </button>
+          <button
+            onClick={onNewDesign}
+            style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: '1.5px solid var(--border)', cursor: 'pointer', background: '#fff', color: 'var(--dark)' }}
+          >
+            Create a new design
+          </button>
+          <button
+            onClick={onExit}
+            style={{ width: '100%', padding: '10px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--mid)', fontFamily: 'inherit' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+          >
+            Exit
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   // 'landing' (the new 3-button home screen, Julia's ask 2026-09-11) is the
   // real first thing anyone sees now - 'brief' (the actual picker+form flow)
@@ -185,6 +225,10 @@ export default function App() {
   const [completedFormats, setCompletedFormats] = useState(new Set())
   const [formatPromptShown, setFormatPromptShown] = useState(false)
   const [formatPromptOptions, setFormatPromptOptions] = useState([])
+  // Post-save "Continue editing / Create a new design / Exit" popup (Julia's
+  // ask, 2026-09-15) - only shown when offerMoreFormats() didn't just show
+  // its own modal instead, see handleSave.
+  const [showSavedModal, setShowSavedModal] = useState(false)
   // Set from the "want more layouts?" popup - scopes BriefTemplatePicker to
   // this ONE format instead of its default of matching whichever checked
   // format it finds first. Reset once you're back editing the brief itself.
@@ -942,8 +986,10 @@ export default function App() {
   // session (formatPromptShown) so repeat Saves on the same design don't
   // nag every time. Marks the just-finished format as done first, then only
   // offers whatever's left of what was actually checked in the brief.
+  // Returns true when it actually showed its modal, so callers (handleSave)
+  // can skip showing a second, competing popup of their own on top of it.
   function offerMoreFormats() {
-    if (!reachedViaBrief || !briefSubmission || formatPromptShown) return
+    if (!reachedViaBrief || !briefSubmission || formatPromptShown) return false
     const doneCode = Object.entries(FORMAT_TEMPLATE_GROUP).find(([, group]) => group === selectedTemplate?.format)?.[0]
     const newCompleted = new Set(completedFormats)
     if (doneCode) newCompleted.add(doneCode)
@@ -952,7 +998,9 @@ export default function App() {
     if (remaining.length > 0) {
       setFormatPromptOptions(remaining)
       setFormatPromptShown(true)
+      return true
     }
+    return false
   }
 
   function handlePickAnotherFormat(formatCode) {
@@ -968,7 +1016,8 @@ export default function App() {
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
-      offerMoreFormats()
+      const showedMoreFormats = offerMoreFormats()
+      if (!showedMoreFormats) setShowSavedModal(true)
     } catch (err) {
       console.error('Save error:', err)
       alert('Save failed: ' + err.message)
@@ -1451,6 +1500,13 @@ export default function App() {
           formats={formatPromptOptions}
           onPick={handlePickAnotherFormat}
           onClose={() => setFormatPromptOptions([])}
+        />
+      )}
+      {showSavedModal && (
+        <SavedModal
+          onContinue={() => setShowSavedModal(false)}
+          onNewDesign={() => { setShowSavedModal(false); handleNavigate('new-brief') }}
+          onExit={() => { setShowSavedModal(false); setScreen('landing') }}
         />
       )}
 
