@@ -235,6 +235,15 @@ export default function App() {
   const [zonePositions, setZonePositions]     = useState({})
   const [projectName, setProjectName]         = useState('')
   const [currentProjectId, setCurrentProjectId] = useState(null)
+  // Personal-folders feature (Julia's ask, 2026-09-15): who a project
+  // belongs to and which of their subfolders it sits in. null/null for a
+  // brand-new, never-saved project - doSave() then stamps the CURRENT
+  // signed-in user as owner. Loaded from the project itself when opening an
+  // existing one (openLoadedProject) so re-saving never silently reassigns
+  // ownership or drops it out of its folder, even if someone else opens and
+  // edits it in place (Designs has no privacy boundary, anyone can do this).
+  const [projectOwner, setProjectOwner]       = useState(null) // { email, name } | null
+  const [projectFolder, setProjectFolder]     = useState(null) // subfolder name string | null
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved' - purely cosmetic, auto-clears after 3s (see handleSave etc.)
   // Separate from saveStatus, which is a 3-second flash badge and NOT a
@@ -479,6 +488,8 @@ export default function App() {
     setZonePositions({})
     setProjectName(template.name)
     setCurrentProjectId(null)
+    setProjectOwner(null)
+    setProjectFolder(null)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -545,6 +556,8 @@ export default function App() {
     const nameTag = [prefilledFields?.restaurant_name, prefilledFields?.offer].filter(Boolean).join(' – ')
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
+    setProjectOwner(null)
+    setProjectFolder(null)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -586,6 +599,8 @@ export default function App() {
     const nameTag = [prefilledFields.restaurant_name, prefilledFields.offer].filter(Boolean).join(' – ')
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
+    setProjectOwner(null)
+    setProjectFolder(null)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -891,11 +906,20 @@ export default function App() {
     const effectiveFontSizes = exportRef.current?.getEffectiveFontSizes?.() ?? {}
     const fontSizesToSave = { ...fontSizes, ...effectiveFontSizes }
     const name = projectName.trim() || selectedTemplate.name
+    // Owner is whoever originally saved this project (preserved across
+    // re-saves, even by someone else editing it in place - see
+    // projectOwner's own comment); falls back to whoever's signed in now
+    // only the first time a brand-new project is saved. Folder likewise
+    // stays whatever it was last set to via Designs' "Move to folder" -
+    // saving in the editor never touches it.
+    const ownerEmail = projectOwner?.email ?? activation?.key ?? null
+    const ownerName = projectOwner?.name ?? activation?.clientName ?? null
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
       fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, imagePositions, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
+      ownerEmail, ownerName, folder: projectFolder,
     }
 
     const response = await fetch('/api/save-project', {
@@ -1023,6 +1047,7 @@ export default function App() {
       projectName: template.name,
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: {}, imagePositions: {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview,
+      ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
     }
     const response = await fetch('/api/save-project', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1099,6 +1124,8 @@ export default function App() {
     setZonePositions(project.zonePositions ?? {})
     setProjectName(project.projectName || template.name)
     setCurrentProjectId(project.id)
+    setProjectOwner(project.ownerEmail ? { email: project.ownerEmail, name: project.ownerName } : null)
+    setProjectFolder(project.folder ?? null)
     setComments(freshComments)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
@@ -1124,6 +1151,12 @@ export default function App() {
       id,
       projectName: `${original.projectName || original.templateName} (copy)`,
       savedAt: Date.now(),
+      // A duplicate is a fresh personal copy for whoever's duplicating it,
+      // not a continuation of the original's owner/folder - lands unsorted
+      // in the current user's own space regardless of who made the original.
+      ownerEmail: activation?.key ?? null,
+      ownerName: activation?.clientName ?? null,
+      folder: null,
     }
 
     const response = await fetch('/api/save-project', {
@@ -1246,7 +1279,7 @@ export default function App() {
 
       {screen === 'designs' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} />
+          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} activation={activation} />
         </div>
       )}
 

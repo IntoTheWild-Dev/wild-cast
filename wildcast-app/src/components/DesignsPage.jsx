@@ -4,6 +4,7 @@ import { TEMPLATES } from '../data/templates'
 import { isCloseMatch } from '../lib/fuzzyMatch'
 
 const ALL = '__all__'
+const NEW_FOLDER = '__new_folder__'
 
 function formatDate(ts) {
   const d = new Date(ts)
@@ -33,6 +34,10 @@ function groupLabel(info) {
   if (!info?.cat || !info?.format) return 'Other'
   const cap = info.cat.charAt(0).toUpperCase() + info.cat.slice(1)
   return `${cap} ${info.format}`
+}
+
+function initials(name) {
+  return (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?'
 }
 
 function EmptyState({ title, desc }) {
@@ -102,6 +107,36 @@ function groupMerchantsFuzzy(merchants) {
   }
 }
 
+// Every signed-in person (account or shared activation key) with any saved
+// design or any created-but-still-empty folder gets a "person" entry - the
+// unit personal folders are organized around (Julia's ask, 2026-09-15:
+// "a main folder called Julia Stadler but then also subfolders"). The
+// currently signed-in person always gets an entry even with zero designs and
+// zero folders yet, so they can always find their own (empty) space to
+// create their first folder in.
+function buildPeople(enriched, folderRegistry, activation) {
+  const map = new Map() // ownerEmail -> { ownerEmail, ownerName, count, folderSet }
+  function ensure(email, name) {
+    if (!map.has(email)) map.set(email, { ownerEmail: email, ownerName: name || email, count: 0, folderSet: new Set() })
+    const entry = map.get(email)
+    if (name && entry.ownerName === entry.ownerEmail) entry.ownerName = name
+    return entry
+  }
+  for (const p of enriched) {
+    if (!p.ownerEmail) continue
+    const entry = ensure(p.ownerEmail, p.ownerName)
+    entry.count++
+    if (p.folder) entry.folderSet.add(p.folder)
+  }
+  for (const rec of folderRegistry) {
+    if (!rec.ownerEmail) continue
+    const entry = ensure(rec.ownerEmail, rec.ownerName)
+    for (const f of rec.folders || []) entry.folderSet.add(f)
+  }
+  if (activation?.key) ensure(activation.key, activation.clientName)
+  return [...map.values()].sort((a, b) => a.ownerName.localeCompare(b.ownerName))
+}
+
 // Designs are shared across every activation key now, with no ownership
 // boundary - so opening one always asks first rather than editing the
 // original in place, since anyone might be picking up someone else's saved
@@ -144,7 +179,12 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
   )
 }
 
-function DesignCard({ project, loading, onOpen, onDelete }) {
+// canOrganize (true only when the signed-in person owns this design - see
+// DesignsPage's canOrganize call site) adds a small "file into folder"
+// dropdown under the card, right in place - no need to open a separate
+// Folders view just to move something. Picking "+ New folder…" prompts for
+// a name and immediately moves this card into it.
+function DesignCard({ project, loading, onOpen, onDelete, canOrganize, folderOptions, onMove, showOwner }) {
   return (
     <div
       onClick={() => onOpen(project)}
@@ -179,6 +219,9 @@ function DesignCard({ project, loading, onOpen, onDelete }) {
       <div style={{ padding: '12px 14px 14px' }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, wordBreak: 'break-word' }}>{project.projectName || project.templateName}</div>
         <div style={{ fontSize: 11, color: 'var(--mid)' }}>{project.merchant} · Saved {formatDate(project.savedAt)}</div>
+        {showOwner && project.ownerName && (
+          <div style={{ fontSize: 10, color: 'var(--light)', marginTop: 2 }}>by {project.ownerName}</div>
+        )}
         <button
           style={{ marginTop: 12, width: '100%', padding: '8px', fontSize: 12, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }}
           onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
@@ -187,6 +230,28 @@ function DesignCard({ project, loading, onOpen, onDelete }) {
         >
           {loading ? 'Opening…' : 'Continue editing'}
         </button>
+
+        {canOrganize && (
+          <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+            <Select
+              value={project.folder || ''}
+              onChange={e => {
+                const v = e.target.value
+                if (v === NEW_FOLDER) {
+                  const name = window.prompt('New folder name')?.trim()
+                  if (name) onMove(project, name)
+                } else {
+                  onMove(project, v || null)
+                }
+              }}
+              style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', width: '100%' }}
+            >
+              <option value="">Unsorted</option>
+              {folderOptions.map(f => <option key={f} value={f}>{f}</option>)}
+              <option value={NEW_FOLDER}>+ New folder…</option>
+            </Select>
+          </div>
+        )}
       </div>
 
       <button
@@ -206,11 +271,66 @@ function DesignCard({ project, loading, onOpen, onDelete }) {
   )
 }
 
+function PersonCard({ person, onOpen }) {
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        background: '#fff', border: '1px solid var(--border)', borderRadius: 12, padding: 18,
+        cursor: 'pointer', transition: 'box-shadow 0.15s, transform 0.15s',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
+    >
+      <div style={{
+        width: 44, height: 44, borderRadius: '50%', background: 'var(--primary-glow)', color: 'var(--primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, flexShrink: 0,
+      }}>
+        {initials(person.ownerName)}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', wordBreak: 'break-word' }}>{person.ownerName}</div>
+        <div style={{ fontSize: 11, color: 'var(--mid)' }}>
+          {person.count} design{person.count !== 1 ? 's' : ''} · {person.folderSet.size} folder{person.folderSet.size !== 1 ? 's' : ''}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FolderCard({ name, count, onOpen }) {
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        background: '#fff', border: '1px solid var(--border)', borderRadius: 12, padding: 18,
+        cursor: 'pointer', transition: 'box-shadow 0.15s, transform 0.15s',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
+    >
+      <div style={{ fontSize: 24 }}>📁</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', wordBreak: 'break-word' }}>{name}</div>
+        <div style={{ fontSize: 11, color: 'var(--mid)' }}>{count} design{count !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+  )
+}
+
 // Designs used to only ever be discoverable via a per-browser localStorage
 // registry - nobody but whoever saved a design, on that exact browser, could
 // ever see it existed. Now backed by a real server-side listing
 // (GET /api/save-project), so every activation key sees every saved design.
-export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [] }) {
+//
+// activation is used for two things here: which person's own design/folder
+// gets the "organize" controls (Move to folder / + New folder - Julia's
+// call, 2026-09-15: everyone can BROWSE every folder, but a folder is still
+// personal to whoever's filing things into it), and stamping who's creating
+// a new folder.
+export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [], activation }) {
   const [projects, setProjects] = useState([])
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [loadingId, setLoadingId] = useState(null)
@@ -220,15 +340,28 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const [formatFilter, setFormatFilter] = useState(ALL)
   const [merchantFilter, setMerchantFilter] = useState(ALL)
   const [dateFilter, setDateFilter] = useState(ALL)
+  const [personFilter, setPersonFilter] = useState(ALL)
   const [nameSearch, setNameSearch] = useState('')
   const [pendingProject, setPendingProject] = useState(null)
   const [pendingBusy, setPendingBusy] = useState(false)
+
+  // "All designs" (existing flat/grouped-by-format view) vs "Folders"
+  // (browse by person -> their subfolders - Julia's ask, 2026-09-15: "create
+  // a folder in the design tab" with a main folder per person + subfolders).
+  const [viewMode, setViewMode] = useState('all') // 'all' | 'folders'
+  const [activePerson, setActivePerson] = useState(null) // ownerEmail | null
+  const [activeFolder, setActiveFolder] = useState(null) // folder name | null
+  const [folderRegistry, setFolderRegistry] = useState([]) // [{ ownerEmail, ownerName, folders }]
 
   useEffect(() => {
     fetch('/api/save-project', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => { setProjects(data.projects ?? []); setStatus('ready') })
       .catch(() => setStatus('error'))
+    fetch('/api/folders', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => setFolderRegistry(data.owners ?? []))
+      .catch(() => {})
   }, [])
 
   const templateInfo = useMemo(() => buildTemplateInfo(customCards), [customCards])
@@ -237,6 +370,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     () => projects.map(p => ({ ...p, group: groupLabel(templateInfo[p.templateId]) })),
     [projects, templateInfo]
   )
+
+  const people = useMemo(() => buildPeople(enriched, folderRegistry, activation), [enriched, folderRegistry, activation])
 
   const formatOptions = useMemo(() => [...new Set(enriched.map(p => p.group))].sort(), [enriched])
   const merchantGroups = useMemo(() => groupMerchantsFuzzy(enriched.map(p => p.merchant)), [enriched])
@@ -262,12 +397,13 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         // can be typed with different casing or a small typo.
         (merchantFilter === ALL || merchantGroups.canonicalOf.get(p.merchant) === merchantFilter) &&
         (dateFilter === ALL || dayKey(p.savedAt) === dateFilter) &&
+        (personFilter === ALL || p.ownerEmail === personFilter) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first - the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-  }, [enriched, formatFilter, merchantFilter, merchantGroups, dateFilter, nameSearch])
+  }, [enriched, formatFilter, merchantFilter, merchantGroups, dateFilter, personFilter, nameSearch])
 
   const grouped = useMemo(() => {
     const byGroup = {}
@@ -311,15 +447,83 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     }
   }
 
-  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, dateFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
+  // Optimistic - reflects the move immediately (folders/lists using
+  // `projects` update right away) and fires the real write in the
+  // background; matches handleDelete's existing pattern above.
+  function handleMove(project, folder) {
+    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, folder } : p))
+    fetch('/api/move-project', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: project.id, folder }),
+    }).catch(() => {})
+    if (folder) {
+      setFolderRegistry(prev => {
+        const mine = prev.find(r => r.ownerEmail === activation?.key)
+        if (mine?.folders?.includes(folder)) return prev
+        const others = prev.filter(r => r.ownerEmail !== activation?.key)
+        return [...others, { ownerEmail: activation?.key, ownerName: activation?.clientName, folders: [...(mine?.folders ?? []), folder] }]
+      })
+    }
+  }
+
+  async function handleCreateFolder() {
+    const name = window.prompt('New folder name')?.trim()
+    if (!name || !activation?.key) return
+    try {
+      const res = await fetch('/api/folders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerEmail: activation.key, ownerName: activation.clientName, folderName: name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not create folder')
+      setFolderRegistry(prev => [...prev.filter(r => r.ownerEmail !== activation.key), data])
+      setActiveFolder(name)
+    } catch (err) {
+      alert('Could not create folder: ' + err.message)
+    }
+  }
+
+  function folderOptionsFor(ownerEmail) {
+    return [...(people.find(p => p.ownerEmail === ownerEmail)?.folderSet ?? [])].sort((a, b) => a.localeCompare(b))
+  }
+
+  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, dateFilter !== ALL, personFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
   const activeFilterSummary = activeFilterCount > 0
     ? [
         formatFilter !== ALL ? formatFilter : null,
         merchantFilter !== ALL ? merchantFilter : null,
         dateFilter !== ALL ? dateOptions.find(d => d.key === dateFilter)?.label : null,
+        personFilter !== ALL ? people.find(p => p.ownerEmail === personFilter)?.ownerName : null,
         nameSearch.trim() ? `"${nameSearch.trim()}"` : null,
       ].filter(Boolean).join(' · ')
     : null
+
+  const activePersonData = people.find(p => p.ownerEmail === activePerson)
+  const personDesigns = useMemo(() => enriched.filter(p => p.ownerEmail === activePerson), [enriched, activePerson])
+  const unsortedDesigns = useMemo(() => personDesigns.filter(p => !p.folder), [personDesigns])
+  const activeFolderDesigns = useMemo(() => personDesigns.filter(p => p.folder === activeFolder), [personDesigns, activeFolder])
+  const isOwnSpace = !!activation?.key && activation.key === activePerson
+
+  const viewToggle = (
+    <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F3F4F6', borderRadius: 8 }}>
+      {[['all', 'All designs'], ['folders', 'Folders']].map(([m, label]) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => { setViewMode(m); setActivePerson(null); setActiveFolder(null) }}
+          style={{
+            padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
+            background: viewMode === m ? '#fff' : 'transparent',
+            color: viewMode === m ? 'var(--dark)' : 'var(--mid)',
+            boxShadow: viewMode === m ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+            fontFamily: 'inherit', transition: 'all 0.15s',
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
@@ -337,20 +541,26 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
           replaces the old "Find a design" popup that gated the whole list
           until submitted (Julia's ask, 2026-09-15). */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
-        <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--mid)' }}>
-          {status === 'loading' && 'Loading designs…'}
-          {status === 'error' && 'Could not load designs - try refreshing the page.'}
-          {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
-          {status === 'ready' && projects.length > 0 && (
-            activeFilterSummary
-              ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
-              : `${projects.length} saved design${projects.length === 1 ? '' : 's'}`
-          )}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
+              {status === 'loading' && 'Loading designs…'}
+              {status === 'error' && 'Could not load designs - try refreshing the page.'}
+              {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
+              {status === 'ready' && projects.length > 0 && viewMode === 'all' && (
+                activeFilterSummary
+                  ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
+                  : `${projects.length} saved design${projects.length === 1 ? '' : 's'}`
+              )}
+              {status === 'ready' && viewMode === 'folders' && 'Browse by person - everyone can see everyone’s folders.'}
+            </p>
+          </div>
+          {status === 'ready' && projects.length > 0 && viewToggle}
+        </div>
 
-        {status === 'ready' && projects.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {status === 'ready' && projects.length > 0 && viewMode === 'all' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Viewing
             </label>
@@ -378,6 +588,14 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
               <option value={ALL}>All dates</option>
               {dateOptions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
             </Select>
+            <Select
+              value={personFilter}
+              onChange={e => setPersonFilter(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+            >
+              <option value={ALL}>Everyone</option>
+              {people.map(p => <option key={p.ownerEmail} value={p.ownerEmail}>{p.ownerName}</option>)}
+            </Select>
             <input
               type="text"
               value={nameSearch}
@@ -387,17 +605,47 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
             />
           </div>
         )}
+
+        {viewMode === 'folders' && activePerson && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 13 }}>
+            <span
+              onClick={() => { setActivePerson(null); setActiveFolder(null) }}
+              style={{ color: 'var(--mid)', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+            >
+              ← All people
+            </span>
+            <span style={{ color: 'var(--light)' }}>/</span>
+            {activeFolder ? (
+              <>
+                <span
+                  onClick={() => setActiveFolder(null)}
+                  style={{ color: 'var(--mid)', cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+                >
+                  {activePersonData?.ownerName}
+                </span>
+                <span style={{ color: 'var(--light)' }}>/</span>
+                <span style={{ fontWeight: 700, color: 'var(--dark)' }}>{activeFolder}</span>
+              </>
+            ) : (
+              <span style={{ fontWeight: 700, color: 'var(--dark)' }}>{activePersonData?.ownerName}</span>
+            )}
+          </div>
+        )}
       </div>
 
       {status === 'ready' && projects.length === 0 && (
         <EmptyState title="No saved designs yet" desc="Open a template, fill in your content, and click Save - it will appear here." />
       )}
 
-      {status === 'ready' && projects.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No designs match" desc="Try widening your format or merchant filter, or clearing the name search." />
+      {status === 'ready' && projects.length > 0 && viewMode === 'all' && filtered.length === 0 && (
+        <EmptyState title="No designs match" desc="Try widening your filters, or clearing the name search." />
       )}
 
-      {status === 'ready' && filtered.length > 0 && (
+      {status === 'ready' && projects.length > 0 && viewMode === 'all' && filtered.length > 0 && (
         <div style={{ padding: '32px 40px 40px' }}>
           {grouped.map(([group, items]) => (
             <div key={group} style={{ marginBottom: 36 }}>
@@ -412,11 +660,102 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                     loading={loadingId === project.id}
                     onOpen={handleRequestOpen}
                     onDelete={handleDelete}
+                    showOwner={personFilter === ALL}
+                    canOrganize={!!activation?.key && activation.key === project.ownerEmail}
+                    folderOptions={folderOptionsFor(project.ownerEmail)}
+                    onMove={handleMove}
                   />
                 ))}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {status === 'ready' && projects.length > 0 && viewMode === 'folders' && !activePerson && (
+        <div style={{ padding: '32px 40px 40px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+            {people.map(p => (
+              <PersonCard key={p.ownerEmail} person={p} onOpen={() => setActivePerson(p.ownerEmail)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {status === 'ready' && viewMode === 'folders' && activePerson && !activeFolder && (
+        <div style={{ padding: '32px 40px 40px' }}>
+          {isOwnSpace && (
+            <button
+              type="button"
+              onClick={handleCreateFolder}
+              style={{ marginBottom: 24, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--dark)', background: '#fff', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
+            >
+              + New folder
+            </button>
+          )}
+
+          {activePersonData?.folderSet.size > 0 && (
+            <div style={{ marginBottom: 36 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', margin: '0 0 16px' }}>Folders</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+                {[...activePersonData.folderSet].sort((a, b) => a.localeCompare(b)).map(f => (
+                  <FolderCard
+                    key={f}
+                    name={f}
+                    count={personDesigns.filter(p => p.folder === f).length}
+                    onOpen={() => setActiveFolder(f)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', margin: '0 0 16px' }}>
+              Unsorted <span style={{ fontWeight: 500, color: 'var(--mid)' }}>({unsortedDesigns.length})</span>
+            </h2>
+            {unsortedDesigns.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--mid)' }}>No designs outside a folder.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 24 }}>
+                {unsortedDesigns.map(project => (
+                  <DesignCard
+                    key={project.id}
+                    project={project}
+                    loading={loadingId === project.id}
+                    onOpen={handleRequestOpen}
+                    onDelete={handleDelete}
+                    canOrganize={isOwnSpace}
+                    folderOptions={folderOptionsFor(project.ownerEmail)}
+                    onMove={handleMove}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {status === 'ready' && viewMode === 'folders' && activePerson && activeFolder && (
+        <div style={{ padding: '32px 40px 40px' }}>
+          {activeFolderDesigns.length === 0 ? (
+            <EmptyState title="This folder is empty" desc="Move a design here from its card, or from the Unsorted list in this person's folder." />
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 24 }}>
+              {activeFolderDesigns.map(project => (
+                <DesignCard
+                  key={project.id}
+                  project={project}
+                  loading={loadingId === project.id}
+                  onOpen={handleRequestOpen}
+                  onDelete={handleDelete}
+                  canOrganize={isOwnSpace}
+                  folderOptions={folderOptionsFor(project.ownerEmail)}
+                  onMove={handleMove}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

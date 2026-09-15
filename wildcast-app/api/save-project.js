@@ -33,6 +33,14 @@ async function handleList(req, res) {
             merchant: (project.fields?.restaurant_name || '').trim() || project.projectName || project.templateName,
             savedAt: project.savedAt,
             thumbnail: project.thumbnail,
+            // Personal-folders feature (Julia's ask, 2026-09-15) - who saved
+            // this and which of their subfolders it's filed under. Absent
+            // on any design saved before this shipped, hence the ?? null
+            // fallbacks - shows up as "Unassigned" in the Designs UI rather
+            // than crashing or silently disappearing from folder views.
+            ownerEmail: project.ownerEmail ?? null,
+            ownerName: project.ownerName ?? null,
+            folder: project.folder ?? null,
           }
         } catch {
           return null
