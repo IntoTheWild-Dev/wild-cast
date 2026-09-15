@@ -19,7 +19,7 @@
 // Wild Stack domain self-provisions full access, no manual step needed.
 import { list, put } from '@vercel/blob'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
-import { WILD_STACK_DOMAIN, SEAT_CAP, countPartnerSeats } from './_lib/accounts.js'
+import { WILD_STACK_DOMAIN, SEAT_CAP, countPartnerSeats, ensurePersonFolder } from './_lib/accounts.js'
 
 function accountPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
@@ -114,6 +114,10 @@ export default async function handler(req, res) {
         createdAt: new Date().toISOString(),
       }
       await saveAccount(account)
+      // Creates their main-folder person tile immediately, visible to
+      // everyone in Designs' Folders view, without waiting on them to save a
+      // design or open their own Folders tab first (Julia's ask, 2026-09-15).
+      await ensurePersonFolder(trimmedEmail, name)
       return res.status(200).json({
         email: trimmedEmail, displayName: name, role, sessionToken, isNewAccount: true,
       })
@@ -125,6 +129,9 @@ export default async function handler(req, res) {
     }
     existing.sessionToken = sessionToken
     await saveAccount(existing)
+    // Backfills a folder space for anyone who signed up before this existed
+    // - no-ops once it's there, see ensurePersonFolder.
+    await ensurePersonFolder(existing.email, existing.displayName)
     return res.status(200).json({
       email: existing.email, displayName: existing.displayName, role: existing.role, sessionToken, isNewAccount: false,
     })

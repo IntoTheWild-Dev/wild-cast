@@ -8,11 +8,7 @@
 // owner listing the subfolder names they've created, independent of whether
 // any design currently uses them.
 import { list, put } from '@vercel/blob'
-
-function ownerPath(email) {
-  const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
-  return `folders/${safe}.json`
-}
+import { folderPath as ownerPath } from './_lib/accounts.js'
 
 async function handleList(req, res) {
   const token = process.env.BLOB_READ_WRITE_TOKEN

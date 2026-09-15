@@ -570,17 +570,20 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const activeFolderDesigns = useMemo(() => personDesigns.filter(p => p.folder === activeFolder), [personDesigns, activeFolder])
   const isOwnSpace = !!activation?.key && activation.key === activePerson
 
+  // Bigger + a coral (var(--primary)) outline so this doesn't get lost next
+  // to the Viewing filter bar it sits above - Julia's report, 2026-09-15:
+  // "its a bit hidden now".
   const viewToggle = (
-    <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F3F4F6', borderRadius: 8 }}>
+    <div style={{ display: 'flex', gap: 4, padding: 4, background: '#F3F4F6', borderRadius: 10, border: '1.5px solid var(--primary)' }}>
       {[['all', 'All designs'], ['folders', 'Folders']].map(([m, label]) => (
         <button
           key={m}
           type="button"
           onClick={() => { setViewMode(m); setActivePerson(null); setActiveFolder(null) }}
           style={{
-            padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
-            background: viewMode === m ? '#fff' : 'transparent',
-            color: viewMode === m ? 'var(--dark)' : 'var(--mid)',
+            padding: '9px 18px', fontSize: 14, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: viewMode === m ? 'var(--primary)' : 'transparent',
+            color: viewMode === m ? '#fff' : 'var(--mid)',
             boxShadow: viewMode === m ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
             fontFamily: 'inherit', transition: 'all 0.15s',
           }}
