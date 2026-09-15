@@ -229,12 +229,20 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
       <div style={{ padding: '12px 14px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Single line + ellipsis, not wrap - a long design name used to push
             everything below it further down than a short one, throwing off
-            row alignment; native title="" gives the same "hover an image to
-            see its full name" behavior Julia asked for, no tooltip component
-            needed. */}
+            row alignment. title="" gives the "hover to see the full name"
+            behavior on desktop for free - but hover doesn't exist on
+            phone/tablet, so a truncated name had no way to be read there at
+            all (Julia's report, 2026-09-15, on what turned out to be a
+            phone-width screenshot again). onClick + stopPropagation adds a
+            tap-to-reveal fallback that works identically on touch or desktop,
+            without also triggering the card's own "open this design" click. */}
         <div
           title={project.projectName || project.templateName}
-          style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          onClick={e => {
+            e.stopPropagation()
+            window.alert(project.projectName || project.templateName)
+          }}
+          style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'default' }}
         >
           {project.projectName || project.templateName}
         </div>
