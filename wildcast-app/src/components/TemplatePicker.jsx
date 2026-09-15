@@ -164,7 +164,7 @@ export function LayoutModal({ entry, onPick, onClose }) {
     },
     {
       key: 'guided-image',
-      type: 'Text + Image · Guided',
+      type: 'Guided',
       desc: 'Headline, sub-headline, offer, plus a food photo and your logo.',
       templateId: entry.templateIdGuided,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><line x1="4" y1="21" x2="20" y2="21"/></svg>,
@@ -179,7 +179,7 @@ export function LayoutModal({ entry, onPick, onClose }) {
     },
     {
       key: 'designer-image',
-      type: 'Text + Image · Designer',
+      type: 'Designer',
       desc: 'Full control with food photo and logo zones.',
       templateId: entry.templateIdDesigner,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
