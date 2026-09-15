@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Select from './Select'
 import { TEMPLATES } from '../data/templates'
+import { isCloseMatch } from '../lib/fuzzyMatch'
 
 const ALL = '__all__'
 
@@ -46,25 +47,59 @@ function EmptyState({ title, desc }) {
   )
 }
 
-// Groups merchant strings case-insensitively before listing them as filter
-// options - real saved data has the same merchant typed with different
-// casing (Julia's report, 2026-09-15: "Wen Cheng" designs split across
-// "Wen Cheng"/"WEN CHENG" as separate options, so picking either one only
-// ever showed part of them, reading as if most were missing entirely). Picks
-// the first-seen casing as the display label; doesn't touch the underlying
-// saved `merchant` value, which is still whatever was actually typed for
-// that project (fixing THAT is a separate, deliberate data-cleanup decision,
-// not something to guess at silently here - genuine typos like "WEN CHEN"
-// missing the G are a different string entirely, not a casing difference,
-// and can't be safely auto-merged the same way).
-function groupMerchantsCaseInsensitive(merchants) {
-  const byKey = new Map()
+// Groups merchant strings that are the same real name typed slightly
+// differently - casing ("Wen Cheng"/"WEN CHENG") AND small typos
+// ("Wen Chen" missing the "g") - before listing them as filter options.
+// Real saved data has both problems (Julia's reports, 2026-09-15): picking
+// any ONE spelling only ever showed part of that merchant's designs, reading
+// as if most were missing entirely. Uses isCloseMatch() (small edit-distance,
+// digit-aware so "Flyer 2"/"Flyer 3" never merge) - see lib/fuzzyMatch.js for
+// the exact rule. Doesn't touch the underlying saved `merchant` value on any
+// project, only how options are grouped for display/filtering here; fixing
+// the actual stored spelling is a separate, deliberate data-cleanup action.
+//
+// Greedy single-pass clustering, most-frequent spelling processed first so
+// it naturally becomes each group's canonical/displayed label (e.g. "Wen
+// Cheng" - the common correct spelling - wins over the rarer "WEN CHEN" typo,
+// rather than whichever happened to be typed first or sorts first alphabetically).
+// Returns { options, canonicalOf } - options is the sorted display list,
+// canonicalOf maps every raw merchant string seen to its group's label, so
+// filtering a project's raw p.merchant against a selected canonical option
+// is a straightforward lookup rather than re-running the fuzzy check per row.
+function groupMerchantsFuzzy(merchants) {
+  const counts = new Map()
   for (const m of merchants) {
     if (!m) continue
-    const key = m.toLowerCase()
-    if (!byKey.has(key)) byKey.set(key, m)
+    counts.set(m, (counts.get(m) || 0) + 1)
   }
-  return [...byKey.values()].sort((a, b) => a.localeCompare(b))
+  // Tiebreaker beyond plain frequency: prefer a non-SHOUTING spelling over an
+  // ALL-CAPS one when two variants tie on count - a typo'd "WEN CHEN" and the
+  // correct "Wen Cheng" can easily tie (2 saves each is common at this
+  // scale), and picking the all-caps typo as the group's displayed label
+  // would be a real, visible regression even though the grouping itself is
+  // correct. Longer string as the final tiebreaker after that.
+  const isShouting = s => s === s.toUpperCase() && s !== s.toLowerCase()
+  const byFrequency = [...counts.keys()].sort((a, b) =>
+    (counts.get(b) - counts.get(a))
+    || (isShouting(a) - isShouting(b))
+    || (b.length - a.length)
+    || a.localeCompare(b)
+  )
+
+  const groups = [] // [{ label, members: string[] }]
+  for (const m of byFrequency) {
+    const group = groups.find(g => isCloseMatch(m, g.label))
+    if (group) group.members.push(m)
+    else groups.push({ label: m, members: [m] })
+  }
+
+  const canonicalOf = new Map()
+  for (const g of groups) for (const m of g.members) canonicalOf.set(m, g.label)
+
+  return {
+    options: groups.map(g => g.label).sort((a, b) => a.localeCompare(b)),
+    canonicalOf,
+  }
 }
 
 // Designs are shared across every activation key now, with no ownership
@@ -204,7 +239,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   )
 
   const formatOptions = useMemo(() => [...new Set(enriched.map(p => p.group))].sort(), [enriched])
-  const merchantOptions = useMemo(() => groupMerchantsCaseInsensitive(enriched.map(p => p.merchant)), [enriched])
+  const merchantGroups = useMemo(() => groupMerchantsFuzzy(enriched.map(p => p.merchant)), [enriched])
+  const merchantOptions = merchantGroups.options
   const dateOptions = useMemo(() => {
     const byKey = new Map()
     for (const p of enriched) {
@@ -217,21 +253,21 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
 
   const filtered = useMemo(() => {
     const q = nameSearch.trim().toLowerCase()
-    const merchantKey = merchantFilter === ALL ? null : merchantFilter.toLowerCase()
     return enriched
       .filter(p =>
         (formatFilter === ALL || p.group === formatFilter) &&
-        // Case-insensitive, matching groupMerchantsCaseInsensitive() above -
-        // the selected option is one specific casing, but real saved
-        // projects for the "same" merchant can have different casing.
-        (merchantKey === null || (p.merchant || '').toLowerCase() === merchantKey) &&
+        // Compares each project's CANONICAL group (from groupMerchantsFuzzy()
+        // above), not a raw string match - the selected option is one
+        // specific spelling, but real saved projects for the "same" merchant
+        // can be typed with different casing or a small typo.
+        (merchantFilter === ALL || merchantGroups.canonicalOf.get(p.merchant) === merchantFilter) &&
         (dateFilter === ALL || dayKey(p.savedAt) === dateFilter) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first - the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-  }, [enriched, formatFilter, merchantFilter, dateFilter, nameSearch])
+  }, [enriched, formatFilter, merchantFilter, merchantGroups, dateFilter, nameSearch])
 
   const grouped = useMemo(() => {
     const byGroup = {}

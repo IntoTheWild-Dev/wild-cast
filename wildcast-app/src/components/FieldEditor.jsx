@@ -10,6 +10,8 @@ function formatDateTime(ts) {
 import AISuggest from './AISuggest'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets, uniqueMerchants, GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { findCloseSuggestion } from '../lib/fuzzyMatch'
+import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 
 const ALL_MERCHANTS = '__all__'
 
@@ -127,11 +129,19 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, hint: hintOverride }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, hint: hintOverride, suggestFrom }) {
   const limit = CHAR_LIMITS[fieldKey]
   const hint = hintOverride ?? FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
+  // Gentle "Did you mean X?" hint, not a blocking popup - Julia's ask,
+  // 2026-09-15: catch a small typo (e.g. "Wen Chen" missing the "g") right
+  // where it's typed, without interrupting typing the way a popup would.
+  // suggestFrom is a known-good list (e.g. PLACEHOLDER_PARTNERS) to compare
+  // against; findCloseSuggestion only returns something when value is a
+  // near-but-not-exact match, never while it's already spelled right or too
+  // different to plausibly be the same name (see lib/fuzzyMatch.js).
+  const suggestion = suggestFrom ? findCloseSuggestion(value, suggestFrom) : null
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -195,6 +205,18 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           placeholder={fieldPlaceholder}
           style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
         />
+      )}
+      {suggestion && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12, color: 'var(--mid)' }}>
+          <span>Did you mean <strong style={{ color: 'var(--dark)' }}>{suggestion}</strong>?</span>
+          <button
+            type="button"
+            onClick={() => onChange(suggestion)}
+            style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+          >
+            Use this
+          </button>
+        </div>
       )}
       {!readOnly && (
         // position:relative here (not on AISuggest itself) so its dropdown
@@ -659,6 +681,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             showControls={false} showSize={false}
             fontSize={20}
             align="right"
+            suggestFrom={PLACEHOLDER_PARTNERS}
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'offer') && (
