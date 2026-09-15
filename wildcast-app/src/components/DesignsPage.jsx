@@ -257,16 +257,20 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
         )}
       </div>
 
+      {/* Always visible, not hover-revealed - hover has no touch-device
+          equivalent, so a hover-only reveal made these two actions
+          impossible to find on phone/tablet (Julia's report, 2026-09-15:
+          "i dont see a flyer editing function"). */}
       <button
         onClick={e => { e.stopPropagation(); onRename(project) }}
         title="Rename this design"
         style={{
           position: 'absolute', top: 8, right: 36, width: 24, height: 24, borderRadius: '50%',
-          background: 'rgba(0,0,0,0.45)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s',
+          background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s',
         }}
-        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-        onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.75)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.55)'}
       >
         ✎
       </button>
@@ -276,11 +280,11 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
         title="Remove from Designs"
         style={{
           position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: '50%',
-          background: 'rgba(0,0,0,0.45)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, lineHeight: 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s',
+          background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s',
         }}
-        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-        onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.75)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.55)'}
       >
         ×
       </button>
@@ -571,26 +575,29 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
           replaces the old "Find a design" popup that gated the whole list
           until submitted (Julia's ask, 2026-09-15). */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
-              {status === 'loading' && 'Loading designs…'}
-              {status === 'error' && 'Could not load designs - try refreshing the page.'}
-              {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
-              {status === 'ready' && projects.length > 0 && viewMode === 'all' && (
-                activeFilterSummary
-                  ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
-                  : `${projects.length} saved design${projects.length === 1 ? '' : 's'}`
-              )}
-              {status === 'ready' && viewMode === 'folders' && 'Browse by person - everyone can see everyone’s folders.'}
-            </p>
-          </div>
-          {status === 'ready' && projects.length > 0 && viewToggle}
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
+            {status === 'loading' && 'Loading designs…'}
+            {status === 'error' && 'Could not load designs - try refreshing the page.'}
+            {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
+            {status === 'ready' && projects.length > 0 && viewMode === 'all' && (
+              activeFilterSummary
+                ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
+                : `${projects.length} saved design${projects.length === 1 ? '' : 's'}`
+            )}
+            {status === 'ready' && viewMode === 'folders' && 'Browse by person - everyone can see everyone’s folders.'}
+          </p>
         </div>
 
+        {/* View toggle sits directly above the Viewing bar (Julia's ask,
+            2026-09-15) - it used to sit up next to the title. */}
+        {status === 'ready' && projects.length > 0 && (
+          <div style={{ marginTop: 16 }}>{viewToggle}</div>
+        )}
+
         {status === 'ready' && projects.length > 0 && viewMode === 'all' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Viewing
             </label>
