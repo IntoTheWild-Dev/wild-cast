@@ -1135,6 +1135,7 @@ export default function App() {
             submitted={briefSubmission}
             customCards={customTemplates.cards}
             customRecords={customTemplates.records}
+            onBack={() => setScreen('landing')}
             onSubmitted={brief => {
               setBriefSubmission(brief)
               setCompletedFormats(new Set())
