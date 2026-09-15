@@ -640,8 +640,12 @@ export default function App() {
     setImageScales({})
     setTextPositions({})
     setZonePositions({})
+    // A name typed into the brief's own "Project name" field (Julia's ask,
+    // 2026-09-15) wins outright over the auto-tag - it's an explicit label,
+    // not something to second-guess by appending merchant/offer/template
+    // name onto it too.
     const nameTag = [prefilledFields.restaurant_name, prefilledFields.offer].filter(Boolean).join(' – ')
-    setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
+    setProjectName(brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name))
     setCurrentProjectId(null)
     setProjectOwner(null)
     setProjectFolder(null)

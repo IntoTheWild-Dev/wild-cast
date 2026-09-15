@@ -373,6 +373,15 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
               </div>
             </Field>
 
+            <Field label="Project name" hint="Optional - labels the saved design and PDF filename in Designs. Leave blank and we'll name it for you.">
+              <input
+                style={inputStyle}
+                value={brief.projectName}
+                onChange={e => set('projectName', e.target.value)}
+                placeholder="e.g. Wen Cheng – Wolt Promo June"
+              />
+            </Field>
+
             <button type="submit" disabled={!isValid} style={{
               width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: isValid ? 'pointer' : 'not-allowed',
               background: isValid ? 'var(--primary)' : '#E5E7EB', color: isValid ? '#fff' : 'var(--mid)',

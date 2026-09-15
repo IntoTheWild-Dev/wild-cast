@@ -44,6 +44,11 @@ export const DEFAULT_BRIEF = {
   about: '',
   objective: '',
   formats: [],
+  // Labels the saved design/PDF filename in Designs (Julia's ask,
+  // 2026-09-15) - distinct from restaurantName below (which is artwork
+  // content, not a label). Left blank, App.jsx falls back to its existing
+  // auto-tag (merchant + offer + template name).
+  projectName: '',
   // Shown on the flyer artwork (Option A's restaurant_name zone) - distinct
   // from Partner name, which just scopes the Library/internal tracking.
   // Left blank, it falls back to Partner name (buildCandidateFields).
