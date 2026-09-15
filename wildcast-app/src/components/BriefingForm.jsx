@@ -190,7 +190,7 @@ function ChoiceButton({ active, onClick, children, checkbox, disabled }) {
 // template + mode is picked, so this form only ever has one screen and one
 // action: hand off to the template picker (Julia's workflow change,
 // 2026-09-08).
-export default function BriefingForm({ submitted, onSubmitted, customCards, customRecords }) {
+export default function BriefingForm({ submitted, onSubmitted, customCards, customRecords, onBack }) {
   // Seed from `submitted` (the last-submitted snapshot) rather than always
   // DEFAULT_BRIEF. BriefingForm fully unmounts whenever screen leaves 'brief'
   // and remounts fresh when you come back (e.g. via the logo, or the
@@ -295,7 +295,24 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
             onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault() }}
             style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--border)', padding: '32px' }}
           >
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', marginBottom: 20 }}>Brief your design</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)' }}>Brief your design</div>
+              {/* Landing was the actual entry point (Julia's ask, 2026-09-11) and
+                  the top nav has no item pointing back at it - without this, the
+                  only way back from a brief already in progress was the logo
+                  click, which doesn't read as an explicit "go back" affordance. */}
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+                >
+                  ← Back
+                </button>
+              )}
+            </div>
 
             <Field label="Partner name">
               <Select style={inputStyle} value={brief.partner} onChange={e => set('partner', e.target.value)}>
