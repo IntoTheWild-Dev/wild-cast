@@ -183,8 +183,11 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
 // DesignsPage's canOrganize call site) adds a small "file into folder"
 // dropdown under the card, right in place - no need to open a separate
 // Folders view just to move something. Picking "+ New folder…" prompts for
-// a name and immediately moves this card into it.
-function DesignCard({ project, loading, onOpen, onDelete, canOrganize, folderOptions, onMove, showOwner }) {
+// a name and immediately moves this card into it. Rename (the pencil icon)
+// is NOT owner-gated - designs are already fully shared/editable by anyone
+// (see ConfirmOpenModal below), so renaming follows that same existing
+// model rather than the newer, deliberately-personal folder-organizing one.
+function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize, folderOptions, onMove, showOwner }) {
   return (
     <div
       onClick={() => onOpen(project)}
@@ -253,6 +256,20 @@ function DesignCard({ project, loading, onOpen, onDelete, canOrganize, folderOpt
           </div>
         )}
       </div>
+
+      <button
+        onClick={e => { e.stopPropagation(); onRename(project) }}
+        title="Rename this design"
+        style={{
+          position: 'absolute', top: 8, right: 36, width: 24, height: 24, borderRadius: '50%',
+          background: 'rgba(0,0,0,0.45)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+      >
+        ✎
+      </button>
 
       <button
         onClick={e => { e.stopPropagation(); onDelete(project.id) }}
@@ -415,6 +432,19 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     if (!window.confirm('Delete this design? This cannot be undone.')) return
     setProjects(prev => prev.filter(p => p.id !== id))
     fetch(`/api/delete-project?id=${id}`, { method: 'DELETE' }).catch(() => {})
+  }
+
+  // Renames right from the card, no need to open the editor - Julia's ask,
+  // 2026-09-15. Not owner-gated (see DesignCard's own comment on this).
+  function handleRename(project) {
+    const current = project.projectName || project.templateName || ''
+    const next = window.prompt('Rename this design', current)?.trim()
+    if (!next || next === current) return
+    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, projectName: next } : p))
+    fetch('/api/rename-project', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: project.id, projectName: next }),
+    }).catch(() => {})
   }
 
   function handleRequestOpen(project) {
@@ -660,6 +690,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                     loading={loadingId === project.id}
                     onOpen={handleRequestOpen}
                     onDelete={handleDelete}
+                    onRename={handleRename}
                     showOwner={personFilter === ALL}
                     canOrganize={!!activation?.key && activation.key === project.ownerEmail}
                     folderOptions={folderOptionsFor(project.ownerEmail)}
@@ -725,6 +756,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                     loading={loadingId === project.id}
                     onOpen={handleRequestOpen}
                     onDelete={handleDelete}
+                    onRename={handleRename}
                     canOrganize={isOwnSpace}
                     folderOptions={folderOptionsFor(project.ownerEmail)}
                     onMove={handleMove}
@@ -749,6 +781,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                   loading={loadingId === project.id}
                   onOpen={handleRequestOpen}
                   onDelete={handleDelete}
+                  onRename={handleRename}
                   canOrganize={isOwnSpace}
                   folderOptions={folderOptionsFor(project.ownerEmail)}
                   onMove={handleMove}
