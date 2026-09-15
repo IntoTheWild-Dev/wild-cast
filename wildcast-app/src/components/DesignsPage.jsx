@@ -46,60 +46,25 @@ function EmptyState({ title, desc }) {
   )
 }
 
-// Shown before any design renders - Julia's ask: search by format + merchant
-// as a popup gate, not just inline filters, now that Designs shows everyone's
-// saved work instead of just whoever's browser it's in. Defaults to "All" on
-// both, so clicking straight through shows everything, same as skipping.
-function FilterPopup({ formatOptions, merchantOptions, dateOptions, onApply }) {
-  const [format, setFormat] = useState(ALL)
-  const [merchant, setMerchant] = useState(ALL)
-  const [date, setDate] = useState(ALL)
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
-        <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--dark)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>Find a design</h3>
-        <p style={{ fontSize: 13, color: 'var(--mid)', margin: '0 0 20px' }}>Narrow it down, or leave on "All" to see everything.</p>
-
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Format</label>
-        <Select
-          value={format}
-          onChange={e => setFormat(e.target.value)}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff', marginBottom: 16 }}
-        >
-          <option value={ALL}>All formats</option>
-          {formatOptions.map(f => <option key={f} value={f}>{f}</option>)}
-        </Select>
-
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Merchant</label>
-        <Select
-          value={merchant}
-          onChange={e => setMerchant(e.target.value)}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff', marginBottom: 16 }}
-        >
-          <option value={ALL}>All merchants</option>
-          {merchantOptions.map(m => <option key={m} value={m}>{m}</option>)}
-        </Select>
-
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>Date saved</label>
-        <Select
-          value={date}
-          onChange={e => setDate(e.target.value)}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', background: '#fff' }}
-        >
-          <option value={ALL}>All dates</option>
-          {dateOptions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-        </Select>
-
-        <button
-          onClick={() => onApply({ format, merchant, date })}
-          style={{ marginTop: 22, width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer' }}
-        >
-          Show designs
-        </button>
-      </div>
-    </div>
-  )
+// Groups merchant strings case-insensitively before listing them as filter
+// options - real saved data has the same merchant typed with different
+// casing (Julia's report, 2026-09-15: "Wen Cheng" designs split across
+// "Wen Cheng"/"WEN CHENG" as separate options, so picking either one only
+// ever showed part of them, reading as if most were missing entirely). Picks
+// the first-seen casing as the display label; doesn't touch the underlying
+// saved `merchant` value, which is still whatever was actually typed for
+// that project (fixing THAT is a separate, deliberate data-cleanup decision,
+// not something to guess at silently here - genuine typos like "WEN CHEN"
+// missing the G are a different string entirely, not a casing difference,
+// and can't be safely auto-merged the same way).
+function groupMerchantsCaseInsensitive(merchants) {
+  const byKey = new Map()
+  for (const m of merchants) {
+    if (!m) continue
+    const key = m.toLowerCase()
+    if (!byKey.has(key)) byKey.set(key, m)
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b))
 }
 
 // Designs are shared across every activation key now, with no ownership
@@ -214,7 +179,12 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const [projects, setProjects] = useState([])
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [loadingId, setLoadingId] = useState(null)
-  const [filters, setFilters] = useState(null) // null = filter popup still showing
+  // Inline filters, always visible - same "Viewing" bar pattern as
+  // LibraryPage.jsx, replacing the old "Find a design" popup gate that used
+  // to block the whole list until submitted (Julia's ask, 2026-09-15).
+  const [formatFilter, setFormatFilter] = useState(ALL)
+  const [merchantFilter, setMerchantFilter] = useState(ALL)
+  const [dateFilter, setDateFilter] = useState(ALL)
   const [nameSearch, setNameSearch] = useState('')
   const [pendingProject, setPendingProject] = useState(null)
   const [pendingBusy, setPendingBusy] = useState(false)
@@ -234,7 +204,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   )
 
   const formatOptions = useMemo(() => [...new Set(enriched.map(p => p.group))].sort(), [enriched])
-  const merchantOptions = useMemo(() => [...new Set(enriched.map(p => p.merchant))].sort(), [enriched])
+  const merchantOptions = useMemo(() => groupMerchantsCaseInsensitive(enriched.map(p => p.merchant)), [enriched])
   const dateOptions = useMemo(() => {
     const byKey = new Map()
     for (const p of enriched) {
@@ -246,19 +216,22 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   }, [enriched])
 
   const filtered = useMemo(() => {
-    if (!filters) return []
     const q = nameSearch.trim().toLowerCase()
+    const merchantKey = merchantFilter === ALL ? null : merchantFilter.toLowerCase()
     return enriched
       .filter(p =>
-        (filters.format === ALL || p.group === filters.format) &&
-        (filters.merchant === ALL || p.merchant === filters.merchant) &&
-        (filters.date === ALL || dayKey(p.savedAt) === filters.date) &&
+        (formatFilter === ALL || p.group === formatFilter) &&
+        // Case-insensitive, matching groupMerchantsCaseInsensitive() above -
+        // the selected option is one specific casing, but real saved
+        // projects for the "same" merchant can have different casing.
+        (merchantKey === null || (p.merchant || '').toLowerCase() === merchantKey) &&
+        (dateFilter === ALL || dayKey(p.savedAt) === dateFilter) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first - the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-  }, [enriched, filters, nameSearch])
+  }, [enriched, formatFilter, merchantFilter, dateFilter, nameSearch])
 
   const grouped = useMemo(() => {
     const byGroup = {}
@@ -302,24 +275,18 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     }
   }
 
-  const activeFilterCount = filters
-    ? [filters.format !== ALL, filters.merchant !== ALL, filters.date !== ALL, !!nameSearch.trim()].filter(Boolean).length
-    : 0
+  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, dateFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
   const activeFilterSummary = activeFilterCount > 0
     ? [
-        filters.format !== ALL ? filters.format : null,
-        filters.merchant !== ALL ? filters.merchant : null,
-        filters.date !== ALL ? dateOptions.find(d => d.key === filters.date)?.label : null,
+        formatFilter !== ALL ? formatFilter : null,
+        merchantFilter !== ALL ? merchantFilter : null,
+        dateFilter !== ALL ? dateOptions.find(d => d.key === dateFilter)?.label : null,
         nameSearch.trim() ? `"${nameSearch.trim()}"` : null,
       ].filter(Boolean).join(' · ')
     : null
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
-      {status === 'ready' && projects.length > 0 && filters === null && (
-        <FilterPopup formatOptions={formatOptions} merchantOptions={merchantOptions} dateOptions={dateOptions} onApply={setFilters} />
-      )}
-
       {pendingProject && (
         <ConfirmOpenModal
           project={pendingProject}
@@ -330,35 +297,58 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         />
       )}
 
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
-            {status === 'loading' && 'Loading designs…'}
-            {status === 'error' && 'Could not load designs - try refreshing the page.'}
-            {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
-            {status === 'ready' && projects.length > 0 && filters && (
-              activeFilterSummary
-                ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
-                : `${projects.length} saved design${projects.length === 1 ? '' : 's'}`
-            )}
-          </p>
-        </div>
-        {status === 'ready' && projects.length > 0 && filters && (
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+      {/* Inline "Viewing" filter bar, same placement/style as LibraryPage.jsx -
+          replaces the old "Find a design" popup that gated the whole list
+          until submitted (Julia's ask, 2026-09-15). */}
+      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
+        <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--mid)' }}>
+          {status === 'loading' && 'Loading designs…'}
+          {status === 'error' && 'Could not load designs - try refreshing the page.'}
+          {status === 'ready' && projects.length === 0 && 'Saved designs will appear here - pick up where anyone left off.'}
+          {status === 'ready' && projects.length > 0 && (
+            activeFilterSummary
+              ? `${filtered.length} of ${projects.length} design${projects.length === 1 ? '' : 's'} · ${activeFilterSummary}`
+              : `${projects.length} saved design${projects.length === 1 ? '' : 's'}`
+          )}
+        </p>
+
+        {status === 'ready' && projects.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Viewing
+            </label>
+            <Select
+              value={formatFilter}
+              onChange={e => setFormatFilter(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+            >
+              <option value={ALL}>All formats</option>
+              {formatOptions.map(f => <option key={f} value={f}>{f}</option>)}
+            </Select>
+            <Select
+              value={merchantFilter}
+              onChange={e => setMerchantFilter(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+            >
+              <option value={ALL}>All merchants</option>
+              {merchantOptions.map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+            <Select
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+            >
+              <option value={ALL}>All dates</option>
+              {dateOptions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </Select>
             <input
               type="text"
               value={nameSearch}
               onChange={e => setNameSearch(e.target.value)}
               placeholder="Search by name…"
-              style={{ fontSize: 13, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', width: 200 }}
+              style={{ marginLeft: 'auto', fontSize: 13, padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff', width: 200 }}
             />
-            <button
-              onClick={() => setFilters(null)}
-              style={{ padding: '8px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', cursor: 'pointer', flexShrink: 0 }}
-            >
-              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-            </button>
           </div>
         )}
       </div>
@@ -367,11 +357,11 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         <EmptyState title="No saved designs yet" desc="Open a template, fill in your content, and click Save - it will appear here." />
       )}
 
-      {status === 'ready' && projects.length > 0 && filters && filtered.length === 0 && (
+      {status === 'ready' && projects.length > 0 && filtered.length === 0 && (
         <EmptyState title="No designs match" desc="Try widening your format or merchant filter, or clearing the name search." />
       )}
 
-      {status === 'ready' && filters && filtered.length > 0 && (
+      {status === 'ready' && filtered.length > 0 && (
         <div style={{ padding: '32px 40px 40px' }}>
           {grouped.map(([group, items]) => (
             <div key={group} style={{ marginBottom: 36 }}>
