@@ -45,7 +45,7 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
       >
         <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--dark)', marginBottom: 6 }}>Sign out?</div>
         <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.6, marginBottom: 20 }}>
-          You'll need your activation key to sign back in.
+          You'll need your activation key or account password to sign back in.
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
