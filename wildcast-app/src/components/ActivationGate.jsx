@@ -1,7 +1,23 @@
 import { useState } from 'react'
 
+// Default export credits given to a self-signed-up individual account - this
+// tier was designed for per-client billing conversations (WILDCAST_KEYS),
+// which doesn't apply to an internal team member's own seat. Generous enough
+// that it never blocks real usage; revisit if that stops being true.
+const ACCOUNT_DEFAULT_CREDITS = 1000
+
 export default function ActivationGate({ onActivated }) {
+  // Two parallel sign-in paths, not one replacing the other - existing
+  // per-client shared keys (WILDCAST_KEYS, e.g. "Wolt DE") keep working
+  // completely unchanged; "Team sign in" is the new per-person path
+  // (api/account-auth.js) for individual seats - Wild Stack's own team plus
+  // the Wolt test group - Julia's ask, 2026-09-15.
+  const [mode, setMode] = useState('key') // 'key' | 'account'
   const [key, setKey] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [needsName, setNeedsName] = useState(false) // first-ever sign-in for this email - ask for a name too
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -30,6 +46,44 @@ export default function ActivationGate({ onActivated }) {
       localStorage.setItem('wildcast_credits', data.total_credits)
       localStorage.setItem('wildcast_role', data.role || 'partner')
       onActivated({ key: trimmed, clientName: data.client_name, credits: data.total_credits, role: data.role || 'partner' })
+    } catch {
+      setError('Could not connect. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAccountSubmit(e) {
+    e.preventDefault()
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) return
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/account-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, password, displayName: displayName.trim() || undefined }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        // First-ever sign-in for this email needs a name before it can
+        // actually create the account - reveal that field instead of just
+        // showing a generic error, so it reads as "one more step," not a failure.
+        if (data.isNewAccount) { setNeedsName(true); setError(''); return }
+        setError(data.error || 'Could not sign in')
+        return
+      }
+
+      localStorage.setItem('wildcast_auth_type', 'account')
+      localStorage.setItem('wildcast_account_email', data.email)
+      localStorage.setItem('wildcast_account_token', data.sessionToken)
+      localStorage.setItem('wildcast_credits', ACCOUNT_DEFAULT_CREDITS)
+      localStorage.setItem('wildcast_role', data.role || 'partner')
+      onActivated({ key: data.email, clientName: data.displayName, credits: ACCOUNT_DEFAULT_CREDITS, role: data.role || 'partner' })
     } catch {
       setError('Could not connect. Please try again.')
     } finally {
@@ -67,61 +121,184 @@ export default function ActivationGate({ onActivated }) {
               Wild Cast
             </h1>
             <p style={{ fontSize: 14, color: 'var(--mid)', lineHeight: 1.5 }}>
-              Print templates for Wolt partners.<br />Enter your activation key to get started.
+              Print templates for Wolt partners.
             </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Activation key
-              </label>
-              <input
-                type="text"
-                value={key}
-                onChange={e => setKey(e.target.value)}
-                placeholder="e.g. WOLT-DE-demo-key"
-                autoFocus
+          {/* Mode toggle - client activation keys (unchanged) vs. individual
+              team sign-in (new, api/account-auth.js) */}
+          <div style={{ display: 'flex', gap: 4, padding: 4, background: '#F3F4F6', borderRadius: 10, marginBottom: 20 }}>
+            {[['key', 'Activation key'], ['account', 'Team sign in']].map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setMode(m); setError(''); setNeedsName(false) }}
                 style={{
-                  width: '100%', padding: '12px 14px',
-                  fontSize: 14, fontFamily: 'inherit',
-                  border: `1.5px solid ${error ? '#EF4444' : 'var(--border)'}`,
-                  borderRadius: 10, background: '#fff', color: 'var(--dark)',
-                  outline: 'none', transition: 'border-color 0.15s',
+                  flex: 1, padding: '9px 0', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: mode === m ? '#fff' : 'transparent',
+                  color: mode === m ? 'var(--dark)' : 'var(--mid)',
+                  boxShadow: mode === m ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  fontFamily: 'inherit', transition: 'all 0.15s',
                 }}
-                onFocus={e => { if (!error) e.target.style.borderColor = 'var(--primary)' }}
-                onBlur={e => { if (!error) e.target.style.borderColor = 'var(--border)' }}
-              />
-            </div>
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-            {error && (
-              <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 13, color: '#B91C1C' }}>
-                {error}
-              </div>
-            )}
+          {mode === 'key' ? (
+            <>
+              {/* Activation key form - unchanged */}
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Activation key
+                  </label>
+                  <input
+                    type="text"
+                    value={key}
+                    onChange={e => setKey(e.target.value)}
+                    placeholder="e.g. WOLT-DE-demo-key"
+                    autoFocus
+                    style={{
+                      width: '100%', padding: '12px 14px',
+                      fontSize: 14, fontFamily: 'inherit',
+                      border: `1.5px solid ${error ? '#EF4444' : 'var(--border)'}`,
+                      borderRadius: 10, background: '#fff', color: 'var(--dark)',
+                      outline: 'none', transition: 'border-color 0.15s',
+                    }}
+                    onFocus={e => { if (!error) e.target.style.borderColor = 'var(--primary)' }}
+                    onBlur={e => { if (!error) e.target.style.borderColor = 'var(--border)' }}
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={loading || !key.trim()}
-              style={{
-                marginTop: 4, padding: '13px', fontSize: 14, fontWeight: 700,
-                background: loading || !key.trim() ? '#E5E7EB' : 'var(--primary)',
-                color: loading || !key.trim() ? 'var(--mid)' : '#fff',
-                border: 'none', borderRadius: 10, cursor: loading || !key.trim() ? 'not-allowed' : 'pointer',
-                transition: 'background 0.15s, transform 0.1s',
-                fontFamily: 'inherit',
-              }}
-              onMouseEnter={e => { if (!loading && key.trim()) e.currentTarget.style.background = 'var(--primary-dark)' }}
-              onMouseLeave={e => { if (!loading && key.trim()) e.currentTarget.style.background = 'var(--primary)' }}
-            >
-              {loading ? 'Validating…' : 'Activate'}
-            </button>
-          </form>
+                {error && (
+                  <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 13, color: '#B91C1C' }}>
+                    {error}
+                  </div>
+                )}
 
-          <p style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: 'var(--light)' }}>
-            Don't have a key? Contact Wild Stack to get access.
-          </p>
+                <button
+                  type="submit"
+                  disabled={loading || !key.trim()}
+                  style={{
+                    marginTop: 4, padding: '13px', fontSize: 14, fontWeight: 700,
+                    background: loading || !key.trim() ? '#E5E7EB' : 'var(--primary)',
+                    color: loading || !key.trim() ? 'var(--mid)' : '#fff',
+                    border: 'none', borderRadius: 10, cursor: loading || !key.trim() ? 'not-allowed' : 'pointer',
+                    transition: 'background 0.15s, transform 0.1s',
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={e => { if (!loading && key.trim()) e.currentTarget.style.background = 'var(--primary-dark)' }}
+                  onMouseLeave={e => { if (!loading && key.trim()) e.currentTarget.style.background = 'var(--primary)' }}
+                >
+                  {loading ? 'Validating…' : 'Activate'}
+                </button>
+              </form>
+
+              <p style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: 'var(--light)' }}>
+                Don't have a key? Contact Wild Stack to get access.
+              </p>
+            </>
+          ) : (
+            <>
+              {/* Team sign-in form - email + password. First-ever sign-in for
+                  an email creates the account right then (see account-auth.js) -
+                  needsName only becomes true once the server's confirmed this
+                  email has never signed in before, so the name field doesn't
+                  show up front for a returning person logging in normally. */}
+              <form onSubmit={handleAccountSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@wildstack.studio"
+                    autoFocus
+                    style={{
+                      width: '100%', padding: '12px 14px',
+                      fontSize: 14, fontFamily: 'inherit',
+                      border: `1.5px solid ${error ? '#EF4444' : 'var(--border)'}`,
+                      borderRadius: 10, background: '#fff', color: 'var(--dark)',
+                      outline: 'none', transition: 'border-color 0.15s',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    style={{
+                      width: '100%', padding: '12px 14px',
+                      fontSize: 14, fontFamily: 'inherit',
+                      border: `1.5px solid ${error ? '#EF4444' : 'var(--border)'}`,
+                      borderRadius: 10, background: '#fff', color: 'var(--dark)',
+                      outline: 'none', transition: 'border-color 0.15s',
+                    }}
+                  />
+                  <p style={{ marginTop: 6, fontSize: 11, color: 'var(--light)' }}>
+                    First time signing in with this email? This password becomes your account's password from now on.
+                  </p>
+                </div>
+
+                {needsName && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Your name
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      placeholder="e.g. Julia Stadler"
+                      autoFocus
+                      style={{
+                        width: '100%', padding: '12px 14px',
+                        fontSize: 14, fontFamily: 'inherit',
+                        border: '1.5px solid var(--primary)',
+                        borderRadius: 10, background: '#fff', color: 'var(--dark)',
+                        outline: 'none',
+                      }}
+                    />
+                    <p style={{ marginTop: 6, fontSize: 11, color: 'var(--mid)' }}>
+                      New here - this email hasn't signed in before. Your name is used to label your own folder in Designs.
+                    </p>
+                  </div>
+                )}
+
+                {error && (
+                  <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 13, color: '#B91C1C' }}>
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || !email.trim() || !password || (needsName && !displayName.trim())}
+                  style={{
+                    marginTop: 4, padding: '13px', fontSize: 14, fontWeight: 700,
+                    background: (loading || !email.trim() || !password || (needsName && !displayName.trim())) ? '#E5E7EB' : 'var(--primary)',
+                    color: (loading || !email.trim() || !password || (needsName && !displayName.trim())) ? 'var(--mid)' : '#fff',
+                    border: 'none', borderRadius: 10,
+                    cursor: (loading || !email.trim() || !password || (needsName && !displayName.trim())) ? 'not-allowed' : 'pointer',
+                    transition: 'background 0.15s, transform 0.1s',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {loading ? 'Signing in…' : needsName ? 'Create account' : 'Sign in'}
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </main>
 

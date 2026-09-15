@@ -257,10 +257,21 @@ export default function App() {
   // key server-side and fill in clientName, but the optimistic value here is
   // what the very first paint uses.
   const [activation, setActivation]           = useState(() => {
-    const savedKey = localStorage.getItem('wildcast_activation_key')
-    if (!savedKey) return null
+    // Two parallel identities can be saved here - a shared activation key
+    // (existing) or an individual account email (new, api/account-auth.js) -
+    // wildcast_auth_type says which one to trust. Both produce the exact
+    // same { key, clientName, credits, role } shape downstream, so nothing
+    // else in the app needs to know or care which path logged someone in.
+    const authType = localStorage.getItem('wildcast_auth_type') || 'key'
     const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
     if (!Number.isFinite(savedCredits)) return null
+    if (authType === 'account') {
+      const savedEmail = localStorage.getItem('wildcast_account_email')
+      if (!savedEmail || !localStorage.getItem('wildcast_account_token')) return null
+      return { key: savedEmail, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
+    }
+    const savedKey = localStorage.getItem('wildcast_activation_key')
+    if (!savedKey) return null
     return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
   })
   const [showHelp, setShowHelp]               = useState(false)
@@ -364,8 +375,48 @@ export default function App() {
     return () => { document.body.style.overflow = '' }
   }, [screen])
 
-  // On mount: restore activation from localStorage (so users don't need to re-enter key on refresh)
+  // On mount: restore activation from localStorage (so users don't need to
+  // re-enter their key/password on refresh) - branches on wildcast_auth_type,
+  // see the useState initializer above for why both paths exist.
   useEffect(() => {
+    const authType = localStorage.getItem('wildcast_auth_type') || 'key'
+
+    if (authType === 'account') {
+      const savedEmail = localStorage.getItem('wildcast_account_email')
+      const savedToken = localStorage.getItem('wildcast_account_token')
+      if (!savedEmail || !savedToken) return
+      fetch('/api/account-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: savedEmail, sessionToken: savedToken }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.valid) {
+            const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
+            const role = data.role || 'partner'
+            localStorage.setItem('wildcast_role', role)
+            setActivation({ key: data.email, clientName: data.displayName, credits: Number.isFinite(savedCredits) ? savedCredits : 1000, role })
+          } else {
+            // Session token no longer matches (e.g. signed in elsewhere,
+            // which overwrites the single stored token - see
+            // account-auth.js) - the optimistic state seeded above was
+            // wrong, drop back to the sign-in gate.
+            localStorage.removeItem('wildcast_auth_type')
+            localStorage.removeItem('wildcast_account_email')
+            localStorage.removeItem('wildcast_account_token')
+            localStorage.removeItem('wildcast_credits')
+            localStorage.removeItem('wildcast_role')
+            setActivation(null)
+          }
+        })
+        .catch(() => {
+          // Network error on restore - optimistic state already running on
+          // cached credits (set synchronously in useState above), nothing to do.
+        })
+      return
+    }
+
     const savedKey = localStorage.getItem('wildcast_activation_key')
     if (!savedKey) return
     fetch('/api/validate-key', {
@@ -398,6 +449,9 @@ export default function App() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // key here is either a shared activation key OR an account email - both
+  // ActivationGate.jsx paths already write the correct wildcast_* localStorage
+  // keys themselves before calling this, this just mirrors that into state.
   function handleActivated({ key, clientName, credits, role }) {
     setActivation({ key, clientName, credits, role: role || 'partner' })
   }

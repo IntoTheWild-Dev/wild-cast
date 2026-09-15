@@ -71,7 +71,14 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
 
   function handleSignOut() {
+    // Clears both possible sign-in paths unconditionally rather than
+    // checking wildcast_auth_type first - removing a key that was never set
+    // is a no-op, so this is simpler and can't drift out of sync with
+    // App.jsx's two restore branches if a third auth path is ever added.
     localStorage.removeItem('wildcast_activation_key')
+    localStorage.removeItem('wildcast_auth_type')
+    localStorage.removeItem('wildcast_account_email')
+    localStorage.removeItem('wildcast_account_token')
     localStorage.removeItem('wildcast_credits')
     localStorage.removeItem('wildcast_role')
     window.location.reload()
