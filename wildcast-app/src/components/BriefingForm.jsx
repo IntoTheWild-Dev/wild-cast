@@ -58,27 +58,35 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
 
       {showTemplateStep && <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={onOpenTemplateModal} />}
 
+      {/* Made much bigger/bolder with a real standalone button (was a small
+          inline text link) - Julia's ask, 2026-09-15: Wild Scale needed to
+          be "in your face," easy to miss at the old size. */}
       <div
         style={{
-          display: 'flex', alignItems: 'flex-start', gap: 10,
-          background: 'var(--primary-glow)', border: '1px solid var(--border)', borderRadius: 12,
-          padding: '14px 16px', marginBottom: 36, maxWidth: 420,
+          background: 'var(--primary-glow)', border: '1.5px solid var(--primary)', borderRadius: 16,
+          padding: '22px 24px', marginBottom: 36, maxWidth: 420,
         }}
       >
-        <span style={{ color: 'var(--primary)', fontSize: 16, lineHeight: '20px' }}>✦</span>
-        <p style={{ fontSize: 13, color: 'var(--dark)', margin: 0, lineHeight: 1.5 }}>
-          <strong>Before you upload:</strong> product photos should be high
-          resolution - use Wild Scale's <strong>Print</strong> preset
-          (2400×2400px) - with the background removed (transparent PNG).{' '}
-          <a
-            href="https://scale.wildstack.studio"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'underline' }}
-          >
-            Prep your assets with Wild Scale →
-          </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ color: 'var(--primary)', fontSize: 20, lineHeight: 1 }}>✦</span>
+          <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)' }}>Before you upload</span>
+        </div>
+        <p style={{ fontSize: 14, color: 'var(--dark)', margin: '0 0 18px', lineHeight: 1.6 }}>
+          Product photos should be high resolution - use Wild Scale's <strong>Print</strong> preset
+          (2400×2400px) - with the background removed (transparent PNG).
         </p>
+        <a
+          href="https://scale.wildstack.studio"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', padding: '16px 20px', fontSize: 16, fontWeight: 800, borderRadius: 12,
+            background: 'var(--primary)', color: '#fff', textDecoration: 'none', boxSizing: 'border-box',
+          }}
+        >
+          Prep your assets with Wild Scale →
+        </a>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
