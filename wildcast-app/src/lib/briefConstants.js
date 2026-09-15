@@ -6,7 +6,10 @@ export const ADD_NEW = '__add_new__'
 
 // Placeholder partner list - no backend wiring yet, this is just so the
 // dropdown feels real while Julia checks the form itself is correct.
-export const PLACEHOLDER_PARTNERS = ['Wen Cheng', 'McD', 'Fressnapf Koblenz', 'AKKO Chicken & Grilled']
+// 'McD' -> "McDonald's" (2026-09-15, Julia's explicit call) - matches the
+// canonical spelling every existing saved design's restaurant_name was just
+// cleaned up to (see STATUS.md's matching entry for the full data fix).
+export const PLACEHOLDER_PARTNERS = ['Wen Cheng', "McDonald's", 'Fressnapf Koblenz', 'AKKO Chicken & Grilled']
 
 export const OBJECTIVES = [
   { value: 'new_opening', label: 'New opening' },
