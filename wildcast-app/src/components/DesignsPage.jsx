@@ -195,6 +195,13 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
         background: '#fff', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
         cursor: loading ? 'default' : 'pointer', transition: 'box-shadow 0.15s, transform 0.15s',
         position: 'relative', opacity: loading ? 0.7 : 1,
+        // Fills the grid row's full height (CSS Grid stretches items by
+        // default) and lays out as a column so the button block below can
+        // be pinned to the bottom - otherwise a short one-line title left
+        // "Continue editing" sitting higher than on a card with a two-line
+        // title/owner-name next to it in the same row (Julia's ask,
+        // 2026-09-15: keep every row's buttons on the same line).
+        display: 'flex', flexDirection: 'column', height: '100%',
       }}
       onMouseEnter={e => {
         if (!loading) {
@@ -219,42 +226,59 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
         )}
       </div>
 
-      <div style={{ padding: '12px 14px 14px' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, wordBreak: 'break-word' }}>{project.projectName || project.templateName}</div>
+      <div style={{ padding: '12px 14px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Single line + ellipsis, not wrap - a long design name used to push
+            everything below it further down than a short one, throwing off
+            row alignment; native title="" gives the same "hover an image to
+            see its full name" behavior Julia asked for, no tooltip component
+            needed. */}
+        <div
+          title={project.projectName || project.templateName}
+          style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+        >
+          {project.projectName || project.templateName}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--mid)' }}>{project.merchant} · Saved {formatDate(project.savedAt)}</div>
         {showOwner && project.ownerName && (
           <div style={{ fontSize: 10, color: 'var(--light)', marginTop: 2 }}>by {project.ownerName}</div>
         )}
-        <button
-          style={{ marginTop: 12, width: '100%', padding: '8px', fontSize: 12, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'var(--primary)'}
-          onClick={e => { e.stopPropagation(); onOpen(project) }}
-        >
-          {loading ? 'Opening…' : 'Continue editing'}
-        </button>
 
-        {canOrganize && (
-          <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
-            <Select
-              value={project.folder || ''}
-              onChange={e => {
-                const v = e.target.value
-                if (v === NEW_FOLDER) {
-                  const name = window.prompt('New folder name')?.trim()
-                  if (name) onMove(project, name)
-                } else {
-                  onMove(project, v || null)
-                }
-              }}
-              style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', width: '100%' }}
-            >
-              <option value="">Unsorted</option>
-              {folderOptions.map(f => <option key={f} value={f}>{f}</option>)}
-              <option value={NEW_FOLDER}>+ New folder…</option>
-            </Select>
-          </div>
-        )}
+        {/* Pinned to the card's bottom (marginTop: auto, inside the flex
+            column above) regardless of how many lines the content above
+            took - this is what actually keeps every "Continue editing"
+            button on the same line across a row. */}
+        <div style={{ marginTop: 'auto', paddingTop: 12 }}>
+          <button
+            style={{ width: '100%', padding: '8px', fontSize: 12, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--primary)'}
+            onClick={e => { e.stopPropagation(); onOpen(project) }}
+          >
+            {loading ? 'Opening…' : 'Continue editing'}
+          </button>
+
+          {canOrganize && (
+            <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+              <Select
+                value={project.folder || ''}
+                onChange={e => {
+                  const v = e.target.value
+                  if (v === NEW_FOLDER) {
+                    const name = window.prompt('New folder name')?.trim()
+                    if (name) onMove(project, name)
+                  } else {
+                    onMove(project, v || null)
+                  }
+                }}
+                style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', width: '100%' }}
+              >
+                <option value="">Unsorted</option>
+                {folderOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                <option value={NEW_FOLDER}>+ New folder…</option>
+              </Select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Always visible, not hover-revealed - hover has no touch-device
