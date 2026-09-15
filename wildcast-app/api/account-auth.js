@@ -19,8 +19,7 @@
 // Wild Stack domain self-provisions full access, no manual step needed.
 import { list, put } from '@vercel/blob'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
-
-const WILD_STACK_DOMAIN = 'wildstack.studio'
+import { WILD_STACK_DOMAIN, SEAT_CAP, countPartnerSeats } from './_lib/accounts.js'
 
 function accountPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
@@ -92,6 +91,18 @@ export default async function handler(req, res) {
       }
       const domain = trimmedEmail.split('@')[1] || ''
       const role = domain === WILD_STACK_DOMAIN ? 'agency' : 'partner'
+
+      // Wolt test group is hard-capped at 5 seats - wildstack.studio is
+      // exempt (global/uncapped, per Julia's "more global for our team").
+      // Checked only for a brand-new partner signup, never on login, so the
+      // 5 people who already signed up keep working after the cap is hit.
+      if (role === 'partner') {
+        const used = await countPartnerSeats()
+        if (used >= SEAT_CAP) {
+          return res.status(403).json({ error: `All ${SEAT_CAP} team seats are taken. Contact Wild Stack for access.` })
+        }
+      }
+
       const { salt, hash } = hashPassword(password)
       const account = {
         email: trimmedEmail,

@@ -154,7 +154,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
                 color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
                 border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
               }}>
-                {activation.credits} credit{activation.credits !== 1 ? 's' : ''}
+                {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''}
               </span>
               <button
                 onClick={() => setShowSignOutConfirm(true)}

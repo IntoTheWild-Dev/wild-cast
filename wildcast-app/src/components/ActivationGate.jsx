@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-// Default export credits given to a self-signed-up individual account - this
-// tier was designed for per-client billing conversations (WILDCAST_KEYS),
-// which doesn't apply to an internal team member's own seat. Generous enough
-// that it never blocks real usage; revisit if that stops being true.
-const ACCOUNT_DEFAULT_CREDITS = 1000
+// Default AI credits given to a self-signed-up individual account - only AI
+// Suggest/Improve usage spends these now, PDF export is free (Julia's ask,
+// 2026-09-15: replace the old per-export credit system with an AI-usage-only
+// one starting at 100).
+const ACCOUNT_DEFAULT_CREDITS = 100
 
 export default function ActivationGate({ onActivated }) {
   // Two parallel sign-in paths, not one replacing the other - existing
@@ -20,6 +20,21 @@ export default function ActivationGate({ onActivated }) {
   const [needsName, setNeedsName] = useState(false) // first-ever sign-in for this email - ask for a name too
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Wolt test group's 5-seat cap - fetched fresh whenever the "Team sign in"
+  // tab is shown so someone can see availability before trying to sign up.
+  // null while loading/unknown; the seat cap itself is enforced server-side
+  // (api/account-auth.js) regardless of whether this fetch succeeds.
+  const [seats, setSeats] = useState(null)
+
+  useEffect(() => {
+    if (mode !== 'account') return
+    let cancelled = false
+    fetch('/api/account-seats')
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setSeats(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [mode])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -207,6 +222,19 @@ export default function ActivationGate({ onActivated }) {
                   needsName only becomes true once the server's confirmed this
                   email has never signed in before, so the name field doesn't
                   show up front for a returning person logging in normally. */}
+              {seats && (
+                <div style={{
+                  marginBottom: 14, padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: 'center',
+                  background: seats.remaining <= 0 ? '#FEF2F2' : '#F3F4F6',
+                  color: seats.remaining <= 0 ? '#B91C1C' : 'var(--mid)',
+                  border: `1px solid ${seats.remaining <= 0 ? '#FECACA' : 'var(--border)'}`,
+                }}>
+                  {seats.remaining <= 0
+                    ? `All ${seats.total} team seats are taken`
+                    : `${seats.remaining} of ${seats.total} team seats available`}
+                </div>
+              )}
+
               <form onSubmit={handleAccountSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>

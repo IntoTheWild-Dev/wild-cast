@@ -396,7 +396,7 @@ export default function App() {
             const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
             const role = data.role || 'partner'
             localStorage.setItem('wildcast_role', role)
-            setActivation({ key: data.email, clientName: data.displayName, credits: Number.isFinite(savedCredits) ? savedCredits : 1000, role })
+            setActivation({ key: data.email, clientName: data.displayName, credits: Number.isFinite(savedCredits) ? savedCredits : 100, role })
           } else {
             // Session token no longer matches (e.g. signed in elsewhere,
             // which overwrites the single stored token - see
@@ -823,10 +823,6 @@ export default function App() {
       alert('Canvas not ready - please wait a moment and try again.')
       return
     }
-    if (activation && activation.credits <= 0) {
-      alert('You have no export credits remaining. Contact Wild Stack to get more.')
-      return
-    }
     setExporting(true)
     try {
       const png = exportRef.current.getPng()
@@ -851,12 +847,9 @@ export default function App() {
       a.click()
       URL.revokeObjectURL(url)
 
-      // Decrement credit after successful export
-      if (activation) {
-        const newCredits = Math.max(0, activation.credits - 1)
-        setActivation(prev => ({ ...prev, credits: newCredits }))
-        localStorage.setItem('wildcast_credits', newCredits)
-      }
+      // PDF export is free - only AI feature usage costs credits now, see
+      // handleAiCreditUsed (Julia's ask, 2026-09-15: replace the old
+      // per-export credit system with an AI-usage-only one).
       offerMoreFormats()
     } catch (err) {
       console.error('Export error:', err)
@@ -866,9 +859,10 @@ export default function App() {
     }
   }
 
-  // Same decrement pattern as handleExport's credit deduction - each AI
-  // Suggest generation is a real Claude API call we pay for, so it costs
-  // a credit too. AISuggest.jsx gates the actual confirmation/blocking.
+  // AI credits - the only thing that costs a credit now (PDF export is
+  // free, see handleExport). Each AI Suggest/Improve generation is a real
+  // Claude API call we pay for. AISuggest.jsx gates the actual
+  // confirmation/blocking.
   function handleAiCreditUsed() {
     if (!activation) return
     const newCredits = Math.max(0, activation.credits - 1)
@@ -1329,7 +1323,7 @@ export default function App() {
               <div style={{ flex: 1 }} />
               {activation && (
                 <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)' }}>
-                  {activation.credits} export{activation.credits !== 1 ? 's' : ''} remaining
+                  {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''} remaining
                 </span>
               )}
               <button
