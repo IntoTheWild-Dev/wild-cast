@@ -813,14 +813,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             >
               {exporting ? 'Exporting…' : 'Export PDF'}
             </button>
-            {/* Cost surfaced before clicking, not just implied by the credits
-                pill up in the breadcrumb (checklist i6, 2026-09-08) - AI
-                Suggest already states its own cost the same way. */}
-            {credits != null && (
-              <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center', marginTop: -4 }}>
-                Uses 1 export credit — {credits} remaining
-              </div>
-            )}
           </>
         )}
 
