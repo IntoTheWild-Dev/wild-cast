@@ -70,7 +70,13 @@ export default function LandingPage({ onNavigate }) {
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
+        {/* alignItems: 'center' (not 'start') - the right column's 3 choice
+            cards are much shorter than the left column's hero copy + tip box
+            + feature list, so top-aligning them left them pinned high with a
+            lot of empty space underneath, sitting above where the eye
+            naturally lands. Centering shifts them down to the left column's
+            vertical middle instead (Julia's ask, 2026-09-15). */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'center' }}>
 
           <HeroColumn showTemplateStep={false} />
 
