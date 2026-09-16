@@ -713,6 +713,10 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
             align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
             onResetPosition={() => onResetZone?.('tc')}
+            // Was missing this even though headline/sub_headline/offer all
+            // already had it - Julia's ask, 2026-09-16, to make Position
+            // nudge available on T&Cs too in guided mode, same as the others.
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('tc', axis, delta) : undefined}
           />
         )}
         {templateConfig?.zones?.some(z => z.id === 'cta') && (
