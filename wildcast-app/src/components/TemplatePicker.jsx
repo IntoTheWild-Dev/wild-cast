@@ -793,7 +793,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
                   rel="noreferrer"
                   style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'underline' }}
                 >
-                  Prep your assets with Wild Scale →
+                  Prep your assets with WildScale →
                 </a>
               </p>
             </div>

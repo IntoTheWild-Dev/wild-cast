@@ -85,7 +85,7 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
             background: 'var(--primary)', color: '#fff', textDecoration: 'none', boxSizing: 'border-box',
           }}
         >
-          Prep your assets with Wild Scale →
+          Prep your assets with WildScale →
         </a>
       </div>
 
