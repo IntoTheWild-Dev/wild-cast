@@ -254,7 +254,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', textAlign: 'center' }}>
             <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Out of AI credits</div>
             <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
-              You've used all your AI credits. Contact Wild Stack to get more.
+              Contact Wild Stack to top up.
             </div>
             <button
               onClick={() => setShowOutOfCredits(false)}
