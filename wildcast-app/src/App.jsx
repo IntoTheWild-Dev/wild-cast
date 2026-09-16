@@ -1333,13 +1333,13 @@ export default function App() {
 
       {screen === 'designs' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} activation={activation} />
+          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} activation={activation} onBack={() => setScreen('landing')} />
         </div>
       )}
 
       {screen === 'library' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <LibraryPage />
+          <LibraryPage onBack={() => setScreen('landing')} />
         </div>
       )}
 

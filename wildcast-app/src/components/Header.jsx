@@ -127,8 +127,8 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             'new-brief'
           )}
           {navItem('Templates', 'catalogue')}
-          {navItem('Designs', 'designs')}
-          {navItem('Library', 'library')}
+          {navItem('Design library', 'designs')}
+          {navItem('Assets', 'library')}
           {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
               role:'designer' (client-facing test keys) sees it greyed out with
               a Coming Soon popup - everything else designer-tier stays the

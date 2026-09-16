@@ -29,7 +29,7 @@ const CHOICES = [
   },
   {
     key: 'designs',
-    title: 'See design library',
+    title: 'See Design library',
     desc: 'Look through designs already made - yours and everyone else on the team.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

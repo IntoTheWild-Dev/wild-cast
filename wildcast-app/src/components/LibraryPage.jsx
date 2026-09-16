@@ -324,7 +324,7 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
   )
 }
 
-export default function LibraryPage() {
+export default function LibraryPage({ onBack }) {
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
   const [merchant, setMerchant] = useState(() => localStorage.getItem(LAST_MERCHANT_KEY) || GENERAL_MERCHANT)
@@ -387,7 +387,20 @@ export default function LibraryPage() {
 
       {/* Page header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Library</h1>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Assets</h1>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+            >
+              ← Back
+            </button>
+          )}
+        </div>
         <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--mid)' }}>
           {loading ? 'Loading…' : assets.length === 0
             ? 'Your uploaded logos and photos, ready to reuse across designs.'

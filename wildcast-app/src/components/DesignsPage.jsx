@@ -11,13 +11,6 @@ function formatDate(ts) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// Calendar-day key (not the raw timestamp) so two designs saved on the same
-// day but at different times of day still count as one "date" filter option.
-function dayKey(ts) {
-  const d = new Date(ts)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-}
-
 // Merges the static template cards with any Figma-imported ones into one
 // id -> {cat, format} lookup - both arrays already carry these fields per
 // card (see src/data/templates.js and customTemplateCards() in
@@ -383,7 +376,7 @@ function FolderCard({ name, count, onOpen }) {
 // call, 2026-09-15: everyone can BROWSE every folder, but a folder is still
 // personal to whoever's filing things into it), and stamping who's creating
 // a new folder.
-export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [], activation }) {
+export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [], activation, onBack }) {
   const [projects, setProjects] = useState([])
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [loadingId, setLoadingId] = useState(null)
@@ -392,7 +385,6 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   // to block the whole list until submitted (Julia's ask, 2026-09-15).
   const [formatFilter, setFormatFilter] = useState(ALL)
   const [merchantFilter, setMerchantFilter] = useState(ALL)
-  const [dateFilter, setDateFilter] = useState(ALL)
   const [personFilter, setPersonFilter] = useState(ALL)
   const [nameSearch, setNameSearch] = useState('')
   const [pendingProject, setPendingProject] = useState(null)
@@ -429,15 +421,6 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const formatOptions = useMemo(() => [...new Set(enriched.map(p => p.group))].sort(), [enriched])
   const merchantGroups = useMemo(() => groupMerchantsFuzzy(enriched.map(p => p.merchant)), [enriched])
   const merchantOptions = merchantGroups.options
-  const dateOptions = useMemo(() => {
-    const byKey = new Map()
-    for (const p of enriched) {
-      if (!p.savedAt) continue
-      const key = dayKey(p.savedAt)
-      if (!byKey.has(key)) byKey.set(key, { key, label: formatDate(p.savedAt), ts: p.savedAt })
-    }
-    return [...byKey.values()].sort((a, b) => b.ts - a.ts)
-  }, [enriched])
 
   const filtered = useMemo(() => {
     const q = nameSearch.trim().toLowerCase()
@@ -449,14 +432,13 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         // specific spelling, but real saved projects for the "same" merchant
         // can be typed with different casing or a small typo.
         (merchantFilter === ALL || merchantGroups.canonicalOf.get(p.merchant) === merchantFilter) &&
-        (dateFilter === ALL || dayKey(p.savedAt) === dateFilter) &&
         (personFilter === ALL || p.ownerEmail === personFilter) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first - the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-  }, [enriched, formatFilter, merchantFilter, merchantGroups, dateFilter, personFilter, nameSearch])
+  }, [enriched, formatFilter, merchantFilter, merchantGroups, personFilter, nameSearch])
 
   const grouped = useMemo(() => {
     const byGroup = {}
@@ -553,12 +535,11 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     return [...(people.find(p => p.ownerEmail === ownerEmail)?.folderSet ?? [])].sort((a, b) => a.localeCompare(b))
   }
 
-  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, dateFilter !== ALL, personFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
+  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, personFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
   const activeFilterSummary = activeFilterCount > 0
     ? [
         formatFilter !== ALL ? formatFilter : null,
         merchantFilter !== ALL ? merchantFilter : null,
-        dateFilter !== ALL ? dateOptions.find(d => d.key === dateFilter)?.label : null,
         personFilter !== ALL ? people.find(p => p.ownerEmail === personFilter)?.ownerName : null,
         nameSearch.trim() ? `"${nameSearch.trim()}"` : null,
       ].filter(Boolean).join(' · ')
@@ -574,7 +555,10 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   // to the Viewing filter bar it sits above - Julia's report, 2026-09-15:
   // "its a bit hidden now".
   const viewToggle = (
-    <div style={{ display: 'flex', gap: 4, padding: 4, background: '#F3F4F6', borderRadius: 10, border: '1.5px solid var(--primary)' }}>
+    // width: 'fit-content' - a flex div is block-level by default, so
+    // without this it stretched to the full width of its container (Julia's
+    // report, 2026-09-16: "shorten this box to bound the buttons").
+    <div style={{ display: 'flex', gap: 4, padding: 4, background: '#F3F4F6', borderRadius: 10, border: '1.5px solid var(--primary)', width: 'fit-content' }}>
       {[['all', 'All designs'], ['folders', 'Folders']].map(([m, label]) => (
         <button
           key={m}
@@ -610,8 +594,21 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
           replaces the old "Find a design" popup that gated the whole list
           until submitted (Julia's ask, 2026-09-15). */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+            >
+              ← Back
+            </button>
+          )}
+        </div>
+        <div>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)' }}>
             {status === 'loading' && 'Loading designs…'}
             {status === 'error' && 'Could not load designs - try refreshing the page.'}
@@ -651,14 +648,6 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
             >
               <option value={ALL}>All merchants</option>
               {merchantOptions.map(m => <option key={m} value={m}>{m}</option>)}
-            </Select>
-            <Select
-              value={dateFilter}
-              onChange={e => setDateFilter(e.target.value)}
-              style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
-            >
-              <option value={ALL}>All dates</option>
-              {dateOptions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
             </Select>
             <Select
               value={personFilter}
