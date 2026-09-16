@@ -107,20 +107,6 @@ export default function TemplatePreviewModal({ selectedId, onPick, onClose, cust
               </div>
             </div>
           ))}
-
-          {/* Coming soon groups - visible so partners know more is on the way,
-              matching the same "coming soon" pattern used in TemplatePicker.jsx's
-              catalogue view. */}
-          {['Posters', 'Wild Posters'].map(label => (
-            <div key={label} style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--light)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                {label} - coming soon
-              </div>
-              <div style={{ height: 100, borderRadius: 12, border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--light)', fontSize: 12, fontWeight: 700 }}>
-                Coming soon
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
