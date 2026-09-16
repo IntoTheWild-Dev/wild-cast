@@ -595,7 +595,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
           until submitted (Julia's ask, 2026-09-15). */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Designs</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Design library</h1>
           {onBack && (
             <button
               type="button"
