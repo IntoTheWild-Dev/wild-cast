@@ -25,7 +25,7 @@ const WEN_CHENG_ZONES = [
     width: 296, height: 30,
     fontSize: 20,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -37,7 +37,7 @@ const WEN_CHENG_ZONES = [
     width: 296, height: 52,
     fontSize: 50,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -49,7 +49,7 @@ const WEN_CHENG_ZONES = [
     width: 200, height: 50,
     fontSize: 36,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -72,9 +72,19 @@ const WEN_CHENG_ZONES = [
 
 // ── Option A V3 - real bleed master via scripts/import-figma-template.js ───
 // Source: Figma node 4859:24 ("FINAL - A6 Bleed Master, Template A"). Position
-// math is script-derived (not hand pixel-scanned); fontFamily/fontWeight
-// forced to 'omnes-cond'/700 since only that weight is Typekit-loaded (script
-// read the Figma file's real "Omnes Cond"/900, which isn't available to load).
+// math is script-derived (not hand pixel-scanned); fontWeight was originally
+// forced to 700 here (and on every other omnes-cond text zone in this file)
+// because only that weight was Typekit-loaded at import time - the Figma
+// source's real weight, 900 (WOLTCondBlack), wasn't registered yet. That's
+// been fixed since 2026-09-11 (see index.css/TemplateCanvas.jsx) but nothing
+// ever went back and updated these zone weights to match - every PDF export
+// was quietly using Bold instead of the correct Black face, reading visibly
+// thinner/more condensed than the real InDesign master (Julia's report,
+// 2026-09-16, caught by comparing the two PDFs directly). Fixed: every
+// omnes-cond zone across this file (headline/sub_headline/offer/
+// restaurant_name) is now 900, matching what the Figma source actually
+// specifies. omnes-pro zones (tc, cta) are a different font/weight and were
+// never affected.
 // sub_headline/headline/offer positions come from their dedicated (non-
 // overlapping) guide rectangles, not the raw text nodes - the text nodes'
 // own bounding boxes overlapped each other by 15-23px since they reflect
@@ -96,7 +106,7 @@ const WEN_CHENG_V3_ZONES = [
     width: 300.54, height: 36.09,
     fontSize: 38.78,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -108,7 +118,7 @@ const WEN_CHENG_V3_ZONES = [
     width: 300.54, height: 40.46,
     fontSize: 56.6,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -120,7 +130,7 @@ const WEN_CHENG_V3_ZONES = [
     width: 216.45, height: 27.35,
     fontSize: 31.45,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
@@ -183,7 +193,7 @@ const WEN_CHENG_V3_ZONES = [
     width: 174.3, height: 29.12,
     fontSize: 20.96,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'right',
     autoShrink: true,
@@ -224,7 +234,7 @@ const OPT_B_ZONES = [
     width: 300.54, height: 45.86,
     fontSize: 60.8,
     fontFamily: 'omnes-cond',
-    fontWeight: 700,
+    fontWeight: 900,
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
