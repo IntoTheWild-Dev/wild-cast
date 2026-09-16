@@ -1,6 +1,4 @@
-import { CANDIDATE_TEMPLATE_IDS } from '../lib/briefToCandidates'
-
-const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
+import { BASE_TEMPLATES, overlayCustomCards, deriveGroups } from './TemplatePicker'
 
 // Lets a partner pick which design they want BEFORE filling out the brief -
 // this is now the mandatory first step of the whole flow (Julia's ask,
@@ -13,34 +11,29 @@ const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
 // Picking here pre-fills the "Formats needed"/"Business type" answers (see
 // BriefingForm.jsx's pickTemplate) and IS what the rest of the flow uses to
 // skip straight to the "Choose your mode" popup after the brief is
-// submitted (App.jsx's onSubmitted) - Julia's fix request (2026-08-20) that
-// picking just Option A here shouldn't still generate both candidates
-// applies even more directly now that there's no candidate-generation step
-// left at all.
+// submitted (App.jsx's onSubmitted, via entryForGuidedId) - so every option
+// offered here must carry a real templateIdGuided that resolves there.
 //
-// Option ids are the REAL candidate template ids (not arbitrary strings) so
-// this ties directly into that generation step with no extra mapping layer.
-// Thumbs match the ones already used on the "Templates" nav page
-// (TemplatePicker.jsx's BASE_TEMPLATES) for consistency - same source
-// images, not a separate set. Tile aspect ratio matches their real 1191x1679
-// px size exactly, so the full flyer shows uncropped.
-const GROUPS = [
-  {
-    format: 'flyer',
-    businessType: 'Restaurant',
-    label: 'Restaurant Flyers',
-    options: [
-      { id: OPTION_A_ID, name: 'Option A', thumb: '/templates/preview_opt-a.png' },
-      { id: OPTION_B_ID, name: 'Option B', thumb: '/templates/preview_opt-b.png' },
-    ],
-  },
-]
+// Groups/options used to be a hardcoded list of just Option A/B - Julia's
+// report, 2026-09-16: Option C (already live and shown correctly on the
+// Templates catalogue page) never appeared here, and any future Figma
+// import would need this file manually updated too. Now built the same way
+// TemplatePicker.jsx's own catalogue is: overlayCustomCards() +
+// deriveGroups() over BASE_TEMPLATES, filtered to live members only - a new
+// import shows up here automatically the moment it goes live, no code
+// change needed.
+function groupLabel(category, format) {
+  const cap = category.charAt(0).toUpperCase() + category.slice(1)
+  // "Flyer" -> "Flyers" etc. - plural section heading, matching the
+  // original hand-written "Restaurant Flyers" label.
+  return `${cap} ${format}${format.endsWith('s') ? '' : 's'}`
+}
 
 function OptionCard({ option, selected, onPick }) {
   return (
     <button
       type="button"
-      onClick={() => onPick(option.id)}
+      onClick={() => onPick(option.templateIdGuided)}
       style={{
         position: 'relative', textAlign: 'left', cursor: 'pointer', padding: 0,
         borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)',
@@ -55,9 +48,9 @@ function OptionCard({ option, selected, onPick }) {
         </div>
       )}
       <div style={{ aspectRatio: '1191 / 1679', background: '#F3F4F6' }}>
-        <img src={option.thumb} alt={option.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img src={option.thumb} alt={option.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
-      <div style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{option.name}</div>
+      <div style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{option.label.split(' · ').pop()}</div>
     </button>
   )
 }
@@ -65,7 +58,10 @@ function OptionCard({ option, selected, onPick }) {
 // Renders as position:fixed against the viewport so it's centered on the
 // whole page (and can be wide enough to avoid the grid scrolling), not just
 // the form column it's triggered from.
-export default function TemplatePreviewModal({ selectedId, onPick, onClose }) {
+export default function TemplatePreviewModal({ selectedId, onPick, onClose, customCards = [], customRecords = [] }) {
+  const allTemplates = overlayCustomCards(BASE_TEMPLATES, customCards, customRecords)
+  const groups = deriveGroups(allTemplates).filter(g => g.liveCount > 0)
+
   return (
     <div
       onClick={onClose}
@@ -99,14 +95,14 @@ export default function TemplatePreviewModal({ selectedId, onPick, onClose }) {
             Pick the design you'd like to start with.
           </p>
 
-          {GROUPS.map(group => (
-            <div key={group.format} style={{ marginBottom: 24 }}>
+          {groups.map(group => (
+            <div key={group.key} style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                {group.label}
+                {groupLabel(group.category, group.format)}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
-                {group.options.map(opt => (
-                  <OptionCard key={opt.id} option={opt} selected={selectedId === opt.id} onPick={onPick} />
+                {group.members.filter(m => m.live).map(member => (
+                  <OptionCard key={member.templateIdGuided} option={member} selected={selectedId === member.templateIdGuided} onPick={onPick} />
                 ))}
               </div>
             </div>
@@ -130,5 +126,3 @@ export default function TemplatePreviewModal({ selectedId, onPick, onClose }) {
     </div>
   )
 }
-
-export { GROUPS as TEMPLATE_PREVIEW_GROUPS }

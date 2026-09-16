@@ -4,8 +4,8 @@ import Select from './Select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
-import { liveFormatsFor } from './TemplatePicker'
-import TemplatePreviewModal, { TEMPLATE_PREVIEW_GROUPS } from './TemplatePreviewModal'
+import { liveFormatsFor, entryForGuidedId } from './TemplatePicker'
+import TemplatePreviewModal from './TemplatePreviewModal'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -121,11 +121,11 @@ function TemplatePickStep({ pickedOption, onOpenTemplateModal }) {
       {pickedOption ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <img
-            src={pickedOption.thumb} alt={pickedOption.name}
+            src={pickedOption.thumb} alt={pickedOption.label}
             style={{ width: 52, height: 73, objectFit: 'cover', borderRadius: 8, border: '1.5px solid var(--primary)', flexShrink: 0 }}
           />
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{pickedOption.name} selected</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{pickedOption.label.split(' · ').pop()} selected</div>
             <button
               type="button"
               onClick={onOpenTemplateModal}
@@ -251,8 +251,11 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
   }
 
   const pickedTemplateId = brief.preSelectedTemplateIds[0] ?? null
+  // Same overlay resolution TemplatePreviewModal itself uses, so whatever's
+  // pickable there (including a freshly-imported template) resolves here
+  // too - no separate hardcoded list to keep in sync.
   const pickedOption = pickedTemplateId
-    ? TEMPLATE_PREVIEW_GROUPS.flatMap(g => g.options).find(o => o.id === pickedTemplateId) ?? null
+    ? entryForGuidedId(pickedTemplateId, customCards, customRecords)
     : null
 
   const partnerFilled = brief.partner === ADD_NEW ? brief.partnerNew.trim().length > 0 : brief.partner.length > 0
@@ -398,6 +401,8 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
           selectedId={pickedTemplateId}
           onPick={pickTemplate}
           onClose={() => setShowTemplateModal(false)}
+          customCards={customCards}
+          customRecords={customRecords}
         />
       )}
     </div>

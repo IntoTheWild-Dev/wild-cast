@@ -76,7 +76,7 @@ export const BASE_TEMPLATES = [
 // slot's underlying data, only whether it's shown. Matched by exact label +
 // category + format - the designer picks the target slot by label when
 // importing, so this only needs a direct match, not fuzzy logic.
-function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
+export function overlayCustomCards(baseTemplates, customCards, customRecords = []) {
   return baseTemplates.map(slot => {
     if (slot.live) {
       const override = customRecords.find(r => r.slotKey === slotKeyFor(slot.label) && r.isOverrideOnly)
@@ -118,7 +118,7 @@ export function entryForGuidedId(templateId, customCards = [], customRecords = [
 }
 
 // Derive unique groups from a templates array, preserving order.
-function deriveGroups(templates) {
+export function deriveGroups(templates) {
   const seen = new Set()
   const groups = []
   for (const t of templates) {
