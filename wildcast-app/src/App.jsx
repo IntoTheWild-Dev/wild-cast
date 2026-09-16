@@ -1520,10 +1520,13 @@ export default function App() {
       {/* Help modal */}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
+      {/* Matches WildScale's own footer exactly (Julia's ask, 2026-09-16) -
+          scale.wildstack.studio's footer is a single centered copyright
+          line: max-w-6xl (1152px) mx-auto, px-6 py-6 (24px), text-xs
+          (12px), text-gray-400 (var(--light), same hex), text-center. */}
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'var(--mid)', fontSize: 13 }}>
-          <span style={{ whiteSpace: 'nowrap' }}>WildCast - Print Templates in Minutes.</span>
-          <span style={{ whiteSpace: 'nowrap' }}>Built by Wild Stack</span>
+        <div style={{ maxWidth: 1152, margin: '0 auto', padding: 24, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
+          © {new Date().getFullYear()} Wildstack Studio
         </div>
       </footer>
     </div>
