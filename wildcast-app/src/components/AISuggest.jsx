@@ -32,6 +32,9 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   // language - capped at one extra round per open, so at most 2 credits
   // (initial + one more) can be spent per language per generation.
   const [moreUsed, setMoreUsed] = useState({})
+  // A real notification box instead of a plain alert() - matching
+  // WildScale's own out-of-credits notice (Julia's ask, 2026-09-16).
+  const [showOutOfCredits, setShowOutOfCredits] = useState(false)
 
   const activeLang = dropLang
   const suggestions = byLang[activeLang] ?? []
@@ -82,7 +85,7 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   // fetch happens, so no confirmation needed to reopen it).
   function canGenerate(kind = 'initial') {
     if (credits != null && credits <= 0) {
-      alert('You have no credits remaining for AI suggestions. Contact Wild Stack to get more.')
+      setShowOutOfCredits(true)
       return false
     }
     const message = kind === 'more'
@@ -244,6 +247,23 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
             </div>
           </div>
         </>
+      )}
+
+      {showOutOfCredits && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setShowOutOfCredits(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+            <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Out of AI credits</div>
+            <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
+              You've used all your AI credits. Contact Wild Stack to get more.
+            </div>
+            <button
+              onClick={() => setShowOutOfCredits(false)}
+              style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
       )}
     </>
   )

@@ -80,7 +80,7 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
           rel="noreferrer"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', padding: '16px 20px', fontSize: 16, fontWeight: 800, borderRadius: 12,
+            width: '100%', padding: '16px 20px', fontSize: 16, fontWeight: 400, borderRadius: 12,
             background: 'var(--primary)', color: '#fff', textDecoration: 'none', boxSizing: 'border-box',
           }}
         >
