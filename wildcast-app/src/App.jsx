@@ -1408,7 +1408,10 @@ export default function App() {
               )}
               <div style={{ flex: 1 }} />
               {activation && (
-                <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)' }}>
+                <span
+                  title="AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them."
+                  style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'help' }}
+                >
                   {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''} remaining
                 </span>
               )}
@@ -1519,7 +1522,7 @@ export default function App() {
 
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'var(--mid)', fontSize: 13 }}>
-          <span style={{ whiteSpace: 'nowrap' }}>WildCast - Print templates for Wolt partners.</span>
+          <span style={{ whiteSpace: 'nowrap' }}>WildCast - Print Templates in Minutes.</span>
           <span style={{ whiteSpace: 'nowrap' }}>Built by Wild Stack</span>
         </div>
       </footer>

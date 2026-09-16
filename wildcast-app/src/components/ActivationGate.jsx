@@ -136,7 +136,7 @@ export default function ActivationGate({ onActivated }) {
               Wild Cast
             </h1>
             <p style={{ fontSize: 14, color: 'var(--mid)', lineHeight: 1.5 }}>
-              Print templates for Wolt partners.
+              Print Templates in Minutes.
             </p>
           </div>
 
@@ -333,7 +333,7 @@ export default function ActivationGate({ onActivated }) {
       {/* Footer */}
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 32px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 16px', color: 'var(--mid)', fontSize: 12 }}>
-          <span style={{ whiteSpace: 'nowrap' }}>Wild Cast - Print templates for Wolt partners.</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Wild Cast - Print Templates in Minutes.</span>
           <span style={{ whiteSpace: 'nowrap' }}>Built by Wild Stack</span>
         </div>
       </footer>

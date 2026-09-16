@@ -148,12 +148,15 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
               <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
                 {/* {activation.clientName} */}
               </span>
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
-                background: activation.credits <= 5 ? 'rgba(239,68,68,0.1)' : 'rgba(2,6,24,0.06)',
-                color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
-                border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-              }}>
+              <span
+                title="AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them."
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
+                  background: activation.credits <= 5 ? 'rgba(239,68,68,0.1)' : 'rgba(2,6,24,0.06)',
+                  color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
+                  border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+                  cursor: 'help',
+                }}>
                 {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''}
               </span>
               <button

@@ -48,7 +48,6 @@ const FEATURES = [
 export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep = true }) {
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Wolt Partner Tools</div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
         We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
       </h1>
