@@ -9,7 +9,7 @@ import { HeroColumn } from './BriefingForm'
 const CHOICES = [
   {
     key: 'brief',
-    title: 'Start from scratch',
+    title: 'Create from brief',
     desc: "Brief us like you would a designer - pick a template, tell us what you need, and we'll get it ready to fill in.",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
