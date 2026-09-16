@@ -87,24 +87,57 @@ function SliderField({ label, value, min, max, step = 1, onChange, width }) {
 // that reaching any zone rarely needs much scrolling at all. Needs-review
 // zones (no live text in Figma to read font info from) start expanded,
 // since those are the ones that actually need a look.
-function ZoneCard({ z, expanded, onToggle, needsReview, onChange }) {
+// Bring-forward/send-back buttons live in the collapsed header row itself
+// (not inside the expanded body) so reordering never requires opening a
+// zone first - Julia's ask, 2026-09-16: fixing a stacking mistake (e.g. the
+// food photo sitting under the discount sticker) shouldn't require editing
+// X/Y/size at all, just moving it in the layer order.
+function ZoneCard({ z, expanded, onToggle, needsReview, onChange, onMoveForward, onMoveBack, isFrontmost, isBackmost }) {
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-      >
-        <span style={{ width: 9, height: 9, borderRadius: '50%', background: zoneColor(z), flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{z.id}</span>
-        <span style={{ fontSize: 11, color: 'var(--light)' }}>{z.type === 'image' ? 'image' : 'text'}</span>
-        {needsReview && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '2px 7px', borderRadius: 100 }}>
-            Check font
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--light)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+        >
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: zoneColor(z), flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{z.id}</span>
+          <span style={{ fontSize: 11, color: 'var(--light)' }}>{z.type === 'image' ? 'image' : 'text'}</span>
+          {needsReview && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '2px 7px', borderRadius: 100 }}>
+              Check font
+            </span>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--light)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+        </button>
+        <div style={{ display: 'flex', gap: 2, padding: '0 10px 0 4px', flexShrink: 0 }}>
+          <button
+            type="button"
+            title="Bring forward (in front of the zone above)"
+            onClick={e => { e.stopPropagation(); onMoveForward() }}
+            disabled={isFrontmost}
+            style={{
+              width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)', background: '#fff',
+              color: isFrontmost ? 'var(--light)' : 'var(--dark)', cursor: isFrontmost ? 'default' : 'pointer', fontSize: 11, lineHeight: 1,
+            }}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            title="Send back (behind the zone below)"
+            onClick={e => { e.stopPropagation(); onMoveBack() }}
+            disabled={isBackmost}
+            style={{
+              width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)', background: '#fff',
+              color: isBackmost ? 'var(--light)' : 'var(--dark)', cursor: isBackmost ? 'default' : 'pointer', fontSize: 11, lineHeight: 1,
+            }}
+          >
+            ↓
+          </button>
+        </div>
+      </div>
 
       {expanded && (
         <div style={{ padding: '2px 14px 16px' }}>
@@ -252,6 +285,35 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   function updateZoneEdit(zoneId, patch) {
     setZoneEdits(prev => ({ ...prev, [zoneId]: { ...prev[zoneId], ...patch } }))
     setZonesSaved(false)
+  }
+
+  // Same order TemplateCanvas.jsx's applyZoneStackingOrder paints in - lower
+  // zIndex further back, higher further front, falling back to each zone's
+  // position in the raw array (import order) when zIndex is missing, so
+  // this list always matches what the live canvas would actually show.
+  // Sorted front-first (descending) to match a Figma-style layers panel,
+  // where the top of the list is what's visually on top.
+  function orderedZones() {
+    const zones = zonesWithEdits()
+    const orderKey = (z, i) => z.zIndex ?? i
+    return zones
+      .map((z, i) => ({ z, key: orderKey(z, i) }))
+      .sort((a, b) => b.key - a.key)
+      .map(({ z }) => z)
+  }
+
+  // Moving a zone re-assigns explicit zIndex values to every zone at once
+  // (rather than just swapping the two involved) so the result is always a
+  // clean, gap-free sequence - never relies on the "fall back to array
+  // position" behavior for zones that already have a real zIndex from import.
+  function moveZone(zoneId, direction) {
+    const ordered = orderedZones()
+    const idx = ordered.findIndex(z => z.id === zoneId)
+    const swapWith = direction === 'forward' ? idx - 1 : idx + 1
+    if (idx === -1 || swapWith < 0 || swapWith >= ordered.length) return
+    const reordered = [...ordered]
+    ;[reordered[idx], reordered[swapWith]] = [reordered[swapWith], reordered[idx]]
+    reordered.forEach((z, i) => updateZoneEdit(z.id, { zIndex: reordered.length - 1 - i }))
   }
 
   async function handleSaveZones() {
@@ -415,11 +477,11 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 </div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 10 }}>
-                Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} - matches the boxes drawn on the preview. Click a zone to open it.
+                Position (X/Y) and size (W/H) are in canvas units, {CANVAS_W}×{CANVAS_H} - matches the boxes drawn on the preview. Click a zone to open it. Listed front-to-back, like a Figma layers panel - use ↑/↓ to fix stacking (e.g. a photo hidden behind a sticker) without going back into Figma.
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-                {zonesWithEdits().map(z => (
+                {orderedZones().map((z, i, arr) => (
                   <ZoneCard
                     key={z.id}
                     z={z}
@@ -427,6 +489,10 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                     onToggle={() => toggleZoneExpanded(z.id)}
                     needsReview={!!result.needsReview?.includes(z.id)}
                     onChange={patch => updateZoneEdit(z.id, patch)}
+                    onMoveForward={() => moveZone(z.id, 'forward')}
+                    onMoveBack={() => moveZone(z.id, 'back')}
+                    isFrontmost={i === 0}
+                    isBackmost={i === arr.length - 1}
                   />
                 ))}
               </div>

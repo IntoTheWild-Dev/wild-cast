@@ -736,6 +736,16 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
 
       {status === 'ready' && projects.length > 0 && viewMode === 'folders' && !activePerson && (
         <div style={{ padding: '32px 40px 40px' }}>
+          {/* Each card here is a TEAM MEMBER (a distinct sign-in - activation
+              key or account), not a folder - folders live one level in, per
+              person. Without this heading the grid alone reads as if each
+              card itself were a "folder", which is exactly what confused
+              Julia, 2026-09-16: two cards ("Wild Stack" / "Wild Stack Team")
+              for what she expected to be one identity. */}
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', margin: '0 0 4px' }}>Team members</h2>
+          <div style={{ fontSize: 12, color: 'var(--mid)', margin: '0 0 16px' }}>
+            Each card is a separate sign-in - their designs and folders are private to them. Open one to see (and organize) their folders.
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
             {people.map(p => (
               <PersonCard key={p.ownerEmail} person={p} onOpen={() => setActivePerson(p.ownerEmail)} />
