@@ -133,7 +133,7 @@ export default function ActivationGate({ onActivated }) {
               </svg>
             </div>
             <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--dark)', letterSpacing: '-0.02em', marginBottom: 8 }}>
-              Wild Cast
+              WildCast
             </h1>
             <p style={{ fontSize: 14, color: 'var(--mid)', lineHeight: 1.5 }}>
               Print Templates in Minutes.
