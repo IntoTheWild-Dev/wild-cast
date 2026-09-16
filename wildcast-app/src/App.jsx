@@ -302,6 +302,11 @@ export default function App() {
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
+  // Editor-side reply box state (Julia's ask, 2026-09-16: the Feedback
+  // sidebar was read-only - designer could see reviewer comments but never
+  // reply from inside the app).
+  const [replyText, setReplyText]             = useState('')
+  const [postingReply, setPostingReply]       = useState(false)
   // activation: null = not logged in, object = { key, clientName, credits, role }.
   // Seeded synchronously from localStorage (not just in the useEffect below) so
   // an already-logged-in user's refresh renders straight into the app instead
@@ -517,6 +522,43 @@ export default function App() {
       .then(d => setComments(d.comments || []))
       .catch(() => {})
   }, [currentProjectId])
+
+  // Lets the signed-in designer reply right from the editor's Feedback
+  // sidebar instead of that panel being read-only (Julia's ask, 2026-09-16:
+  // "back and forth communication"). Posts as from:'designer' with whatever
+  // name the current activation carries - no separate name field needed,
+  // unlike the external reviewer's own form on ReviewPage.jsx.
+  async function handlePostReply() {
+    const text = replyText.trim()
+    if (!text || !currentProjectId || postingReply) return
+    setPostingReply(true)
+    try {
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProjectId, name: activation?.clientName || 'Wild Stack', text, from: 'designer' }),
+      })
+      if (!res.ok) throw new Error('Failed to post reply')
+      setReplyText('')
+      const data = await fetch(`/api/comments?id=${currentProjectId}`).then(r => r.json())
+      setComments(data.comments || [])
+    } catch (err) {
+      alert('Could not send reply: ' + err.message)
+    } finally {
+      setPostingReply(false)
+    }
+  }
+
+  // Optimistic - flips the checkbox immediately, same pattern used
+  // throughout Designs (handleDelete etc.), then fires the real PATCH.
+  function handleToggleResolved(commentId, resolved) {
+    setComments(prev => prev.map(c => c.id === commentId ? { ...c, resolved } : c))
+    fetch('/api/comments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: currentProjectId, commentId, resolved }),
+    }).catch(() => {})
+  }
 
   function handleSelectTemplate(template) {
     historyRef.current = []; setCanUndo(false)
@@ -1377,14 +1419,45 @@ export default function App() {
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {comments.map(c => (
-                  <div key={c.id} style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', border: '1px solid #FDE68A' }}>
-                    <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--dark)', marginBottom: 3 }}>{c.name}</div>
+                  <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : '#FDE68A'}`, opacity: c.resolved ? 0.6 : 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--dark)' }}>{c.name}</div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--mid)', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={!!c.resolved} onChange={e => handleToggleResolved(c.id, e.target.checked)} style={{ cursor: 'pointer' }} />
+                        Done
+                      </label>
+                    </div>
                     <div style={{ fontSize: 10, color: 'var(--mid)', marginBottom: 6 }}>
                       {new Date(c.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--dark)', lineHeight: 1.6 }}>{c.text}</div>
+                    <div style={{ fontSize: 12, color: 'var(--dark)', lineHeight: 1.6, textDecoration: c.resolved ? 'line-through' : 'none' }}>{c.text}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Reply box - the panel used to be read-only; Julia's ask,
+                  2026-09-16, was real back-and-forth from inside the editor. */}
+              <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <textarea
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder="Reply to feedback…"
+                  rows={2}
+                  style={{ padding: '8px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5, background: '#fff' }}
+                />
+                <button
+                  type="button"
+                  onClick={handlePostReply}
+                  disabled={postingReply || !replyText.trim()}
+                  style={{
+                    padding: '8px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
+                    background: (postingReply || !replyText.trim()) ? '#E5E7EB' : 'var(--primary)',
+                    color: (postingReply || !replyText.trim()) ? 'var(--mid)' : '#fff',
+                    cursor: (postingReply || !replyText.trim()) ? 'default' : 'pointer',
+                  }}
+                >
+                  {postingReply ? 'Sending…' : 'Send reply'}
+                </button>
               </div>
             </div>
           )}

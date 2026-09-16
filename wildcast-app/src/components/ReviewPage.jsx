@@ -37,6 +37,17 @@ export default function ReviewPage({ projectId }) {
     setComments(data.comments || [])
   }
 
+  // Optimistic - matches the same pattern used on the designer's side
+  // (App.jsx's Feedback sidebar) so the checkbox feels instant either way.
+  function handleToggleResolved(commentId, resolved) {
+    setComments(prev => prev.map(c => c.id === commentId ? { ...c, resolved } : c))
+    fetch('/api/comments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, commentId, resolved }),
+    }).catch(() => {})
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim() || !text.trim() || submitting) return
@@ -113,12 +124,18 @@ export default function ReviewPage({ projectId }) {
             </div>
           ) : (
             comments.map(c => (
-              <div key={c.id} style={{ background: '#F9FAFB', borderRadius: 10, padding: '10px 14px', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dark)' }}>{c.name}</span>
-                  <span style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap', marginLeft: 8 }}>{formatDateTime(c.createdAt)}</span>
+              <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#F9FAFB', borderRadius: 10, padding: '10px 14px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : 'var(--border)'}`, opacity: c.resolved ? 0.6 : 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5, gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dark)' }}>
+                    {c.name}{c.from === 'designer' && <span style={{ fontWeight: 600, color: 'var(--primary)' }}> · designer</span>}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap' }}>{formatDateTime(c.createdAt)}</span>
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--dark)', lineHeight: 1.55 }}>{c.text}</div>
+                <div style={{ fontSize: 13, color: 'var(--dark)', lineHeight: 1.55, textDecoration: c.resolved ? 'line-through' : 'none', marginBottom: 8 }}>{c.text}</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--mid)', cursor: 'pointer', width: 'fit-content' }}>
+                  <input type="checkbox" checked={!!c.resolved} onChange={e => handleToggleResolved(c.id, e.target.checked)} style={{ cursor: 'pointer' }} />
+                  Done
+                </label>
               </div>
             ))
           )}
