@@ -1326,6 +1326,7 @@ export default function App() {
             canManage={activation?.role === 'designer' || activation?.role === 'agency'}
             onOptimisticPatch={patchCustomRecord}
             onRecordDeleted={removeCustomRecord}
+            onBack={() => setScreen('landing')}
           />
         </div>
       )}

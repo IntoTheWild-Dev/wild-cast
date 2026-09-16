@@ -270,11 +270,24 @@ function GroupCard({ group, onViewAll }) {
 }
 
 // ── Catalogue view (all template groups) ──────────────────────────────────────
-function CatalogueView({ groups, onViewGroup }) {
+function CatalogueView({ groups, onViewGroup, onBack }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
-        <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', marginBottom: 32 }}>All templates</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+          <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0 }}>All templates</h1>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+            >
+              ← Back
+            </button>
+          )}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
           {groups.map(g => (
             <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
@@ -722,11 +735,16 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) - reached via the header logo.
 // mode="catalogue": full template grid - reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
-  const allGroups     = useMemo(() => deriveGroups(allTemplates), [allTemplates])
+  // Only groups with at least one real (live or Figma-imported) template -
+  // the rest of BASE_TEMPLATES is a fixed 30-slot skeleton for future
+  // categories/formats that don't exist yet, which rendered as "Coming
+  // soon" placeholder tiles here. Julia's ask, 2026-09-16: only show what
+  // we actually have.
+  const allGroups = useMemo(() => deriveGroups(allTemplates).filter(g => g.liveCount > 0), [allTemplates])
 
   // Options view
   if (selectedGroup) {
@@ -745,7 +763,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
   }
 
   if (mode === 'catalogue') {
-    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} />
+    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} onBack={onBack} />
   }
 
   function handleBriefSubmit({ category, format }) {
