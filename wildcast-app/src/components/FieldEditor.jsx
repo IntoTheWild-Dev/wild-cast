@@ -263,16 +263,23 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 
   useEffect(() => { refreshLibrary() }, [libraryFolder]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const libraryMerchants = uniqueMerchants(libraryAssets)
+
   // Default the library modal's merchant filter to whichever restaurant is
   // currently being edited (re-applied on every open, in case the restaurant
   // name changed since last time) - most of the time that's exactly what you
-  // want to reuse from.
+  // want to reuse from. But `merchant` here is just the free-text restaurant_name
+  // field, which won't always match the (sometimes abbreviated, e.g. "McD")
+  // merchant tag a partner picked when they originally uploaded an asset -
+  // when it doesn't match any real tag, a raw `<select value=merchant>` with
+  // no matching <option> silently falls back to displaying "All merchants"
+  // (the first option) while React's own state stays on the unmatched value,
+  // so the list still filters (to nothing) as if that literal text were
+  // selected. Only default to `merchant` when it's a tag that actually exists.
   function openLibrary() {
-    setLibraryMerchantFilter(merchant)
+    setLibraryMerchantFilter(libraryMerchants.includes(merchant) ? merchant : ALL_MERCHANTS)
     setLibraryOpen(true)
   }
-
-  const libraryMerchants = uniqueMerchants(libraryAssets)
   const filteredLibraryAssets = libraryAssets
     .filter(a => libraryMerchantFilter === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === libraryMerchantFilter)
     .filter(a => !librarySearch.trim() || a.name.toLowerCase().includes(librarySearch.trim().toLowerCase()))
