@@ -1,8 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import WordCarousel from './WordCarousel'
-import Select from './Select'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { CheckmarkSquare01Icon, SquareIcon } from '@hugeicons/core-free-icons'
+import ChoiceButton from './ChoiceButton'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
 import { liveFormatsFor, entryForGuidedId } from './TemplatePicker'
 import TemplatePreviewModal from './TemplatePreviewModal'
@@ -114,7 +112,7 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
 // swaps to a compact "selected" state with a way to change it.
 function TemplatePickStep({ pickedOption, onOpenTemplateModal }) {
   return (
-    <div style={{ marginBottom: 40 }}>
+    <div style={{ marginBottom: 30 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
         Step 1 · Required
       </div>
@@ -163,30 +161,40 @@ function Field({ label, hint, children }) {
   )
 }
 
-// disabled: can't be picked at all - used for formats with no live template
-// yet (checklist i10, 2026-09-08), rather than letting a partner select
-// something the tool can't actually produce.
-function ChoiceButton({ active, onClick, children, checkbox, disabled }) {
+// Replaces the old window.alert('Please pick your template first.') with an
+// in-app modal matching TemplatePreviewModal's overlay treatment - a native
+// alert can't be styled and blocks the whole tab, which reads as a browser
+// error rather than part of the product.
+function NoTemplateModal({ onClose, onChooseTemplate }) {
   return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      title={disabled ? "Coming soon - not available to pick yet" : undefined}
+    <div
+      onClick={onClose}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        border: `1.5px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
-        background: active ? 'var(--primary-glow)' : '#fff',
-        color: disabled ? 'var(--light)' : (active ? 'var(--primary-dark)' : 'var(--dark)'),
-        opacity: disabled ? 0.6 : 1,
-        transition: 'all 0.15s',
+        position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(17,17,17,0.25)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
       }}
     >
-      {checkbox ? <HugeiconsIcon icon={active ? CheckmarkSquare01Icon : SquareIcon} size={15} /> : null}{children}
-      {disabled && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--light)' }}>· Coming soon</span>}
-    </button>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 360, padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.25)', textAlign: 'center' }}
+      >
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)', marginBottom: 8 }}>Pick your template first</div>
+        <p style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.5, marginBottom: 20 }}>
+          Choose a template above so we know what to prepare, then come back to finish the brief.
+        </p>
+        <button
+          type="button"
+          onClick={onChooseTemplate}
+          style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          Choose a template
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -205,19 +213,17 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
   // blank even though `submitted` still holds the real answers.
   const [brief, setBrief] = useState(() => submitted ?? DEFAULT_BRIEF)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
-  // Fires once, the moment someone touches the form without having picked a
+  const [showNoTemplateModal, setShowNoTemplateModal] = useState(false)
+  // Fires every time someone touches the form without having picked a
   // template yet - Julia's ask, 2026-09-10: "if someone missed the button
   // and goes straight to the form, make a popup come up." The Continue-time
   // check (handleSubmit below) was already there but only ever surfaced at
   // the very end - this catches it at the actual moment they skip Step 1.
-  // A ref, not state, so it doesn't fire again on every subsequent
-  // keystroke while still unpicked - once is a nudge, not a nag.
-  const warnedNoTemplateRef = useRef(false)
-
+  // Re-fires on every field until a template is picked (not just the
+  // first) since it's a dismissible modal, not a blocking native alert.
   function warnIfNoTemplate() {
-    if (brief.preSelectedTemplateIds.length || warnedNoTemplateRef.current) return
-    warnedNoTemplateRef.current = true
-    window.alert('Please pick your template first.')
+    if (brief.preSelectedTemplateIds.length) return
+    setShowNoTemplateModal(true)
   }
 
   function set(key, value) {
@@ -283,7 +289,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
     // a partner who skips it and fills the rest of the form should be told
     // plainly to go back and pick one, not left guessing why nothing happens.
     if (!pickedTemplateId) {
-      window.alert('Please pick your template first.')
+      setShowNoTemplateModal(true)
       return
     }
     if (!isValid) return
@@ -325,11 +331,12 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
             </div>
 
             <Field label="Partner name">
-              <Select style={inputStyle} value={brief.partner} onChange={e => set('partner', e.target.value)}>
-                <option value="" disabled>Select a partner…</option>
-                {PLACEHOLDER_PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
-                <option value={ADD_NEW}>+ Add new partner</option>
-              </Select>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {PLACEHOLDER_PARTNERS.map(p => (
+                  <ChoiceButton key={p} active={brief.partner === p} onClick={() => set('partner', p)}>{p}</ChoiceButton>
+                ))}
+                <ChoiceButton active={brief.partner === ADD_NEW} onClick={() => set('partner', ADD_NEW)}>+ Add new partner</ChoiceButton>
+              </div>
               {brief.partner === ADD_NEW && (
                 <input style={{ ...inputStyle, marginTop: 8 }} placeholder="New partner name" value={brief.partnerNew} onChange={e => set('partnerNew', e.target.value)} />
               )}
@@ -403,6 +410,13 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
           onClose={() => setShowTemplateModal(false)}
           customCards={customCards}
           customRecords={customRecords}
+        />
+      )}
+
+      {showNoTemplateModal && (
+        <NoTemplateModal
+          onClose={() => setShowNoTemplateModal(false)}
+          onChooseTemplate={() => { setShowNoTemplateModal(false); setShowTemplateModal(true) }}
         />
       )}
     </div>
