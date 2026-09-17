@@ -1,3 +1,11 @@
+const SUPPORT_EMAIL = 'hello@wildstack.studio'
+
+// Gmail's own compose URL, not mailto: - mailto relies on a default mail
+// app being configured on the device, which opens nothing (silently) when
+// there isn't one. This always opens Gmail's web compose in a new tab,
+// pre-addressed, regardless of what's installed locally.
+const SUPPORT_EMAIL_HREF = `https://mail.google.com/mail/?view=cm&fs=1&to=${SUPPORT_EMAIL}`
+
 export default function HelpModal({ onClose }) {
   return (
     <div
@@ -84,7 +92,9 @@ export default function HelpModal({ onClose }) {
             <div style={{ fontSize: 12, color: 'var(--mid)' }}>Contact Wild Stack and we'll sort it.</div>
           </div>
           <a
-            href="mailto:hello@wildstack.studio"
+            href={SUPPORT_EMAIL_HREF}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{ fontSize: 13, fontWeight: 700, color: '#fff', background: 'var(--primary)', padding: '8px 16px', borderRadius: 8, textDecoration: 'none', flexShrink: 0, transition: 'background 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-dark)'}
             onMouseLeave={e => e.currentTarget.style.background = 'var(--primary)'}

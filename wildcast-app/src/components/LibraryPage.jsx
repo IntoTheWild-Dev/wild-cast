@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import Select from './Select'
+import ChoiceButton from './ChoiceButton'
 import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset, uniqueMerchants } from '../lib/assetLibrary'
 import { hasTransparency } from '../lib/image'
 
@@ -422,14 +423,10 @@ export default function LibraryPage({ onBack }) {
             <option value={ALL_MERCHANTS}>All merchants</option>
             {merchants.map(m => <option key={m} value={m}>{m}</option>)}
           </Select>
-          <Select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
-          >
-            <option value={ALL_TYPES}>All types</option>
-            {Object.entries(FOLDERS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </Select>
+          <ChoiceButton active={typeFilter === ALL_TYPES} onClick={() => setTypeFilter(ALL_TYPES)}>All types</ChoiceButton>
+          {Object.entries(FOLDERS).map(([key, label]) => (
+            <ChoiceButton key={key} active={typeFilter === key} onClick={() => setTypeFilter(key)}>{label}</ChoiceButton>
+          ))}
           <input
             type="text"
             value={search}
