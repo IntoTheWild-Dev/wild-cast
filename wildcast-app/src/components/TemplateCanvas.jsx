@@ -48,9 +48,16 @@ function applyZoneStackingOrder(canvas, config, zoneObjs) {
       const obj = zoneObjs[zone.type === 'image' ? `${zone.id}-image` : zone.id]
       if (obj) canvas.bringToFront(obj)
     })
-  Object.values(zoneObjs).forEach(o => {
-    if (o._wcGuide) canvas.bringToFront(o)
-  })
+  // Two passes, not one - Julia's report, 2026-09-18: a number chip could
+  // end up stacked BELOW a different zone's own boundary rect (each
+  // bringToFront call only wins until the next one, so whichever guide
+  // this loop happened to process last came out on top - not necessarily
+  // every chip). Bringing every non-chip guide (rects) forward first, then
+  // every chip forward after, guarantees every chip sits above every rect,
+  // regardless of how many zones or what order they were declared in.
+  const guideObjs = Object.values(zoneObjs).filter(o => o._wcGuide)
+  guideObjs.filter(o => !o._wcChip).forEach(o => canvas.bringToFront(o))
+  guideObjs.filter(o => o._wcChip).forEach(o => canvas.bringToFront(o))
 }
 
 // Numbered zone-guide chip color on the editor canvas - Julia's ask,
@@ -371,6 +378,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             selectable: false,
             evented: false,
             _wcGuide: true,
+            _wcChip: true,
           })
           canvas.add(label)
           zoneObjsRef.current[`${zone.id}-guide-label`] = label
@@ -818,7 +826,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const active = zone.id === activeZoneId
       obj.set({
         stroke: active ? ZONE_LABEL_COLOR : 'rgba(255,255,255,0.5)',
-        strokeWidth: active ? 2.5 : 1.5,
+        strokeWidth: active ? 1.8 : 1.5,
         strokeDashArray: active ? null : [6, 4],
         fill: active ? 'rgba(223,111,109,0.15)' : 'transparent',
       })

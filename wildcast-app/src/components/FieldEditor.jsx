@@ -164,27 +164,28 @@ function SizeControl({ size, onSize }) {
 // Same arrow-button layout as ImageUpload's Position control below - reused
 // here for text zones (headline/sub_headline) in the restricted review mode,
 // where a canvas drag isn't available (see TemplateCanvas.jsx's textPositions).
-function NudgeControl({ onNudge }) {
+// No wrapping div/label of its own (Julia's ask, 2026-09-18: Position needs
+// to sit inline on the same row as Scale/font-size, not stacked below it) -
+// the caller supplies the "Position" label and lays this out alongside its
+// other controls.
+function NudgeArrows({ onNudge }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 34 }}>
-      <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600 }}>Position</span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
-        {[
-          { dir: '←', axis: 'x', delta: -4 },
-          { dir: '→', axis: 'x', delta: 4 },
-          { dir: '↑', axis: 'y', delta: -4 },
-          { dir: '↓', axis: 'y', delta: 4 },
-        ].map(({ dir, axis, delta }) => (
-          <button
-            key={dir}
-            onClick={() => onNudge(axis, delta)}
-            title={`Nudge ${dir === '←' ? 'left' : dir === '→' ? 'right' : dir === '↑' ? 'up' : 'down'}`}
-            style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
-            onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >{dir}</button>
-        ))}
-      </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
+      {[
+        { dir: '←', axis: 'x', delta: -4 },
+        { dir: '→', axis: 'x', delta: 4 },
+        { dir: '↑', axis: 'y', delta: -4 },
+        { dir: '↓', axis: 'y', delta: 4 },
+      ].map(({ dir, axis, delta }) => (
+        <button
+          key={dir}
+          onClick={() => onNudge(axis, delta)}
+          title={`Nudge ${dir === '←' ? 'left' : dir === '→' ? 'right' : dir === '↑' ? 'up' : 'down'}`}
+          style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+          onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >{dir}</button>
+      ))}
     </div>
   )
 }
@@ -228,24 +229,32 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         </div>
       </div>
 
-      {/* Controls row - full (designer) or size-only (guided/restricted) */}
-      {(showControls || showSize) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 34 }}>
-          {showControls && align != null && <AlignControl align={align} onAlign={onAlign} />}
-          {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
-          {showControls && (
-            <button
-              onClick={onResetPosition}
-              title="Reset position to default"
-              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
-            >↺</button>
+      {/* Controls row - font size/align (designer) or size-only (guided/
+          restricted), Position now inline on the same row instead of a
+          separate one below it (Julia's ask, 2026-09-18). */}
+      {(showControls || showSize || onNudge) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, paddingLeft: 34, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {showControls && align != null && <AlignControl align={align} onAlign={onAlign} />}
+            {fontSize != null && <SizeControl size={fontSize} onSize={onFontSize} />}
+            {showControls && (
+              <button
+                onClick={onResetPosition}
+                title="Reset position to default"
+                style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
+              >↺</button>
+            )}
+          </div>
+          {onNudge && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600 }}>Position</span>
+              <NudgeArrows onNudge={onNudge} />
+            </div>
           )}
         </div>
       )}
-
-      {onNudge && <NudgeControl onNudge={onNudge} />}
 
       {/* Input - focus/blur report this field up to App.jsx's activeZoneId
           (Annika's ask, 2026-09-18: light up the matching zone on the
@@ -560,55 +569,42 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         </div>
       )}
 
-      {/* Image scale control - shown after upload when in guided mode */}
-      {value && onScaleChange && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
-          <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Scale</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
-            <button
-              onClick={e => { e.stopPropagation(); onScaleChange(Math.max(20, (scalePercent ?? 100) - 5)) }}
-              disabled={(scalePercent ?? 100) <= 20}
-              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: (scalePercent ?? 100) <= 20 ? 'default' : 'pointer', fontSize: 14, color: (scalePercent ?? 100) <= 20 ? 'var(--light)' : 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
-              onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >−</button>
-            <span style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'center', color: 'var(--mid)', fontWeight: 600 }}>{scalePercent ?? 100}%</span>
-            <button
-              onClick={e => { e.stopPropagation(); onScaleChange(Math.min(300, (scalePercent ?? 100) + 5)) }}
-              disabled={(scalePercent ?? 100) >= 300}
-              style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: (scalePercent ?? 100) >= 300 ? 'default' : 'pointer', fontSize: 14, color: (scalePercent ?? 100) >= 300 ? 'var(--light)' : 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
-              onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >+</button>
-          </div>
-        </div>
-      )}
-
-      {/* Nudge control - repositions the photo within its zone. The image can
-          never be nudged far enough to reveal empty space behind it, so how
-          far it can move depends on Scale: at 100% there's often only a few
-          clicks' worth of room before it silently stops (by design, not a
-          bug) - the hint below is the only feedback for that today. */}
-      {value && onNudge && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 2 }}>
-          <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600, flex: 1 }}>Position</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
-            {[
-              { dir: '←', axis: 'x', delta: -4 },
-              { dir: '→', axis: 'x', delta: 4 },
-              { dir: '↑', axis: 'y', delta: -4 },
-              { dir: '↓', axis: 'y', delta: 4 },
-            ].map(({ dir, axis, delta }) => (
-              <button
-                key={dir}
-                onClick={e => { e.stopPropagation(); onNudge(axis, delta) }}
-                title={`Nudge ${dir === '←' ? 'left' : dir === '→' ? 'right' : dir === '↑' ? 'up' : 'down'}`}
-                style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >{dir}</button>
-            ))}
-          </div>
+      {/* Scale and Position inline on one row (Julia's ask, 2026-09-18),
+          instead of two stacked rows. The image can never be nudged far
+          enough to reveal empty space behind it, so how far it can move
+          depends on Scale: at 100% there's often only a few clicks' worth
+          of room before it silently stops (by design, not a bug) - the
+          hint below is the only feedback for that today. */}
+      {value && (onScaleChange || onNudge) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, paddingLeft: 2, flexWrap: 'wrap' }}>
+          {onScaleChange && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600 }}>Scale</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 1, background: '#F3F4F6', borderRadius: 6, padding: '1px 3px' }}>
+                <button
+                  onClick={e => { e.stopPropagation(); onScaleChange(Math.max(20, (scalePercent ?? 100) - 5)) }}
+                  disabled={(scalePercent ?? 100) <= 20}
+                  style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: (scalePercent ?? 100) <= 20 ? 'default' : 'pointer', fontSize: 14, color: (scalePercent ?? 100) <= 20 ? 'var(--light)' : 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >−</button>
+                <span style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'center', color: 'var(--mid)', fontWeight: 600 }}>{scalePercent ?? 100}%</span>
+                <button
+                  onClick={e => { e.stopPropagation(); onScaleChange(Math.min(300, (scalePercent ?? 100) + 5)) }}
+                  disabled={(scalePercent ?? 100) >= 300}
+                  style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: (scalePercent ?? 100) >= 300 ? 'default' : 'pointer', fontSize: 14, color: (scalePercent ?? 100) >= 300 ? 'var(--light)' : 'var(--mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >+</button>
+              </div>
+            </div>
+          )}
+          {onNudge && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--mid)', fontWeight: 600 }}>Position</span>
+              <NudgeArrows onNudge={(axis, delta) => onNudge(axis, delta)} />
+            </div>
+          )}
         </div>
       )}
       {value && onNudge && (
