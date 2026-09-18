@@ -8,6 +8,7 @@ function formatDateTime(ts) {
   })
 }
 import AISuggest from './AISuggest'
+import PresetPicker from './PresetPicker'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
@@ -176,7 +177,7 @@ function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField, vertical }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField, vertical, partnerName }) {
   const limit = CHAR_LIMITS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
@@ -284,6 +285,14 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         // triggered it - keeps a 300px dropdown from starting left of the
         // panel's own edge and getting clipped (see AISuggest.jsx).
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative' }}>
+          {/* Choose preset - real past copy served verbatim, no AI call, no
+              credit cost (Julia's ask, 2026-09-18: "that shouldn't use AI,
+              it should just call the database and spit out exactly what it
+              has"). PresetPicker/api/presets.js already existed from the
+              copy-database work but had never actually been wired into the
+              editor - this is that wiring. Sits next to AI Suggest, not
+              merged into it, since "no AI at all" is the entire point. */}
+          <PresetPicker field={fieldKey} onApply={val => onChange(val)} partnerName={partnerName} vertical={vertical} />
           {/* One button, not two (Julia's editor redesign, 2026-09-18) -
               AISuggest itself decides generate-vs-improve from seedText.
               vertical ("Restaurant"/"Retail" from the brief) strictly scopes
@@ -624,6 +633,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // "all text fields, then all images" the way the two blocks below used to
   // render.
   const fieldOrder = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
+  // Same fallback ImageUpload's own merchant tag already uses below, minus
+  // the GENERAL_MERCHANT catch-all - api/presets.js falls back to the full
+  // vertical library itself when nothing matches a given partner name yet,
+  // so there's nothing to gain from forcing one here.
+  const partnerName = (fields.restaurant_name || projectName || '').trim() || undefined
 
   // Accordion: only one field expanded (full controls) at a time, every
   // other field collapses to a single summary line - Julia's editor
@@ -652,6 +666,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Headline" fieldKey="headline"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
             placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
@@ -673,6 +688,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Sub-headline" fieldKey="sub_headline"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -689,6 +705,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Restaurant name" fieldKey="restaurant_name"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -704,6 +721,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Offer" fieldKey="offer"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
@@ -726,6 +744,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="T&amp;Cs" fieldKey="tc"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -745,6 +764,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="App download line" fieldKey="cta"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
             placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}
