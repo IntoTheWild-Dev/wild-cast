@@ -725,13 +725,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             bar. `projectName` is still a prop of this component (used below
             for the merchant-name fallback), just no longer rendered here. */}
 
-        {/* Intro banner for non-designer */}
-        {/* {isNonDesigner && (
-          <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
-            This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.
-          </div>
-        )} */}
-
         {/* One interleaved, numbered list for both text fields and image
             zones so step numbers here match TemplateCanvas.jsx's on-canvas
             zone labels (see fieldOrder above). */}
