@@ -143,7 +143,7 @@ export default function ActivationGate({ onActivated }) {
           {/* Mode toggle - client activation keys (unchanged) vs. individual
               team sign-in (new, api/account-auth.js) */}
           <div style={{ display: 'flex', gap: 4, padding: 4, background: '#F3F4F6', borderRadius: 10, marginBottom: 20 }}>
-            {[['key', 'Activation key'], ['account', 'Sign in, please']].map(([m, label]) => (
+            {[['key', 'Activation key'], ['account', 'Sign in']].map(([m, label]) => (
               <button
                 key={m}
                 type="button"
