@@ -260,6 +260,12 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
 
           {canOrganize && (
             <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+              {/* Plain <select> read as just a folder label, not an action -
+                  Julia's report, 2026-09-18: didn't realize picking a
+                  different option here actually moves the design. */}
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
+                Move to folder
+              </div>
               <Select
                 value={project.folder || ''}
                 onChange={e => {
