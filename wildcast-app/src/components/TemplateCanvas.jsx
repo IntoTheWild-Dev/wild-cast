@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
+import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 
 // Visual-only bleed margin drawn around the canvas in the editor, matching
 // the Figma master's own look (solid page edge + inset dashed trim line) -
@@ -328,13 +329,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         }
 
+        // Step number shown on each zone's guide chip, matching FieldEditor's
+        // "Edit content" panel step numbers exactly - same shared order (see
+        // lib/fieldOrder.js) - Julia's ask, 2026-09-18: a plain "1", "2",
+        // "3"... instead of the raw zone id (e.g. "headline"), so the canvas
+        // reads together with the numbered panel instead of duplicating its
+        // own separate field-name vocabulary.
+        const stepNumberOrder = sortIdsByFieldOrder(zones.map(z => z.id))
+
         // Small colored chip naming a zone, anchored to its box's top-left
         // corner in UN-rotated coordinates (zone.x/zone.y) even for a
         // rotated zone's guide - stays upright and readable regardless of
         // which way the box itself is turned, matching how ZoneOverlay on
         // the Import review page keeps its own labels upright too.
         function addZoneLabel(zone) {
-          const label = new fabric.Text(zone.id, {
+          const label = new fabric.Text(String(stepNumberOrder.indexOf(zone.id) + 1), {
             left: zone.x, top: zone.y,
             originX: 'left', originY: 'top',
             fontSize: 9, fontWeight: '700', fontFamily: 'Arial, sans-serif',

@@ -190,11 +190,10 @@ export default function App() {
   // real first thing anyone sees now - 'brief' (the actual picker+form flow)
   // only shows once "Start from scratch" is picked from there.
   const [screen, setScreen]                   = useState('landing')
-  // Which output ICC profile export-cmyk.js should convert to - see the
-  // matching ICC Profile picker in FieldEditor.jsx and ICC_PROFILES in
-  // api/export-cmyk.js. Defaults to fogra39 (what every export used before
-  // FOGRA51 was added as a second option).
-  const [iccProfile, setIccProfile] = useState('fogra39')
+  // Which output ICC profile export-cmyk.js should convert to - see
+  // ICC_PROFILES in api/export-cmyk.js. No longer user-choosable (FOGRA39
+  // removed, Julia's ask, 2026-09-18) - every export uses FOGRA51 now.
+  const iccProfile = 'fogra51'
   // Lifted out of BriefingForm so it survives a round trip to the editor and
   // back - Julia's ask (2026-08-03): saving a candidate mid-edit should
   // return to the "pick a design" screen (e.g. a merchant wants both A and
@@ -1619,8 +1618,6 @@ export default function App() {
             onLangChange={setLang}
             onExport={handleExport}
             exporting={exporting}
-            iccProfile={iccProfile}
-            onIccProfileChange={profile => { setIccProfile(profile); setHasUnsavedChanges(true) }}
             template={selectedTemplate}
             templateConfig={templateConfig}
             fontSizes={fontSizes}

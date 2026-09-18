@@ -12,6 +12,7 @@ import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
+import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 
 const ALL_MERCHANTS = '__all__'
 
@@ -294,14 +295,11 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
   )
 }
 
-// Output ICC profiles for CMYK export (api/export-cmyk.js has the matching
-// ICC_PROFILES map + bundled .icc files). fogra39 stays the default so
-// existing exports don't change unless a merchant/print shop asks for the
-// newer standard.
-const ICC_PROFILE_OPTIONS = [
-  { id: 'fogra51', label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' },
-  { id: 'fogra39', label: 'FOGRA39', hint: 'ISO Coated v2 · ISO 12647-2:2004' },
-]
+// Output ICC profile for CMYK export (api/export-cmyk.js has the matching
+// ICC_PROFILES map + bundled .icc files). FOGRA39 was removed as a choice
+// (Julia's ask, 2026-09-18) - FOGRA51 is now the only, fixed profile every
+// export uses (App.jsx's iccProfile default was updated to match).
+const ICC_PROFILE = { label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' }
 
 // ── Image upload ─────────────────────────────────────────────────────────────
 // Canvas is 316×441px = A6 105×148mm → canvas PPI ≈ 76.4
@@ -612,7 +610,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, iccProfile, onIccProfileChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -631,13 +629,17 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
   }
 
   // Drag-to-reorder for the panel's steps (see useOrderedKeys above) - text
-  // fields and image zones are reordered as two separate groups, same as
-  // they're already visually separated by the divider below.
+  // fields and image zones are now interleaved into ONE ordered list, not
+  // two separate blocks (Julia's ask, 2026-09-18: Logo, Subline, Headline,
+  // Photo, Sticker, T&Cs, App download line/Offer), so a design's photo can
+  // sit between its subline and its T&Cs, matching TemplateCanvas.jsx's
+  // on-canvas step numbers - see lib/fieldOrder.js for the shared order
+  // both this panel and the canvas sort by.
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
     .filter(k => k === 'headline' || templateConfig?.zones?.some(z => z.id === k))
   const imageZoneKeys = imageZones.map(z => z.id)
-  const [textOrder, reorderText] = useOrderedKeys(textFieldKeys)
-  const [imageOrder, reorderImages] = useOrderedKeys(imageZoneKeys)
+  const naturalKeys = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
+  const [fieldOrder, reorderFields] = useOrderedKeys(naturalKeys)
   const [draggingKey, setDraggingKey] = useState(null)
   const [dragOverKey, setDragOverKey] = useState(null)
 
@@ -814,115 +816,75 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             bar. `projectName` is still a prop of this component (used below
             for the merchant-name fallback), just no longer rendered here. */}
 
-        {/* Intro banner for non-designer */}
-        {isNonDesigner && (
+        {/* Intro banner - the plain guided-mode message ("Fill in each step
+            below...") was removed entirely (Julia's ask, 2026-09-18); the
+            restricted-review one stays since it explains something actually
+            different (why the canvas is locked, what happens on send). */}
+        {isNonDesigner && restricted && (
           <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
-            {restricted
-              ? 'This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.'
-              : 'Fill in each step below - your text will appear on the preview automatically.'}
+            This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.
           </div>
         )}
 
-        {/* Text fields - same numbered layout for both modes. Drag the grip
-            handle to reorder (hidden in restricted review mode, where
-            everything else is locked too) - see useOrderedKeys/ReorderableStep
-            above (Julia's ask, 2026-09-18). */}
-        {textOrder.map((key, i) => (
-          restricted ? (
-            <div key={key}>{renderTextStep(key, i + 1)}</div>
+        {/* One interleaved, numbered list for both text fields and image
+            zones (Julia's ask, 2026-09-18: Logo, Subline, Headline, Photo,
+            Sticker, T&Cs, App download line/Offer) - drag the grip handle to
+            reorder within a session (hidden in restricted review mode,
+            where everything else is locked too). Step numbers here match
+            TemplateCanvas.jsx's on-canvas zone labels - see lib/fieldOrder.js. */}
+        {fieldOrder.map((key, i) => {
+          const zone = imageZones.find(z => z.id === key)
+          const content = zone ? (
+            <ImageUpload
+              step={i + 1}
+              label={imageZoneLabel(zone)}
+              hint={zone.hint ?? 'JPG or PNG'}
+              value={fields[`${zone.id}Url`]}
+              onChange={url => onChange(`${zone.id}Url`, url)}
+              square={zone.id === 'logo' || zone.id === 'qr'}
+              onResetPosition={() => onResetZone?.(zone.id)}
+              scalePercent={imageScales?.[zone.id] ?? 100}
+              onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+              onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
+              minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+              minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+              requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+              folder={assetFolderForZone(zone.id)}
+              // Templates without a restaurant_name field (e.g. Figma imports
+              // that don't define one) have nothing to auto-tag the merchant
+              // with - fall back to the project name instead of dumping
+              // everything into "General", still with zero extra clicks.
+              merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+              autoCropContent={zone.id === 'qr'}
+              restricted={restricted}
+            />
+          ) : renderTextStep(key, i + 1)
+
+          return restricted ? (
+            <div key={key}>{content}</div>
           ) : (
             <ReorderableStep
               key={key}
               isDragging={draggingKey === key}
               isDragOver={dragOverKey === key && !!draggingKey && draggingKey !== key}
               dragSource={dragSourceProps(key)}
-              dropTarget={dropTargetProps(key, reorderText)}
+              dropTarget={dropTargetProps(key, reorderFields)}
             >
-              {renderTextStep(key, i + 1)}
+              {content}
             </ReorderableStep>
           )
-        ))}
-
-        {imageZones.length > 0 && (
-          <>
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 24px' }} />
-            {imageOrder.map((id, i) => {
-              const zone = imageZones.find(z => z.id === id)
-              if (!zone) return null
-              const upload = (
-                <ImageUpload
-                  step={textOrder.length + 1 + i}
-                  label={imageZoneLabel(zone)}
-                  hint={zone.hint ?? 'JPG or PNG'}
-                  value={fields[`${zone.id}Url`]}
-                  onChange={url => onChange(`${zone.id}Url`, url)}
-                  square={zone.id === 'logo' || zone.id === 'qr'}
-                  onResetPosition={() => onResetZone?.(zone.id)}
-                  scalePercent={imageScales?.[zone.id] ?? 100}
-                  onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
-                  onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
-                  minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
-                  minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
-                  requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
-                  folder={assetFolderForZone(zone.id)}
-                  // Templates without a restaurant_name field (e.g. Figma imports
-                  // that don't define one) have nothing to auto-tag the merchant
-                  // with - fall back to the project name instead of dumping
-                  // everything into "General", still with zero extra clicks.
-                  merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
-                  autoCropContent={zone.id === 'qr'}
-                  restricted={restricted}
-                />
-              )
-              return restricted ? (
-                <div key={zone.id}>{upload}</div>
-              ) : (
-                <ReorderableStep
-                  key={zone.id}
-                  isDragging={draggingKey === zone.id}
-                  isDragOver={dragOverKey === zone.id && !!draggingKey && draggingKey !== zone.id}
-                  dragSource={dragSourceProps(zone.id)}
-                  dropTarget={dropTargetProps(zone.id, reorderImages)}
-                >
-                  {upload}
-                </ReorderableStep>
-              )
-            })}
-          </>
-        )}
+        })}
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>ICC Profile</div>
-          {/* Both options actually change the export now (api/export-cmyk.js
-              picks the matching bundled .icc + OutputIntent) - unlike the old
-              fixed FOGRA39-only display, this is a real choice. FOGRA39 stays
-              the default since it's what every export used before this. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {ICC_PROFILE_OPTIONS.map(opt => {
-              const active = (iccProfile ?? 'fogra39') === opt.id
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => onIccProfileChange?.(opt.id)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
-                    padding: '10px 12px', fontSize: 13, textAlign: 'left', cursor: 'pointer',
-                    border: `1px solid ${active ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 8,
-                    background: active ? 'var(--primary-glow)' : 'var(--surface)', color: 'var(--dark)',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-                    <span style={{ color: active ? '#16a34a' : 'var(--light)', fontWeight: 700 }}>✓</span>
-                    {opt.label}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--mid)', paddingLeft: 22 }}>{opt.hint}</span>
-                </button>
-              )
-            })}
+          {/* No longer a choice (FOGRA39 removed, Julia's ask, 2026-09-18) -
+              every export uses FOGRA51, shown here for reference only. */}
+          <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{ICC_PROFILE.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{ICC_PROFILE.hint}</div>
           </div>
         </div>
 
