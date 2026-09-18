@@ -342,6 +342,18 @@ export default function App() {
   // load, with no timer.
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [loadKey, setLoadKey]                 = useState(0)    // increments on project load to reset auto-shrink
+  // Gates Export PDF behind Send for Review (Julia's ask, 2026-09-18, per
+  // Annika's mockup - "assuming there's an approval step"; confirmed: yes,
+  // gate it). Session-local, not a persisted project field - resets
+  // whenever a fresh editing session starts (loadKey increments on every
+  // project load), so reopening a design later requires sending it for
+  // review again rather than remembering it forever.
+  const [reviewSentLoadKey, setReviewSentLoadKey] = useState(loadKey)
+  const [reviewSent, setReviewSent] = useState(false)
+  if (reviewSentLoadKey !== loadKey) {
+    setReviewSentLoadKey(loadKey)
+    setReviewSent(false)
+  }
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
@@ -1311,13 +1323,18 @@ export default function App() {
   // here, and used to be explained only in small gray footer text - easy to
   // click without realizing it's the one-way option.
   async function handleSendForReview() {
-    if (!window.confirm('Send this design for review as-is? You can still find and edit it later from Designs, but this skips exporting or reviewing it here first.')) return
+    // Wording updated for the Export-behind-review gate (Julia's editor
+    // redesign, 2026-09-18) - this used to be framed as an alternative to
+    // exporting ("skips exporting... first"), which is now backwards: this
+    // IS what unlocks Export PDF, not something instead of it.
+    if (!window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
     setSaving(true)
     try {
       const { id } = await doSave()
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
+      setReviewSent(true)
       setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
       offerMoreFormats()
     } catch (err) {
@@ -1723,9 +1740,16 @@ export default function App() {
                 </span>
                 <span style={{ fontSize: 13, color: 'var(--light)', flexShrink: 0 }}>→</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTemplate?.name}</span>
-                {currentProjectId && (
-                  <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 8px', borderRadius: 100, flexShrink: 0 }}>
-                    Saved
+                {/* Reflects real save state now that autosave replaced the
+                    manual Save button (Julia's editor redesign, 2026-09-18)
+                    - this is the only save feedback left for the normal
+                    (non-restricted) flow. */}
+                {(saving || saveStatus === 'saved' || currentProjectId) && (
+                  <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#16a34a' : 'var(--mid)', background: saveStatus === 'saved' ? '#F0FDF4' : '#F3F4F6', padding: '2px 8px', borderRadius: 100, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {saving && (
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--mid)', flexShrink: 0 }} />
+                    )}
+                    {saving ? 'Saving…' : saveStatus === 'saved' ? 'Saved just now' : 'Saved'}
                   </span>
                 )}
               </div>
@@ -1897,6 +1921,7 @@ export default function App() {
             currentProjectId={currentProjectId}
             projectName={projectName}
             vertical={designVertical}
+            reviewSent={reviewSent}
           />
         </div>
       )}

@@ -597,7 +597,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical }) {
+export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -872,63 +872,82 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
 
       </div>
 
-      {/* Action footer: Export PDF → Send for Review → Save (restricted review
-          mode hides Export PDF only - Save stays, and returns to the "pick a
-          design" screen so a merchant wanting both A and B isn't stuck) */}
+      {/* Action footer - Julia's editor redesign, 2026-09-18, per Annika's
+          mockup: autosave replaces the manual Save button, leaving Send for
+          Review as the one primary CTA, with Export PDF gated behind it.
+          Restricted review mode is untouched - it never had autosave (a
+          brief-generated candidate's own save flow is deliberately manual,
+          see handleSaveAndReturnToPicker in App.jsx) and has no "Advanced"
+          concept to gate export against. */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {!restricted && (
+        {restricted ? (
           <>
             <button
-              onClick={onExport}
-              disabled={exporting}
-              style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: exporting ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'background 0.15s' }}
-              onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary-dark)' }}
-              onMouseLeave={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary)' }}
+              onClick={onSendForReview}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
+                background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
             >
-              {exporting ? 'Exporting…' : 'Export PDF'}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Send for Review
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving}
+              title="Saves this design (findable later in Designs) and takes you back to pick the other option"
+              style={{
+                width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+                background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
+                border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save & pick another design'}
             </button>
           </>
+        ) : (
+          <>
+            <button
+              onClick={onSendForReview}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
+                background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+              onMouseEnter={e => { if (!saving) e.currentTarget.style.background = 'var(--primary-dark)' }}
+              onMouseLeave={e => { if (!saving) e.currentTarget.style.background = 'var(--primary)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Send for Review
+            </button>
+
+            {reviewSent ? (
+              <button
+                onClick={onExport}
+                disabled={exporting}
+                style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--dark)' }}
+                onMouseLeave={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--border)' }}
+              >
+                {exporting ? 'Exporting…' : 'Export PDF'}
+              </button>
+            ) : (
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--light)', padding: '4px 0' }}>
+                🔒 Export PDF - unlocks once you send for review
+              </div>
+            )}
+          </>
         )}
-
-        <button
-          onClick={onSendForReview}
-          disabled={saving}
-          style={restricted ? {
-            width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
-            background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          } : {
-            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
-            background: '#fff', color: 'var(--dark)',
-            border: '1.5px solid var(--border)',
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}
-          onMouseEnter={e => { if (!saving && !restricted) e.currentTarget.style.borderColor = 'var(--dark)' }}
-          onMouseLeave={e => { if (!saving && !restricted) e.currentTarget.style.borderColor = 'var(--border)' }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-          </svg>
-          Send for Review
-        </button>
-
-        <button
-          onClick={onSave}
-          disabled={saving}
-          title={restricted ? 'Saves this design (findable later in Designs) and takes you back to pick the other option' : undefined}
-          style={{
-            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
-            background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
-            border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
-          onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
-        >
-          {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : restricted ? 'Save & pick another design' : 'Save'}
-        </button>
       </div>
 
     </div>
