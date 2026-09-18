@@ -194,7 +194,7 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField }) {
   const limit = CHAR_LIMITS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
@@ -247,11 +247,16 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 
       {onNudge && <NudgeControl onNudge={onNudge} />}
 
-      {/* Input */}
+      {/* Input - focus/blur report this field up to App.jsx's activeZoneId
+          (Annika's ask, 2026-09-18: light up the matching zone on the
+          canvas while typing here) - see TemplateCanvas.jsx's own effect
+          keyed on that prop for the actual highlight. */}
       {multiline ? (
         <textarea
           value={value}
           onChange={e => onChange(e.target.value)}
+          onFocus={() => onFocusField?.(fieldKey)}
+          onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
           rows={3}
@@ -263,6 +268,8 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
+          onFocus={() => onFocusField?.(fieldKey)}
+          onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
           placeholder={fieldPlaceholder}
@@ -306,7 +313,7 @@ const ICC_PROFILE = { label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted }) {
+function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted, zoneId, onFocusField }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -435,6 +442,8 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
         <button
           type="button"
           onClick={restricted ? undefined : handleClick}
+          onMouseEnter={() => onFocusField?.(zoneId)}
+          onMouseLeave={() => onFocusField?.(null)}
           disabled={restricted}
           style={{ flex: 1, minWidth: 0, border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '10px 8px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
         >
@@ -456,6 +465,8 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           <button
             type="button"
             onClick={openLibrary}
+            onMouseEnter={() => onFocusField?.(zoneId)}
+            onMouseLeave={() => onFocusField?.(null)}
             style={{ flex: 1, minWidth: 0, border: '1.5px dashed var(--border)', borderRadius: 10, padding: '10px 8px', cursor: 'pointer', background: '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
           >
             <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -610,7 +621,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -670,6 +681,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Headline" fieldKey="headline"
+            onFocusField={onFocusField}
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
             placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
@@ -689,6 +701,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Sub-headline" fieldKey="sub_headline"
+            onFocusField={onFocusField}
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -703,6 +716,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Restaurant name" fieldKey="restaurant_name"
+            onFocusField={onFocusField}
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -716,6 +730,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Offer" fieldKey="offer"
+            onFocusField={onFocusField}
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
@@ -736,6 +751,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="T&amp;Cs" fieldKey="tc"
+            onFocusField={onFocusField}
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -753,6 +769,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="App download line" fieldKey="cta"
+            onFocusField={onFocusField}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
             placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}
@@ -837,6 +854,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           const content = zone ? (
             <ImageUpload
               step={i + 1}
+              zoneId={zone.id}
+              onFocusField={onFocusField}
               label={imageZoneLabel(zone)}
               hint={zone.hint ?? 'JPG or PNG'}
               value={fields[`${zone.id}Url`]}

@@ -257,6 +257,10 @@ export default function App() {
   // eslint-disable-next-line no-unused-vars
   const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
+  // Which zone's field is currently focused/hovered in the side panel - lights
+  // up that zone's boundary on the canvas (Annika's ask via Julia, 2026-09-18).
+  // Lifted here since FieldEditor and TemplateCanvas are siblings.
+  const [activeZoneId, setActiveZoneId]        = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
   const [lang, setLang]                       = useState('de')
   const [exporting, setExporting]             = useState(false)
@@ -1606,12 +1610,14 @@ export default function App() {
               onAutoShrink={handleAutoShrink}
               restricted={restrictedReview}
               onImageDrop={handleCanvasImageDrop}
+              activeZoneId={activeZoneId}
             />
           </div>
 
           <FieldEditor
             fields={fields}
             onChange={handleFieldChange}
+            onFocusField={setActiveZoneId}
             credits={activation?.credits}
             onCreditUsed={handleAiCreditUsed}
             lang={lang}
