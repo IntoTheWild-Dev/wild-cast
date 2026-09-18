@@ -1771,12 +1771,20 @@ export default function App() {
                 onBlur={e => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent' }}
               />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+              {/* minWidth: 0 - a grid item's default min-width is "auto" (its
+                  content's own intrinsic width), which stopped this column
+                  from ever actually shrinking below that on a narrow window
+                  and squashed everything together instead of wrapping
+                  (Julia's report, 2026-09-18). flexWrap lets whole
+                  pills/buttons drop to a second line as intact units instead
+                  - paired with whiteSpace:'nowrap' on each one below, so a
+                  single pill's own text never breaks mid-word first. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap', rowGap: 6, minWidth: 0 }}>
               {activation && (
                 <div ref={creditsInfoRef} style={{ position: 'relative' }}>
                   <span
                     onClick={() => setShowCreditsInfo(v => !v)}
-                    style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'pointer' }}
+                    style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >
                     {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''} remaining
                   </span>
@@ -1796,7 +1804,7 @@ export default function App() {
                 onClick={handleUndo}
                 disabled={!canUndo}
                 title="Undo last change (⌘Z)"
-                style={{ fontSize: 12, fontWeight: 600, color: canUndo ? 'var(--mid)' : 'var(--light)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: canUndo ? 'pointer' : 'default', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4 }}
+                style={{ fontSize: 12, fontWeight: 600, color: canUndo ? 'var(--mid)' : 'var(--light)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: canUndo ? 'pointer' : 'default', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', flexShrink: 0 }}
                 onMouseEnter={e => { if (canUndo) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' } }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = canUndo ? 'var(--mid)' : 'var(--light)' }}
               >
@@ -1811,7 +1819,7 @@ export default function App() {
                 <button
                   onClick={effectiveMode === 'non-designer' ? handleResetToBlank : handleResetLayout}
                   title={effectiveMode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
-                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
                 >

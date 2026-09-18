@@ -781,7 +781,12 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
           >
-            {expanded ? '›' : '‹'}
+            {/* Was backwards from convention - Julia's report, 2026-09-18:
+                read as "only ever expands, no way to close it back up".
+                Pointing right (›) now means "expand"; left (‹) means
+                "collapse/close", matching how these arrows are normally
+                read regardless of which state is currently showing. */}
+            {expanded ? '‹' : '›'}
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)' }}>Edit content</div>
@@ -825,36 +830,40 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             )
           }
 
-          if (zone) {
-            return (
-              <ImageUpload
-                key={zone.id}
-                step={i + 1}
-                zoneId={zone.id}
-                onFocusField={onFocusField}
-                label={imageZoneLabel(zone)}
-                value={fields[`${zone.id}Url`]}
-                onChange={url => onChange(`${zone.id}Url`, url)}
-                square={zone.id === 'logo' || zone.id === 'qr'}
-                onResetPosition={() => onResetZone?.(zone.id)}
-                scalePercent={imageScales?.[zone.id] ?? 100}
-                onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
-                onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
-                minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
-                minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
-                requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
-                folder={assetFolderForZone(zone.id)}
-                // Templates without a restaurant_name field (e.g. Figma imports
-                // that don't define one) have nothing to auto-tag the merchant
-                // with - fall back to the project name instead of dumping
-                // everything into "General", still with zero extra clicks.
-                merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
-                autoCropContent={zone.id === 'qr'}
-                restricted={restricted}
-              />
-            )
-          }
-          return <div key={key}>{renderTextStep(key, i + 1)}</div>
+          // Coral box around the active field, matching the canvas zone
+          // highlight's same coral (Julia's ask, 2026-09-18) - reads as one
+          // consistent "this is what you're working on" treatment instead
+          // of two different visual languages for canvas vs. panel.
+          return (
+            <div key={key} style={{ border: '1.5px solid var(--primary)', background: 'rgba(223,111,109,0.06)', borderRadius: 12, padding: '14px 14px 2px', marginBottom: 8 }}>
+              {zone ? (
+                <ImageUpload
+                  step={i + 1}
+                  zoneId={zone.id}
+                  onFocusField={onFocusField}
+                  label={imageZoneLabel(zone)}
+                  value={fields[`${zone.id}Url`]}
+                  onChange={url => onChange(`${zone.id}Url`, url)}
+                  square={zone.id === 'logo' || zone.id === 'qr'}
+                  onResetPosition={() => onResetZone?.(zone.id)}
+                  scalePercent={imageScales?.[zone.id] ?? 100}
+                  onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+                  onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
+                  minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+                  minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+                  requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+                  folder={assetFolderForZone(zone.id)}
+                  // Templates without a restaurant_name field (e.g. Figma imports
+                  // that don't define one) have nothing to auto-tag the merchant
+                  // with - fall back to the project name instead of dumping
+                  // everything into "General", still with zero extra clicks.
+                  merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                  autoCropContent={zone.id === 'qr'}
+                  restricted={restricted}
+                />
+              ) : renderTextStep(key, i + 1)}
+            </div>
+          )
         })}
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
