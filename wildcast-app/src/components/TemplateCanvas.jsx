@@ -86,7 +86,7 @@ async function loadFonts() {
   }
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -114,6 +114,9 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
+  const [dropZoneId, setDropZoneId] = useState(null) // image zone highlighted while a file is dragged over it
+  const [dropError, setDropError] = useState(null)   // transient message when a dropped file gets rejected
+  const dropErrorTimerRef = useRef(null)
 
   // Clamps a user nudge offset to how far the image can move without breaking
   // its fit contract, so a nudge can never reveal zone background behind it
@@ -832,6 +835,62 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     requestAnimationFrame(() => { fabricRef.current?.calcOffset() })
   }, [zoom])
 
+  // ── Drag-and-drop an image file straight onto a photo/logo zone ───────────
+  // fabric's own getPointer() already resolves the CSS `transform: scale()`
+  // zoom wrapper into real canvas-space coordinates (same mechanism its own
+  // mouse handling relies on, via calcOffset() above), so a plain bounding-box
+  // check against each image zone's x/y/width/height is enough to tell which
+  // zone a drop landed on - no fabric hit-testing needed.
+  function zoneIdAtPoint(px, py) {
+    const imageZones = config?.zones?.filter(z => z.type === 'image') ?? []
+    const hit = imageZones.find(z => px >= z.x && px <= z.x + z.width && py >= z.y && py <= z.y + z.height)
+    return hit?.id ?? null
+  }
+
+  function zoneIdFromDragEvent(e) {
+    const canvas = fabricRef.current
+    if (!canvas || restricted) return null
+    const pt = canvas.getPointer(e, true)
+    return zoneIdAtPoint(pt.x, pt.y)
+  }
+
+  function showDropError(message) {
+    setDropError(message)
+    clearTimeout(dropErrorTimerRef.current)
+    dropErrorTimerRef.current = setTimeout(() => setDropError(null), 4000)
+  }
+
+  function handleDragOver(e) {
+    if (!e.dataTransfer?.types?.includes('Files')) return
+    e.preventDefault()
+    setDropZoneId(zoneIdFromDragEvent(e.nativeEvent))
+  }
+
+  function handleDragLeave(e) {
+    // Only clear on actually leaving the canvas area, not just moving between
+    // its own children (which also fires dragleave on the outgoing element).
+    if (!containerRef.current?.contains(e.relatedTarget)) setDropZoneId(null)
+  }
+
+  async function handleDrop(e) {
+    e.preventDefault()
+    const zoneId = zoneIdFromDragEvent(e.nativeEvent)
+    setDropZoneId(null)
+    const file = e.dataTransfer?.files?.[0]
+    if (!file || !zoneId || !onImageDrop) return
+    if (!file.type.startsWith('image/')) {
+      showDropError('That file isn’t an image.')
+      return
+    }
+    try {
+      await onImageDrop(zoneId, file)
+    } catch (err) {
+      showDropError(err.message)
+    }
+  }
+
+  useEffect(() => () => clearTimeout(dropErrorTimerRef.current), [])
+
   // ── Sync image uploads → canvas (handles any image zone: photo, logo, etc.) ──
   useEffect(() => {
     const canvas = fabricRef.current
@@ -976,10 +1035,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   // that case so the canvas's own bottom edge doubles as the outer edge.
   const bleedPadBottom = config?.bleedExtraBottom ? 0 : BLEED_MARGIN
   const scale = zoom / 100
+  const dropZone = dropZoneId ? config?.zones?.find(z => z.id === dropZoneId) : null
 
   return (
     <div
       ref={containerRef}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         flex: 1,
         minHeight: 0,
@@ -1050,7 +1113,36 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               <canvas ref={canvasElRef} />
             </div>
           </div>
+          {/* Highlights the zone a dragged file is currently over - lives in
+              this same `transform: scale()` wrapper as the canvas so it scales
+              and positions identically, using the zone's own unscaled x/y/
+              width/height plus the same BLEED_MARGIN offset the canvas itself
+              sits at within this wrapper. */}
+          {dropZone && (
+            <div style={{
+              position: 'absolute',
+              left: dropZone.x + BLEED_MARGIN,
+              top: dropZone.y + BLEED_MARGIN,
+              width: dropZone.width,
+              height: dropZone.height,
+              border: '2.5px dashed var(--primary, #DF6F6D)',
+              background: 'rgba(223,111,109,0.18)',
+              borderRadius: 4,
+              pointerEvents: 'none',
+              zIndex: 8,
+            }} />
+          )}
         </div>
+        {dropError && (
+          <div style={{
+            position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+            background: '#B91C1C', color: '#fff', fontSize: 12, fontWeight: 600,
+            padding: '7px 14px', borderRadius: 20, whiteSpace: 'nowrap',
+            zIndex: 9, boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          }}>
+            {dropError}
+          </div>
+        )}
         {/* Zoom controls */}
         <div style={{
           position: 'absolute', bottom: -38, left: '50%', transform: 'translateX(-50%)',

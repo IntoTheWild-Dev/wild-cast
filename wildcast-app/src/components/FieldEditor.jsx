@@ -9,7 +9,7 @@ function formatDateTime(ts) {
 }
 import AISuggest from './AISuggest'
 import { hasTransparency, cropToContent } from '../lib/image'
-import { assetFolderForZone, saveAssetToLibrary, getLibraryAssets, uniqueMerchants, GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 
@@ -43,6 +43,79 @@ const FIELD_HINTS = {
 // there (Julia's ask, 2026-09-09: "the form isn't clear on Option A and
 // Option B" for what each field expects).
 const OPT_B_HEADLINE_HINT = "Completes the fixed \"Wie wär's mit ...\" line above it as a question, e.g. 'MCDONALD'S?'"
+
+// Session-only display order for the Edit content panel's text/image steps -
+// lets a partner drag e.g. "Offer" above "Sub-headline" for their own
+// editing convenience. Purely cosmetic (only changes which numbered step a
+// field appears as in this panel, never the zone's x/y on the canvas) and
+// intentionally not persisted with the project - resets to the template's
+// natural order next time this editor is opened (Julia's ask, 2026-09-18).
+function useOrderedKeys(naturalKeys) {
+  const naturalSig = naturalKeys.join('|')
+  const [sig, setSig] = useState(naturalSig)
+  const [order, setOrder] = useState(naturalKeys)
+  // Adjusts state during render (not an effect) when the template's own
+  // field set changes (e.g. switching templates) - resets the drag order
+  // back to natural immediately, in the same render, rather than flashing
+  // the stale order for one frame first.
+  if (sig !== naturalSig) {
+    setSig(naturalSig)
+    setOrder(naturalKeys)
+  }
+  function reorder(draggedKey, targetKey) {
+    if (draggedKey === targetKey) return
+    setOrder(prev => {
+      const from = prev.indexOf(draggedKey)
+      const to = prev.indexOf(targetKey)
+      if (from === -1 || to === -1) return prev
+      const next = [...prev]
+      const [item] = next.splice(from, 1)
+      next.splice(to, 0, item)
+      return next
+    })
+  }
+  return [order, reorder]
+}
+
+function GripIcon() {
+  return (
+    <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+      <circle cx="2.5" cy="2.5" r="1.4" /><circle cx="7.5" cy="2.5" r="1.4" />
+      <circle cx="2.5" cy="8" r="1.4" /><circle cx="7.5" cy="8" r="1.4" />
+      <circle cx="2.5" cy="13.5" r="1.4" /><circle cx="7.5" cy="13.5" r="1.4" />
+    </svg>
+  )
+}
+
+// Wraps a StepFieldRow/ImageUpload with a drag handle - native HTML5 drag
+// and drop rather than a library, matching the rest of this codebase's
+// hand-rolled UI. The handle alone is draggable (not the whole row), so
+// selecting/editing text inside the field's own input never gets mistaken
+// for a drag.
+function ReorderableStep({ isDragging, isDragOver, dragSource, dropTarget, children }) {
+  return (
+    <div
+      {...dropTarget}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 2,
+        opacity: isDragging ? 0.4 : 1,
+        outline: isDragOver ? '2px dashed var(--primary)' : 'none',
+        outlineOffset: 4, borderRadius: 10, transition: 'opacity 0.15s',
+      }}
+    >
+      <span
+        {...dragSource}
+        title="Drag to reorder"
+        style={{ cursor: 'grab', color: 'var(--light)', flexShrink: 0, marginTop: 7, padding: '2px 1px', touchAction: 'none' }}
+        onMouseEnter={e => { e.currentTarget.style.color = 'var(--mid)' }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
+      >
+        <GripIcon />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  )
+}
 
 function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
@@ -304,39 +377,27 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
     }
   }
 
+  // Shared with TemplateCanvas.jsx's drag-and-drop-onto-a-zone path
+  // (uploadImageForZone in lib/assetLibrary.js) - same validation/autocrop/
+  // library-save pipeline either way, just a different entry point for the file.
+  async function handleFile(file) {
+    setBgError(null)
+    try {
+      const { url, name } = await uploadImageForZone(file, { requireTransparent, autoCropContent, folder: libraryFolder, merchant })
+      refreshLibrary()
+      applyImage(url, name)
+    } catch (err) {
+      setBgError(err.message)
+    }
+  }
+
   const handleClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
-    input.onchange = async e => {
+    input.onchange = e => {
       const file = e.target.files[0]
-      if (!file) return
-      setBgError(null)
-
-      if (requireTransparent && file.type !== 'image/png') {
-        setBgError('This image has a background - please upload a transparent PNG.')
-        return
-      }
-
-      let url = URL.createObjectURL(file)
-
-      if (requireTransparent) {
-        const transparent = await hasTransparency(url)
-        if (!transparent) {
-          setBgError('This image has a background - please upload a transparent PNG.')
-          URL.revokeObjectURL(url)
-          return
-        }
-      }
-
-      // Many QR generators export with a big white "quiet zone" margin baked
-      // into the file - crop it away so a plain "contain" fit fills the zone
-      // tightly instead of leaving visible gaps, no manual scale/position
-      // needed from a non-designer partner.
-      if (autoCropContent) url = await cropToContent(url)
-
-      saveAssetToLibrary(libraryFolder, file.name, url, merchant).then(refreshLibrary)
-      applyImage(url, file.name)
+      if (file) handleFile(file)
     }
     input.click()
   }
@@ -571,6 +632,143 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
     return zone?.align ?? fallback
   }
 
+  // Drag-to-reorder for the panel's steps (see useOrderedKeys above) - text
+  // fields and image zones are reordered as two separate groups, same as
+  // they're already visually separated by the divider below.
+  const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
+    .filter(k => k === 'headline' || templateConfig?.zones?.some(z => z.id === k))
+  const imageZoneKeys = imageZones.map(z => z.id)
+  const [textOrder, reorderText] = useOrderedKeys(textFieldKeys)
+  const [imageOrder, reorderImages] = useOrderedKeys(imageZoneKeys)
+  const [draggingKey, setDraggingKey] = useState(null)
+  const [dragOverKey, setDragOverKey] = useState(null)
+
+  function dragSourceProps(key) {
+    return {
+      draggable: true,
+      onDragStart: e => { setDraggingKey(key); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key) },
+      onDragEnd: () => { setDraggingKey(null); setDragOverKey(null) },
+    }
+  }
+
+  function dropTargetProps(key, reorderFn) {
+    return {
+      onDragOver: e => { e.preventDefault(); if (draggingKey && draggingKey !== key) setDragOverKey(key) },
+      onDragLeave: () => setDragOverKey(prev => (prev === key ? null : prev)),
+      onDrop: e => {
+        e.preventDefault()
+        if (draggingKey) reorderFn(draggingKey, key)
+        setDraggingKey(null)
+        setDragOverKey(null)
+      },
+    }
+  }
+
+  function renderTextStep(key, step) {
+    switch (key) {
+      case 'headline':
+        return (
+          <StepFieldRow
+            step={step} label="Headline" fieldKey="headline"
+            value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
+            hint={template?.id === 'opt-b-flyer2-simple' ? OPT_B_HEADLINE_HINT : undefined}
+            placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
+            credits={credits} onCreditUsed={onCreditUsed}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
+            fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
+            align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
+            onResetPosition={() => onResetZone?.('headline')}
+            // Guided mode's canvas is locked (no drag) same as restricted review -
+            // Headline needs the same Position nudge Offer already got (2026-09-08)
+            // or there's no way to fix overlap without switching to Designer mode
+            // (Julia's ask, 2026-09-11).
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('headline', axis, delta) : undefined}
+          />
+        )
+      case 'sub_headline':
+        return (
+          <StepFieldRow
+            step={step} label="Sub-headline" fieldKey="sub_headline"
+            value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
+            credits={credits} onCreditUsed={onCreditUsed}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
+            fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
+            align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
+            onResetPosition={() => onResetZone?.('sub_headline')}
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('sub_headline', axis, delta) : undefined}
+          />
+        )
+      case 'restaurant_name':
+        return (
+          <StepFieldRow
+            step={step} label="Restaurant name" fieldKey="restaurant_name"
+            value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
+            credits={credits} onCreditUsed={onCreditUsed}
+            readOnly={restricted}
+            showControls={false} showSize={false}
+            fontSize={20}
+            align="right"
+            suggestFrom={PLACEHOLDER_PARTNERS}
+          />
+        )
+      case 'offer':
+        return (
+          <StepFieldRow
+            step={step} label="Offer" fieldKey="offer"
+            value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
+            placeholder="z.B. 30% Rabatt"
+            credits={credits} onCreditUsed={onCreditUsed}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
+            fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
+            align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
+            onResetPosition={() => onResetZone?.('offer')}
+            // Guided mode's canvas is locked (no drag), same as restricted
+            // review - Offer needs the same Position nudge that headline/
+            // sub_headline restricted mode already has, or there's no way to
+            // fix overlap without switching to Designer mode (Julia's ask,
+            // 2026-09-08).
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('offer', axis, delta) : undefined}
+          />
+        )
+      case 'tc':
+        return (
+          <StepFieldRow
+            step={step} label="T&amp;Cs" fieldKey="tc"
+            value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
+            credits={credits} onCreditUsed={onCreditUsed}
+            readOnly={restricted}
+            showControls={showControls && !restricted}
+            fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
+            align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
+            onResetPosition={() => onResetZone?.('tc')}
+            // Was missing this even though headline/sub_headline/offer all
+            // already had it - Julia's ask, 2026-09-16, to make Position
+            // nudge available on T&Cs too in guided mode, same as the others.
+            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('tc', axis, delta) : undefined}
+          />
+        )
+      case 'cta':
+        return (
+          <StepFieldRow
+            step={step} label="App download line" fieldKey="cta"
+            value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
+            placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
+            credits={credits} onCreditUsed={onCreditUsed}
+            readOnly={restricted}
+            showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
+            fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}
+            align={effectiveAlign('cta', 'center')} onAlign={a => onAlignChange('cta', a)}
+            onResetPosition={() => onResetZone?.('cta')}
+          />
+        )
+      default:
+        return null
+    }
+  }
+
   const width = expanded ? 520 : 360
 
   return (
@@ -648,127 +846,71 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           </div>
         )}
 
-        {/* Text fields - same numbered layout for both modes */}
-        <StepFieldRow
-          step={1} label="Headline" fieldKey="headline"
-          value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-          hint={template?.id === 'opt-b-flyer2-simple' ? OPT_B_HEADLINE_HINT : undefined}
-          placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
-          credits={credits} onCreditUsed={onCreditUsed}
-          readOnly={restricted}
-          showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
-          fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
-          align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
-          onResetPosition={() => onResetZone?.('headline')}
-          // Guided mode's canvas is locked (no drag) same as restricted review -
-          // Headline needs the same Position nudge Offer already got (2026-09-08)
-          // or there's no way to fix overlap without switching to Designer mode
-          // (Julia's ask, 2026-09-11).
-          onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('headline', axis, delta) : undefined}
-        />
-        {templateConfig?.zones?.some(z => z.id === 'sub_headline') && (
-          <StepFieldRow
-            step={2} label="Sub-headline" fieldKey="sub_headline"
-            value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
-            credits={credits} onCreditUsed={onCreditUsed}
-            readOnly={restricted}
-            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
-            fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
-            align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
-            onResetPosition={() => onResetZone?.('sub_headline')}
-            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('sub_headline', axis, delta) : undefined}
-          />
-        )}
-        {templateConfig?.zones?.some(z => z.id === 'restaurant_name') && (
-          <StepFieldRow
-            step={3} label="Restaurant name" fieldKey="restaurant_name"
-            value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
-            credits={credits} onCreditUsed={onCreditUsed}
-            readOnly={restricted}
-            showControls={false} showSize={false}
-            fontSize={20}
-            align="right"
-            suggestFrom={PLACEHOLDER_PARTNERS}
-          />
-        )}
-        {templateConfig?.zones?.some(z => z.id === 'offer') && (
-          <StepFieldRow
-            step={4} label="Offer" fieldKey="offer"
-            value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-            placeholder="z.B. 30% Rabatt"
-            credits={credits} onCreditUsed={onCreditUsed}
-            readOnly={restricted}
-            showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
-            fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
-            align={effectiveAlign('offer', 'center')} onAlign={a => onAlignChange('offer', a)}
-            onResetPosition={() => onResetZone?.('offer')}
-            // Guided mode's canvas is locked (no drag), same as restricted
-            // review - Offer needs the same Position nudge that headline/
-            // sub_headline restricted mode already has, or there's no way to
-            // fix overlap without switching to Designer mode (Julia's ask,
-            // 2026-09-08).
-            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('offer', axis, delta) : undefined}
-          />
-        )}
-        {templateConfig?.zones?.some(z => z.id === 'tc') && (
-          <StepFieldRow
-            step={5} label="T&amp;Cs" fieldKey="tc"
-            value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
-            credits={credits} onCreditUsed={onCreditUsed}
-            readOnly={restricted}
-            showControls={showControls && !restricted}
-            fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
-            align={effectiveAlign('tc', 'left')} onAlign={a => onAlignChange('tc', a)}
-            onResetPosition={() => onResetZone?.('tc')}
-            // Was missing this even though headline/sub_headline/offer all
-            // already had it - Julia's ask, 2026-09-16, to make Position
-            // nudge available on T&Cs too in guided mode, same as the others.
-            onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('tc', axis, delta) : undefined}
-          />
-        )}
-        {templateConfig?.zones?.some(z => z.id === 'cta') && (
-          <StepFieldRow
-            step={5} label="App download line" fieldKey="cta"
-            value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
-            placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
-            credits={credits} onCreditUsed={onCreditUsed}
-            readOnly={restricted}
-            showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
-            fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}
-            align={effectiveAlign('cta', 'center')} onAlign={a => onAlignChange('cta', a)}
-            onResetPosition={() => onResetZone?.('cta')}
-          />
-        )}
+        {/* Text fields - same numbered layout for both modes. Drag the grip
+            handle to reorder (hidden in restricted review mode, where
+            everything else is locked too) - see useOrderedKeys/ReorderableStep
+            above (Julia's ask, 2026-09-18). */}
+        {textOrder.map((key, i) => (
+          restricted ? (
+            <div key={key}>{renderTextStep(key, i + 1)}</div>
+          ) : (
+            <ReorderableStep
+              key={key}
+              isDragging={draggingKey === key}
+              isDragOver={dragOverKey === key && !!draggingKey && draggingKey !== key}
+              dragSource={dragSourceProps(key)}
+              dropTarget={dropTargetProps(key, reorderText)}
+            >
+              {renderTextStep(key, i + 1)}
+            </ReorderableStep>
+          )
+        ))}
 
         {imageZones.length > 0 && (
           <>
             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 24px' }} />
-            {imageZones.map((zone, i) => (
-              <ImageUpload
-                key={zone.id}
-                step={6 + i}
-                label={imageZoneLabel(zone)}
-                hint={zone.hint ?? 'JPG or PNG'}
-                value={fields[`${zone.id}Url`]}
-                onChange={url => onChange(`${zone.id}Url`, url)}
-                square={zone.id === 'logo' || zone.id === 'qr'}
-                onResetPosition={() => onResetZone?.(zone.id)}
-                scalePercent={imageScales?.[zone.id] ?? 100}
-                onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
-                onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
-                minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
-                minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
-                requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
-                folder={assetFolderForZone(zone.id)}
-                // Templates without a restaurant_name field (e.g. Figma imports
-                // that don't define one) have nothing to auto-tag the merchant
-                // with - fall back to the project name instead of dumping
-                // everything into "General", still with zero extra clicks.
-                merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
-                autoCropContent={zone.id === 'qr'}
-                restricted={restricted}
-              />
-            ))}
+            {imageOrder.map((id, i) => {
+              const zone = imageZones.find(z => z.id === id)
+              if (!zone) return null
+              const upload = (
+                <ImageUpload
+                  step={textOrder.length + 1 + i}
+                  label={imageZoneLabel(zone)}
+                  hint={zone.hint ?? 'JPG or PNG'}
+                  value={fields[`${zone.id}Url`]}
+                  onChange={url => onChange(`${zone.id}Url`, url)}
+                  square={zone.id === 'logo' || zone.id === 'qr'}
+                  onResetPosition={() => onResetZone?.(zone.id)}
+                  scalePercent={imageScales?.[zone.id] ?? 100}
+                  onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+                  onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
+                  minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+                  minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+                  requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+                  folder={assetFolderForZone(zone.id)}
+                  // Templates without a restaurant_name field (e.g. Figma imports
+                  // that don't define one) have nothing to auto-tag the merchant
+                  // with - fall back to the project name instead of dumping
+                  // everything into "General", still with zero extra clicks.
+                  merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                  autoCropContent={zone.id === 'qr'}
+                  restricted={restricted}
+                />
+              )
+              return restricted ? (
+                <div key={zone.id}>{upload}</div>
+              ) : (
+                <ReorderableStep
+                  key={zone.id}
+                  isDragging={draggingKey === zone.id}
+                  isDragOver={dragOverKey === zone.id && !!draggingKey && draggingKey !== zone.id}
+                  dragSource={dragSourceProps(zone.id)}
+                  dropTarget={dropTargetProps(zone.id, reorderImages)}
+                >
+                  {upload}
+                </ReorderableStep>
+              )
+            })}
           </>
         )}
 

@@ -1,4 +1,4 @@
-import { blobUrlToDataUrl } from './image'
+import { blobUrlToDataUrl, hasTransparency, cropToContent } from './image'
 
 // Shared library, backed by Vercel Blob (not localStorage) - same asset is
 // reusable across designs AND across browsers/devices, and stored at real
@@ -79,6 +79,36 @@ export async function saveAssetToLibrary(folder, name, blobUrl, merchant) {
     console.warn('Could not save asset to library:', err)
     return null
   }
+}
+
+// Shared by FieldEditor.jsx's ImageUpload (click-to-browse) and
+// TemplateCanvas.jsx's drag-and-drop directly onto a zone - both need the
+// exact same validation/processing pipeline before a raw File becomes a
+// usable zone URL, so it lives in one place rather than the canvas-drop path
+// silently skipping steps the click path has always done (the
+// transparent-PNG requirement, QR quiet-zone autocrop, saving into the
+// partner's asset Library). Throws (with a user-facing message) on the one
+// blocking case - a non-transparent upload into a zone that requires one.
+export async function uploadImageForZone(file, { requireTransparent, autoCropContent, folder, merchant } = {}) {
+  if (requireTransparent && file.type !== 'image/png') {
+    throw new Error('This image has a background - please upload a transparent PNG.')
+  }
+
+  let url = URL.createObjectURL(file)
+
+  if (requireTransparent) {
+    const transparent = await hasTransparency(url)
+    if (!transparent) {
+      URL.revokeObjectURL(url)
+      throw new Error('This image has a background - please upload a transparent PNG.')
+    }
+  }
+
+  if (autoCropContent) url = await cropToContent(url)
+
+  saveAssetToLibrary(folder ?? 'other', file.name, url, merchant)
+
+  return { url, name: file.name }
 }
 
 export async function deleteLibraryAsset(url) {

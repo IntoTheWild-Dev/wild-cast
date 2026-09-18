@@ -33,6 +33,64 @@ const FEATURES = [
   },
 ]
 
+// Shared by HeroColumn (single column, as always) and LandingPage.jsx, which
+// pulls it out to its own full-width, 4-column section below the choice
+// cards instead (Julia's ask, 2026-09-18).
+export function FeatureGrid({ columns = 1 }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: columns > 1 ? '28px 24px' : 20 }}>
+      {FEATURES.map(f => (
+        <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {f.icon}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{f.title}</div>
+            <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{f.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Made much bigger/bolder with a real standalone button (was a small inline
+// text link) - Julia's ask, 2026-09-15: Wild Scale needed to be "in your
+// face," easy to miss at the old size. Pulled out of HeroColumn so
+// LandingPage.jsx can place it after the 3-column choice-card section
+// instead of inside the narrow hero column (Julia's ask, 2026-09-18).
+export function WildScaleTip({ maxWidth = 420 }) {
+  return (
+    <div
+      style={{
+        background: 'var(--primary-glow)', border: '1.5px solid var(--primary)', borderRadius: 16,
+        padding: '22px 24px', marginBottom: 36, maxWidth,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ color: 'var(--primary)', fontSize: 20, lineHeight: 1 }}>✦</span>
+        <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)' }}>Before you upload</span>
+      </div>
+      <p style={{ fontSize: 14, color: 'var(--dark)', margin: '0 0 18px', lineHeight: 1.6 }}>
+        Product photos should be high resolution - use Wild Scale's <strong>Print</strong> preset
+        (2400×2400px) - with the background removed (transparent PNG).
+      </p>
+      <a
+        href="https://scale.wildstack.studio"
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          width: '100%', padding: '16px 20px', fontSize: 16, fontWeight: 400, borderRadius: 12,
+          background: 'var(--primary)', color: '#fff', textDecoration: 'none', boxSizing: 'border-box',
+        }}
+      >
+        Prep your assets with WildScale →
+      </a>
+    </div>
+  )
+}
+
 // pickedOption/onOpenTemplateModal: TemplatePickStep renders right here, between
 // the hero copy and the tip box - Julia's ask (2026-09-10): the hero's own
 // headline/subline should read first, with "Pick your template" right after
@@ -43,7 +101,10 @@ const FEATURES = [
 // inside the actual brief flow (reached via "Start from scratch"), not on
 // the landing page itself, which just routes to that flow instead of
 // starting it directly.
-export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep = true }) {
+// showFeatures/showWildScaleTip=false: LandingPage.jsx renders FeatureGrid
+// and WildScaleTip itself, full-width below the choice cards, instead of
+// leaving them here in the narrow hero column (Julia's ask, 2026-09-18).
+export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep = true, showFeatures = true, showWildScaleTip = true }) {
   return (
     <div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
@@ -55,50 +116,9 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
 
       {showTemplateStep && <TemplatePickStep pickedOption={pickedOption} onOpenTemplateModal={onOpenTemplateModal} />}
 
-      {/* Made much bigger/bolder with a real standalone button (was a small
-          inline text link) - Julia's ask, 2026-09-15: Wild Scale needed to
-          be "in your face," easy to miss at the old size. */}
-      <div
-        style={{
-          background: 'var(--primary-glow)', border: '1.5px solid var(--primary)', borderRadius: 16,
-          padding: '22px 24px', marginBottom: 36, maxWidth: 420,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ color: 'var(--primary)', fontSize: 20, lineHeight: 1 }}>✦</span>
-          <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)' }}>Before you upload</span>
-        </div>
-        <p style={{ fontSize: 14, color: 'var(--dark)', margin: '0 0 18px', lineHeight: 1.6 }}>
-          Product photos should be high resolution - use Wild Scale's <strong>Print</strong> preset
-          (2400×2400px) - with the background removed (transparent PNG).
-        </p>
-        <a
-          href="https://scale.wildstack.studio"
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', padding: '16px 20px', fontSize: 16, fontWeight: 400, borderRadius: 12,
-            background: 'var(--primary)', color: '#fff', textDecoration: 'none', boxSizing: 'border-box',
-          }}
-        >
-          Prep your assets with WildScale →
-        </a>
-      </div>
+      {showWildScaleTip && <WildScaleTip />}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {FEATURES.map(f => (
-          <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {f.icon}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{f.title}</div>
-              <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>{f.desc}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {showFeatures && <FeatureGrid />}
     </div>
   )
 }
@@ -301,7 +321,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
-          <HeroColumn pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} />
+          <HeroColumn pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} showFeatures={false} />
 
           <form
             onSubmit={handleSubmit}
@@ -400,6 +420,13 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
             {!isValid && <div style={{ fontSize: 12, color: 'var(--mid)', textAlign: 'center', marginTop: 8 }}>Fill in the fields above to continue.</div>}
           </form>
 
+        </div>
+
+        {/* Pulled out of the (narrow) hero column and run full-width in 4
+            columns below both columns instead, matching the landing page's
+            treatment of the same list (Julia's ask, 2026-09-18). */}
+        <div style={{ marginTop: 56 }}>
+          <FeatureGrid columns={4} />
         </div>
       </div>
 

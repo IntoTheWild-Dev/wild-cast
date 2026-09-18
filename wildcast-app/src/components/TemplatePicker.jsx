@@ -298,10 +298,69 @@ function CatalogueView({ groups, onViewGroup, onBack }) {
   )
 }
 
+// Same blurred-backdrop overlay/card shell as BriefingForm.jsx's
+// NoTemplateModal (icon circle + centered title/body, rounded white card) -
+// a native window.confirm() here looked out of place next to the rest of
+// the app's own modals, and (per Julia's report, 2026-09-18) silently did
+// nothing in some embedded/webview contexts where the browser suppresses
+// it, making Archive look broken instead of just asking to confirm.
+function ArchiveConfirmModal({ label, busy, onConfirm, onCancel }) {
+  return (
+    <div
+      onClick={busy ? undefined : onCancel}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(17,17,17,0.25)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 380, padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.25)', textAlign: 'center' }}
+      >
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+          </svg>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)', marginBottom: 8 }}>Archive this template?</div>
+        <p style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.5, marginBottom: 20 }}>
+          <strong style={{ color: 'var(--dark)' }}>"{label}"</strong> is currently live - partners can see it. Archive it anyway? You can restore it as a draft later.
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            style={{ flex: 1, padding: '12px', fontSize: 14, fontWeight: 700, background: '#fff', color: 'var(--dark)', border: '1px solid var(--border)', borderRadius: 10, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: 'inherit' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            style={{ flex: 1, padding: '12px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, fontFamily: 'inherit' }}
+          >
+            {busy ? 'Archiving…' : 'Archive'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Designer-only manage menu (Publish / Unpublish / Archive) ────────────────
 // Lets a designer act on a Figma-imported card right where they're browsing,
 // instead of needing the separate Import screen for every routine action.
-function ManageMenu({ record, onAction, onDelete }) {
+// The archive-confirmation modal itself is requested via onRequestArchive and
+// rendered by the parent (OptionsView), not here - this card's own hover
+// effect sets a `transform` on the card (see the "live" branch below), and a
+// `position: fixed` modal nested inside an element with an active transform
+// gets contained/clipped to that element's own box instead of covering the
+// viewport (same CSS quirk as backdrop-filter) - rendering it as a sibling of
+// the whole card grid instead sidesteps that entirely.
+function ManageMenu({ record, onAction, onDelete, onRequestArchive }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -311,8 +370,9 @@ function ManageMenu({ record, onAction, onDelete }) {
     // template is hardcoded-visible unless this flag hides it.
     const isVisibleToPartners = record.isOverrideOnly ? !record.archived : record.live
     if (action === 'archive' && isVisibleToPartners) {
-      const ok = window.confirm(`"${record.label}" is currently live - partners can see it. Archive it anyway? You can restore it as a draft later.`)
-      if (!ok) return
+      setOpen(false)
+      onRequestArchive(record)
+      return
     }
     setBusy(true)
     if (action === 'delete') {
@@ -377,6 +437,8 @@ function ManageMenu({ record, onAction, onDelete }) {
 // ── Options view (drilled in) ─────────────────────────────────────────────────
 function OptionsView({ group, customCards, customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
+  const [archiveConfirm, setArchiveConfirm] = useState(null)
+  const [archiving, setArchiving] = useState(false)
   const { format, category, members } = group
   const cap = category.charAt(0).toUpperCase() + category.slice(1)
   const liveCount = members.filter(x => x.live).length
@@ -426,6 +488,13 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
     }
   }
 
+  async function confirmArchiveNow() {
+    setArchiving(true)
+    await handleManageAction(archiveConfirm.slotKey, 'archive', archiveConfirm.label)
+    setArchiving(false)
+    setArchiveConfirm(null)
+  }
+
   async function handleDelete(slotKey, label) {
     const ok = window.confirm(`Permanently delete "${label}"? This removes its imported background and zone data for good - unlike Archive, this can't be undone.`)
     if (!ok) return
@@ -468,6 +537,14 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
         </div>
 
         {modal && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
+        {archiveConfirm && (
+          <ArchiveConfirmModal
+            label={archiveConfirm.label}
+            busy={archiving}
+            onCancel={() => setArchiveConfirm(null)}
+            onConfirm={confirmArchiveNow}
+          />
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
           {members.map((t, i) => {
@@ -486,7 +563,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
               >
-                {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} />}
+                {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} onRequestArchive={r => setArchiveConfirm({ slotKey: r.slotKey, label: r.label })} />}
                 {/* Matches preview_opt-a/b.png's real 1191x1679 aspect ratio so
                     the full flyer shows uncropped, same fix as
                     TemplatePreviewModal.jsx (Julia's fix request, 2026-08-20:
@@ -529,7 +606,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                   overflow: 'hidden', opacity: record ? 0.85 : 0.55,
                 }}
               >
-                {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} />}
+                {record && <ManageMenu record={record} onAction={handleManageAction} onDelete={handleDelete} onRequestArchive={r => setArchiveConfirm({ slotKey: r.slotKey, label: r.label })} />}
                 {isDraft && (
                   <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5, background: 'var(--primary)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Draft

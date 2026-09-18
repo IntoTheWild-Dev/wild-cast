@@ -1,4 +1,4 @@
-import { HeroColumn } from './BriefingForm'
+import { HeroColumn, FeatureGrid, WildScaleTip } from './BriefingForm'
 
 // New home screen (Julia's ask, 2026-09-11): the brief form used to be the
 // very first thing anyone saw. Now the landing page is just a choice between
@@ -39,15 +39,20 @@ const CHOICES = [
   },
 ]
 
+// Laid out vertically (icon, then title+arrow, then desc) rather than the
+// old horizontal icon-left/chevron-right row - that shape worked as a single
+// wide list item, but reads cramped once the 3 choices sit side by side as
+// columns instead of stacked (Julia's ask, 2026-09-18).
 function ChoiceCard({ title, desc, icon, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: 16, width: '100%', textAlign: 'left',
-        padding: '22px 24px', borderRadius: 14, border: '1.5px solid var(--border)', background: '#fff',
-        cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s',
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, width: '100%',
+        textAlign: 'left', padding: '24px', borderRadius: 14, border: '1.5px solid var(--border)',
+        background: '#fff', cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s',
+        boxSizing: 'border-box',
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(223,111,109,0.12)' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
@@ -55,13 +60,15 @@ function ChoiceCard({ title, desc, icon, onClick }) {
       <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {icon}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)', marginBottom: 4 }}>{title}</div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {title}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </div>
         <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.5 }}>{desc}</div>
       </div>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 4 }}>
-        <path d="M9 6l6 6-6 6" />
-      </svg>
     </button>
   )
 }
@@ -70,22 +77,25 @@ export default function LandingPage({ onNavigate }) {
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
-        {/* alignItems: 'center' (not 'start') - the right column's 3 choice
-            cards are much shorter than the left column's hero copy + tip box
-            + feature list, so top-aligning them left them pinned high with a
-            lot of empty space underneath, sitting above where the eye
-            naturally lands. Centering shifts them down to the left column's
-            vertical middle instead (Julia's ask, 2026-09-15). */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'center' }}>
+        {/* Reworked from the old left-hero/right-cards 2-column split into a
+            single stacked column - the 3 choice cards sit side by side below
+            the hero copy, the WildScale tip box comes after that (moved out
+            of the hero copy per Julia's ask, 2026-09-18), and the feature
+            grid runs full-width beneath that in 4 columns of its own. */}
+        <HeroColumn showTemplateStep={false} showFeatures={false} showWildScaleTip={false} />
 
-          <HeroColumn showTemplateStep={false} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+          {CHOICES.map(c => (
+            <ChoiceCard key={c.key} title={c.title} desc={c.desc} icon={c.icon} onClick={() => onNavigate(c.key)} />
+          ))}
+        </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {CHOICES.map(c => (
-              <ChoiceCard key={c.key} title={c.title} desc={c.desc} icon={c.icon} onClick={() => onNavigate(c.key)} />
-            ))}
-          </div>
+        <div style={{ marginTop: 32 }}>
+          <WildScaleTip maxWidth="100%" />
+        </div>
 
+        <div style={{ marginTop: 24 }}>
+          <FeatureGrid columns={4} />
         </div>
       </div>
     </div>
