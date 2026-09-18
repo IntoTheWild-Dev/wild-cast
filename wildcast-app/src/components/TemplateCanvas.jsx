@@ -349,15 +349,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // is turned, matching how ZoneOverlay on the Import review page
         // keeps its own labels upright too. Centered a radius in from the
         // corner (not flush against it) rather than a rectangular chip
-        // anchored exactly at zone.x/zone.y - Julia's report, 2026-09-18:
-        // the old flush-corner rect chip was getting visually clipped for
-        // whichever zone sat right at the canvas's own top-left corner
-        // (its wrapper has a rounded corner there), and round+inset reads
-        // as a cleaner "badge" regardless.
+        // anchored exactly at zone.x/zone.y.
+        //
+        // Clamped into the visible canvas (Julia's report, 2026-09-18: the
+        // "1" chip was cut off on multiple templates) - root cause traced to
+        // Option B's own `logo` zone declaring y: -8.82 in templateZones.js,
+        // a deliberate bleed above the canvas's top edge for that artwork.
+        // zone.y + CHIP_RADIUS for a zone like that still centers the chip
+        // right on the canvas's very first pixel row, clipping half of it.
+        // Every zone gets this same clamp, not just ones known to bleed
+        // today, so a future template with its own bleeding zone doesn't
+        // reintroduce the same bug.
         const CHIP_RADIUS = 9
+        const CHIP_MARGIN = 2
         function addZoneLabel(zone) {
-          const cx = zone.x + CHIP_RADIUS
-          const cy = zone.y + CHIP_RADIUS
+          const cx = Math.min(Math.max(zone.x + CHIP_RADIUS, CHIP_RADIUS + CHIP_MARGIN), canvasW - CHIP_RADIUS - CHIP_MARGIN)
+          const cy = Math.min(Math.max(zone.y + CHIP_RADIUS, CHIP_RADIUS + CHIP_MARGIN), canvasH - CHIP_RADIUS - CHIP_MARGIN)
           const chip = new fabric.Circle({
             left: cx, top: cy,
             originX: 'center', originY: 'center',
