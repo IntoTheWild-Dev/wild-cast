@@ -5,6 +5,7 @@ import { isCloseMatch } from '../lib/fuzzyMatch'
 
 const ALL = '__all__'
 const NEW_FOLDER = '__new_folder__'
+const UNSORTED = '__unsorted__'
 
 function formatDate(ts) {
   const d = new Date(ts)
@@ -260,27 +261,32 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
 
           {canOrganize && (
             <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
-              {/* Plain <select> read as just a folder label, not an action -
-                  Julia's report, 2026-09-18: didn't realize picking a
-                  different option here actually moves the design. */}
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
-                Move to folder
-              </div>
+              {/* An earlier version showed the CURRENT folder as the select's
+                  resting text (e.g. "WEN CHENG") with a small label above it -
+                  Julia's report, 2026-09-18: that still read as a static tag,
+                  not something to act on. This always shows the literal
+                  "Move to folder" prompt instead (value is reset every render,
+                  never the project's actual folder) so it reads as a command,
+                  same pattern as a "..." action menu - picking an option still
+                  fires onMove exactly as before. The folder list itself is the
+                  same one this owner sees under the Folders tab. */}
               <Select
-                value={project.folder || ''}
+                value=""
                 onChange={e => {
                   const v = e.target.value
+                  if (!v) return
                   if (v === NEW_FOLDER) {
                     const name = window.prompt('New folder name')?.trim()
                     if (name) onMove(project, name)
                   } else {
-                    onMove(project, v || null)
+                    onMove(project, v === UNSORTED ? null : v)
                   }
                 }}
                 style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', width: '100%' }}
               >
-                <option value="">Unsorted</option>
-                {folderOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                <option value="" disabled>Move to folder</option>
+                {!!project.folder && <option value={UNSORTED}>Unsorted</option>}
+                {folderOptions.filter(f => f !== project.folder).map(f => <option key={f} value={f}>{f}</option>)}
                 <option value={NEW_FOLDER}>+ New folder…</option>
               </Select>
             </div>
