@@ -190,6 +190,14 @@ export default function App() {
   // real first thing anyone sees now - 'brief' (the actual picker+form flow)
   // only shows once "Start from scratch" is picked from there.
   const [screen, setScreen]                   = useState('landing')
+  // Set synchronously (before the deep-link effect even runs) whenever the
+  // URL is already /content/<id> on first paint, so that render shows a
+  // loading placeholder instead of flashing the landing page for a frame
+  // while that effect resolves the id into a project - see the effect and
+  // the early return near the bottom of this component.
+  const [resolvingDeepLink, setResolvingDeepLink] = useState(
+    () => /^\/content\/[^/]+\/?$/.test(window.location.pathname)
+  )
   // Which output ICC profile export-cmyk.js should convert to - see
   // ICC_PROFILES in api/export-cmyk.js. No longer user-choosable (FOGRA39
   // removed, Julia's ask, 2026-09-18) - every export uses FOGRA51 now.
@@ -270,7 +278,7 @@ export default function App() {
   // Lifted here since FieldEditor and TemplateCanvas are siblings.
   const [activeZoneId, setActiveZoneId]        = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
-  const [lang, setLang]                       = useState('de')
+  const [lang]                                = useState('de') // DE/EN switcher removed (Julia's ask, 2026-09-18: never used) - fixed to German
   const [exporting, setExporting]             = useState(false)
   const [fontSizes, setFontSizes]             = useState({})
   // The REAL font size each auto-shrink zone actually rendered at on load -
@@ -432,12 +440,92 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }) // no deps - always uses latest handleUndo via closure refresh
 
+  // Warn before an actual browser refresh/close/tab-nav discards unsaved
+  // work - the confirm() in handleNavigate below only catches in-app
+  // navigation (Home/Designs buttons etc.), which can't intercept the
+  // browser's own reload. Same dirty conditions as that guard. Browsers
+  // ignore any custom message here and show their own fixed wording, so
+  // there's no UI to design - just the standard preventDefault/returnValue
+  // incantation that triggers it.
+  useEffect(() => {
+    const dirty = (screen === 'editor' && hasUnsavedChanges) || (screen === 'import' && importDirty)
+    if (!dirty) return
+    function onBeforeUnload(e) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [screen, hasUnsavedChanges, importDirty])
+
   // Detect ?review=<id> in URL and switch to review screen
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const rid = params.get('review')
     if (rid) { setReviewProjectId(rid); setScreen('review') }
   }, [])
+
+  // Detect /content/<id> in the URL (written by the sync effect below) and
+  // reopen straight into that design - without this, refreshing or
+  // reopening a tab mid-edit always landed back on the landing/home screen,
+  // since 'screen' is plain useState with nothing tying it to the URL
+  // (Julia's ask, 2026-09-18). sessionStorage is tried first since it
+  // already holds the exact last-saved state for anything autosaved/saved
+  // this session with no extra round trip; api/load-project.js's ?id= path
+  // (a Blob list() lookup) is the fallback for a brand-new tab/session that
+  // never wrote it. vercel.json rewrites this path to index.html so a
+  // real, server-side refresh reaches this same app shell instead of 404ing.
+  useEffect(() => {
+    const contentMatch = window.location.pathname.match(/^\/content\/([^/]+)\/?$/)
+    const editId = contentMatch?.[1]
+    if (!editId) return
+    ;(async () => {
+      try {
+        let project = null
+        try {
+          const cached = sessionStorage.getItem(`wildcast_project_${editId}`)
+          if (cached) project = JSON.parse(cached)
+        } catch { /* corrupted or unavailable - fall through to fetch */ }
+        if (!project) {
+          const res = await fetch(`/api/load-project?id=${editId}&_t=${Date.now()}`, { cache: 'no-store' })
+          if (!res.ok) throw new Error('Design not found')
+          project = await res.json()
+        }
+        // Custom (Figma-imported) templates load asynchronously on mount
+        // too (see the refetchCustomTemplates() effect above) - can't just
+        // read the customTemplates state here since this closure predates
+        // whichever mount effect runs second, so this fetches its own copy
+        // and hands it to openLoadedProject directly instead of racing it.
+        const customTemplatesNow = await refetchCustomTemplates()
+        await openLoadedProject(project, { customTemplatesOverride: customTemplatesNow ?? customTemplates })
+      } catch (err) {
+        console.error('Deep-link load error:', err)
+        alert('Could not open that design - it may have been deleted.')
+      } finally {
+        setResolvingDeepLink(false)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keeps /content/<id> in the address bar in sync with what's actually
+  // open, so a later refresh/reopen (the effect above) lands back here
+  // instead of the home screen - and leaves it again once the editor is
+  // left, so it doesn't linger on the landing/Designs screens. Only ever
+  // touches the path when entering/leaving THIS specific path shape,
+  // leaving ?review= or anything else on '/' completely untouched. Nothing
+  // to sync for a brand-new, not-yet-saved project (no currentProjectId
+  // yet) - it picks this up automatically the moment the first
+  // autosave/save assigns one.
+  useEffect(() => {
+    if (screen === 'editor' && currentProjectId) {
+      const targetPath = `/content/${currentProjectId}`
+      if (window.location.pathname === targetPath) return
+      window.history.replaceState(null, '', targetPath + window.location.search)
+    } else if (/^\/content\/[^/]+\/?$/.test(window.location.pathname)) {
+      window.history.replaceState(null, '', '/' + window.location.search)
+    }
+  }, [screen, currentProjectId])
 
   // Fetch Figma-imported templates once on mount. Failure just means the app
   // runs with the static built-in templates only - never blocks/breaks the app.
@@ -771,8 +859,17 @@ export default function App() {
   function refetchCustomTemplates() {
     return fetch(`/api/list-templates?_t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(data => setCustomTemplates(mergeCustomTemplates(data.templates ?? [])))
-      .catch(() => {})
+      .then(data => {
+        const merged = mergeCustomTemplates(data.templates ?? [])
+        setCustomTemplates(merged)
+        // Also returned directly (not just set as state) so a caller that
+        // needs the fresh value in the SAME async flow - e.g. the ?edit=
+        // deep-link effect below, which can't wait for a re-render to see
+        // it via the customTemplates closure - doesn't have to guess
+        // whether the setState above has actually flushed yet.
+        return merged
+      })
+      .catch(() => null)
   }
 
   // Applies a publish-template.js response directly to local state instead of
@@ -1119,6 +1216,40 @@ export default function App() {
     }
   }
 
+  // Silent background save, distinct from handleSave() above: no "Saved"
+  // modal, no offerMoreFormats prompt - those are for an explicit "I'm
+  // done" click, not a routine autosave the user didn't ask for. Reuses
+  // saving/saveStatus so the Save button's own "Saving…" / "✓ Saved" text
+  // still reflects it, which is the only feedback autosave gets. A failure
+  // (e.g. offline) is left dirty and silently retried on the next edit -
+  // the beforeunload guard above is still the backstop if it keeps failing.
+  async function autoSave() {
+    setSaving(true)
+    try {
+      await doSave()
+      setSaveStatus('saved')
+      setHasUnsavedChanges(false)
+      setTimeout(() => setSaveStatus(null), 3000)
+    } catch (err) {
+      console.error('Autosave error:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Debounced autosave: (re)starts a 2.5s timer on every relevant edit
+  // (mirrors exactly what doSave() persists) and fires once things go
+  // quiet, rather than on every keystroke. Gated on hasUnsavedChanges so a
+  // freshly loaded/already-saved project never triggers a redundant save,
+  // and on !saving so a manual Save in flight isn't raced by this timer
+  // landing at the same time.
+  useEffect(() => {
+    if (screen !== 'editor' || !hasUnsavedChanges || saving) return
+    const t = setTimeout(() => { autoSave() }, 2500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, fontSizes, alignments, imageScales, imagePositions, projectName, screen, hasUnsavedChanges, saving])
+
   // Save from the restricted review editor (a brief-generated candidate) -
   // Julia's ask (2026-08-03): persists via the same doSave()/Designs
   // mechanism as any other save (so an interrupted session isn't lost - it's
@@ -1243,10 +1374,14 @@ export default function App() {
   // Puts an already-loaded project's full state into the editor. Shared by
   // opening the original and opening a freshly-made duplicate - the only
   // difference between the two is which project object got loaded/created
-  // before this runs.
-  async function openLoadedProject(project, { restricted = false } = {}) {
+  // before this runs. customTemplatesOverride lets the ?edit= deep-link
+  // effect below pass its own just-fetched value in - it can't rely on the
+  // customTemplates *state* being fresh yet, since it may run before that
+  // separate on-mount fetch's setState has flowed through to a re-render.
+  async function openLoadedProject(project, { restricted = false, customTemplatesOverride } = {}) {
+    const templatesSource = customTemplatesOverride ?? customTemplates
     const template = TEMPLATES.find(t => t.id === project.templateId)
-      ?? customTemplates.cards.find(t => t.id === project.templateId)
+      ?? templatesSource.cards.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
 
     // Fetch comments directly - can't rely on the useEffect because the
@@ -1323,6 +1458,18 @@ export default function App() {
   // Show activation gate unless already activated or this is a shared review link
   if (!activation && !reviewProjectId) {
     return <ActivationGate onActivated={handleActivated} />
+  }
+
+  // Placeholder while the ?edit=<id> deep-link effect above resolves -
+  // otherwise this frame would render the plain landing screen (screen's
+  // initial value) for a moment before flipping to 'editor', which looks
+  // like a refresh briefly bounced home before "recovering".
+  if (resolvingDeepLink) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 13, color: 'var(--mid)' }}>Loading your design…</div>
+      </div>
+    )
   }
 
   return (
@@ -1640,7 +1787,6 @@ export default function App() {
             credits={activation?.credits}
             onCreditUsed={handleAiCreditUsed}
             lang={lang}
-            onLangChange={setLang}
             onExport={handleExport}
             exporting={exporting}
             template={selectedTemplate}
