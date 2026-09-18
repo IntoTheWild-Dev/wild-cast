@@ -18,6 +18,7 @@ import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from './lib/
 import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
+import { sortIdsByFieldOrder } from './lib/fieldOrder'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -273,6 +274,28 @@ export default function App() {
   // eslint-disable-next-line no-unused-vars
   const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
+  // Guided/Advanced toggle (Julia's editor redesign, 2026-09-18, per
+  // Annika's mockup): replaces the old fixed-per-template guided-vs-designer
+  // split with a live in-session toggle. Guided hides font-size/position
+  // controls and locks the canvas (nudge-only); Advanced shows full manual
+  // controls and unlocks free dragging - exactly today's non-designer vs
+  // designer behavior, just now user-switchable instead of fixed by which
+  // template id was picked. Safe to do this way because a template's
+  // "-simple" (guided) and non-suffixed (designer) ids always point at the
+  // IDENTICAL zone layout (see templateZones.js's own comments on this) -
+  // toggling only ever changes controls visibility/lock state, never which
+  // zones exist or where they sit. Resets to the template's own starting
+  // mode every time a different template loads.
+  const [advancedModeTemplateId, setAdvancedModeTemplateId] = useState(selectedTemplate?.id)
+  const [advancedMode, setAdvancedMode] = useState(selectedTemplate?.mode === 'designer')
+  // Adjusts state during render (not an effect) when the selected template
+  // changes - same pattern FieldEditor.jsx's useOrderedKeys uses for the
+  // same reason: resets in the same render instead of flashing the stale
+  // mode for one frame first.
+  if (advancedModeTemplateId !== selectedTemplate?.id) {
+    setAdvancedModeTemplateId(selectedTemplate?.id)
+    setAdvancedMode(selectedTemplate?.mode === 'designer')
+  }
   // Which zone's field is currently focused/hovered in the side panel - lights
   // up that zone's boundary on the canvas (Annika's ask via Julia, 2026-09-18).
   // Lifted here since FieldEditor and TemplateCanvas are siblings.
@@ -319,6 +342,18 @@ export default function App() {
   // load, with no timer.
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [loadKey, setLoadKey]                 = useState(0)    // increments on project load to reset auto-shrink
+  // Gates Export PDF behind Send for Review (Julia's ask, 2026-09-18, per
+  // Annika's mockup - "assuming there's an approval step"; confirmed: yes,
+  // gate it). Session-local, not a persisted project field - resets
+  // whenever a fresh editing session starts (loadKey increments on every
+  // project load), so reopening a design later requires sending it for
+  // review again rather than remembering it forever.
+  const [reviewSentLoadKey, setReviewSentLoadKey] = useState(loadKey)
+  const [reviewSent, setReviewSent] = useState(false)
+  if (reviewSentLoadKey !== loadKey) {
+    setReviewSentLoadKey(loadKey)
+    setReviewSent(false)
+  }
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
@@ -1288,13 +1323,18 @@ export default function App() {
   // here, and used to be explained only in small gray footer text - easy to
   // click without realizing it's the one-way option.
   async function handleSendForReview() {
-    if (!window.confirm('Send this design for review as-is? You can still find and edit it later from Designs, but this skips exporting or reviewing it here first.')) return
+    // Wording updated for the Export-behind-review gate (Julia's editor
+    // redesign, 2026-09-18) - this used to be framed as an alternative to
+    // exporting ("skips exporting... first"), which is now backwards: this
+    // IS what unlocks Export PDF, not something instead of it.
+    if (!window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
     setSaving(true)
     try {
       const { id } = await doSave()
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
+      setReviewSent(true)
       setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
       offerMoreFormats()
     } catch (err) {
@@ -1454,6 +1494,23 @@ export default function App() {
   }
 
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
+  // Restricted review keeps its own fixed lock behavior regardless of the
+  // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
+  // meaningful to unlock on an already-generated candidate).
+  const effectiveMode = restrictedReview ? (selectedTemplate?.mode ?? 'designer') : (advancedMode ? 'designer' : 'non-designer')
+  // "X of Y ready" progress bar (Julia's editor redesign, 2026-09-18, per
+  // Annika's mockup) - mirrors FieldEditor.jsx's own fieldOrder/isFieldReady
+  // logic (same shared lib/fieldOrder.js order) since the bar renders up
+  // here in the breadcrumb stack, not inside that side panel.
+  const progressFieldOrder = templateConfig ? sortIdsByFieldOrder([
+    ...['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
+      .filter(k => k === 'headline' || templateConfig.zones?.some(z => z.id === k)),
+    ...(templateConfig.zones?.filter(z => z.type === 'image').map(z => z.id) ?? []),
+  ]) : []
+  const progressReadyCount = progressFieldOrder.filter(key => {
+    const isImage = templateConfig?.zones?.find(z => z.id === key)?.type === 'image'
+    return isImage ? !!fields[`${key}Url`] : !!(fields[key] || '').trim()
+  }).length
 
   // Show activation gate unless already activated or this is a shared review link
   if (!activation && !reviewProjectId) {
@@ -1683,9 +1740,16 @@ export default function App() {
                 </span>
                 <span style={{ fontSize: 13, color: 'var(--light)', flexShrink: 0 }}>→</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTemplate?.name}</span>
-                {currentProjectId && (
-                  <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 8px', borderRadius: 100, flexShrink: 0 }}>
-                    Saved
+                {/* Reflects real save state now that autosave replaced the
+                    manual Save button (Julia's editor redesign, 2026-09-18)
+                    - this is the only save feedback left for the normal
+                    (non-restricted) flow. */}
+                {(saving || saveStatus === 'saved' || currentProjectId) && (
+                  <span style={{ fontSize: 11, color: saveStatus === 'saved' ? '#16a34a' : 'var(--mid)', background: saveStatus === 'saved' ? '#F0FDF4' : '#F3F4F6', padding: '2px 8px', borderRadius: 100, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {saving && (
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--mid)', flexShrink: 0 }} />
+                    )}
+                    {saving ? 'Saving…' : saveStatus === 'saved' ? 'Saved just now' : 'Saved'}
                   </span>
                 )}
               </div>
@@ -1707,12 +1771,20 @@ export default function App() {
                 onBlur={e => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent' }}
               />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+              {/* minWidth: 0 - a grid item's default min-width is "auto" (its
+                  content's own intrinsic width), which stopped this column
+                  from ever actually shrinking below that on a narrow window
+                  and squashed everything together instead of wrapping
+                  (Julia's report, 2026-09-18). flexWrap lets whole
+                  pills/buttons drop to a second line as intact units instead
+                  - paired with whiteSpace:'nowrap' on each one below, so a
+                  single pill's own text never breaks mid-word first. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap', rowGap: 6, minWidth: 0 }}>
               {activation && (
                 <div ref={creditsInfoRef} style={{ position: 'relative' }}>
                   <span
                     onClick={() => setShowCreditsInfo(v => !v)}
-                    style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'pointer' }}
+                    style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >
                     {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''} remaining
                   </span>
@@ -1732,7 +1804,7 @@ export default function App() {
                 onClick={handleUndo}
                 disabled={!canUndo}
                 title="Undo last change (⌘Z)"
-                style={{ fontSize: 12, fontWeight: 600, color: canUndo ? 'var(--mid)' : 'var(--light)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: canUndo ? 'pointer' : 'default', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4 }}
+                style={{ fontSize: 12, fontWeight: 600, color: canUndo ? 'var(--mid)' : 'var(--light)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: canUndo ? 'pointer' : 'default', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', flexShrink: 0 }}
                 onMouseEnter={e => { if (canUndo) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' } }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = canUndo ? 'var(--mid)' : 'var(--light)' }}
               >
@@ -1745,17 +1817,63 @@ export default function App() {
                   button is hidden rather than wired to either reset flow. */}
               {!restrictedReview && (
                 <button
-                  onClick={selectedTemplate?.mode === 'non-designer' ? handleResetToBlank : handleResetLayout}
-                  title={selectedTemplate?.mode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
-                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                  onClick={effectiveMode === 'non-designer' ? handleResetToBlank : handleResetLayout}
+                  title={effectiveMode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
+                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
                 >
-                  {selectedTemplate?.mode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
+                  {effectiveMode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
                 </button>
               )}
               </div>
             </div>
+
+            {/* Guided/Advanced toggle (Julia's editor redesign, 2026-09-18,
+                per Annika's mockup) - not shown in restricted review, which
+                has no "Advanced" concept (see effectiveMode above). */}
+            {!restrictedReview && (
+              <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
+                  {[['non-designer', 'Guided'], ['designer', 'Advanced']].map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setAdvancedMode(m === 'designer')}
+                      style={{
+                        padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: effectiveMode === m ? 'var(--primary)' : 'transparent',
+                        color: effectiveMode === m ? '#fff' : 'var(--mid)',
+                        fontFamily: 'inherit', transition: 'all 0.15s',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--mid)' }}>
+                  {effectiveMode === 'non-designer' ? 'Keeps text inside safe print margins' : 'Full manual control over position and size'}
+                </span>
+              </div>
+            )}
+
+            {/* Progress bar (Julia's editor redesign, 2026-09-18, per
+                Annika's mockup) - hidden in restricted review, which has no
+                open-ended "keep filling fields" flow. */}
+            {!restrictedReview && progressFieldOrder.length > 0 && (
+              <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  {progressReadyCount} of {progressFieldOrder.length} ready
+                </span>
+                <div style={{ flex: 1, height: 6, background: '#F3F4F6', borderRadius: 100, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${(progressReadyCount / progressFieldOrder.length) * 100}%`, height: '100%',
+                    background: progressReadyCount === progressFieldOrder.length ? '#16a34a' : 'var(--primary)',
+                    borderRadius: 100, transition: 'width 0.2s ease, background 0.2s ease',
+                  }} />
+                </div>
+              </div>
+            )}
 
             <TemplateCanvas
               key={loadKey}
@@ -1768,7 +1886,7 @@ export default function App() {
               imageScales={imageScales}
               imagePositions={imagePositions}
               textPositions={textPositions}
-              mode={selectedTemplate?.mode ?? 'designer'}
+              mode={effectiveMode}
               loadKey={loadKey}
               zonePositions={zonePositions}
               onZoneDragStart={handleZoneDragStart}
@@ -1802,7 +1920,7 @@ export default function App() {
             onImageOffsetChange={handleImageOffsetChange}
             onTextNudge={handleTextNudge}
             restricted={restrictedReview}
-            mode={selectedTemplate?.mode ?? 'designer'}
+            mode={effectiveMode}
             onSave={restrictedReview ? handleSaveAndReturnToPicker : handleSave}
             saving={saving}
             saveStatus={saveStatus}
@@ -1811,6 +1929,7 @@ export default function App() {
             currentProjectId={currentProjectId}
             projectName={projectName}
             vertical={designVertical}
+            reviewSent={reviewSent}
           />
         </div>
       )}

@@ -8,6 +8,7 @@ function formatDateTime(ts) {
   })
 }
 import AISuggest from './AISuggest'
+import PresetPicker from './PresetPicker'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
@@ -17,6 +18,18 @@ import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 const ALL_MERCHANTS = '__all__'
 
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
+
+// Matches the label each case in renderTextStep's switch passes to
+// StepFieldRow - used by the accordion's collapsed row, which needs a
+// field's label without rendering its full step.
+const TEXT_FIELD_LABELS = {
+  headline: 'Headline',
+  sub_headline: 'Sub-headline',
+  restaurant_name: 'Restaurant name',
+  offer: 'Offer',
+  tc: 'T&Cs',
+  cta: 'App download line',
+}
 
 // No live template has a sticker-type zone yet, but the underlying id/folder/
 // Library category stay "sticker" throughout the codebase (assetLibrary.js,
@@ -117,12 +130,54 @@ function NudgeArrows({ onNudge }) {
   )
 }
 
+// A collapsed accordion row - one line, click anywhere to expand into the
+// full StepFieldRow/ImageUpload below (Julia's editor redesign, 2026-09-18,
+// per Annika's mockup: "collapse finished fields to a single line"). Shows a
+// ✓ once the field has content, a plain empty circle otherwise - matches the
+// numbered chip's coral so it reads as the same "step" system, not a new one.
+function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        padding: '10px 12px', marginBottom: 8, textAlign: 'left',
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+        cursor: 'pointer', transition: 'border-color 0.15s', fontFamily: 'inherit',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+    >
+      <span style={{
+        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: ready ? 'var(--primary)' : 'transparent',
+        border: ready ? 'none' : '1.5px solid var(--border)',
+        color: '#fff', fontSize: 11, fontWeight: 700,
+      }}>
+        {ready ? '✓' : ''}
+      </span>
+      {thumb && <img src={thumb} alt="" style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)', flexShrink: 0 }}>{label}</span>
+        {preview && (
+          <span style={{ fontSize: 12, color: 'var(--mid)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {preview}
+          </span>
+        )}
+      </span>
+      <span style={{ color: 'var(--light)', fontSize: 12, flexShrink: 0 }}>⌄</span>
+    </button>
+  )
+}
+
 // ── Unified numbered field row (both modes) ─────────────────────────────────
 // showControls=true adds font-size, alignment and reset position (designer mode)
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField, vertical }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField, vertical, partnerName }) {
   const limit = CHAR_LIMITS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
@@ -230,11 +285,20 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         // triggered it - keeps a 300px dropdown from starting left of the
         // panel's own edge and getting clipped (see AISuggest.jsx).
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative' }}>
-          {/* vertical ("Restaurant"/"Retail" from the brief) strictly scopes
-              which KB examples and rules AI Suggest retrieves - without it
-              the backend falls back to the unfiltered library. */}
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} mode="improve" seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
+          {/* Choose preset - real past copy served verbatim, no AI call, no
+              credit cost (Julia's ask, 2026-09-18: "that shouldn't use AI,
+              it should just call the database and spit out exactly what it
+              has"). PresetPicker/api/presets.js already existed from the
+              copy-database work but had never actually been wired into the
+              editor - this is that wiring. Sits next to AI Suggest, not
+              merged into it, since "no AI at all" is the entire point. */}
+          <PresetPicker field={fieldKey} onApply={val => onChange(val)} partnerName={partnerName} vertical={vertical} />
+          {/* One button, not two (Julia's editor redesign, 2026-09-18) -
+              AISuggest itself decides generate-vs-improve from seedText.
+              vertical ("Restaurant"/"Retail" from the brief) strictly scopes
+              which KB examples and rules it retrieves - without it the
+              backend falls back to the unfiltered library. */}
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
         </div>
       )}
     </div>
@@ -542,7 +606,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical }) {
+export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -569,6 +633,30 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // "all text fields, then all images" the way the two blocks below used to
   // render.
   const fieldOrder = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
+  // Same fallback ImageUpload's own merchant tag already uses below, minus
+  // the GENERAL_MERCHANT catch-all - api/presets.js falls back to the full
+  // vertical library itself when nothing matches a given partner name yet,
+  // so there's nothing to gain from forcing one here.
+  const partnerName = (fields.restaurant_name || projectName || '').trim() || undefined
+
+  // Accordion: only one field expanded (full controls) at a time, every
+  // other field collapses to a single summary line - Julia's editor
+  // redesign, 2026-09-18, per Annika's mockup ("collapse finished fields to
+  // a single line"). Defaults to the first field, resetting whenever the
+  // template changes - same render-time-adjustment pattern as advancedMode
+  // in App.jsx, avoiding an effect-based setState for the same reason.
+  const [expandedFieldOrderSig, setExpandedFieldOrderSig] = useState(fieldOrder.join('|'))
+  const [expandedKey, setExpandedKey] = useState(fieldOrder[0] ?? null)
+  const fieldOrderSig = fieldOrder.join('|')
+  if (expandedFieldOrderSig !== fieldOrderSig) {
+    setExpandedFieldOrderSig(fieldOrderSig)
+    setExpandedKey(fieldOrder[0] ?? null)
+  }
+
+  function isFieldReady(key) {
+    const zone = imageZones.find(z => z.id === key)
+    return zone ? !!fields[`${zone.id}Url`] : !!(fields[key] || '').trim()
+  }
 
   function renderTextStep(key, step) {
     switch (key) {
@@ -578,6 +666,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Headline" fieldKey="headline"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
             placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
@@ -599,6 +688,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Sub-headline" fieldKey="sub_headline"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -615,6 +705,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Restaurant name" fieldKey="restaurant_name"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -630,6 +721,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="Offer" fieldKey="offer"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
@@ -652,6 +744,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="T&amp;Cs" fieldKey="tc"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -671,6 +764,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             step={step} label="App download line" fieldKey="cta"
             onFocusField={onFocusField}
             vertical={vertical}
+            partnerName={partnerName}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
             placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}
@@ -707,13 +801,22 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
           >
-            {expanded ? '›' : '‹'}
+            {/* Was backwards from convention - Julia's report, 2026-09-18:
+                read as "only ever expands, no way to close it back up".
+                Pointing right (›) now means "expand"; left (‹) means
+                "collapse/close", matching how these arrows are normally
+                read regardless of which state is currently showing. */}
+            {expanded ? '‹' : '›'}
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)' }}>Edit content</div>
             <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>
               {template?.name ?? 'Promo Flyer'} · A6
-              {isNonDesigner && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '1px 6px', borderRadius: 100 }}>{restricted ? 'Review' : 'Guided'}</span>}
+              {/* "Guided" pill removed - the Guided/Advanced toggle in
+                  App.jsx's breadcrumb area already shows this now (Julia's
+                  editor redesign, 2026-09-18). "Review" stays - restricted
+                  mode has no toggle to duplicate it. */}
+              {isNonDesigner && restricted && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '1px 6px', borderRadius: 100 }}>Review</span>}
             </div>
           </div>
         </div>
@@ -727,41 +830,60 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             bar. `projectName` is still a prop of this component (used below
             for the merchant-name fallback), just no longer rendered here. */}
 
-        {/* One interleaved, numbered list for both text fields and image
-            zones so step numbers here match TemplateCanvas.jsx's on-canvas
-            zone labels (see fieldOrder above). */}
+        {/* Accordion: the active field renders in full (same step number as
+            TemplateCanvas.jsx's on-canvas zone labels - see fieldOrder
+            above); every other field collapses to one summary line - Julia's
+            editor redesign, 2026-09-18. */}
         {fieldOrder.map((key, i) => {
           const zone = imageZones.find(z => z.id === key)
-          if (zone) {
+
+          if (key !== expandedKey) {
             return (
-              <ImageUpload
-                key={zone.id}
-                step={i + 1}
-                zoneId={zone.id}
-                onFocusField={onFocusField}
-                label={imageZoneLabel(zone)}
-                value={fields[`${zone.id}Url`]}
-                onChange={url => onChange(`${zone.id}Url`, url)}
-                square={zone.id === 'logo' || zone.id === 'qr'}
-                onResetPosition={() => onResetZone?.(zone.id)}
-                scalePercent={imageScales?.[zone.id] ?? 100}
-                onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
-                onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
-                minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
-                minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
-                requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
-                folder={assetFolderForZone(zone.id)}
-                // Templates without a restaurant_name field (e.g. Figma imports
-                // that don't define one) have nothing to auto-tag the merchant
-                // with - fall back to the project name instead of dumping
-                // everything into "General", still with zero extra clicks.
-                merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
-                autoCropContent={zone.id === 'qr'}
-                restricted={restricted}
+              <CollapsedFieldRow
+                key={key}
+                label={zone ? imageZoneLabel(zone) : TEXT_FIELD_LABELS[key]}
+                ready={isFieldReady(key)}
+                preview={zone ? null : fields[key]}
+                thumb={zone ? fields[`${zone.id}Url`] : null}
+                onClick={() => setExpandedKey(key)}
               />
             )
           }
-          return <div key={key}>{renderTextStep(key, i + 1)}</div>
+
+          // Coral box around the active field, matching the canvas zone
+          // highlight's same coral (Julia's ask, 2026-09-18) - reads as one
+          // consistent "this is what you're working on" treatment instead
+          // of two different visual languages for canvas vs. panel.
+          return (
+            <div key={key} style={{ border: '1.5px solid var(--primary)', background: 'rgba(223,111,109,0.06)', borderRadius: 12, padding: '14px 14px 2px', marginBottom: 8 }}>
+              {zone ? (
+                <ImageUpload
+                  step={i + 1}
+                  zoneId={zone.id}
+                  onFocusField={onFocusField}
+                  label={imageZoneLabel(zone)}
+                  value={fields[`${zone.id}Url`]}
+                  onChange={url => onChange(`${zone.id}Url`, url)}
+                  square={zone.id === 'logo' || zone.id === 'qr'}
+                  onResetPosition={() => onResetZone?.(zone.id)}
+                  scalePercent={imageScales?.[zone.id] ?? 100}
+                  onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+                  onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
+                  minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+                  minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+                  requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+                  folder={assetFolderForZone(zone.id)}
+                  // Templates without a restaurant_name field (e.g. Figma imports
+                  // that don't define one) have nothing to auto-tag the merchant
+                  // with - fall back to the project name instead of dumping
+                  // everything into "General", still with zero extra clicks.
+                  merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                  autoCropContent={zone.id === 'qr'}
+                  restricted={restricted}
+                />
+              ) : renderTextStep(key, i + 1)}
+            </div>
+          )
         })}
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
@@ -779,63 +901,82 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
 
       </div>
 
-      {/* Action footer: Export PDF → Send for Review → Save (restricted review
-          mode hides Export PDF only - Save stays, and returns to the "pick a
-          design" screen so a merchant wanting both A and B isn't stuck) */}
+      {/* Action footer - Julia's editor redesign, 2026-09-18, per Annika's
+          mockup: autosave replaces the manual Save button, leaving Send for
+          Review as the one primary CTA, with Export PDF gated behind it.
+          Restricted review mode is untouched - it never had autosave (a
+          brief-generated candidate's own save flow is deliberately manual,
+          see handleSaveAndReturnToPicker in App.jsx) and has no "Advanced"
+          concept to gate export against. */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {!restricted && (
+        {restricted ? (
           <>
             <button
-              onClick={onExport}
-              disabled={exporting}
-              style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: exporting ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'background 0.15s' }}
-              onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary-dark)' }}
-              onMouseLeave={e => { if (!exporting) e.currentTarget.style.background = 'var(--primary)' }}
+              onClick={onSendForReview}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
+                background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
             >
-              {exporting ? 'Exporting…' : 'Export PDF'}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Send for Review
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving}
+              title="Saves this design (findable later in Designs) and takes you back to pick the other option"
+              style={{
+                width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+                background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
+                border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save & pick another design'}
             </button>
           </>
+        ) : (
+          <>
+            <button
+              onClick={onSendForReview}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
+                background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+              onMouseEnter={e => { if (!saving) e.currentTarget.style.background = 'var(--primary-dark)' }}
+              onMouseLeave={e => { if (!saving) e.currentTarget.style.background = 'var(--primary)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Send for Review
+            </button>
+
+            {reviewSent ? (
+              <button
+                onClick={onExport}
+                disabled={exporting}
+                style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--dark)' }}
+                onMouseLeave={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--border)' }}
+              >
+                {exporting ? 'Exporting…' : 'Export PDF'}
+              </button>
+            ) : (
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--light)', padding: '4px 0' }}>
+                🔒 Export PDF - unlocks once you send for review
+              </div>
+            )}
+          </>
         )}
-
-        <button
-          onClick={onSendForReview}
-          disabled={saving}
-          style={restricted ? {
-            width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
-            background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          } : {
-            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
-            background: '#fff', color: 'var(--dark)',
-            border: '1.5px solid var(--border)',
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}
-          onMouseEnter={e => { if (!saving && !restricted) e.currentTarget.style.borderColor = 'var(--dark)' }}
-          onMouseLeave={e => { if (!saving && !restricted) e.currentTarget.style.borderColor = 'var(--border)' }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-          </svg>
-          Send for Review
-        </button>
-
-        <button
-          onClick={onSave}
-          disabled={saving}
-          title={restricted ? 'Saves this design (findable later in Designs) and takes you back to pick the other option' : undefined}
-          style={{
-            width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
-            background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
-            border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
-            borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--dark)' } }}
-          onMouseLeave={e => { if (!saving && saveStatus !== 'saved') { e.currentTarget.style.borderColor = 'var(--border)' } }}
-        >
-          {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : restricted ? 'Save & pick another design' : 'Save'}
-        </button>
       </div>
 
     </div>
