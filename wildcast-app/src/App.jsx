@@ -270,7 +270,7 @@ export default function App() {
   // Lifted here since FieldEditor and TemplateCanvas are siblings.
   const [activeZoneId, setActiveZoneId]        = useState(null)
   const [fields, setFields]                   = useState(DEFAULT_FIELDS)
-  const [lang, setLang]                       = useState('de')
+  const [lang]                                = useState('de') // DE/EN switcher removed (Julia's ask, 2026-09-18: never used) - fixed to German
   const [exporting, setExporting]             = useState(false)
   const [fontSizes, setFontSizes]             = useState({})
   // The REAL font size each auto-shrink zone actually rendered at on load -
@@ -1768,7 +1768,6 @@ export default function App() {
             credits={activation?.credits}
             onCreditUsed={handleAiCreditUsed}
             lang={lang}
-            onLangChange={setLang}
             onExport={handleExport}
             exporting={exporting}
             template={selectedTemplate}
