@@ -33,79 +33,6 @@ function imageZoneLabel(zone) {
 // ask, 2026-09-18: too much text under every field) - each field's
 // placeholder text now carries the example instead.
 
-// Session-only display order for the Edit content panel's text/image steps -
-// lets a partner drag e.g. "Offer" above "Sub-headline" for their own
-// editing convenience. Purely cosmetic (only changes which numbered step a
-// field appears as in this panel, never the zone's x/y on the canvas) and
-// intentionally not persisted with the project - resets to the template's
-// natural order next time this editor is opened (Julia's ask, 2026-09-18).
-function useOrderedKeys(naturalKeys) {
-  const naturalSig = naturalKeys.join('|')
-  const [sig, setSig] = useState(naturalSig)
-  const [order, setOrder] = useState(naturalKeys)
-  // Adjusts state during render (not an effect) when the template's own
-  // field set changes (e.g. switching templates) - resets the drag order
-  // back to natural immediately, in the same render, rather than flashing
-  // the stale order for one frame first.
-  if (sig !== naturalSig) {
-    setSig(naturalSig)
-    setOrder(naturalKeys)
-  }
-  function reorder(draggedKey, targetKey) {
-    if (draggedKey === targetKey) return
-    setOrder(prev => {
-      const from = prev.indexOf(draggedKey)
-      const to = prev.indexOf(targetKey)
-      if (from === -1 || to === -1) return prev
-      const next = [...prev]
-      const [item] = next.splice(from, 1)
-      next.splice(to, 0, item)
-      return next
-    })
-  }
-  return [order, reorder]
-}
-
-function GripIcon() {
-  return (
-    <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
-      <circle cx="2.5" cy="2.5" r="1.4" /><circle cx="7.5" cy="2.5" r="1.4" />
-      <circle cx="2.5" cy="8" r="1.4" /><circle cx="7.5" cy="8" r="1.4" />
-      <circle cx="2.5" cy="13.5" r="1.4" /><circle cx="7.5" cy="13.5" r="1.4" />
-    </svg>
-  )
-}
-
-// Wraps a StepFieldRow/ImageUpload with a drag handle - native HTML5 drag
-// and drop rather than a library, matching the rest of this codebase's
-// hand-rolled UI. The handle alone is draggable (not the whole row), so
-// selecting/editing text inside the field's own input never gets mistaken
-// for a drag.
-function ReorderableStep({ isDragging, isDragOver, dragSource, dropTarget, children }) {
-  return (
-    <div
-      {...dropTarget}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 2,
-        opacity: isDragging ? 0.4 : 1,
-        outline: isDragOver ? '2px dashed var(--primary)' : 'none',
-        outlineOffset: 4, borderRadius: 10, transition: 'opacity 0.15s',
-      }}
-    >
-      <span
-        {...dragSource}
-        title="Drag to reorder"
-        style={{ cursor: 'grab', color: 'var(--light)', flexShrink: 0, marginTop: 7, padding: '2px 1px', touchAction: 'none' }}
-        onMouseEnter={e => { e.currentTarget.style.color = 'var(--mid)' }}
-        onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
-      >
-        <GripIcon />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
-    </div>
-  )
-}
-
 function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
 }
@@ -322,7 +249,7 @@ const ICC_PROFILE = { label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted, zoneId, onFocusField }) {
+function ImageUpload({ step, label, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted, zoneId, onFocusField }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -359,10 +286,6 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
   const filteredLibraryAssets = libraryAssets
     .filter(a => libraryMerchantFilter === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === libraryMerchantFilter)
     .filter(a => !librarySearch.trim() || a.name.toLowerCase().includes(librarySearch.trim().toLowerCase()))
-
-  // The displayed min-resolution text always matches the real 300 DPI check below -
-  // never hardcode a pixel count in a zone's hint string, it will drift from this.
-  const fullHint = minWidth && minHeight ? `${hint} · min ${minWidth}×${minHeight}px` : hint
 
   function applyImage(url, name) {
     onChange(url, name)
@@ -440,7 +363,6 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
               >↺</button>
             )}
           </div>
-          {fullHint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{fullHint}</div>}
         </div>
       </div>
 
@@ -635,41 +557,15 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
     return zone?.align ?? fallback
   }
 
-  // Drag-to-reorder for the panel's steps (see useOrderedKeys above) - text
-  // fields and image zones are now interleaved into ONE ordered list, not
-  // two separate blocks (Julia's ask, 2026-09-18: Logo, Subline, Headline,
-  // Photo, Sticker, T&Cs, App download line/Offer), so a design's photo can
-  // sit between its subline and its T&Cs, matching TemplateCanvas.jsx's
-  // on-canvas step numbers - see lib/fieldOrder.js for the shared order
-  // both this panel and the canvas sort by.
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
     .filter(k => k === 'headline' || templateConfig?.zones?.some(z => z.id === k))
   const imageZoneKeys = imageZones.map(z => z.id)
-  const naturalKeys = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
-  const [fieldOrder, reorderFields] = useOrderedKeys(naturalKeys)
-  const [draggingKey, setDraggingKey] = useState(null)
-  const [dragOverKey, setDragOverKey] = useState(null)
-
-  function dragSourceProps(key) {
-    return {
-      draggable: true,
-      onDragStart: e => { setDraggingKey(key); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key) },
-      onDragEnd: () => { setDraggingKey(null); setDragOverKey(null) },
-    }
-  }
-
-  function dropTargetProps(key, reorderFn) {
-    return {
-      onDragOver: e => { e.preventDefault(); if (draggingKey && draggingKey !== key) setDragOverKey(key) },
-      onDragLeave: () => setDragOverKey(prev => (prev === key ? null : prev)),
-      onDrop: e => {
-        e.preventDefault()
-        if (draggingKey) reorderFn(draggingKey, key)
-        setDraggingKey(null)
-        setDragOverKey(null)
-      },
-    }
-  }
+  // Interleaved so this panel's step numbers match TemplateCanvas.jsx's
+  // on-canvas zone labels (Logo, Subline, Headline, Photo, ... - see
+  // lib/fieldOrder.js for the shared order both sort by), not grouped into
+  // "all text fields, then all images" the way the two blocks below used to
+  // render.
+  const fieldOrder = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
 
   function renderTextStep(key, step) {
     switch (key) {
@@ -829,65 +725,48 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
             bar. `projectName` is still a prop of this component (used below
             for the merchant-name fallback), just no longer rendered here. */}
 
-        {/* Intro banner - the plain guided-mode message ("Fill in each step
-            below...") was removed entirely (Julia's ask, 2026-09-18); the
-            restricted-review one stays since it explains something actually
-            different (why the canvas is locked, what happens on send). */}
-        {isNonDesigner && restricted && (
+        {/* Intro banner for non-designer */}
+        {/* {isNonDesigner && (
           <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
             This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.
           </div>
-        )}
+        )} */}
 
         {/* One interleaved, numbered list for both text fields and image
-            zones (Julia's ask, 2026-09-18: Logo, Subline, Headline, Photo,
-            Sticker, T&Cs, App download line/Offer) - drag the grip handle to
-            reorder within a session (hidden in restricted review mode,
-            where everything else is locked too). Step numbers here match
-            TemplateCanvas.jsx's on-canvas zone labels - see lib/fieldOrder.js. */}
+            zones so step numbers here match TemplateCanvas.jsx's on-canvas
+            zone labels (see fieldOrder above). */}
         {fieldOrder.map((key, i) => {
           const zone = imageZones.find(z => z.id === key)
-          const content = zone ? (
-            <ImageUpload
-              step={i + 1}
-              zoneId={zone.id}
-              onFocusField={onFocusField}
-              label={imageZoneLabel(zone)}
-              hint={zone.hint ?? 'JPG or PNG'}
-              value={fields[`${zone.id}Url`]}
-              onChange={url => onChange(`${zone.id}Url`, url)}
-              square={zone.id === 'logo' || zone.id === 'qr'}
-              onResetPosition={() => onResetZone?.(zone.id)}
-              scalePercent={imageScales?.[zone.id] ?? 100}
-              onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
-              onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
-              minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
-              minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
-              requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
-              folder={assetFolderForZone(zone.id)}
-              // Templates without a restaurant_name field (e.g. Figma imports
-              // that don't define one) have nothing to auto-tag the merchant
-              // with - fall back to the project name instead of dumping
-              // everything into "General", still with zero extra clicks.
-              merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
-              autoCropContent={zone.id === 'qr'}
-              restricted={restricted}
-            />
-          ) : renderTextStep(key, i + 1)
-
-          return restricted ? (
-            <div key={key}>{content}</div>
-          ) : (
-            <ReorderableStep
-              key={key}
-              isDragging={draggingKey === key}
-              isDragOver={dragOverKey === key && !!draggingKey && draggingKey !== key}
-              dragSource={dragSourceProps(key)}
-              dropTarget={dropTargetProps(key, reorderFields)}
-            >
-              {content}
-            </ReorderableStep>
-          )
+          if (zone) {
+            return (
+              <ImageUpload
+                key={zone.id}
+                step={i + 1}
+                zoneId={zone.id}
+                onFocusField={onFocusField}
+                label={imageZoneLabel(zone)}
+                value={fields[`${zone.id}Url`]}
+                onChange={url => onChange(`${zone.id}Url`, url)}
+                square={zone.id === 'logo' || zone.id === 'qr'}
+                onResetPosition={() => onResetZone?.(zone.id)}
+                scalePercent={imageScales?.[zone.id] ?? 100}
+                onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+                onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
+                minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+                minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+                requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+                folder={assetFolderForZone(zone.id)}
+                // Templates without a restaurant_name field (e.g. Figma imports
+                // that don't define one) have nothing to auto-tag the merchant
+                // with - fall back to the project name instead of dumping
+                // everything into "General", still with zero extra clicks.
+                merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                autoCropContent={zone.id === 'qr'}
+                restricted={restricted}
+              />
+            )
+          }
+          return <div key={key}>{renderTextStep(key, i + 1)}</div>
         })}
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
@@ -962,8 +841,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         >
           {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : restricted ? 'Save & pick another design' : 'Save'}
         </button>
-
-        <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center' }}>CMYK · 3mm bleed · print-ready</div>
       </div>
 
     </div>
