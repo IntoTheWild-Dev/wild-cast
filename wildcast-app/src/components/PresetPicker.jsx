@@ -15,7 +15,7 @@ import { useState } from 'react'
 // options" just reveals the rest of what's already fetched, no refetch.
 const VISIBLE_COUNT = 4
 
-export default function PresetPicker({ field, onApply, partnerName }) {
+export default function PresetPicker({ field, onApply, partnerName, vertical }) {
   const [open, setOpen] = useState(false)
   const [presets, setPresets] = useState(null)
   const [fetchedFor, setFetchedFor] = useState(undefined)
@@ -29,11 +29,12 @@ export default function PresetPicker({ field, onApply, partnerName }) {
     try {
       const params = new URLSearchParams({ field })
       if (partnerName) params.set('partner', partnerName)
+      if (vertical) params.set('vertical', vertical)
       const res = await fetch(`/api/presets?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not load presets')
       setPresets(data.presets ?? [])
-      setFetchedFor(partnerName)
+      setFetchedFor(`${vertical ?? ''}|${partnerName}`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -46,7 +47,7 @@ export default function PresetPicker({ field, onApply, partnerName }) {
     setOpen(willOpen)
     if (willOpen) {
       setShowAll(false)
-      if (presets === null || fetchedFor !== partnerName) fetchPresets()
+      if (presets === null || fetchedFor !== `${vertical ?? ''}|${partnerName}`) fetchPresets()
     }
   }
 

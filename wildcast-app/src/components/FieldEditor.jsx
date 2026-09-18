@@ -122,7 +122,7 @@ function NudgeArrows({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField, vertical }) {
   const limit = CHAR_LIMITS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
@@ -230,8 +230,11 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         // triggered it - keeps a 300px dropdown from starting left of the
         // panel's own edge and getting clipped (see AISuggest.jsx).
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative' }}>
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} credits={credits} onCreditUsed={onCreditUsed} />
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} mode="improve" seedText={value} credits={credits} onCreditUsed={onCreditUsed} />
+          {/* vertical ("Restaurant"/"Retail" from the brief) strictly scopes
+              which KB examples and rules AI Suggest retrieves - without it
+              the backend falls back to the unfiltered library. */}
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} mode="improve" seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
         </div>
       )}
     </div>
@@ -539,7 +542,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -574,6 +577,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="Headline" fieldKey="headline"
             onFocusField={onFocusField}
+            vertical={vertical}
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
             placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
@@ -594,6 +598,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="Sub-headline" fieldKey="sub_headline"
             onFocusField={onFocusField}
+            vertical={vertical}
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -609,6 +614,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="Restaurant name" fieldKey="restaurant_name"
             onFocusField={onFocusField}
+            vertical={vertical}
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -623,6 +629,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="Offer" fieldKey="offer"
             onFocusField={onFocusField}
+            vertical={vertical}
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
@@ -644,6 +651,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="T&amp;Cs" fieldKey="tc"
             onFocusField={onFocusField}
+            vertical={vertical}
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -662,6 +670,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="App download line" fieldKey="cta"
             onFocusField={onFocusField}
+            vertical={vertical}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
             placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}

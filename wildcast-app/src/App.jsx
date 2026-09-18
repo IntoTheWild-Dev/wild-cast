@@ -200,6 +200,14 @@ export default function App() {
   // B), not lose it. BriefingForm no longer owns this - it's just the
   // submitted brief snapshot ({...brief} at Submit), or null before that.
   const [briefSubmission, setBriefSubmission] = useState(null)
+  // The design's vertical ("Restaurant" / "Retail") - gates which knowledge
+  // base examples AI Suggest may retrieve (strict vertical filtering). Set
+  // from the brief's Business type when entering via the brief flow, or
+  // restored from the saved project itself when re-opening from Designs
+  // (older projects saved before this shipped have no vertical, and stay
+  // null). Cleared on "New Brief" so a stale vertical can't leak into the
+  // next design.
+  const [designVertical, setDesignVertical] = useState(null)
   // Set right after a brief submit (template is already picked as Step 1 of
   // the brief now, per Julia's ask 2026-09-10) to open "Choose your mode"
   // directly, overlaid on the still-visible brief screen - skips the old
@@ -744,6 +752,7 @@ export default function App() {
     // the brief form the way it used to.
     else if (target === 'new-brief') {
       setBriefSubmission(null)
+      setDesignVertical(null)
       setSavedCandidateIds({})
       setCompletedFormats(new Set())
       setTemplateSelectFormat(null)
@@ -1045,6 +1054,9 @@ export default function App() {
       fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, imagePositions, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
       ownerEmail, ownerName, folder: projectFolder,
+      // Persisted so re-opening this design (from any device/account) keeps
+      // AI Suggest strictly scoped to the brief's vertical.
+      vertical: designVertical,
     }
 
     const response = await fetch('/api/save-project', {
@@ -1178,6 +1190,9 @@ export default function App() {
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: {}, imagePositions: {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview,
       ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
+      // Candidate saves only happen via the brief flow, so the brief's
+      // business type is the design's vertical.
+      vertical: briefSubmission?.businessType ?? null,
     }
     const response = await fetch('/api/save-project', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1256,6 +1271,9 @@ export default function App() {
     setCurrentProjectId(project.id)
     setProjectOwner(project.ownerEmail ? { email: project.ownerEmail, name: project.ownerName } : null)
     setProjectFolder(project.folder ?? null)
+    // Restore the design's vertical from the saved project (null on projects
+    // saved before verticals shipped) so AI Suggest re-scopes to it.
+    setDesignVertical(project.vertical ?? null)
     setComments(freshComments)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
@@ -1349,6 +1367,7 @@ export default function App() {
             onBack={() => setScreen('landing')}
             onSubmitted={brief => {
               setBriefSubmission(brief)
+              setDesignVertical(brief.businessType || null)
               setCompletedFormats(new Set())
               setTemplateSelectFormat(null)
               // Template is already picked (Step 1 of the brief, per Julia's
@@ -1645,6 +1664,7 @@ export default function App() {
             comments={comments}
             currentProjectId={currentProjectId}
             projectName={projectName}
+            vertical={designVertical}
           />
         </div>
       )}
