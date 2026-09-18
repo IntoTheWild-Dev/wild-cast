@@ -6,17 +6,9 @@ import { HeroColumn, FeatureGrid, WildScaleTip } from './BriefingForm'
 // only starts once "Start from scratch" is picked. Mirrors BriefingForm.jsx's
 // own outer wrapper/grid exactly so the transition between this screen and
 // the brief screen it hands off to doesn't visually jump.
+// Order: Choose a template, See Design library, Create from brief
+// (Julia's ask, 2026-09-18 - brief moved from first to last).
 const CHOICES = [
-  {
-    key: 'brief',
-    title: 'Create from brief',
-    desc: "Brief us like you would a designer - pick a template, tell us what you need, and we'll get it ready to fill in.",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    ),
-  },
   {
     key: 'catalogue',
     title: 'Choose a template',
@@ -34,6 +26,16 @@ const CHOICES = [
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <rect x="3" y="3" width="18" height="14" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+      </svg>
+    ),
+  },
+  {
+    key: 'brief',
+    title: 'Create from brief',
+    desc: "Brief us like you would a designer - pick a template, tell us what you need, and we'll get it ready to fill in.",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14M5 12h14" />
       </svg>
     ),
   },
