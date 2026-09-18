@@ -429,39 +429,48 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           {fullHint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{fullHint}</div>}
         </div>
       </div>
-      <div
-        onClick={restricted ? undefined : handleClick}
-        style={{ border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '16px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}
-      >
-        {value ? (
-          <>
-            <img src={value} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: square ? 4 : 6 }} />
-            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>{restricted ? 'Uploaded ✓' : 'Uploaded ✓ - click to replace'}</span>
-          </>
-        ) : (
-          <>
-            <div style={{ width: 40, height: 40, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+
+      {/* Upload and "choose from library" side by side as two equal buttons,
+          not a big drop zone with a small text link stacked underneath it -
+          Julia's ask, 2026-09-18. */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={restricted ? undefined : handleClick}
+          disabled={restricted}
+          style={{ flex: 1, minWidth: 0, border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '12px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'left' }}
+        >
+          {value ? (
+            <img src={value} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: square ? 4 : 6, flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 32, height: 32, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
             </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{restricted ? 'No image' : 'Click to upload'}</div>
-              <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{fullHint}</div>
+          )}
+          <span style={{ fontSize: 12, fontWeight: 600, color: value ? 'var(--primary)' : 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {value ? (restricted ? 'Uploaded ✓' : 'Click to replace') : (restricted ? 'No image' : 'Click to upload')}
+          </span>
+        </button>
+
+        {!restricted && (
+          <button
+            type="button"
+            onClick={openLibrary}
+            style={{ flex: 1, minWidth: 0, border: '1.5px dashed var(--border)', borderRadius: 10, padding: '12px', cursor: 'pointer', background: '#FAFAF8', display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'left' }}
+          >
+            <div style={{ width: 32, height: 32, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+              </svg>
             </div>
-          </>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Choose from library
+            </span>
+          </button>
         )}
       </div>
-
-      {/* Library picker toggle - only shown when this zone's folder already has saved assets */}
-      {!restricted && libraryAssets.length > 0 && (
-        <button
-          onClick={openLibrary}
-          style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
-        >
-          or choose from library →
-        </button>
-      )}
       {libraryOpen && (
         <div
           onClick={() => setLibraryOpen(false)}
