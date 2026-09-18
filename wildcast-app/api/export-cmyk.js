@@ -37,9 +37,10 @@ export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 
 // Selectable output intents — both ICC files are the free, redistributable
 // characterisation profiles from eci.org (same source/license as the
-// original FOGRA39 file). FOGRA51 (PSO Coated v3, ISO 12647-2:2013) is the
-// newer offset standard; FOGRA39 (ISO Coated v2, ISO 12647-2:2004) stays the
-// default so existing exports don't change unless a caller opts in.
+// original FOGRA39 file). FOGRA51 (PSO Coated v3, ISO 12647-2:2013) is now
+// the only user-choosable profile (Julia's ask, 2026-09-18); the fogra39
+// entry stays here so a project saved before this change with
+// iccProfile:'fogra39' still exports correctly, it's just not offered.
 const ICC_PROFILES = {
   fogra39: {
     file: 'ISOcoated_v2_eci.icc',
@@ -56,7 +57,7 @@ const ICC_PROFILES = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { png, filename = 'wildcast-flyer', profile = 'fogra39' } = req.body
+  const { png, filename = 'wildcast-flyer', profile = 'fogra51' } = req.body
   if (!png) return res.status(400).json({ error: 'Missing png' })
 
   const profileMeta = ICC_PROFILES[profile]

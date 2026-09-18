@@ -12,6 +12,7 @@ import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
+import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 
 const ALL_MERCHANTS = '__all__'
 
@@ -27,29 +28,20 @@ function imageZoneLabel(zone) {
   return zone.label ?? zone.id
 }
 
-const FIELD_HINTS = {
-  headline:         "The bigger line, below the subline, e.g. 'DREAMTEAM'",
-  sub_headline:     "The smaller line, above the headline, e.g. 'POTSDAMS NEUES'",
-  restaurant_name:  "Your restaurant name, e.g. 'Wen Cheng'",
-  offer:            "Your promotion, e.g. '30% SPAREN'",
-  tc:               'Small-print terms, rotated vertically on the flyer',
-  cta:              "Completes \"Jetzt Wolt App downloaden und ...\" as one sentence, e.g. 'Lieblingsessen bei McDonald's bestellen.'",
-}
-
-// Option B's headline completes the fixed "Wie wär's mit ..." line baked
-// into its background art as a question (e.g. "WIE WÄR'S MIT MCDONALD'S?")
-// - a completely different pattern from Option A's standalone headline, so
-// the shared generic hint/example ('DREAMTEAM') was actively misleading
-// there (Julia's ask, 2026-09-09: "the form isn't clear on Option A and
-// Option B" for what each field expects).
-const OPT_B_HEADLINE_HINT = "Completes the fixed \"Wie wär's mit ...\" line above it as a question, e.g. 'MCDONALD'S?'"
+// The per-field explainer paragraphs that used to live here (FIELD_HINTS /
+// OPT_B_HEADLINE_HINT) were removed from the field rows entirely (Julia's
+// ask, 2026-09-18: too much text under every field) - each field's
+// placeholder text now carries the example instead.
 
 function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
 }
 
+// A pill reading "Required" next to every mandatory field's label added up
+// to a lot of the same word repeated down the panel - Julia's ask,
+// 2026-09-18: swap it for the plain asterisk convention instead.
 function RequiredBadge() {
-  return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '2px 7px', borderRadius: 100 }}>Required</span>
+  return <span style={{ color: 'var(--primary)', fontWeight: 700 }} title="Required">*</span>
 }
 
 function AlignControl({ align, onAlign }) {
@@ -129,9 +121,8 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, hint: hintOverride, suggestFrom }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField }) {
   const limit = CHAR_LIMITS[fieldKey]
-  const hint = hintOverride ?? FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
   // Gentle "Did you mean X?" hint, not a blocking popup - Julia's ask,
@@ -161,7 +152,6 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
               </span>
             )}
           </div>
-          {hint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{hint}</div>}
         </div>
       </div>
 
@@ -184,11 +174,16 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
 
       {onNudge && <NudgeControl onNudge={onNudge} />}
 
-      {/* Input */}
+      {/* Input - focus/blur report this field up to App.jsx's activeZoneId
+          (Annika's ask, 2026-09-18: light up the matching zone on the
+          canvas while typing here) - see TemplateCanvas.jsx's own effect
+          keyed on that prop for the actual highlight. */}
       {multiline ? (
         <textarea
           value={value}
           onChange={e => onChange(e.target.value)}
+          onFocus={() => onFocusField?.(fieldKey)}
+          onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
           rows={3}
@@ -200,6 +195,8 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
+          onFocus={() => onFocusField?.(fieldKey)}
+          onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
           placeholder={fieldPlaceholder}
@@ -232,21 +229,18 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
   )
 }
 
-// Output ICC profiles for CMYK export (api/export-cmyk.js has the matching
-// ICC_PROFILES map + bundled .icc files). fogra39 stays the default so
-// existing exports don't change unless a merchant/print shop asks for the
-// newer standard.
-const ICC_PROFILE_OPTIONS = [
-  { id: 'fogra51', label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' },
-  { id: 'fogra39', label: 'FOGRA39', hint: 'ISO Coated v2 · ISO 12647-2:2004' },
-]
+// Output ICC profile for CMYK export (api/export-cmyk.js has the matching
+// ICC_PROFILES map + bundled .icc files). FOGRA39 was removed as a choice
+// (Julia's ask, 2026-09-18) - FOGRA51 is now the only, fixed profile every
+// export uses (App.jsx's iccProfile default was updated to match).
+const ICC_PROFILE = { label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' }
 
 // ── Image upload ─────────────────────────────────────────────────────────────
 // Canvas is 316×441px = A6 105×148mm → canvas PPI ≈ 76.4
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted }) {
+function ImageUpload({ step, label, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted, zoneId, onFocusField }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -362,38 +356,52 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
           </div>
         </div>
       </div>
-      <div
-        onClick={restricted ? undefined : handleClick}
-        style={{ border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '16px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}
-      >
-        {value ? (
-          <>
-            <img src={value} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: square ? 4 : 6 }} />
-            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>{restricted ? 'Uploaded ✓' : 'Uploaded ✓ - click to replace'}</span>
-          </>
-        ) : (
-          <>
-            <div style={{ width: 40, height: 40, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+
+      {/* Upload and "choose from library" side by side as two equal buttons,
+          not a big drop zone with a small text link stacked underneath it -
+          Julia's ask, 2026-09-18. */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={restricted ? undefined : handleClick}
+          onMouseEnter={() => onFocusField?.(zoneId)}
+          onMouseLeave={() => onFocusField?.(null)}
+          disabled={restricted}
+          style={{ flex: 1, minWidth: 0, border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '10px 8px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
+        >
+          {value ? (
+            <img src={value} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: square ? 4 : 6, flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
             </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{restricted ? 'No image' : 'Click to upload'}</div>
+          )}
+          <span style={{ fontSize: 11, fontWeight: 600, color: value ? 'var(--primary)' : 'var(--dark)', lineHeight: 1.3 }}>
+            {value ? (restricted ? 'Uploaded ✓' : 'Click to replace') : (restricted ? 'No image' : 'Click to upload')}
+          </span>
+        </button>
+
+        {!restricted && (
+          <button
+            type="button"
+            onClick={openLibrary}
+            onMouseEnter={() => onFocusField?.(zoneId)}
+            onMouseLeave={() => onFocusField?.(null)}
+            style={{ flex: 1, minWidth: 0, border: '1.5px dashed var(--border)', borderRadius: 10, padding: '10px 8px', cursor: 'pointer', background: '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
+          >
+            <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+              </svg>
             </div>
-          </>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', lineHeight: 1.3 }}>
+              Choose from library
+            </span>
+          </button>
         )}
       </div>
-
-      {/* Library picker toggle - only shown when this zone's folder already has saved assets */}
-      {!restricted && libraryAssets.length > 0 && (
-        <button
-          onClick={openLibrary}
-          style={{ marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
-        >
-          or choose from library →
-        </button>
-      )}
       {libraryOpen && (
         <div
           onClick={() => setLibraryOpen(false)}
@@ -535,7 +543,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange, credits, onCreditUsed, iccProfile, onIccProfileChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -556,6 +564,12 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
     .filter(k => k === 'headline' || templateConfig?.zones?.some(z => z.id === k))
   const imageZoneKeys = imageZones.map(z => z.id)
+  // Interleaved so this panel's step numbers match TemplateCanvas.jsx's
+  // on-canvas zone labels (Logo, Subline, Headline, Photo, ... - see
+  // lib/fieldOrder.js for the shared order both sort by), not grouped into
+  // "all text fields, then all images" the way the two blocks below used to
+  // render.
+  const fieldOrder = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
 
   function renderTextStep(key, step) {
     switch (key) {
@@ -563,8 +577,8 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Headline" fieldKey="headline"
+            onFocusField={onFocusField}
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-            hint={template?.id === 'opt-b-flyer2-simple' ? OPT_B_HEADLINE_HINT : undefined}
             placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -583,6 +597,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Sub-headline" fieldKey="sub_headline"
+            onFocusField={onFocusField}
             value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -597,6 +612,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Restaurant name" fieldKey="restaurant_name"
+            onFocusField={onFocusField}
             value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -610,6 +626,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="Offer" fieldKey="offer"
+            onFocusField={onFocusField}
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
             placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
@@ -630,6 +647,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="T&amp;Cs" fieldKey="tc"
+            onFocusField={onFocusField}
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -647,6 +665,7 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         return (
           <StepFieldRow
             step={step} label="App download line" fieldKey="cta"
+            onFocusField={onFocusField}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
             placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}
@@ -705,112 +724,65 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       {/* Scrollable fields */}
       <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }}>
 
-        {/* Project name */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            Project name
-          </label>
-          <input
-            type="text"
-            value={projectName ?? ''}
-            onChange={e => onProjectNameChange(e.target.value)}
-            placeholder="e.g. Wen Cheng – Wolt Promo June"
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              padding: '9px 12px', fontSize: 13, fontFamily: 'inherit',
-              border: '1px solid var(--border)', borderRadius: 8,
-              background: '#fff', color: 'var(--dark)', outline: 'none',
-              transition: 'border-color 0.15s',
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
-          />
-          <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 5 }}>
-            Used as the PDF filename and label in your Designs tab.
-          </div>
-        </div>
+        {/* Project name now lives centered in the header above the canvas,
+            not here (Julia's ask, 2026-09-18) - see App.jsx's breadcrumb
+            bar. `projectName` is still a prop of this component (used below
+            for the merchant-name fallback), just no longer rendered here. */}
 
         {/* Intro banner for non-designer */}
         {/* {isNonDesigner && (
           <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
-            {restricted
-              ? 'This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.'
-              : 'Fill in each step below - your text will appear on the preview automatically.'}
+            This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.
           </div>
         )} */}
 
-        {/* Text fields - same numbered layout for both modes. */}
-        {textFieldKeys.map((key, i) => (
-          <div key={key}>{renderTextStep(key, i + 1)}</div>
-        ))}
-
-        {imageZones.length > 0 && (
-          <>
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 24px' }} />
-            {imageZoneKeys.map((id, i) => {
-              const zone = imageZones.find(z => z.id === id)
-              if (!zone) return null
-              return (
-                <ImageUpload
-                  key={zone.id}
-                  step={textFieldKeys.length + 1 + i}
-                  label={imageZoneLabel(zone)}
-                  value={fields[`${zone.id}Url`]}
-                  onChange={url => onChange(`${zone.id}Url`, url)}
-                  square={zone.id === 'logo' || zone.id === 'qr'}
-                  onResetPosition={() => onResetZone?.(zone.id)}
-                  scalePercent={imageScales?.[zone.id] ?? 100}
-                  onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
-                  onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
-                  minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
-                  minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
-                  requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
-                  folder={assetFolderForZone(zone.id)}
-                  // Templates without a restaurant_name field (e.g. Figma imports
-                  // that don't define one) have nothing to auto-tag the merchant
-                  // with - fall back to the project name instead of dumping
-                  // everything into "General", still with zero extra clicks.
-                  merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
-                  autoCropContent={zone.id === 'qr'}
-                  restricted={restricted}
-                />
-              )
-            })}
-          </>
-        )}
+        {/* One interleaved, numbered list for both text fields and image
+            zones so step numbers here match TemplateCanvas.jsx's on-canvas
+            zone labels (see fieldOrder above). */}
+        {fieldOrder.map((key, i) => {
+          const zone = imageZones.find(z => z.id === key)
+          if (zone) {
+            return (
+              <ImageUpload
+                key={zone.id}
+                step={i + 1}
+                zoneId={zone.id}
+                onFocusField={onFocusField}
+                label={imageZoneLabel(zone)}
+                value={fields[`${zone.id}Url`]}
+                onChange={url => onChange(`${zone.id}Url`, url)}
+                square={zone.id === 'logo' || zone.id === 'qr'}
+                onResetPosition={() => onResetZone?.(zone.id)}
+                scalePercent={imageScales?.[zone.id] ?? 100}
+                onScaleChange={(pct) => onImageScaleChange?.(zone.id, pct)}
+                onNudge={(axis, delta) => onImageOffsetChange?.(zone.id, axis, delta)}
+                minWidth={Math.round(zone.width * 300 / CANVAS_PPI)}
+                minHeight={Math.round(zone.height * 300 / CANVAS_PPI)}
+                requireTransparent={zone.hint?.toLowerCase().includes('transparent')}
+                folder={assetFolderForZone(zone.id)}
+                // Templates without a restaurant_name field (e.g. Figma imports
+                // that don't define one) have nothing to auto-tag the merchant
+                // with - fall back to the project name instead of dumping
+                // everything into "General", still with zero extra clicks.
+                merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                autoCropContent={zone.id === 'qr'}
+                restricted={restricted}
+              />
+            )
+          }
+          return <div key={key}>{renderTextStep(key, i + 1)}</div>
+        })}
 
         <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 20px' }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>ICC Profile</div>
-          {/* Both options actually change the export now (api/export-cmyk.js
-              picks the matching bundled .icc + OutputIntent) - unlike the old
-              fixed FOGRA39-only display, this is a real choice. FOGRA39 stays
-              the default since it's what every export used before this. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {ICC_PROFILE_OPTIONS.map(opt => {
-              const active = (iccProfile ?? 'fogra39') === opt.id
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => onIccProfileChange?.(opt.id)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
-                    padding: '10px 12px', fontSize: 13, textAlign: 'left', cursor: 'pointer',
-                    border: `1px solid ${active ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 8,
-                    background: active ? 'var(--primary-glow)' : 'var(--surface)', color: 'var(--dark)',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-                    <span style={{ color: active ? '#16a34a' : 'var(--light)', fontWeight: 700 }}>✓</span>
-                    {opt.label}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--mid)', paddingLeft: 22 }}>{opt.hint}</span>
-                </button>
-              )
-            })}
+          {/* No longer a choice (FOGRA39 removed, Julia's ask, 2026-09-18) -
+              every export uses FOGRA51, shown here for reference only. */}
+          <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{ICC_PROFILE.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{ICC_PROFILE.hint}</div>
           </div>
         </div>
 

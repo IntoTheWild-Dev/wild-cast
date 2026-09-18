@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import Select from './Select'
 import { TEMPLATES } from '../data/templates'
 import { isCloseMatch } from '../lib/fuzzyMatch'
 
 const ALL = '__all__'
-const NEW_FOLDER = '__new_folder__'
 
 function formatDate(ts) {
   const d = new Date(ts)
@@ -180,7 +180,8 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
 // is NOT owner-gated - designs are already fully shared/editable by anyone
 // (see ConfirmOpenModal below), so renaming follows that same existing
 // model rather than the newer, deliberately-personal folder-organizing one.
-function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize, folderOptions, onMove, showOwner }) {
+function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize, people, onMove, showOwner }) {
+  const [moving, setMoving] = useState(false)
   return (
     <div
       onClick={() => onOpen(project)}
@@ -260,24 +261,29 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
 
           {canOrganize && (
             <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
-              <Select
-                value={project.folder || ''}
-                onChange={e => {
-                  const v = e.target.value
-                  if (v === NEW_FOLDER) {
-                    const name = window.prompt('New folder name')?.trim()
-                    if (name) onMove(project, name)
-                  } else {
-                    onMove(project, v || null)
-                  }
-                }}
-                style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', width: '100%' }}
+              {/* A native <select> couldn't move a design into a DIFFERENT
+                  sign-in's folder (it only ever listed this project's own
+                  owner's folders) and its inline popup was easy to miss -
+                  Julia's report, 2026-09-18. This opens a proper centered
+                  modal instead, listing every person's folders so a design
+                  can be re-homed across sign-ins, not just re-filed within
+                  its current one. */}
+              <button
+                type="button"
+                onClick={() => setMoving(true)}
+                style={{ width: '100%', fontSize: 11, fontWeight: 600, color: 'var(--dark)', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', cursor: 'pointer' }}
               >
-                <option value="">Unsorted</option>
-                {folderOptions.map(f => <option key={f} value={f}>{f}</option>)}
-                <option value={NEW_FOLDER}>+ New folder…</option>
-              </Select>
+                Move to folder
+              </button>
             </div>
+          )}
+          {moving && (
+            <MoveModal
+              project={project}
+              people={people}
+              onClose={() => setMoving(false)}
+              onMove={(folder, ownerEmail, ownerName) => { onMove(project, folder, ownerEmail, ownerName); setMoving(false) }}
+            />
           )}
         </div>
       </div>
@@ -314,6 +320,83 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
         ×
       </button>
     </div>
+  )
+}
+
+// Centered popup listing every person's folders (Julia's ask, 2026-09-18) -
+// picking any row moves this design there, including a folder that belongs
+// to a DIFFERENT sign-in than the design's current owner, which re-homes
+// the design under that person too (see handleMove in the parent). Every
+// click inside stops propagation so it never bubbles up into the card's
+// own onOpen underneath it.
+function MoveModal({ project, people, onClose, onMove }) {
+  function createAndMove(ownerEmail, ownerName) {
+    const name = window.prompt('New folder name')?.trim()
+    if (name) onMove(name, ownerEmail, ownerName)
+  }
+
+  // Portaled straight to document.body - Julia's report, 2026-09-18: the
+  // popup flickered between properly centered and clipped/small "inside the
+  // tile". Root cause: DesignCard sets an inline `transform` on hover (its
+  // lift-up effect), and CSS makes any transformed ancestor the containing
+  // block for a `position: fixed` descendant instead of the viewport - so
+  // while nested inside the card, this modal centered on the CARD, not the
+  // screen, and jumped every time hover state changed underneath it. A
+  // portal renders this outside that DOM subtree entirely, so no ancestor
+  // transform can ever affect it again.
+  return createPortal(
+    <div
+      onClick={e => { e.stopPropagation(); onClose() }}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 16, padding: 24, width: 440, maxWidth: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 2 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 800, color: 'var(--dark)', margin: 0, flex: 1 }}>Move to folder</h3>
+          <button
+            onClick={onClose}
+            style={{ width: 26, height: 26, border: 'none', background: '#F3F4F6', borderRadius: '50%', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', lineHeight: 1, flexShrink: 0 }}
+          >×</button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--mid)', margin: '0 0 18px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {project.projectName || project.templateName}
+        </p>
+
+        {people.map(person => (
+          <div key={person.ownerEmail} style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              {person.ownerName}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {!(project.ownerEmail === person.ownerEmail && !project.folder) && (
+                <FolderRow label="Unsorted" onClick={() => onMove(null, person.ownerEmail, person.ownerName)} />
+              )}
+              {[...person.folderSet].sort((a, b) => a.localeCompare(b))
+                .filter(f => !(project.ownerEmail === person.ownerEmail && project.folder === f))
+                .map(f => (
+                  <FolderRow key={f} label={f} onClick={() => onMove(f, person.ownerEmail, person.ownerName)} />
+                ))}
+              <FolderRow label="+ New folder…" accent onClick={() => createAndMove(person.ownerEmail, person.ownerName)} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+function FolderRow({ label, onClick, accent }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ textAlign: 'left', padding: '9px 12px', fontSize: 13, fontWeight: 600, color: accent ? 'var(--primary)' : 'var(--dark)', background: '#FAFAF8', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
+    >
+      {accent ? label : `📁 ${label}`}
+    </button>
   )
 }
 
@@ -498,18 +581,26 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   // Optimistic - reflects the move immediately (folders/lists using
   // `projects` update right away) and fires the real write in the
   // background; matches handleDelete's existing pattern above.
-  function handleMove(project, folder) {
-    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, folder } : p))
+  //
+  // ownerEmail/ownerName: passed whenever the target folder belongs to a
+  // DIFFERENT person than the design's current owner (Julia's ask,
+  // 2026-09-18 - moving across the two "Wild Stack"/"Wild Stack Team"
+  // sign-ins) - re-homes the design itself, not just its folder tag, so it
+  // actually shows up under the new owner's Folders view.
+  function handleMove(project, folder, ownerEmail, ownerName) {
+    const targetEmail = ownerEmail || project.ownerEmail
+    const targetName = ownerEmail ? (ownerName || ownerEmail) : project.ownerName
+    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, folder, ownerEmail: targetEmail, ownerName: targetName } : p))
     fetch('/api/move-project', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: project.id, folder }),
+      body: JSON.stringify({ id: project.id, folder, ownerEmail, ownerName }),
     }).catch(() => {})
     if (folder) {
       setFolderRegistry(prev => {
-        const mine = prev.find(r => r.ownerEmail === activation?.key)
+        const mine = prev.find(r => r.ownerEmail === targetEmail)
         if (mine?.folders?.includes(folder)) return prev
-        const others = prev.filter(r => r.ownerEmail !== activation?.key)
-        return [...others, { ownerEmail: activation?.key, ownerName: activation?.clientName, folders: [...(mine?.folders ?? []), folder] }]
+        const others = prev.filter(r => r.ownerEmail !== targetEmail)
+        return [...others, { ownerEmail: targetEmail, ownerName: targetName, folders: [...(mine?.folders ?? []), folder] }]
       })
     }
   }
@@ -531,9 +622,6 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     }
   }
 
-  function folderOptionsFor(ownerEmail) {
-    return [...(people.find(p => p.ownerEmail === ownerEmail)?.folderSet ?? [])].sort((a, b) => a.localeCompare(b))
-  }
 
   const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, personFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
   const activeFilterSummary = activeFilterCount > 0
@@ -723,8 +811,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                     onDelete={handleDelete}
                     onRename={handleRename}
                     showOwner={personFilter === ALL}
-                    canOrganize={!!activation?.key && activation.key === project.ownerEmail}
-                    folderOptions={folderOptionsFor(project.ownerEmail)}
+                    canOrganize={!!activation?.key}
+                    people={people}
                     onMove={handleMove}
                   />
                 ))}
@@ -798,8 +886,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                     onOpen={handleRequestOpen}
                     onDelete={handleDelete}
                     onRename={handleRename}
-                    canOrganize={isOwnSpace}
-                    folderOptions={folderOptionsFor(project.ownerEmail)}
+                    canOrganize={!!activation?.key}
+                    people={people}
                     onMove={handleMove}
                   />
                 ))}
@@ -823,8 +911,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
                   onOpen={handleRequestOpen}
                   onDelete={handleDelete}
                   onRename={handleRename}
-                  canOrganize={isOwnSpace}
-                  folderOptions={folderOptionsFor(project.ownerEmail)}
+                  canOrganize={!!activation?.key}
+                  people={people}
                   onMove={handleMove}
                 />
               ))}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
+import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 
 // Visual-only bleed margin drawn around the canvas in the editor, matching
 // the Figma master's own look (solid page edge + inset dashed trim line) -
@@ -52,14 +53,13 @@ function applyZoneStackingOrder(canvas, config, zoneObjs) {
   })
 }
 
-// Colored zone-id label chips on the editor canvas - Julia's ask, 2026-09-11
-// (her client: "editing a template needs more guidance"), matching the same
-// blue/pink color scheme TemplateImportPage.jsx's ZoneOverlay already uses
-// on the Import review screen, so this reads as the same visual language
-// rather than a new one. Literal hex, not var(--primary) - a raw <canvas>
-// 2D context can't resolve CSS custom properties, only the DOM's own style
-// system can (see src/index.css for the source of truth on this value).
-const ZONE_LABEL_COLOR = { image: '#3B82F6', text: '#DF6F6D' }
+// Numbered zone-guide chip color on the editor canvas - Julia's ask,
+// 2026-09-18: one flat coral for every zone type, not a blue/coral split by
+// text vs image. Literal hex, not var(--primary) - a raw <canvas> 2D
+// context can't resolve CSS custom properties, only the DOM's own style
+// system can (see src/index.css for the source of truth - this is that
+// same --primary value).
+const ZONE_LABEL_COLOR = '#df6f6d'
 
 async function loadFonts() {
   // document.fonts.ready resolves when @font-face declarations are parsed -
@@ -86,7 +86,7 @@ async function loadFonts() {
   }
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -328,18 +328,46 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         }
 
-        // Small colored chip naming a zone, anchored to its box's top-left
-        // corner in UN-rotated coordinates (zone.x/zone.y) even for a
-        // rotated zone's guide - stays upright and readable regardless of
-        // which way the box itself is turned, matching how ZoneOverlay on
-        // the Import review page keeps its own labels upright too.
+        // Step number shown on each zone's guide chip, matching FieldEditor's
+        // "Edit content" panel step numbers exactly - same shared order (see
+        // lib/fieldOrder.js) - Julia's ask, 2026-09-18: a plain "1", "2",
+        // "3"... instead of the raw zone id (e.g. "headline"), so the canvas
+        // reads together with the numbered panel instead of duplicating its
+        // own separate field-name vocabulary.
+        const stepNumberOrder = sortIdsByFieldOrder(zones.map(z => z.id))
+
+        // Round numbered chip anchored to a zone's box, in UN-rotated
+        // coordinates (zone.x/zone.y) even for a rotated zone's guide -
+        // stays upright and readable regardless of which way the box itself
+        // is turned, matching how ZoneOverlay on the Import review page
+        // keeps its own labels upright too. Centered a radius in from the
+        // corner (not flush against it) rather than a rectangular chip
+        // anchored exactly at zone.x/zone.y - Julia's report, 2026-09-18:
+        // the old flush-corner rect chip was getting visually clipped for
+        // whichever zone sat right at the canvas's own top-left corner
+        // (its wrapper has a rounded corner there), and round+inset reads
+        // as a cleaner "badge" regardless.
+        const CHIP_RADIUS = 9
         function addZoneLabel(zone) {
-          const label = new fabric.Text(zone.id, {
-            left: zone.x, top: zone.y,
-            originX: 'left', originY: 'top',
-            fontSize: 9, fontWeight: '700', fontFamily: 'Arial, sans-serif',
+          const cx = zone.x + CHIP_RADIUS
+          const cy = zone.y + CHIP_RADIUS
+          const chip = new fabric.Circle({
+            left: cx, top: cy,
+            originX: 'center', originY: 'center',
+            radius: CHIP_RADIUS,
+            fill: ZONE_LABEL_COLOR,
+            selectable: false,
+            evented: false,
+          })
+          const number = new fabric.Text(String(stepNumberOrder.indexOf(zone.id) + 1), {
+            left: cx, top: cy,
+            originX: 'center', originY: 'center',
+            fontSize: 10, fontWeight: '700', fontFamily: 'Arial, sans-serif',
             fill: '#fff',
-            backgroundColor: ZONE_LABEL_COLOR[zone.type] || ZONE_LABEL_COLOR.text,
+            selectable: false,
+            evented: false,
+          })
+          const label = new fabric.Group([chip, number], {
             selectable: false,
             evented: false,
             _wcGuide: true,
@@ -771,6 +799,32 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     canvas.renderAll()
   }, [alignments, config])
+
+  // ── Light up the zone whose field is focused/hovered in the side panel ──────
+  // Annika's ask via Julia, 2026-09-18: "highlight the zone when we put our
+  // cursor in the box to type or add a photo". Toggles the SAME guide rect
+  // object every other zone-boundary code already draws (`${id}-guide` for
+  // text, `${id}-placeholder` for image) between its normal translucent-white
+  // dashed look and a solid coral one - never rebuilds the canvas, just
+  // mutates existing objects, so this stays cheap enough to run on every
+  // keystroke's focus/blur without the flicker a full re-init would cause.
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !config) return
+    config.zones.forEach(zone => {
+      const key = zone.type === 'image' ? `${zone.id}-placeholder` : `${zone.id}-guide`
+      const obj = zoneObjsRef.current[key]
+      if (!obj) return
+      const active = zone.id === activeZoneId
+      obj.set({
+        stroke: active ? ZONE_LABEL_COLOR : 'rgba(255,255,255,0.5)',
+        strokeWidth: active ? 2.5 : 1.5,
+        strokeDashArray: active ? null : [6, 4],
+        fill: active ? 'rgba(223,111,109,0.15)' : 'transparent',
+      })
+    })
+    canvas.renderAll()
+  }, [activeZoneId, config])
 
   // ── Sync text-zone nudge offsets → canvas ─────────────────────────────────
   // Mirrors the image nudge pattern below, but for specific text zones (e.g.
