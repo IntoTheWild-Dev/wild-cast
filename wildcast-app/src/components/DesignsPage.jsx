@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import Select from './Select'
 import { TEMPLATES } from '../data/templates'
 import { isCloseMatch } from '../lib/fuzzyMatch'
@@ -334,7 +335,16 @@ function MoveModal({ project, people, onClose, onMove }) {
     if (name) onMove(name, ownerEmail, ownerName)
   }
 
-  return (
+  // Portaled straight to document.body - Julia's report, 2026-09-18: the
+  // popup flickered between properly centered and clipped/small "inside the
+  // tile". Root cause: DesignCard sets an inline `transform` on hover (its
+  // lift-up effect), and CSS makes any transformed ancestor the containing
+  // block for a `position: fixed` descendant instead of the viewport - so
+  // while nested inside the card, this modal centered on the CARD, not the
+  // screen, and jumped every time hover state changed underneath it. A
+  // portal renders this outside that DOM subtree entirely, so no ancestor
+  // transform can ever affect it again.
+  return createPortal(
     <div
       onClick={e => { e.stopPropagation(); onClose() }}
       style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
@@ -373,7 +383,8 @@ function MoveModal({ project, people, onClose, onMove }) {
           </div>
         ))}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
