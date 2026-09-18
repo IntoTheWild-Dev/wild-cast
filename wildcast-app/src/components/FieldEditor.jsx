@@ -18,6 +18,18 @@ const ALL_MERCHANTS = '__all__'
 
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
 
+// Matches the label each case in renderTextStep's switch passes to
+// StepFieldRow - used by the accordion's collapsed row, which needs a
+// field's label without rendering its full step.
+const TEXT_FIELD_LABELS = {
+  headline: 'Headline',
+  sub_headline: 'Sub-headline',
+  restaurant_name: 'Restaurant name',
+  offer: 'Offer',
+  tc: 'T&Cs',
+  cta: 'App download line',
+}
+
 // No live template has a sticker-type zone yet, but the underlying id/folder/
 // Library category stay "sticker" throughout the codebase (assetLibrary.js,
 // assetFolderForZone) once one gets built - only what a partner actually
@@ -114,6 +126,48 @@ function NudgeArrows({ onNudge }) {
         >{dir}</button>
       ))}
     </div>
+  )
+}
+
+// A collapsed accordion row - one line, click anywhere to expand into the
+// full StepFieldRow/ImageUpload below (Julia's editor redesign, 2026-09-18,
+// per Annika's mockup: "collapse finished fields to a single line"). Shows a
+// ✓ once the field has content, a plain empty circle otherwise - matches the
+// numbered chip's coral so it reads as the same "step" system, not a new one.
+function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        padding: '10px 12px', marginBottom: 8, textAlign: 'left',
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+        cursor: 'pointer', transition: 'border-color 0.15s', fontFamily: 'inherit',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+    >
+      <span style={{
+        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: ready ? 'var(--primary)' : 'transparent',
+        border: ready ? 'none' : '1.5px solid var(--border)',
+        color: '#fff', fontSize: 11, fontWeight: 700,
+      }}>
+        {ready ? '✓' : ''}
+      </span>
+      {thumb && <img src={thumb} alt="" style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)', flexShrink: 0 }}>{label}</span>
+        {preview && (
+          <span style={{ fontSize: 12, color: 'var(--mid)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {preview}
+          </span>
+        )}
+      </span>
+      <span style={{ color: 'var(--light)', fontSize: 12, flexShrink: 0 }}>⌄</span>
+    </button>
   )
 }
 
@@ -570,6 +624,25 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // render.
   const fieldOrder = sortIdsByFieldOrder([...textFieldKeys, ...imageZoneKeys])
 
+  // Accordion: only one field expanded (full controls) at a time, every
+  // other field collapses to a single summary line - Julia's editor
+  // redesign, 2026-09-18, per Annika's mockup ("collapse finished fields to
+  // a single line"). Defaults to the first field, resetting whenever the
+  // template changes - same render-time-adjustment pattern as advancedMode
+  // in App.jsx, avoiding an effect-based setState for the same reason.
+  const [expandedFieldOrderSig, setExpandedFieldOrderSig] = useState(fieldOrder.join('|'))
+  const [expandedKey, setExpandedKey] = useState(fieldOrder[0] ?? null)
+  const fieldOrderSig = fieldOrder.join('|')
+  if (expandedFieldOrderSig !== fieldOrderSig) {
+    setExpandedFieldOrderSig(fieldOrderSig)
+    setExpandedKey(fieldOrder[0] ?? null)
+  }
+
+  function isFieldReady(key) {
+    const zone = imageZones.find(z => z.id === key)
+    return zone ? !!fields[`${zone.id}Url`] : !!(fields[key] || '').trim()
+  }
+
   function renderTextStep(key, step) {
     switch (key) {
       case 'headline':
@@ -731,11 +804,26 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             bar. `projectName` is still a prop of this component (used below
             for the merchant-name fallback), just no longer rendered here. */}
 
-        {/* One interleaved, numbered list for both text fields and image
-            zones so step numbers here match TemplateCanvas.jsx's on-canvas
-            zone labels (see fieldOrder above). */}
+        {/* Accordion: the active field renders in full (same step number as
+            TemplateCanvas.jsx's on-canvas zone labels - see fieldOrder
+            above); every other field collapses to one summary line - Julia's
+            editor redesign, 2026-09-18. */}
         {fieldOrder.map((key, i) => {
           const zone = imageZones.find(z => z.id === key)
+
+          if (key !== expandedKey) {
+            return (
+              <CollapsedFieldRow
+                key={key}
+                label={zone ? imageZoneLabel(zone) : TEXT_FIELD_LABELS[key]}
+                ready={isFieldReady(key)}
+                preview={zone ? null : fields[key]}
+                thumb={zone ? fields[`${zone.id}Url`] : null}
+                onClick={() => setExpandedKey(key)}
+              />
+            )
+          }
+
           if (zone) {
             return (
               <ImageUpload

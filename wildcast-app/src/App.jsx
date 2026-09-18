@@ -18,6 +18,7 @@ import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from './lib/
 import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
+import { sortIdsByFieldOrder } from './lib/fieldOrder'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -1480,6 +1481,19 @@ export default function App() {
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
   // meaningful to unlock on an already-generated candidate).
   const effectiveMode = restrictedReview ? (selectedTemplate?.mode ?? 'designer') : (advancedMode ? 'designer' : 'non-designer')
+  // "X of Y ready" progress bar (Julia's editor redesign, 2026-09-18, per
+  // Annika's mockup) - mirrors FieldEditor.jsx's own fieldOrder/isFieldReady
+  // logic (same shared lib/fieldOrder.js order) since the bar renders up
+  // here in the breadcrumb stack, not inside that side panel.
+  const progressFieldOrder = templateConfig ? sortIdsByFieldOrder([
+    ...['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
+      .filter(k => k === 'headline' || templateConfig.zones?.some(z => z.id === k)),
+    ...(templateConfig.zones?.filter(z => z.type === 'image').map(z => z.id) ?? []),
+  ]) : []
+  const progressReadyCount = progressFieldOrder.filter(key => {
+    const isImage = templateConfig?.zones?.find(z => z.id === key)?.type === 'image'
+    return isImage ? !!fields[`${key}Url`] : !!(fields[key] || '').trim()
+  }).length
 
   // Show activation gate unless already activated or this is a shared review link
   if (!activation && !reviewProjectId) {
@@ -1808,6 +1822,24 @@ export default function App() {
                 <span style={{ fontSize: 12, color: 'var(--mid)' }}>
                   {effectiveMode === 'non-designer' ? 'Keeps text inside safe print margins' : 'Full manual control over position and size'}
                 </span>
+              </div>
+            )}
+
+            {/* Progress bar (Julia's editor redesign, 2026-09-18, per
+                Annika's mockup) - hidden in restricted review, which has no
+                open-ended "keep filling fields" flow. */}
+            {!restrictedReview && progressFieldOrder.length > 0 && (
+              <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  {progressReadyCount} of {progressFieldOrder.length} ready
+                </span>
+                <div style={{ flex: 1, height: 6, background: '#F3F4F6', borderRadius: 100, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${(progressReadyCount / progressFieldOrder.length) * 100}%`, height: '100%',
+                    background: progressReadyCount === progressFieldOrder.length ? '#16a34a' : 'var(--primary)',
+                    borderRadius: 100, transition: 'width 0.2s ease, background 0.2s ease',
+                  }} />
+                </div>
               </div>
             )}
 
