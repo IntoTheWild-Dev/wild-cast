@@ -1127,9 +1127,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         </div>
       )}
 
+      {/* top: 4, not the container's full 40px padding - Julia's report,
+          2026-09-18: this badge (plain HTML, not drawn on the Fabric canvas)
+          was overlapping the canvas's own top few pixels, which is exactly
+          where a zone's number-1 chip usually sits (Logo is always step 1,
+          and logos are almost always placed near the top of these flyer
+          templates) - no amount of Fabric-side z-ordering can fix a real
+          HTML element sitting visually on top of the whole canvas. */}
       {mode === 'non-designer' && !loading && (
         <div style={{
-          position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+          position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
           background: 'var(--primary)', color: '#fff',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
           padding: '5px 14px', borderRadius: 20,
