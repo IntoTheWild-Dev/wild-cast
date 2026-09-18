@@ -44,79 +44,6 @@ const FIELD_HINTS = {
 // Option B" for what each field expects).
 const OPT_B_HEADLINE_HINT = "Completes the fixed \"Wie wär's mit ...\" line above it as a question, e.g. 'MCDONALD'S?'"
 
-// Session-only display order for the Edit content panel's text/image steps -
-// lets a partner drag e.g. "Offer" above "Sub-headline" for their own
-// editing convenience. Purely cosmetic (only changes which numbered step a
-// field appears as in this panel, never the zone's x/y on the canvas) and
-// intentionally not persisted with the project - resets to the template's
-// natural order next time this editor is opened (Julia's ask, 2026-09-18).
-function useOrderedKeys(naturalKeys) {
-  const naturalSig = naturalKeys.join('|')
-  const [sig, setSig] = useState(naturalSig)
-  const [order, setOrder] = useState(naturalKeys)
-  // Adjusts state during render (not an effect) when the template's own
-  // field set changes (e.g. switching templates) - resets the drag order
-  // back to natural immediately, in the same render, rather than flashing
-  // the stale order for one frame first.
-  if (sig !== naturalSig) {
-    setSig(naturalSig)
-    setOrder(naturalKeys)
-  }
-  function reorder(draggedKey, targetKey) {
-    if (draggedKey === targetKey) return
-    setOrder(prev => {
-      const from = prev.indexOf(draggedKey)
-      const to = prev.indexOf(targetKey)
-      if (from === -1 || to === -1) return prev
-      const next = [...prev]
-      const [item] = next.splice(from, 1)
-      next.splice(to, 0, item)
-      return next
-    })
-  }
-  return [order, reorder]
-}
-
-function GripIcon() {
-  return (
-    <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
-      <circle cx="2.5" cy="2.5" r="1.4" /><circle cx="7.5" cy="2.5" r="1.4" />
-      <circle cx="2.5" cy="8" r="1.4" /><circle cx="7.5" cy="8" r="1.4" />
-      <circle cx="2.5" cy="13.5" r="1.4" /><circle cx="7.5" cy="13.5" r="1.4" />
-    </svg>
-  )
-}
-
-// Wraps a StepFieldRow/ImageUpload with a drag handle - native HTML5 drag
-// and drop rather than a library, matching the rest of this codebase's
-// hand-rolled UI. The handle alone is draggable (not the whole row), so
-// selecting/editing text inside the field's own input never gets mistaken
-// for a drag.
-function ReorderableStep({ isDragging, isDragOver, dragSource, dropTarget, children }) {
-  return (
-    <div
-      {...dropTarget}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 2,
-        opacity: isDragging ? 0.4 : 1,
-        outline: isDragOver ? '2px dashed var(--primary)' : 'none',
-        outlineOffset: 4, borderRadius: 10, transition: 'opacity 0.15s',
-      }}
-    >
-      <span
-        {...dragSource}
-        title="Drag to reorder"
-        style={{ cursor: 'grab', color: 'var(--light)', flexShrink: 0, marginTop: 7, padding: '2px 1px', touchAction: 'none' }}
-        onMouseEnter={e => { e.currentTarget.style.color = 'var(--mid)' }}
-        onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
-      >
-        <GripIcon />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
-    </div>
-  )
-}
-
 function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
 }
@@ -319,7 +246,7 @@ const ICC_PROFILE_OPTIONS = [
 // For 300 DPI print the image needs ~3.93× the zone's canvas pixel width/height.
 const CANVAS_PPI = 316 / (105 / 25.4)
 
-function ImageUpload({ step, label, hint, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted }) {
+function ImageUpload({ step, label, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted }) {
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -356,10 +283,6 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
   const filteredLibraryAssets = libraryAssets
     .filter(a => libraryMerchantFilter === ALL_MERCHANTS || (a.merchant || GENERAL_MERCHANT) === libraryMerchantFilter)
     .filter(a => !librarySearch.trim() || a.name.toLowerCase().includes(librarySearch.trim().toLowerCase()))
-
-  // The displayed min-resolution text always matches the real 300 DPI check below -
-  // never hardcode a pixel count in a zone's hint string, it will drift from this.
-  const fullHint = minWidth && minHeight ? `${hint} · min ${minWidth}×${minHeight}px` : hint
 
   function applyImage(url, name) {
     onChange(url, name)
@@ -437,7 +360,6 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
               >↺</button>
             )}
           </div>
-          {fullHint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{fullHint}</div>}
         </div>
       </div>
       <div
@@ -458,7 +380,6 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{restricted ? 'No image' : 'Click to upload'}</div>
-              <div style={{ fontSize: 11, color: 'var(--light)', marginTop: 2 }}>{fullHint}</div>
             </div>
           </>
         )}
@@ -632,37 +553,9 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
     return zone?.align ?? fallback
   }
 
-  // Drag-to-reorder for the panel's steps (see useOrderedKeys above) - text
-  // fields and image zones are reordered as two separate groups, same as
-  // they're already visually separated by the divider below.
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
     .filter(k => k === 'headline' || templateConfig?.zones?.some(z => z.id === k))
   const imageZoneKeys = imageZones.map(z => z.id)
-  const [textOrder, reorderText] = useOrderedKeys(textFieldKeys)
-  const [imageOrder, reorderImages] = useOrderedKeys(imageZoneKeys)
-  const [draggingKey, setDraggingKey] = useState(null)
-  const [dragOverKey, setDragOverKey] = useState(null)
-
-  function dragSourceProps(key) {
-    return {
-      draggable: true,
-      onDragStart: e => { setDraggingKey(key); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key) },
-      onDragEnd: () => { setDraggingKey(null); setDragOverKey(null) },
-    }
-  }
-
-  function dropTargetProps(key, reorderFn) {
-    return {
-      onDragOver: e => { e.preventDefault(); if (draggingKey && draggingKey !== key) setDragOverKey(key) },
-      onDragLeave: () => setDragOverKey(prev => (prev === key ? null : prev)),
-      onDrop: e => {
-        e.preventDefault()
-        if (draggingKey) reorderFn(draggingKey, key)
-        setDraggingKey(null)
-        setDragOverKey(null)
-      },
-    }
-  }
 
   function renderTextStep(key, step) {
     switch (key) {
@@ -838,45 +731,30 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         </div>
 
         {/* Intro banner for non-designer */}
-        {isNonDesigner && (
+        {/* {isNonDesigner && (
           <div style={{ background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--primary-dark)', marginBottom: 24, lineHeight: 1.5 }}>
             {restricted
               ? 'This design was generated from your brief. Nudge the headline, subline or images into place, then send it for review - text and images are locked.'
               : 'Fill in each step below - your text will appear on the preview automatically.'}
           </div>
-        )}
+        )} */}
 
-        {/* Text fields - same numbered layout for both modes. Drag the grip
-            handle to reorder (hidden in restricted review mode, where
-            everything else is locked too) - see useOrderedKeys/ReorderableStep
-            above (Julia's ask, 2026-09-18). */}
-        {textOrder.map((key, i) => (
-          restricted ? (
-            <div key={key}>{renderTextStep(key, i + 1)}</div>
-          ) : (
-            <ReorderableStep
-              key={key}
-              isDragging={draggingKey === key}
-              isDragOver={dragOverKey === key && !!draggingKey && draggingKey !== key}
-              dragSource={dragSourceProps(key)}
-              dropTarget={dropTargetProps(key, reorderText)}
-            >
-              {renderTextStep(key, i + 1)}
-            </ReorderableStep>
-          )
+        {/* Text fields - same numbered layout for both modes. */}
+        {textFieldKeys.map((key, i) => (
+          <div key={key}>{renderTextStep(key, i + 1)}</div>
         ))}
 
         {imageZones.length > 0 && (
           <>
             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 24px' }} />
-            {imageOrder.map((id, i) => {
+            {imageZoneKeys.map((id, i) => {
               const zone = imageZones.find(z => z.id === id)
               if (!zone) return null
-              const upload = (
+              return (
                 <ImageUpload
-                  step={textOrder.length + 1 + i}
+                  key={zone.id}
+                  step={textFieldKeys.length + 1 + i}
                   label={imageZoneLabel(zone)}
-                  hint={zone.hint ?? 'JPG or PNG'}
                   value={fields[`${zone.id}Url`]}
                   onChange={url => onChange(`${zone.id}Url`, url)}
                   square={zone.id === 'logo' || zone.id === 'qr'}
@@ -896,19 +774,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
                   autoCropContent={zone.id === 'qr'}
                   restricted={restricted}
                 />
-              )
-              return restricted ? (
-                <div key={zone.id}>{upload}</div>
-              ) : (
-                <ReorderableStep
-                  key={zone.id}
-                  isDragging={draggingKey === zone.id}
-                  isDragOver={dragOverKey === zone.id && !!draggingKey && draggingKey !== zone.id}
-                  dragSource={dragSourceProps(zone.id)}
-                  dropTarget={dropTargetProps(zone.id, reorderImages)}
-                >
-                  {upload}
-                </ReorderableStep>
               )
             })}
           </>
@@ -1008,8 +873,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
         >
           {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : restricted ? 'Save & pick another design' : 'Save'}
         </button>
-
-        <div style={{ fontSize: 11, color: 'var(--light)', textAlign: 'center' }}>CMYK · 3mm bleed · print-ready</div>
       </div>
 
     </div>
