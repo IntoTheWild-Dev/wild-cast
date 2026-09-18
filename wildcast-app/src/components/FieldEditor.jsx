@@ -438,18 +438,18 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           type="button"
           onClick={restricted ? undefined : handleClick}
           disabled={restricted}
-          style={{ flex: 1, minWidth: 0, border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '12px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'left' }}
+          style={{ flex: 1, minWidth: 0, border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '10px 8px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
         >
           {value ? (
-            <img src={value} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: square ? 4 : 6, flexShrink: 0 }} />
+            <img src={value} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: square ? 4 : 6, flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 32, height: 32, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
             </div>
           )}
-          <span style={{ fontSize: 12, fontWeight: 600, color: value ? 'var(--primary)' : 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: value ? 'var(--primary)' : 'var(--dark)', lineHeight: 1.3 }}>
             {value ? (restricted ? 'Uploaded ✓' : 'Click to replace') : (restricted ? 'No image' : 'Click to upload')}
           </span>
         </button>
@@ -458,14 +458,14 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
           <button
             type="button"
             onClick={openLibrary}
-            style={{ flex: 1, minWidth: 0, border: '1.5px dashed var(--border)', borderRadius: 10, padding: '12px', cursor: 'pointer', background: '#FAFAF8', display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'left' }}
+            style={{ flex: 1, minWidth: 0, border: '1.5px dashed var(--border)', borderRadius: 10, padding: '10px 8px', cursor: 'pointer', background: '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
           >
-            <div style={{ width: 32, height: 32, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
               </svg>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--dark)', lineHeight: 1.3 }}>
               Choose from library
             </span>
           </button>
