@@ -284,11 +284,12 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         // triggered it - keeps a 300px dropdown from starting left of the
         // panel's own edge and getting clipped (see AISuggest.jsx).
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative' }}>
-          {/* vertical ("Restaurant"/"Retail" from the brief) strictly scopes
-              which KB examples and rules AI Suggest retrieves - without it
-              the backend falls back to the unfiltered library. */}
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} mode="improve" seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
+          {/* One button, not two (Julia's editor redesign, 2026-09-18) -
+              AISuggest itself decides generate-vs-improve from seedText.
+              vertical ("Restaurant"/"Retail" from the brief) strictly scopes
+              which KB examples and rules it retrieves - without it the
+              backend falls back to the unfiltered library. */}
+          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
         </div>
       )}
     </div>

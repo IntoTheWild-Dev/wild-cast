@@ -15,13 +15,18 @@ import { useState } from 'react'
 // deduction in App.jsx). Both are undefined when no activation is in scope,
 // which leaves generation ungated rather than blocking on a false 0.
 //
-// mode="improve" - a separate "Improve with AI" affordance next to the
-// default "Generate" mode: instead of writing fresh copy from the brief, it
-// sends whatever the partner already typed (seedText) as `seed`, and
-// api/ai-suggest.js polishes it or translates it into the target language
-// instead of inventing something new. Never cached (seedText can change
-// between opens), so every open re-checks credits and refetches.
-export default function AISuggest({ field, lang, onApply, variant = 'pill', context = {}, credits, onCreditUsed, mode = 'generate', seedText = '' }) {
+// One icon per field, not two - Julia's editor redesign, 2026-09-18, per
+// Annika's mockup ("merge AI Suggest + Improve with AI into one icon per
+// field"). Which behavior it performs is decided live at click/open time
+// from whatever's currently in the field (seedText), not a fixed prop:
+// empty field -> generate fresh copy from the brief (old default "Generate"
+// mode); field already has text -> polish/translate it (old "Improve with
+// AI" mode, seeding the request with that text). A field's own text can
+// change between opens (someone types, clears, AI-applies, then reopens),
+// so this is recomputed every render rather than cached - same reasoning
+// the old improve-mode-never-caches comment already had, just now covering
+// the empty<->filled transition too, not only cache staleness.
+export default function AISuggest({ field, lang, onApply, variant = 'pill', context = {}, credits, onCreditUsed, seedText = '' }) {
   const [open, setOpen] = useState(false)
   const [dropLang, setDropLang] = useState(lang)
   const [loading, setLoading] = useState(false)
@@ -39,8 +44,8 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   const activeLang = dropLang
   const suggestions = byLang[activeLang] ?? []
 
-  const isImprove = mode === 'improve'
   const trimmedSeed = seedText.trim()
+  const isImprove = trimmedSeed.length > 0
 
   async function fetchSuggestions(l, { more = false } = {}) {
     setLoading(true)
@@ -95,7 +100,6 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
   }
 
   function handleToggle() {
-    if (isImprove && !trimmedSeed) return
     const willOpen = !open
     if (willOpen && needsFetch(lang) && !canGenerate()) return
     setOpen(willOpen)
@@ -126,27 +130,22 @@ export default function AISuggest({ field, lang, onApply, variant = 'pill', cont
         borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
       }
 
-  const disabled = isImprove && !trimmedSeed
-
   // No own position:relative wrapper - the dropdown (position:absolute,
   // right:0 below) is meant to resolve against the shared button-row
   // wrapper in FieldEditor.jsx (which IS position:relative and spans the
   // panel's full content width), not against this one button's own narrow
-  // bounding box. Two AISuggest instances render side by side there (AI
-  // Suggest + Improve with AI) - anchoring the dropdown to whichever
-  // individual button was clicked let a 300px-wide dropdown start well
-  // left of the panel's own left edge and get clipped by the panel's
-  // overflow:hidden (Julia's report, 2026-09-09: "AI Suggestions are off
-  // page we can't see it" - the dropdown WAS generating suggestions fine,
-  // just invisible).
+  // bounding box - anchoring it to this button's own narrow bounding box
+  // let a 300px-wide dropdown start well left of the panel's own left edge
+  // and get clipped by the panel's overflow:hidden (Julia's report,
+  // 2026-09-09: "AI Suggestions are off page we can't see it" - the
+  // dropdown WAS generating suggestions fine, just invisible).
   return (
     <>
       <button
         type="button"
         onClick={handleToggle}
-        disabled={disabled}
-        style={{ ...buttonStyle, ...(disabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}) }}
-        title={disabled ? 'Type something first' : 'Uses 1 credit per generation'}
+        style={buttonStyle}
+        title="Uses 1 credit per generation"
       >
         <span>{isImprove ? '✨' : '✦'}</span> {isImprove ? 'Improve with AI' : 'AI Suggest'}
       </button>
