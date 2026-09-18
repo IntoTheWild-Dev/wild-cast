@@ -1495,24 +1495,50 @@ export default function App() {
           )}
 
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {/* Breadcrumb */}
-            <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <span
-                onClick={handleBack}
-                style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
-              >
-                ← Designs
-              </span>
-              <span style={{ fontSize: 13, color: 'var(--light)' }}>→</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)' }}>{selectedTemplate?.name}</span>
-              {currentProjectId && (
-                <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 8px', borderRadius: 100, marginLeft: 4 }}>
-                  Saved
+            {/* Breadcrumb - a grid (not flex) so the project name can sit
+                truly centered in its own column regardless of how wide the
+                left (breadcrumb) or right (credits/undo/reset) groups are.
+                Moved the editable project name here from FieldEditor's right
+                panel (Julia's ask, 2026-09-18) - same projectName/
+                onProjectNameChange state, just rendered above the canvas
+                instead of buried in the scrollable field list. */}
+            <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <span
+                  onClick={handleBack}
+                  style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+                >
+                  ← Designs
                 </span>
-              )}
-              <div style={{ flex: 1 }} />
+                <span style={{ fontSize: 13, color: 'var(--light)', flexShrink: 0 }}>→</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTemplate?.name}</span>
+                {currentProjectId && (
+                  <span style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 8px', borderRadius: 100, flexShrink: 0 }}>
+                    Saved
+                  </span>
+                )}
+              </div>
+
+              <input
+                type="text"
+                value={projectName ?? ''}
+                onChange={e => { setProjectName(e.target.value); setHasUnsavedChanges(true) }}
+                placeholder="e.g. Wen Cheng – Wolt Promo June"
+                title="Project name - used as the PDF filename and label in your Designs tab"
+                style={{
+                  width: 320, maxWidth: '40vw', boxSizing: 'border-box', textAlign: 'center',
+                  padding: '7px 12px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                  border: '1px solid transparent', borderRadius: 8,
+                  background: 'transparent', color: 'var(--dark)', outline: 'none',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+                onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.background = '#fff' }}
+                onBlur={e => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent' }}
+              />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
               {activation && (
                 <div ref={creditsInfoRef} style={{ position: 'relative' }}>
                   <span
@@ -1559,6 +1585,7 @@ export default function App() {
                   {selectedTemplate?.mode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
                 </button>
               )}
+              </div>
             </div>
 
             <TemplateCanvas
@@ -1615,7 +1642,6 @@ export default function App() {
             comments={comments}
             currentProjectId={currentProjectId}
             projectName={projectName}
-            onProjectNameChange={name => { setProjectName(name); setHasUnsavedChanges(true) }}
           />
         </div>
       )}

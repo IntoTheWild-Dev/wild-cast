@@ -27,22 +27,10 @@ function imageZoneLabel(zone) {
   return zone.label ?? zone.id
 }
 
-const FIELD_HINTS = {
-  headline:         "The bigger line, below the subline, e.g. 'DREAMTEAM'",
-  sub_headline:     "The smaller line, above the headline, e.g. 'POTSDAMS NEUES'",
-  restaurant_name:  "Your restaurant name, e.g. 'Wen Cheng'",
-  offer:            "Your promotion, e.g. '30% SPAREN'",
-  tc:               'Small-print terms, rotated vertically on the flyer',
-  cta:              "Completes \"Jetzt Wolt App downloaden und ...\" as one sentence, e.g. 'Lieblingsessen bei McDonald's bestellen.'",
-}
-
-// Option B's headline completes the fixed "Wie wär's mit ..." line baked
-// into its background art as a question (e.g. "WIE WÄR'S MIT MCDONALD'S?")
-// - a completely different pattern from Option A's standalone headline, so
-// the shared generic hint/example ('DREAMTEAM') was actively misleading
-// there (Julia's ask, 2026-09-09: "the form isn't clear on Option A and
-// Option B" for what each field expects).
-const OPT_B_HEADLINE_HINT = "Completes the fixed \"Wie wär's mit ...\" line above it as a question, e.g. 'MCDONALD'S?'"
+// The per-field explainer paragraphs that used to live here (FIELD_HINTS /
+// OPT_B_HEADLINE_HINT) were removed from the field rows entirely (Julia's
+// ask, 2026-09-18: too much text under every field) - each field's
+// placeholder text now carries the example instead.
 
 // Session-only display order for the Edit content panel's text/image steps -
 // lets a partner drag e.g. "Offer" above "Sub-headline" for their own
@@ -121,8 +109,11 @@ function OptionalBadge() {
   return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>If necessary *</span>
 }
 
+// A pill reading "Required" next to every mandatory field's label added up
+// to a lot of the same word repeated down the panel - Julia's ask,
+// 2026-09-18: swap it for the plain asterisk convention instead.
 function RequiredBadge() {
-  return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '2px 7px', borderRadius: 100 }}>Required</span>
+  return <span style={{ color: 'var(--primary)', fontWeight: 700 }} title="Required">*</span>
 }
 
 function AlignControl({ align, onAlign }) {
@@ -202,9 +193,8 @@ function NudgeControl({ onNudge }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, hint: hintOverride, suggestFrom }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom }) {
   const limit = CHAR_LIMITS[fieldKey]
-  const hint = hintOverride ?? FIELD_HINTS[fieldKey]
   const over = limit && value.length > limit
   const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
   // Gentle "Did you mean X?" hint, not a blocking popup - Julia's ask,
@@ -234,7 +224,6 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
               </span>
             )}
           </div>
-          {hint && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{hint}</div>}
         </div>
       </div>
 
@@ -614,7 +603,7 @@ function ImageUpload({ step, label, hint, required, optional, value, onChange, s
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, onProjectNameChange, credits, onCreditUsed, iccProfile, onIccProfileChange }) {
+export default function FieldEditor({ fields, onChange, lang, onLangChange, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, iccProfile, onIccProfileChange }) {
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -671,7 +660,6 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
           <StepFieldRow
             step={step} label="Headline" fieldKey="headline"
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-            hint={template?.id === 'opt-b-flyer2-simple' ? OPT_B_HEADLINE_HINT : undefined}
             placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
@@ -812,30 +800,10 @@ export default function FieldEditor({ fields, onChange, lang, onLangChange, onEx
       {/* Scrollable fields */}
       <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }}>
 
-        {/* Project name */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            Project name
-          </label>
-          <input
-            type="text"
-            value={projectName ?? ''}
-            onChange={e => onProjectNameChange(e.target.value)}
-            placeholder="e.g. Wen Cheng – Wolt Promo June"
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              padding: '9px 12px', fontSize: 13, fontFamily: 'inherit',
-              border: '1px solid var(--border)', borderRadius: 8,
-              background: '#fff', color: 'var(--dark)', outline: 'none',
-              transition: 'border-color 0.15s',
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
-          />
-          <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 5 }}>
-            Used as the PDF filename and label in your Designs tab.
-          </div>
-        </div>
+        {/* Project name now lives centered in the header above the canvas,
+            not here (Julia's ask, 2026-09-18) - see App.jsx's breadcrumb
+            bar. `projectName` is still a prop of this component (used below
+            for the merchant-name fallback), just no longer rendered here. */}
 
         {/* Intro banner for non-designer */}
         {isNonDesigner && (
