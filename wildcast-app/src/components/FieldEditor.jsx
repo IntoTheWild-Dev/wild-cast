@@ -713,7 +713,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)' }}>Edit content</div>
             <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 1 }}>
               {template?.name ?? 'Promo Flyer'} · A6
-              {isNonDesigner && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '1px 6px', borderRadius: 100 }}>{restricted ? 'Review' : 'Guided'}</span>}
+              {/* "Guided" pill removed - the Guided/Advanced toggle in
+                  App.jsx's breadcrumb area already shows this now (Julia's
+                  editor redesign, 2026-09-18). "Review" stays - restricted
+                  mode has no toggle to duplicate it. */}
+              {isNonDesigner && restricted && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-glow)', padding: '1px 6px', borderRadius: 100 }}>Review</span>}
             </div>
           </div>
         </div>

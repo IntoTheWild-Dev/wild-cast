@@ -273,6 +273,28 @@ export default function App() {
   // eslint-disable-next-line no-unused-vars
   const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
+  // Guided/Advanced toggle (Julia's editor redesign, 2026-09-18, per
+  // Annika's mockup): replaces the old fixed-per-template guided-vs-designer
+  // split with a live in-session toggle. Guided hides font-size/position
+  // controls and locks the canvas (nudge-only); Advanced shows full manual
+  // controls and unlocks free dragging - exactly today's non-designer vs
+  // designer behavior, just now user-switchable instead of fixed by which
+  // template id was picked. Safe to do this way because a template's
+  // "-simple" (guided) and non-suffixed (designer) ids always point at the
+  // IDENTICAL zone layout (see templateZones.js's own comments on this) -
+  // toggling only ever changes controls visibility/lock state, never which
+  // zones exist or where they sit. Resets to the template's own starting
+  // mode every time a different template loads.
+  const [advancedModeTemplateId, setAdvancedModeTemplateId] = useState(selectedTemplate?.id)
+  const [advancedMode, setAdvancedMode] = useState(selectedTemplate?.mode === 'designer')
+  // Adjusts state during render (not an effect) when the selected template
+  // changes - same pattern FieldEditor.jsx's useOrderedKeys uses for the
+  // same reason: resets in the same render instead of flashing the stale
+  // mode for one frame first.
+  if (advancedModeTemplateId !== selectedTemplate?.id) {
+    setAdvancedModeTemplateId(selectedTemplate?.id)
+    setAdvancedMode(selectedTemplate?.mode === 'designer')
+  }
   // Which zone's field is currently focused/hovered in the side panel - lights
   // up that zone's boundary on the canvas (Annika's ask via Julia, 2026-09-18).
   // Lifted here since FieldEditor and TemplateCanvas are siblings.
@@ -1454,6 +1476,10 @@ export default function App() {
   }
 
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
+  // Restricted review keeps its own fixed lock behavior regardless of the
+  // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
+  // meaningful to unlock on an already-generated candidate).
+  const effectiveMode = restrictedReview ? (selectedTemplate?.mode ?? 'designer') : (advancedMode ? 'designer' : 'non-designer')
 
   // Show activation gate unless already activated or this is a shared review link
   if (!activation && !reviewProjectId) {
@@ -1745,17 +1771,45 @@ export default function App() {
                   button is hidden rather than wired to either reset flow. */}
               {!restrictedReview && (
                 <button
-                  onClick={selectedTemplate?.mode === 'non-designer' ? handleResetToBlank : handleResetLayout}
-                  title={selectedTemplate?.mode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
+                  onClick={effectiveMode === 'non-designer' ? handleResetToBlank : handleResetLayout}
+                  title={effectiveMode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
                   style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
                 >
-                  {selectedTemplate?.mode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
+                  {effectiveMode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
                 </button>
               )}
               </div>
             </div>
+
+            {/* Guided/Advanced toggle (Julia's editor redesign, 2026-09-18,
+                per Annika's mockup) - not shown in restricted review, which
+                has no "Advanced" concept (see effectiveMode above). */}
+            {!restrictedReview && (
+              <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
+                  {[['non-designer', 'Guided'], ['designer', 'Advanced']].map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setAdvancedMode(m === 'designer')}
+                      style={{
+                        padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: effectiveMode === m ? 'var(--primary)' : 'transparent',
+                        color: effectiveMode === m ? '#fff' : 'var(--mid)',
+                        fontFamily: 'inherit', transition: 'all 0.15s',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--mid)' }}>
+                  {effectiveMode === 'non-designer' ? 'Keeps text inside safe print margins' : 'Full manual control over position and size'}
+                </span>
+              </div>
+            )}
 
             <TemplateCanvas
               key={loadKey}
@@ -1768,7 +1822,7 @@ export default function App() {
               imageScales={imageScales}
               imagePositions={imagePositions}
               textPositions={textPositions}
-              mode={selectedTemplate?.mode ?? 'designer'}
+              mode={effectiveMode}
               loadKey={loadKey}
               zonePositions={zonePositions}
               onZoneDragStart={handleZoneDragStart}
@@ -1802,7 +1856,7 @@ export default function App() {
             onImageOffsetChange={handleImageOffsetChange}
             onTextNudge={handleTextNudge}
             restricted={restrictedReview}
-            mode={selectedTemplate?.mode ?? 'designer'}
+            mode={effectiveMode}
             onSave={restrictedReview ? handleSaveAndReturnToPicker : handleSave}
             saving={saving}
             saveStatus={saveStatus}
