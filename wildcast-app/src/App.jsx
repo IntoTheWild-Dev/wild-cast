@@ -14,6 +14,7 @@ import TemplateImportPage from './components/TemplateImportPage'
 import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
+import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from './lib/assetLibrary'
 import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
@@ -333,6 +334,17 @@ export default function App() {
     return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
   })
   const [showHelp, setShowHelp]               = useState(false)
+  const [showCreditsInfo, setShowCreditsInfo] = useState(false)
+  const creditsInfoRef = useRef(null)
+
+  useEffect(() => {
+    if (!showCreditsInfo) return
+    function handleOutsideClick(e) {
+      if (creditsInfoRef.current && !creditsInfoRef.current.contains(e.target)) setShowCreditsInfo(false)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [showCreditsInfo])
   // true only when the editor was entered via a brief-generated candidate -
   // gates the locked-down FieldEditor mode (Phase 2). Reset to false by every
   // other entry point so the lock never leaks into normal editing.
@@ -923,6 +935,26 @@ export default function App() {
     setHasUnsavedChanges(true)
   }
 
+  // Drag-and-drop straight onto a photo/logo zone on the canvas itself
+  // (Julia's ask, 2026-09-18) - mirrors exactly what FieldEditor.jsx's
+  // ImageUpload does for the same zone on a click-upload (same
+  // uploadImageForZone pipeline: transparent-PNG check, QR autocrop, saving
+  // into the Library), just triggered from TemplateCanvas.jsx's own drop
+  // handler instead. Left to throw on a validation failure (e.g. a
+  // non-transparent logo) - TemplateCanvas.jsx catches it and shows its own
+  // transient message near the drop point.
+  async function handleCanvasImageDrop(zoneId, file) {
+    const zone = templateConfig?.zones?.find(z => z.id === zoneId)
+    if (!zone) return
+    const { url } = await uploadImageForZone(file, {
+      requireTransparent: zone.hint?.toLowerCase().includes('transparent'),
+      autoCropContent: zoneId === 'qr',
+      folder: assetFolderForZone(zoneId),
+      merchant: (fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT,
+    })
+    handleFieldChange(`${zoneId}Url`, url)
+  }
+
   async function handleExport() {
     if (!exportRef.current?.getPng) {
       alert('Canvas not ready - please wait a moment and try again.')
@@ -1482,12 +1514,24 @@ export default function App() {
               )}
               <div style={{ flex: 1 }} />
               {activation && (
-                <span
-                  title="AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them."
-                  style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'help' }}
-                >
-                  {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''} remaining
-                </span>
+                <div ref={creditsInfoRef} style={{ position: 'relative' }}>
+                  <span
+                    onClick={() => setShowCreditsInfo(v => !v)}
+                    style={{ fontSize: 11, color: 'var(--mid)', background: '#F3F4F6', padding: '3px 10px', borderRadius: 100, border: '1px solid var(--border)', cursor: 'pointer' }}
+                  >
+                    {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''} remaining
+                  </span>
+                  {showCreditsInfo && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200,
+                      width: 220, padding: '10px 12px', borderRadius: 8, background: '#fff',
+                      border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      fontSize: 12, color: 'var(--mid)', lineHeight: 1.5,
+                    }}>
+                      AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them.
+                    </div>
+                  )}
+                </div>
               )}
               <button
                 onClick={handleUndo}
@@ -1534,6 +1578,8 @@ export default function App() {
               onZoneDragStart={handleZoneDragStart}
               onReady={handleCanvasReady}
               onAutoShrink={handleAutoShrink}
+              restricted={restrictedReview}
+              onImageDrop={handleCanvasImageDrop}
             />
           </div>
 

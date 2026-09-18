@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 
@@ -69,6 +69,20 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const [showCreditsInfo, setShowCreditsInfo] = useState(false)
+  const creditsInfoRef = useRef(null)
+
+  useEffect(() => {
+    if (!showCreditsInfo) return
+    // 'fixed' backdrop divs don't work here since the header's backdropFilter
+    // makes them contain to the header's own box instead of the viewport, so
+    // this closes on any outside click instead.
+    function handleOutsideClick(e) {
+      if (creditsInfoRef.current && !creditsInfoRef.current.contains(e.target)) setShowCreditsInfo(false)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [showCreditsInfo])
 
   function handleSignOut() {
     // Clears both possible sign-in paths unconditionally rather than
@@ -148,17 +162,29 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
               <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
                 {/* {activation.clientName} */}
               </span>
-              <span
-                title="AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them."
-                style={{
-                  fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
-                  background: activation.credits <= 5 ? 'rgba(239,68,68,0.1)' : 'rgba(2,6,24,0.06)',
-                  color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
-                  border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-                  cursor: 'help',
-                }}>
-                {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''}
-              </span>
+              <div ref={creditsInfoRef} style={{ position: 'relative' }}>
+                <span
+                  onClick={() => setShowCreditsInfo(v => !v)}
+                  style={{
+                    fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
+                    background: activation.credits <= 5 ? 'rgba(239,68,68,0.1)' : 'rgba(2,6,24,0.06)',
+                    color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
+                    border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+                    cursor: 'pointer',
+                  }}>
+                  {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''}
+                </span>
+                {showCreditsInfo && (
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200,
+                    width: 220, padding: '10px 12px', borderRadius: 8, background: '#fff',
+                    border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    fontSize: 12, color: 'var(--mid)', lineHeight: 1.5,
+                  }}>
+                    AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them.
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setShowSignOutConfirm(true)}
                 title="Sign Out"
