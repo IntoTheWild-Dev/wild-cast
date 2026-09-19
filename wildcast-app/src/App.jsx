@@ -1369,18 +1369,22 @@ export default function App() {
   // CURRENTLY OPEN editor's live state, which doesn't exist here. Takes the
   // already-captured PNG from TemplateCandidatePicker's off-screen render
   // instead of calling exportRef.current.getPng().
-  async function saveCandidateForReview(template, prefilledFields, fullPng) {
+  //
+  // opts.name / opts.vertical (2026-09-19): Prompt Brief supplies its own project
+  // name and business type; the old candidate flow passes neither and keeps
+  // its template-name / briefSubmission fallbacks.
+  async function saveCandidateForReview(template, prefilledFields, fullPng, opts = {}) {
     const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
     const id = crypto.randomUUID()
     const project = {
       id, templateId: template.id, templateName: template.name,
-      projectName: template.name,
+      projectName: opts.name ?? template.name,
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: {}, imagePositions: {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview,
       ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
       // Candidate saves only happen via the brief flow, so the brief's
       // business type is the design's vertical.
-      vertical: briefSubmission?.businessType ?? null,
+      vertical: opts.vertical ?? briefSubmission?.businessType ?? null,
     }
     const response = await fetch('/api/save-project', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1389,6 +1393,26 @@ export default function App() {
     if (!response.ok) throw new Error(await response.text())
     try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
     return id
+  }
+
+  // Prompt Brief's "Send for review" (2026-09-19): saves the finished design to
+  // the Design library and returns its shareable review link, without ever
+  // opening the editor. Uploaded images are blob: URLs, which die with the tab
+  // - converted to data URLs first, exactly as doSave() does for the editor.
+  // Returns { url } or throws (the popup shows the message and offers a retry).
+  async function handleSendPromptBriefForReview({ brief, fields: briefFields, png }) {
+    const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
+    if (!template) throw new Error('Template not found.')
+    if (!png) throw new Error('The preview is not ready yet.')
+    const savedFields = { ...DEFAULT_FIELDS, ...briefFields }
+    for (const key of ['logoUrl', 'photoUrl', 'qrUrl']) {
+      if (savedFields[key]?.startsWith('blob:')) savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+    }
+    // Same naming rule as the Edit design hand-off (handleSelectTemplateFromBrief).
+    const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
+    const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
+    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null })
+    return { url: `${window.location.origin}/?review=${id}` }
   }
 
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
@@ -1587,6 +1611,9 @@ export default function App() {
             config={TEMPLATE_ZONES[promptTemplateId] ?? customTemplates.zonesById[promptTemplateId] ?? null}
             onBack={() => setScreen('landing')}
             onChangeTemplate={() => setPromptPickerOpen(true)}
+            onSendForReview={handleSendPromptBriefForReview}
+            onOpenLibrary={() => handleNavigate('designs')}
+            onNewBrief={() => handleNavigate('new-brief')}
             onEdit={brief => {
               // Same bookkeeping BriefingForm's onSubmitted does, then straight
               // into the editor (the chat already picked the template + mode).

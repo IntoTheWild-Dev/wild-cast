@@ -26,8 +26,19 @@ function SummaryRow({ row }) {
   )
 }
 
-export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose }) {
-  const [sent, setSent] = useState(false)
+export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onOpenLibrary, onNewBrief }) {
+  // Send for review: onSendForReview({ brief, fields, png }) saves the design
+  // (without opening the editor) and resolves { url } - the shareable review
+  // link. sentUrl is kept so going Back and pressing Send again shows the same
+  // link instead of saving a second copy.
+  const [view, setView] = useState('summary') // 'summary' | 'sent'
+  const [confirming, setConfirming] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState(null)
+  const [sentUrl, setSentUrl] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const [brief, setBrief] = useState(null)
+  const sent = view === 'sent'
   const [fields, setFields] = useState(null)
   const [png, setPng] = useState(null)
   const [autoLogo, setAutoLogo] = useState(false)
@@ -37,21 +48,46 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   useEffect(() => {
     let cancelled = false
     async function resolveFields() {
-      const brief = assembleBrief(answers, entry)
+      const built = assembleBrief(answers, entry)
       // Same as the editor hand-off (App.jsx): with no logo given, use the
       // partner's own logo from Assets if they have one, so what you preview
       // here is what Edit design opens with.
-      let logoUrl = brief.logoUrl
+      let logoUrl = built.logoUrl
       if (!logoUrl) {
         logoUrl = (await fetchMerchantAssets(partnerNameFrom(answers))).logoUrl
         if (logoUrl && !cancelled) setAutoLogo(true)
       }
       if (cancelled) return
-      setFields(buildCandidateFields(brief, { logoUrl, photoUrl: brief.photoUrl }))
+      setBrief(built)
+      setFields(buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl }))
     }
     resolveFields()
     return () => { cancelled = true; clearTimeout(captureTimer.current) }
   }, [answers, entry])
+
+  const canSend = !!png && !!fields && !!brief && !!onSendForReview && !sending
+
+  async function send() {
+    if (sentUrl) { setView('sent'); return }
+    setSendError(null)
+    setSending(true)
+    try {
+      const { url } = await onSendForReview({ brief, fields, png })
+      setSentUrl(url)
+      setConfirming(false)
+      setView('sent')
+    } catch (err) {
+      setSendError(err?.message || 'Something went wrong.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(sentUrl) } catch { /* clipboard blocked - link is still selectable */ }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   function scheduleCapture() {
     clearTimeout(captureTimer.current)
@@ -81,7 +117,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 {sent ? 'Sent' : 'All done'}
               </div>
               <h3 style={{ fontSize: 22, fontWeight: 800, color: 'var(--dark)', margin: 0, letterSpacing: '-0.02em' }}>
-                {sent ? 'Your design is on its way to review' : 'Your design is ready'}
+                {sent ? 'Saved and ready for review' : 'Your design is ready'}
               </h3>
             </div>
             <button
@@ -113,10 +149,22 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
 
             <div>
               {sent ? (
-                <div style={{ background: 'var(--primary-glow)', border: '1.5px solid var(--primary)', borderRadius: 12, padding: '16px 18px' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 4 }}>Prototype only</div>
-                  <div style={{ fontSize: 13, color: 'var(--dark)', lineHeight: 1.55 }}>
-                    Nothing was actually sent. Once this is hooked up, this step saves the design and notifies the reviewer.
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)', marginBottom: 6 }}>Review link</div>
+                  <div style={{ fontSize: 13, color: 'var(--mid)', lineHeight: 1.55, marginBottom: 14 }}>
+                    Send this link to your client or team. They can view the design and leave comments. It's also saved in your Design library.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      value={sentUrl ?? ''} readOnly onClick={e => e.target.select()}
+                      style={{ flex: 1, minWidth: 0, padding: '10px 12px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, background: '#F9FAFB', color: 'var(--dark)', fontFamily: 'inherit' }}
+                    />
+                    <button
+                      type="button" onClick={copyLink}
+                      style={{ padding: '10px 16px', background: copied ? '#16a34a' : 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, flexShrink: 0, transition: 'background 0.2s', minWidth: 78, fontFamily: 'inherit' }}
+                    >
+                      {copied ? '✓ Copied' : 'Copy'}
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -130,8 +178,29 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 </>
               )}
 
+              {sendError && !sent && (
+                <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10, lineHeight: 1.5 }}>
+                  Couldn't send for review: {sendError}
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: sent ? 16 : 0 }}>
-                {!sent && (
+                {sent && (
+                  <>
+                    <button
+                      type="button" onClick={onOpenLibrary}
+                      style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Open Design library
+                    </button>
+                    <button
+                      type="button" onClick={onNewBrief}
+                      style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, background: '#fff', color: 'var(--primary)', border: '1.5px solid var(--primary)', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Start another brief
+                    </button>
+                  </>
+                )}
+                {!sent && !confirming && (
                   <>
                     <button
                       type="button" onClick={onEdit}
@@ -140,15 +209,36 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                       Edit design
                     </button>
                     <button
-                      type="button" onClick={() => setSent(true)}
-                      style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, background: '#fff', color: 'var(--primary)', border: '1.5px solid var(--primary)', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                      type="button" disabled={!sentUrl && !canSend} onClick={() => (sentUrl ? setView('sent') : setConfirming(true))}
+                      style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, background: '#fff', color: !sentUrl && !canSend ? 'var(--light)' : 'var(--primary)', border: `1.5px solid ${!sentUrl && !canSend ? 'var(--border)' : 'var(--primary)'}`, borderRadius: 10, cursor: !sentUrl && !canSend ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
                     >
-                      Send for review
+                      {sentUrl ? 'View review link' : (!png && config ? 'Preparing preview…' : 'Send for review')}
                     </button>
                   </>
                 )}
+                {!sent && confirming && (
+                  <div style={{ background: 'var(--primary-glow)', border: '1.5px solid var(--primary)', borderRadius: 12, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 13, color: 'var(--dark)', lineHeight: 1.5, marginBottom: 12 }}>
+                      Save this design to your Design library and create a shareable review link?
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button" onClick={send} disabled={sending}
+                        style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: sending ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: sending ? 0.7 : 1 }}
+                      >
+                        {sending ? 'Saving…' : 'Yes, send for review'}
+                      </button>
+                      <button
+                        type="button" onClick={() => { setConfirming(false); setSendError(null) }} disabled={sending}
+                        style={{ padding: '11px 16px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--mid)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <button
-                  type="button" onClick={sent ? () => setSent(false) : onClose}
+                  type="button" onClick={sent ? () => setView('summary') : onClose}
                   style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: 'transparent', color: 'var(--mid)', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   {sent ? '← Back' : 'Back to chat'}

@@ -122,7 +122,7 @@ function UploadDrop({ label, onFile }) {
   )
 }
 
-export default function PromptBriefChat({ entry, config, onBack, onChangeTemplate, onEdit }) {
+export default function PromptBriefChat({ entry, config, onBack, onChangeTemplate, onEdit, onSendForReview, onOpenLibrary, onNewBrief }) {
   const steps = useMemo(() => buildSteps(config?.zones ?? []), [config])
   const [messages, setMessages] = useState([])
   const [answers, setAnswers] = useState({})
@@ -516,6 +516,9 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
           answers={answers}
           rows={rows}
           onEdit={() => onEdit(assembleBrief(answers, entry))}
+          onSendForReview={onSendForReview}
+          onOpenLibrary={onOpenLibrary}
+          onNewBrief={onNewBrief}
           onClose={() => setShowResult(false)}
         />
       )}
