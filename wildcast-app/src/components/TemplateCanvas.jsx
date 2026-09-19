@@ -78,8 +78,10 @@ async function loadFonts() {
     await Promise.all([
       document.fonts.load('500 16px omnes-cond'),
       document.fonts.load('700 16px omnes-cond'),
-      document.fonts.load('900 16px omnes-cond'), // WOLTCondBlack - registered 2026-09-11, was deployed but unused before
-      document.fonts.load('400 16px omnes-pro'),
+      // '%' sample text pulls in the %-only patch faces declared in index.css (the supplied
+      // WOLTCondBlack/WOLTRegular files have a broken % glyph); load() defaults to a space otherwise.
+      document.fonts.load('900 16px omnes-cond', '%'), // WOLTCondBlack - registered 2026-09-11, was deployed but unused before
+      document.fonts.load('400 16px omnes-pro', '%'),
       document.fonts.load('600 16px omnes-pro'),
       document.fonts.load('700 16px omnes-pro'),
       document.fonts.load('900 16px omnes-pro'), // WOLTBlack - same fix as above

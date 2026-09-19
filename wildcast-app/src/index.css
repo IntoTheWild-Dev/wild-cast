@@ -64,6 +64,32 @@
   font-display: swap;
 }
 
+/* "%" fix (2026-09-19): the supplied WOLTCondBlack.otf and WOLTRegular.otf ship
+   with a broken "%" glyph - it exists in the character map but its outline
+   is a flat, zero-height shape, so it draws nothing ("30% SPAREN" showed as
+   "30 SPAREN"). It only surfaced when WOLTCondBlack was registered on
+   2026-09-11; before that, weight 900 silently fell back to Cond Bold, whose
+   "%" is fine. These faces borrow ONLY the "%" (U+0025) from the nearest
+   working WOLT weight and leave every other character on the real face.
+   Declared after the faces they patch on purpose (later faces win for the
+   same range). Replace with corrected font files from the supplier when
+   available, then delete this block (and the '%' sample text on the two
+   matching document.fonts.load calls in TemplateCanvas.jsx). */
+@font-face {
+  font-family: 'omnes-cond';
+  src: url('/fonts/wolt/WOLTCond-Bold.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  unicode-range: U+0025;
+}
+@font-face {
+  font-family: 'omnes-pro';
+  src: url('/fonts/wolt/WOLTSemiBold.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  unicode-range: U+0025;
+}
+
 :root {
   --bg: #FAFAFA;
   --surface: #FFFFFF;
