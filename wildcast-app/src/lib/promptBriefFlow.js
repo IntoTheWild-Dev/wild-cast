@@ -27,7 +27,6 @@ const ZONE_QUESTIONS = {
   logo: {
     kind: 'upload', ask: 'Do you have a restaurant logo to put on the design?', hint: 'JPG or PNG',
     summaryLabel: 'Logo', optional: true,
-    options: [{ label: 'Use the logo from my Library', value: '__library__' }],
   },
   sub_headline: {
     kind: 'text', ask: 'What should the sub-headline say?', hint: 'The short line near the top. It is always shown in capitals.',

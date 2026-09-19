@@ -30,6 +30,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   const [sent, setSent] = useState(false)
   const [fields, setFields] = useState(null)
   const [png, setPng] = useState(null)
+  const [autoLogo, setAutoLogo] = useState(false)
   const exportRef = useRef(null)
   const captureTimer = useRef(null)
 
@@ -37,9 +38,13 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
     let cancelled = false
     async function resolveFields() {
       const brief = assembleBrief(answers, entry)
+      // Same as the editor hand-off (App.jsx): with no logo given, use the
+      // partner's own logo from Assets if they have one, so what you preview
+      // here is what Edit design opens with.
       let logoUrl = brief.logoUrl
-      if (!logoUrl && answers.logo?.value === '__library__') {
+      if (!logoUrl) {
         logoUrl = (await fetchMerchantAssets(partnerNameFrom(answers))).logoUrl
+        if (logoUrl && !cancelled) setAutoLogo(true)
       }
       if (cancelled) return
       setFields(buildCandidateFields(brief, { logoUrl, photoUrl: brief.photoUrl }))
@@ -118,7 +123,9 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 <>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)', marginBottom: 2 }}>What went into it</div>
                   <div style={{ marginBottom: 20 }}>
-                    {rows.map(r => <SummaryRow key={r.id} row={r} />)}
+                    {rows.map(r => (
+                      <SummaryRow key={r.id} row={r.id === 'logo' && !r.value && !r.imageUrl && autoLogo ? { ...r, value: "Your partner's logo from Assets" } : r} />
+                    ))}
                   </div>
                 </>
               )}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { FeatureGrid, WildScaleTip } from './BriefingForm'
 import PromptBriefResultModal from './PromptBriefResultModal'
+import PromptBriefAssetPicker from './PromptBriefAssetPicker'
 import { buildSteps, stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
@@ -133,6 +134,8 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   const [showResult, setShowResult] = useState(false)
   const [draft, setDraft] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
+  // Step id whose "Choose from Assets" popup is open (upload steps only).
+  const [pickerId, setPickerId] = useState(null)
   // Suggestions already shown per step, sent back as `exclude` on "Suggest more".
   const [aiShown, setAiShown] = useState({})
   const timers = useRef([])
@@ -347,7 +350,15 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     }
   }
 
+  // A pick from the Assets library is an image answer like an upload, minus the
+  // validation upload needs - the picker already applied the transparent-PNG check.
+  function pickAsset(step, asset) {
+    setPickerId(null)
+    submit(step, { value: asset.name, display: asset.name, imageUrl: asset.src })
+  }
+
   const step = steps.find(s => s.id === currentId) ?? null
+  const pickerStep = steps.find(s => s.id === pickerId) ?? null
   const activeSteps = steps.filter(s => stepApplies(s, answers))
   const answered = activeSteps.filter(s => answers[s.id]).length
   const rows = summarizeAnswers(steps, answers)
@@ -458,9 +469,22 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
                     {step.optional && <Chip onClick={() => submit(step, { skipped: true, display: 'Skipped' })}>Skip for now</Chip>}
                   </div>
                 )}
-                {step?.kind === 'upload'
-                  ? <UploadDrop label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`} onFile={f => pickFile(step, f)} />
-                  : inputRow}
+                {step?.kind === 'upload' ? (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 260px', display: 'flex' }}>
+                      <UploadDrop label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`} onFile={f => pickFile(step, f)} />
+                    </div>
+                    <button
+                      type="button" onClick={() => setPickerId(step.id)}
+                      style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px 20px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 12, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', transition: 'all 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = '#fff' }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      Choose from Assets
+                    </button>
+                  </div>
+                ) : inputRow}
               </>
             )}
           </div>
@@ -474,6 +498,16 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
           <FeatureGrid columns={4} />
         </div>
       </div>
+
+      {pickerStep && (
+        <PromptBriefAssetPicker
+          folder={assetFolderForZone(pickerStep.id)}
+          merchant={partnerNameFrom(answers) || GENERAL_MERCHANT}
+          requireTransparent={config?.zones?.find(z => z.id === pickerStep.id)?.hint?.toLowerCase().includes('transparent')}
+          onPick={asset => pickAsset(pickerStep, asset)}
+          onClose={() => setPickerId(null)}
+        />
+      )}
 
       {showResult && (
         <PromptBriefResultModal

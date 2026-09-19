@@ -184,10 +184,14 @@ export default async function handler(req, res) {
       recorded.push({ stepId: step.id, value, display })
       settled[step.id] = { value, display, skipped: false }
     }
+    // A skip only counts for the step that was just asked, or one the partner
+    // actually named ("no logo"). Otherwise a vague reply ("skip that") could
+    // let the model quietly skip questions the partner never saw.
     const skipped = []
     for (const id of Array.isArray(out.skipped) ? out.skipped : []) {
       const step = byId.get(clean(id, 40))
       if (!userMessage || !step || !step.optional || settled[step.id]) continue
+      if (step.id !== currentStepId && !(step.label && norm(userMessage).includes(norm(step.label)))) continue
       skipped.push(step.id)
       settled[step.id] = { value: '', display: 'Skipped', skipped: true }
     }
