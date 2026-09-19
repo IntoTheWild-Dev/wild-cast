@@ -105,7 +105,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
       // Landing ('/') is where "New Brief" itself lands you (see handleNavigate's
       // 'new-brief' case in App.jsx) - without this, loading the home page shows
       // no nav item as active even though New Brief is exactly what's showing.
-      (target === 'new-brief' && screen === 'landing')
+      (target === 'new-brief' && (screen === 'landing' || screen === 'prompt-brief'))
     )
     return (
       <span

@@ -4,6 +4,8 @@ import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
 import BriefingForm from './components/BriefingForm'
+import PromptBriefChat from './components/PromptBriefChat'
+import TemplatePreviewModal from './components/TemplatePreviewModal'
 import LandingPage from './components/LandingPage'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
@@ -223,6 +225,14 @@ export default function App() {
   // card-grid template-select screen entirely, since there's only ever one
   // template to choose a mode for at this point. Null when not showing.
   const [briefModeEntry, setBriefModeEntry] = useState(null)
+  // Prompt Brief (Julia's ask, 2026-09-19): replaces the old brief form as the
+  // landing page's third path. promptPickerOpen shows the template-picker
+  // popup over whatever screen opened it; once a template is picked,
+  // promptTemplateId drives the chat screen. promptChatKey remounts the chat
+  // so a new/changed template always starts a fresh conversation.
+  const [promptPickerOpen, setPromptPickerOpen] = useState(false)
+  const [promptTemplateId, setPromptTemplateId] = useState(null)
+  const [promptChatKey, setPromptChatKey] = useState(0)
   // Bumped by the "+ New Brief" nav item to force BriefingForm to remount
   // (resetting its own in-progress field values) even when it's already
   // mounted and showing the brief screen.
@@ -810,8 +820,11 @@ export default function App() {
   // rather than silently inheriting whatever was uploaded last. Logo stays
   // auto-pulled since it's one fixed brand asset per merchant, not something
   // that varies per design the way a food photo does.
-  async function handleSelectTemplateFromBrief(template) {
-    const brief = briefSubmission
+  // briefOverride: Prompt Brief hands over its own freshly-assembled brief -
+  // setBriefSubmission hasn't flushed by the time this runs, so reading the
+  // state here would still see the previous (or null) brief.
+  async function handleSelectTemplateFromBrief(template, briefOverride) {
+    const brief = briefOverride ?? briefSubmission
     const partnerName = resolvePartnerName(brief)
     const { logoUrl } = await fetchMerchantAssets(partnerName)
     const prefilledFields = buildCandidateFields(brief, { logoUrl })
@@ -862,7 +875,9 @@ export default function App() {
     // (screen itself never changes while it's open) - dismiss it on any nav
     // away so it can't end up floating over whatever screen comes next.
     setBriefModeEntry(null)
-    if (target === 'brief') setScreen('brief')
+    setPromptPickerOpen(false)
+    if (target === 'prompt-brief') setPromptPickerOpen(true)
+    else if (target === 'brief') setScreen('brief')
     else if (target === 'landing') setScreen('landing')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
     // picker was already in progress) - this always starts a genuinely fresh
@@ -1493,6 +1508,7 @@ export default function App() {
     await openLoadedProject(duplicate)
   }
 
+  const promptEntry = entryForGuidedId(promptTemplateId, customTemplates.cards, customTemplates.records)
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
   // Restricted review keeps its own fixed lock behavior regardless of the
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
@@ -1559,6 +1575,48 @@ export default function App() {
 
       {screen === 'landing' && (
         <LandingPage onNavigate={handleNavigate} />
+      )}
+
+      {screen === 'prompt-brief' && promptEntry && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <PromptBriefChat
+            key={promptChatKey}
+            entry={promptEntry}
+            zones={(TEMPLATE_ZONES[promptTemplateId] ?? customTemplates.zonesById[promptTemplateId])?.zones ?? []}
+            onBack={() => setScreen('landing')}
+            onChangeTemplate={() => setPromptPickerOpen(true)}
+            onEdit={brief => {
+              // Same bookkeeping BriefingForm's onSubmitted does, then straight
+              // into the editor (the chat already picked the template + mode).
+              setBriefSubmission(brief)
+              setDesignVertical(brief.businessType || null)
+              setCompletedFormats(new Set())
+              setTemplateSelectFormat(null)
+              setSavedCandidateIds({})
+              const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
+              if (template) handleSelectTemplateFromBrief(template, brief)
+            }}
+          />
+        </div>
+      )}
+
+      {promptPickerOpen && (
+        <TemplatePreviewModal
+          selectedId={promptTemplateId}
+          customCards={customTemplates.cards}
+          customRecords={customTemplates.records}
+          onClose={() => setPromptPickerOpen(false)}
+          onPick={id => {
+            // Re-picking the same template keeps the chat going; a different
+            // one restarts it, since the questions come from the template's zones.
+            if (id !== promptTemplateId || screen !== 'prompt-brief') {
+              setPromptTemplateId(id)
+              setPromptChatKey(k => k + 1)
+            }
+            setPromptPickerOpen(false)
+            setScreen('prompt-brief')
+          }}
+        />
       )}
 
       {screen === 'brief' && (

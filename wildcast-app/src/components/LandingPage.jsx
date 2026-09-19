@@ -7,7 +7,8 @@ import { HeroColumn, FeatureGrid, WildScaleTip } from './BriefingForm'
 // own outer wrapper/grid exactly so the transition between this screen and
 // the brief screen it hands off to doesn't visually jump.
 // Order: Choose a template, See Design library, Create from brief
-// (Julia's ask, 2026-09-18 - brief moved from first to last).
+// (Julia's ask, 2026-09-18 - brief moved from first to last). Renamed
+// "Prompt Brief" and switched to a chat flow on 2026-09-19.
 const CHOICES = [
   {
     key: 'catalogue',
@@ -30,12 +31,12 @@ const CHOICES = [
     ),
   },
   {
-    key: 'brief',
-    title: 'Create from brief',
-    desc: "Brief us like you would a designer - pick a template, tell us what you need, and we'll get it ready to fill in.",
+    key: 'prompt-brief',
+    title: 'Prompt Brief',
+    desc: "Pick a template, then chat with our assistant. It asks the questions a designer would and fills the template in for you.",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 5v14M5 12h14" />
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     ),
   },
