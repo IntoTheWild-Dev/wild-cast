@@ -18,6 +18,7 @@ Create a `.env.local` file in this project's root (`wildcast-app/`) with:
 VERCEL_OIDC_TOKEN=...
 WILDCAST_KEYS=...
 BLOB_READ_WRITE_TOKEN=...
+WILDCAST_COPY=...   # Anthropic API key - AI Suggest (/api/ai-suggest) and the Prompt Brief chat (/api/prompt-brief-chat)
 ```
 
 Get these values from the Vercel project settings (Environment Variables tab), or from whoever on the team holds access.
@@ -32,7 +33,7 @@ WILD-Demo-KEY
 
 This project has a frontend (Vite) plus serverless functions in [api/](api/) (used for features like save/load project, publish template, export CMYK, etc). There are two ways to run it:
 
-**Option A — frontend only** (features that call `/api/*` won't work):
+**Option A — frontend only** (features that call `/api/*` won't work; the Prompt Brief chat then falls back to its scripted questions and AI Suggest shows an error):
 
 ```bash
 npm run dev
