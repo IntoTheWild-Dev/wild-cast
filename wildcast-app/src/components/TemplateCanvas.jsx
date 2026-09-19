@@ -95,6 +95,20 @@ async function loadFonts() {
   }
 }
 
+// Text-fit rule (Julia's ask, 2026-09-19): auto-shrink used to check HEIGHT
+// only, so a single line could fill the zone edge to edge - and a zone is
+// wider than the visible panel on some templates (e.g. Option B's headline
+// zone is ~300 wide, its blue panel ~278), so a 17-letter headline touched
+// both panel edges. A single line of text must now also fit within 92% of the
+// zone's width (~276 of ~300 there, just inside the panel). Only applies to
+// unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
+// design, and a rotated zone's width axis is its visual height.
+const FIT_WIDTH_RATIO = 0.92
+function overflowsFitWidth(obj, zone) {
+  if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
+  return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
+}
+
 export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
@@ -617,7 +631,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             let size = zone.fontSize ?? 24
             tb.set('fontSize', size)
             tb.initDimensions()
-            while (tb.height > fitLimit + 2 && size > 6) {
+            while ((tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) && size > 6) {
               size -= 0.5
               tb.set('fontSize', size)
               tb.initDimensions()
@@ -755,7 +769,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // A rotated zone's pre-rotation height becomes the visual thickness once
         // drawn at -90° - must fit zone.width, not zone.height (axes swap).
         const fitLimit = zone.rotate ? zone.width : zone.height
-        while (obj.height > fitLimit + 2 && size > 6) {
+        while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
           size -= 0.5
           obj.set('fontSize', size)
           obj.initDimensions()
