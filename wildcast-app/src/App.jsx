@@ -827,7 +827,9 @@ export default function App() {
     const brief = briefOverride ?? briefSubmission
     const partnerName = resolvePartnerName(brief)
     const { logoUrl } = await fetchMerchantAssets(partnerName)
-    const prefilledFields = buildCandidateFields(brief, { logoUrl })
+    // Prompt Brief carries its own uploaded images on the brief; the classic
+    // brief never sets these, so it keeps the Library-logo-only behavior.
+    const prefilledFields = buildCandidateFields(brief, { logoUrl: brief.logoUrl ?? logoUrl, photoUrl: brief.photoUrl ?? null })
 
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
@@ -1582,7 +1584,7 @@ export default function App() {
           <PromptBriefChat
             key={promptChatKey}
             entry={promptEntry}
-            zones={(TEMPLATE_ZONES[promptTemplateId] ?? customTemplates.zonesById[promptTemplateId])?.zones ?? []}
+            config={TEMPLATE_ZONES[promptTemplateId] ?? customTemplates.zonesById[promptTemplateId] ?? null}
             onBack={() => setScreen('landing')}
             onChangeTemplate={() => setPromptPickerOpen(true)}
             onEdit={brief => {

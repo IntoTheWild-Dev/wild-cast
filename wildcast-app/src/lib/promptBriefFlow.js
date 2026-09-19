@@ -13,7 +13,12 @@ import { ADD_NEW, OBJECTIVES, PLACEHOLDER_PARTNERS, FORMAT_TEMPLATE_GROUP, DEFAU
 //      offer/T&Cs zone, is never asked for them, and a future Figma import
 //      gets sensible questions automatically.
 // Each step: { id, kind: 'chips' | 'text' | 'upload', ask, hint?, options?,
-//   optional?, placeholder?, when?(answers) }.
+//   optional?, placeholder?, aiField? (gets Suggest/Improve with AI), when?(answers) }.
+
+// Same limits FieldEditor.jsx enforces (its CHAR_LIMITS) - duplicated rather
+// than imported for the same reason api/ai-suggest.js duplicates it: the
+// editor's copy isn't exported, and text past these won't fit the zone.
+const CHAR_LIMITS = { headline: 20, sub_headline: 25, offer: 20, tc: 120, restaurant_name: 30, cta: 60 }
 
 const ZONE_QUESTIONS = {
   logo: {
@@ -23,11 +28,11 @@ const ZONE_QUESTIONS = {
   },
   sub_headline: {
     kind: 'text', ask: 'What should the sub-headline say?', hint: 'The short line near the top. It is always shown in capitals.',
-    summaryLabel: 'Sub-headline', placeholder: 'e.g. Neu in Koblenz',
+    summaryLabel: 'Sub-headline', placeholder: 'e.g. Neu in Koblenz', aiField: 'sub_headline',
   },
   headline: {
     kind: 'text', ask: 'And the headline?', hint: 'The big, main line. Always shown in capitals.',
-    summaryLabel: 'Headline', placeholder: 'e.g. Jetzt eröffnet',
+    summaryLabel: 'Headline', placeholder: 'e.g. Jetzt eröffnet', aiField: 'headline',
   },
   photo: {
     kind: 'upload', ask: 'Now the food photo. Which dish should be the star?', hint: 'High resolution PNG with a transparent background works best.',
@@ -55,14 +60,14 @@ function humanize(id) {
 function zoneStep(zone, partnerLabel) {
   if (zone.id === 'restaurant_name') {
     return {
-      id: zone.id, kind: 'text', ask: 'What name should appear on the design?', summaryLabel: 'Name on design',
+      id: zone.id, kind: 'text', maxLength: CHAR_LIMITS.restaurant_name, ask: 'What name should appear on the design?', summaryLabel: 'Name on design',
       hint: 'This can differ from the partner name, e.g. "McDonald\'s Zentrum".',
       options: [{ label: 'Use the partner name', value: '__partner__' }],
       placeholder: partnerLabel ? `e.g. ${partnerLabel} Zentrum` : 'Type the name',
     }
   }
   const known = ZONE_QUESTIONS[zone.id]
-  if (known) return { id: zone.id, ...known }
+  if (known) return { id: zone.id, maxLength: CHAR_LIMITS[zone.id], ...known }
   const isSticker = zone.id.includes('sticker')
   if (zone.type === 'image') {
     return {
@@ -136,8 +141,8 @@ export function summarizeAnswers(steps, answers) {
 
 // Builds a brief in the same shape BriefingForm submits (DEFAULT_BRIEF), so
 // the chat's result can enter the existing brief -> editor pipeline as-is.
-// Image answers (logo/photo) are not mapped: they are local previews only in
-// this UI-first pass - real uploads land with the backend hook-up.
+// logoUrl/photoUrl carry the chat's uploaded images (blob: URLs, exactly what
+// the editor's own uploads produce and doPersist already converts on save).
 export function assembleBrief(answers, entry) {
   const text = id => {
     const a = answers[id]
@@ -169,5 +174,7 @@ export function assembleBrief(answers, entry) {
     cta: text('cta'),
     tcs: text('tc'),
     offer: text('offer'),
+    logoUrl: answers.logo?.imageUrl ?? null,
+    photoUrl: answers.photo?.imageUrl ?? null,
   }
 }

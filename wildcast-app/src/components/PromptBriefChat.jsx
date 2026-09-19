@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { FeatureGrid, WildScaleTip } from './BriefingForm'
 import PromptBriefResultModal from './PromptBriefResultModal'
 import { buildSteps, summarizeAnswers, assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
+import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 
 // "Prompt Brief" screen (Julia's ask, 2026-09-19): replaces the old brief form
 // with a chat. Same page shell as the landing page (hero copy, tip box,
@@ -23,7 +24,7 @@ function AssistantAvatar() {
   )
 }
 
-function Bubble({ msg }) {
+function Bubble({ msg, activeStepId, onPickOption }) {
   const isUser = msg.from === 'user'
   return (
     <div style={{ display: 'flex', gap: 10, justifyContent: isUser ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
@@ -39,6 +40,28 @@ function Bubble({ msg }) {
         )}
         {msg.text}
         {msg.hint && <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 4 }}>{msg.hint}</div>}
+        {msg.options && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+            {msg.options.map(opt => {
+              const live = activeStepId === msg.stepId
+              return (
+                <button
+                  key={opt} type="button" disabled={!live} onClick={() => onPickOption(msg.stepId, opt)}
+                  style={{
+                    textAlign: 'left', padding: '9px 12px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 10,
+                    border: '1.5px solid var(--border)', background: '#fff', color: live ? 'var(--dark)' : 'var(--light)',
+                    cursor: live ? 'pointer' : 'default', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { if (live) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' } }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = '#fff' }}
+                >
+                  {opt}
+                </button>
+              )
+            })}
+            <div style={{ fontSize: 11, color: 'var(--light)', fontStyle: 'italic' }}>AI copy - review before publishing</div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -97,8 +120,8 @@ function UploadDrop({ label, onFile }) {
   )
 }
 
-export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate, onEdit }) {
-  const steps = useMemo(() => buildSteps(zones), [zones])
+export default function PromptBriefChat({ entry, config, onBack, onChangeTemplate, onEdit }) {
+  const steps = useMemo(() => buildSteps(config?.zones ?? []), [config])
   const [messages, setMessages] = useState([])
   const [answers, setAnswers] = useState({})
   const [currentId, setCurrentId] = useState(null)
@@ -108,6 +131,9 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
   const [finished, setFinished] = useState(false)
   const [showResult, setShowResult] = useState(false)
   const [draft, setDraft] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  // Suggestions already shown per step, sent back as `exclude` on "Suggest more".
+  const [aiShown, setAiShown] = useState({})
   const timers = useRef([])
   const blobUrls = useRef([])
   const msgId = useRef(0)
@@ -145,15 +171,18 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
 
   function start() {
     clearTimers()
-    setMessages([]); setAnswers({}); setCurrentId(null); setFinished(false); setShowResult(false); setDraft('')
+    blobUrls.current.forEach(u => URL.revokeObjectURL(u)); blobUrls.current = []
+    setMessages([]); setAnswers({}); setCurrentId(null); setFinished(false); setShowResult(false); setDraft(''); setAiShown({}); setAiBusy(false)
     setTyping(true)
     runScript()
   }
 
   useEffect(() => {
     runScript()
-    const urls = blobUrls.current
-    return () => { clearTimers(); urls.forEach(u => URL.revokeObjectURL(u)) }
+    // Uploaded blob URLs are deliberately NOT revoked on unmount: Edit design
+    // hands them to the editor, which owns them from there (start() revokes
+    // them when the chat is reset instead).
+    return () => { clearTimers() }
     // Runs once per mount; App remounts this component (key) on a template change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -198,9 +227,54 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
     later(() => advance(next, step.id, answer.skipped), 350)
   }
 
+  // Suggest / Improve with AI (Julia's ask, 2026-09-19) - reuses the editor's
+  // existing /api/ai-suggest route (Wolt copy knowledge base, per-field
+  // character limits). Empty draft = fresh suggestions from the brief; typed
+  // draft = polish/translate that line, same rule AISuggest.jsx uses. Credits
+  // are deliberately not deducted here yet (to be decided).
+  async function suggest(step, { more = false } = {}) {
+    if (currentId !== step.id || aiBusy) return
+    const seed = draft.trim()
+    const shown = aiShown[step.id] ?? []
+    push({ from: 'user', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
+    setAiBusy(true)
+    setTyping(true)
+    try {
+      const category = entry.category ?? 'restaurant'
+      const businessType = category.charAt(0).toUpperCase() + category.slice(1)
+      const res = await fetch('/api/ai-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          field: step.aiField, lang: 'de',
+          context: { vertical: businessType, businessType, about: answers.about?.value, objective: answers.objective?.display, partnerName: partnerNameFrom(answers) },
+          ...(seed ? { seed } : {}),
+          ...(more ? { exclude: shown } : {}),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.suggestions?.length) throw new Error(data.error || 'No suggestions')
+      setAiShown(prev => ({ ...prev, [step.id]: [...(more ? shown : []), ...data.suggestions] }))
+      push({
+        from: 'ai', stepId: step.id, options: data.suggestions,
+        text: seed ? 'Here are some sharper versions, in German. Tap one to use it:' : 'Here are a few ideas, in German. Tap one to use it, or type your own:',
+      })
+    } catch {
+      push({ from: 'ai', text: "I couldn't reach the AI copywriter just now. You can type your own line, or try again in a moment." })
+    } finally {
+      setTyping(false)
+      setAiBusy(false)
+    }
+  }
+
   function pickOption(step, opt) {
     const display = opt.value === '__partner__' ? (partnerNameFrom(answers) || opt.label) : opt.label
     submit(step, { value: opt.value, display })
+  }
+
+  function pickSuggestion(stepId, text) {
+    const step = steps.find(s => s.id === stepId)
+    if (step) submit(step, { value: text, display: text })
   }
 
   function sendText(step) {
@@ -209,10 +283,23 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
     submit(step, { value: t, display: t })
   }
 
-  function pickFile(step, file) {
-    const url = URL.createObjectURL(file)
-    blobUrls.current.push(url)
-    submit(step, { value: file.name, display: file.name, imageUrl: url })
+  // Same pipeline as the editor's own upload (FieldEditor's ImageUpload):
+  // the zone's transparent-PNG rule, then a copy saved into the partner's
+  // Library. A rejected file is explained in the chat and the step stays open.
+  async function pickFile(step, file) {
+    if (currentId !== step.id) return
+    const zone = config?.zones?.find(z => z.id === step.id)
+    try {
+      const { url, name } = await uploadImageForZone(file, {
+        requireTransparent: zone?.hint?.toLowerCase().includes('transparent'),
+        folder: assetFolderForZone(step.id),
+        merchant: partnerNameFrom(answers) || GENERAL_MERCHANT,
+      })
+      blobUrls.current.push(url)
+      submit(step, { value: name, display: name, imageUrl: url })
+    } catch (err) {
+      push({ from: 'ai', text: `${err.message} Please try another file, or skip it for now.` })
+    }
   }
 
   const step = steps.find(s => s.id === currentId) ?? null
@@ -227,7 +314,7 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
         value={draft} onChange={e => setDraft(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' && step) { e.preventDefault(); sendText(step) } }}
         placeholder={step?.kind === 'chips' ? 'Or type your own answer…' : (step?.placeholder ?? 'Type your answer…')}
-        disabled={!step}
+        disabled={!step} maxLength={step?.maxLength}
         style={{ flex: 1, padding: '12px 14px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 10, outline: 'none', background: step ? '#fff' : '#F9FAFB' }}
         onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
         onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
@@ -298,7 +385,7 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
           </div>
 
           <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 12, background: '#FAFAFA' }}>
-            {messages.map(m => <Bubble key={m.id} msg={m} />)}
+            {messages.map(m => <Bubble key={m.id} msg={m} activeStepId={currentId} onPickOption={pickSuggestion} />)}
             {typing && <TypingBubble />}
           </div>
 
@@ -314,8 +401,14 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
               </div>
             ) : (
               <>
-                {step && (step.options?.length > 0 || step.optional) && (
+                {step && (step.options?.length > 0 || step.optional || step.aiField) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                    {step.aiField && !aiBusy && (
+                      <Chip primary onClick={() => suggest(step)}>{draft.trim() ? '✨ Improve with AI' : '✦ Suggest with AI'}</Chip>
+                    )}
+                    {step.aiField && !aiBusy && aiShown[step.id]?.length > 0 && !draft.trim() && (
+                      <Chip onClick={() => suggest(step, { more: true })}>Suggest more</Chip>
+                    )}
                     {step.options?.map(o => <Chip key={o.value} onClick={() => pickOption(step, o)}>{o.label}</Chip>)}
                     {step.optional && <Chip onClick={() => submit(step, { skipped: true, display: 'Skipped' })}>Skip for now</Chip>}
                   </div>
@@ -340,6 +433,8 @@ export default function PromptBriefChat({ entry, zones, onBack, onChangeTemplate
       {showResult && (
         <PromptBriefResultModal
           entry={entry}
+          config={config}
+          answers={answers}
           rows={rows}
           onEdit={() => onEdit(assembleBrief(answers, entry))}
           onClose={() => setShowResult(false)}

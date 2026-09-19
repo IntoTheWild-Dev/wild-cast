@@ -1,10 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import TemplateCanvas from './TemplateCanvas'
+import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
+import { buildCandidateFields, fetchMerchantAssets } from '../lib/briefToCandidates'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
-// the editor) or Send for review. Preview is the template's catalogue thumb
-// for now; once the AI backend is hooked up this is where the live-filled
-// render goes.
+// the editor) or Send for review. The preview is the real template rendered
+// with the answers (same off-screen TemplateCanvas + getPng capture
+// TemplateCandidatePicker uses), so it does not depend on any AI; the
+// template's stock thumb stays as the fallback if the render can't happen.
+// TemplateCanvas's onReady fires once text is placed but image zones load in
+// a later step, so the capture waits a beat before reading the PNG.
+const CAPTURE_DELAY_MS = 1600
+
 function SummaryRow({ row }) {
   return (
     <div style={{ display: 'flex', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)', alignItems: 'flex-start' }}>
@@ -18,8 +26,35 @@ function SummaryRow({ row }) {
   )
 }
 
-export default function PromptBriefResultModal({ entry, rows, onEdit, onClose }) {
+export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose }) {
   const [sent, setSent] = useState(false)
+  const [fields, setFields] = useState(null)
+  const [png, setPng] = useState(null)
+  const exportRef = useRef(null)
+  const captureTimer = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function resolveFields() {
+      const brief = assembleBrief(answers, entry)
+      let logoUrl = brief.logoUrl
+      if (!logoUrl && answers.logo?.value === '__library__') {
+        logoUrl = (await fetchMerchantAssets(partnerNameFrom(answers))).logoUrl
+      }
+      if (cancelled) return
+      setFields(buildCandidateFields(brief, { logoUrl, photoUrl: brief.photoUrl }))
+    }
+    resolveFields()
+    return () => { cancelled = true; clearTimeout(captureTimer.current) }
+  }, [answers, entry])
+
+  function scheduleCapture() {
+    clearTimeout(captureTimer.current)
+    captureTimer.current = setTimeout(() => {
+      const data = exportRef.current?.getPng?.()
+      if (data) setPng(data)
+    }, CAPTURE_DELAY_MS)
+  }
 
   return (
     <div
@@ -56,10 +91,19 @@ export default function PromptBriefResultModal({ entry, rows, onEdit, onClose })
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 28, alignItems: 'start' }}>
             <div>
-              <div style={{ aspectRatio: '1191 / 1679', background: '#F3F4F6', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', maxWidth: 320, margin: '0 auto', boxShadow: '0 8px 28px rgba(0,0,0,0.10)' }}>
-                <img src={entry.thumb} alt={entry.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'relative', background: '#F3F4F6', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', maxWidth: 320, margin: '0 auto', boxShadow: '0 8px 28px rgba(0,0,0,0.10)', ...(png ? {} : { aspectRatio: '1191 / 1679' }) }}>
+                {png
+                  ? <img src={png} alt={entry.label} style={{ display: 'block', width: '100%', height: 'auto' }} />
+                  : <img src={entry.thumb} alt={entry.label} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: config ? 0.55 : 1 }} />}
+                {!png && config && (
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 14, textAlign: 'center' }}>
+                    <span style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 999, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--mid)' }}>
+                      Filling in your design…
+                    </span>
+                  </div>
+                )}
               </div>
-              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--mid)', marginTop: 10 }}>{entry.label} · sample preview</div>
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--mid)', marginTop: 10 }}>{png ? entry.label : `${entry.label} · sample preview`}</div>
             </div>
 
             <div>
@@ -107,6 +151,12 @@ export default function PromptBriefResultModal({ entry, rows, onEdit, onClose })
           </div>
         </div>
       </div>
+
+      {fields && config && (
+        <div style={{ position: 'absolute', left: -9999, top: 0, width: 1, height: 1, overflow: 'hidden' }}>
+          <TemplateCanvas config={config} fields={fields} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
+        </div>
+      )}
     </div>
   )
 }
