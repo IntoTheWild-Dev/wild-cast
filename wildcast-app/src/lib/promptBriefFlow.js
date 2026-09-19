@@ -5,7 +5,7 @@ import { ADD_NEW, OBJECTIVES, PLACEHOLDER_PARTNERS, FORMAT_TEMPLATE_GROUP, DEFAU
 // chat asks the same questions, in the same order, as the brief form + the
 // template's own editor fields would - so the script is built from two
 // sources instead of being hardcoded per template:
-//   1. The brief form's questions (partner, about, objective, project name).
+//   1. The brief form's questions (partner, objective, project name).
 //      Business type and Formats are NOT asked - picking a template already
 //      implies both (BriefingForm.jsx's pickTemplate does the same).
 //   2. One question per zone the chosen template actually defines, in the
@@ -94,10 +94,6 @@ export function buildSteps(zones = []) {
     {
       id: 'partnerNew', kind: 'text', ask: "What's the new partner's name?", summaryLabel: 'New partner',
       placeholder: 'New partner name', when: a => a.partner?.value === ADD_NEW,
-    },
-    {
-      id: 'about', kind: 'text', ask: 'In a sentence or two, what is this brief about?', summaryLabel: 'About',
-      hint: 'A short intro is enough.', placeholder: "e.g. We're opening a second location in Koblenz…",
     },
     {
       id: 'objective', kind: 'chips', ask: 'What is the objective?', summaryLabel: 'Objective',
