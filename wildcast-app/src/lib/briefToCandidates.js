@@ -49,7 +49,7 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
     // offer, not a placeholder, so partners kept it without noticing. The
     // editor now shows a greyed example instead (FieldEditor.jsx's Offer
     // placeholder).
-    offer: '',
+    offer: brief.offer?.trim() || '',
     // Own field, distinct from Subline (Julia's ask, 2026-08-04) - falls back
     // to Subline only, not further to the objective text (same "New Dish"
     // problem as Offer above, just discovered on Option B's cta zone instead

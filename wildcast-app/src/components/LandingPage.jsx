@@ -6,13 +6,25 @@ import { HeroColumn, FeatureGrid, WildScaleTip } from './BriefingForm'
 // only starts once "Start from scratch" is picked. Mirrors BriefingForm.jsx's
 // own outer wrapper/grid exactly so the transition between this screen and
 // the brief screen it hands off to doesn't visually jump.
-// Order: Choose a template, See Design library, Create from brief
-// (Julia's ask, 2026-09-18 - brief moved from first to last).
+// Order (Julia's ask, 2026-09-19): Prompt Brief first, then Start from a
+// template, then Edit a previous design. Keys are unchanged (they route in
+// App.jsx's handleNavigate): 'catalogue' is the template catalogue,
+// 'designs' the Design library.
 const CHOICES = [
   {
+    key: 'prompt-brief',
+    title: 'Prompt Brief',
+    desc: 'Pick a template, then chat with our assistant. It asks what a designer would ask and fills the template in for you.',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
+  },
+  {
     key: 'catalogue',
-    title: 'Choose a template',
-    desc: 'Browse every ready-made template and jump straight into editing one yourself.',
+    title: 'Start from a template',
+    desc: 'Open any ready-made template and design it yourself in the editor, with full control.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
@@ -21,21 +33,11 @@ const CHOICES = [
   },
   {
     key: 'designs',
-    title: 'See Design library',
-    desc: 'Look through designs already made - yours and everyone else on the team.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <rect x="3" y="3" width="18" height="14" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-      </svg>
-    ),
-  },
-  {
-    key: 'brief',
-    title: 'Create from brief',
-    desc: "Brief us like you would a designer - pick a template, tell us what you need, and we'll get it ready to fill in.",
+    title: 'Edit a previous design',
+    desc: "Pick up where you left off. Reopen designs you've already made, or ones from your team.",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 5v14M5 12h14" />
+        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
       </svg>
     ),
   },

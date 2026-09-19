@@ -7,6 +7,22 @@
 
 ## What's working right now
 
+### Prompt Brief — AI chat that briefs a template (built + shipped to `main` 2026-09-19, as an MVP — Julia's call)
+Replaces the landing page's "Create from brief" form path. Landing tiles are now **Prompt Brief / Start from a template / Edit a previous design**. Flow: Prompt Brief → template picker popup → chat page → finished-design popup (**Edit design** / **Send for review**).
+- **Questions are generated per template** from its zones (`src/lib/promptBriefFlow.js`): partner → objective → project name, then one question per zone in the editor's field order (Option A = 10 questions, Option B = logo/headline/photo/CTA). Business type/format are implied by the template, not asked. The old "About" question was removed (2026-09-19). Known zone ids get friendly wording; unknown ones get a generic question from the zone's label/hint, so new Figma imports work without code (untested with a real import).
+- **Haiku (`claude-haiku-4-5-20251001`) via `api/prompt-brief-chat.js`**, same `WILDCAST_COPY` key as AI Suggest. The app owns the question list; Haiku reads typed answers (several at once, natural language for chip questions), answers side questions, and phrases each next question. The server validates everything it returns (real step ids, real chip options, text must be the partner's own words, char limits, skips only for the step just asked or one named) and picks the next step itself. Any failure/timeout falls back to scripted questions (this is also what local `vite dev` does — no `/api`). **Julia confirmed live Haiku phrasing on the Vercel preview 2026-09-19.**
+- **Suggest / Improve with AI** on headline + sub-headline, reusing `/api/ai-suggest` (Wolt copy KB). **Credits are NOT deducted in the chat yet.**
+- **Uploads** go through the editor's own pipeline (`uploadImageForZone`: transparent-PNG rule, saved to the partner's Assets) or **Choose from Assets** (in-chat popup, partner's assets first, same folder rules) and carry into the editor on Edit design.
+- **Finished popup renders the real filled template** (off-screen `TemplateCanvas` + `getPng`, same as the old candidate picker), falling back to the template's stock thumb. With no logo given it uses the partner's Assets logo, matching what Edit design opens with.
+- **Edit design** hands the answers into the normal editor via `handleSelectTemplateFromBrief(template, briefOverride)`. **Send for review is still a stub** ("Prototype only").
+- **Also fixed on this branch (separate commit `65e4815`, cherry-pickable): missing `%` on flyers.** `WOLTCondBlack.otf` and `WOLTRegular.otf` ship with a zero-height `%` glyph, so "30% SPAREN" rendered "30 SPAREN" — surfaced 2026-09-11 when CondBlack was registered. Patched with `unicode-range: U+0025` faces borrowing `%` from the neighbouring WOLT weight (`src/index.css`, plus `%` sample text on two `document.fonts.load` calls in `TemplateCanvas.jsx`). Replace with corrected font files from the supplier and delete the patch. Print PDFs not checked for this.
+- **Testing status:** Julia tried it on the Vercel preview and confirmed live Haiku phrasing. Not yet exercised with messy free-text answers or a real Figma-imported template — treat those as unverified.
+- **Open items:**
+  - Option C not showing in the picker on the preview — it comes from Vercel Blob via `/api/list-templates`, so check the preview's Templates page (storage access vs. not published live).
+  - Long headlines (e.g. 17 wide letters) can touch both edges of Option B's panel — identical in the editor; the headline zone is wider than the visible panel and auto-shrink only fits height. Options: leave (editor has a size control) or a global "shrink to ~92% of zone width" rule (affects every template — needs sign-off).
+  - **Security/cost:** partner-level API routes (`ai-suggest`, `prompt-brief-chat`) don't check who is calling, so anyone with the URL could spend Anthropic credit. Input/output are capped and Haiku is cheap, but add a rate limit or short-lived token before real partners use it.
+  - Credits for chat turns, Send for review wiring, and retiring the old `BriefingForm` code are all undecided/undone.
+
 ### Briefing Form → Template Picker → Mode → Live Editor (reworked 2026-09-08) — new front page
 Client-requested workflow reversal, same day: the 2026-08-03 pivot below (3-step wizard → AI generates candidate mockups to pick from) is replaced with a single-screen brief → template picker → "Choose your mode" → live editor flow, much closer to the original pre-pivot template-first experience. See the 2026-09-08 update entries below for the full reasoning and build log.
 - **Brief is one screen now**, just enough to route to the right template: Partner name, Business type, "what's this about", Objective (with per-choice follow-up), Formats needed. No pagination, no AI-candidate-generation step.
@@ -302,6 +318,9 @@ Format: `key|Client Name|credits|role` — role is **optional** (added 2026-07-1
 ---
 
 ## Next steps (priority order)
+
+### 0. Accounts section for seats (planned, not scoped — Julia's note 2026-09-19)
+A dedicated Accounts section for managing seats (by Wolt) is planned for later. The building blocks already exist (email accounts, seat cap, personal folders per seat — see the account routes in `api/`); what's missing is a management screen. Natural time to also fix the auth gap on partner-level API routes (see Prompt Brief open items) and to decide how chat/AI credits are counted per seat.
 
 ### 1. ⏳ IONOS DNS record (waiting on executive)
 Add CNAME for `cast.wildstack.studio` → see Custom domain section above.

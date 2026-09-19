@@ -18,6 +18,11 @@
 > [fontdrop.info](https://fontdrop.info)'s Data tab before assuming it's
 > fine.
 
+> **Update (2026-09-19):** `WOLTCondBlack.otf` and `WOLTRegular.otf` have a
+> broken (zero-height) `%` glyph, so "30% SPAREN" rendered as "30 SPAREN". Worked
+> around with `%`-only `@font-face` patches in `src/index.css` — replace with
+> corrected font files from the supplier when available (see STATUS.md).
+
 ---
 
 ## What WildCast does
@@ -81,7 +86,7 @@ Partner downloads CMYK PDF
 | PDF export | **Ghostscript** (static binary on Vercel) | RGB canvas PNG → CMYK PDF |
 | ICC Profiles | FOGRA39 (confirm with Wolt's print vendor) | Embedded at export |
 | Figma import | **Figma REST API** | Auto-derives zone positions from layer names |
-| AI Copy | Anthropic Claude API (claude-sonnet-4-6) | Not yet wired — planned |
+| AI Copy | Anthropic Claude API | Live: `/api/ai-suggest` (claude-sonnet-5, Wolt copy KB) and `/api/prompt-brief-chat` (claude-haiku-4-5) |
 | Google Drive | Google Drive API v3 | Planned Phase 2 |
 | Auth | None in Phase 1 — open URL | Per-partner magic links in Phase 3 |
 
@@ -266,6 +271,8 @@ When a partner clicks "Suggest copy":
 
 **Privacy:** no partner-uploaded images ever sent to Claude API. Text corpus only. GDPR compliant.
 
+> **Update (2026-09-19):** the above was the original plan. As built: `/api/ai-suggest` (Suggest / Improve with AI, per field) and `/api/prompt-brief-chat` (the Prompt Brief chat, claude-haiku-4-5) both use the `WILDCAST_COPY` Anthropic key server-side. See STATUS.md → Prompt Brief.
+
 ---
 
 ## Build Phases
@@ -368,6 +375,9 @@ The overall layout (left canvas + right panel) stays. What changes:
 ```env
 # Already configured in Vercel
 BLOB_READ_WRITE_TOKEN=...           # Vercel Blob access
+
+WILDCAST_KEYS=...                    # activation keys + roles
+WILDCAST_COPY=...                    # Anthropic key for /api/ai-suggest and /api/prompt-brief-chat
 
 # To add for Phase 2
 FIGMA_API_TOKEN=...                  # Figma REST API personal token
