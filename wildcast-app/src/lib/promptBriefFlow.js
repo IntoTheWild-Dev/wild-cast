@@ -13,7 +13,10 @@ import { ADD_NEW, OBJECTIVES, PLACEHOLDER_PARTNERS, FORMAT_TEMPLATE_GROUP, DEFAU
 //      offer/T&Cs zone, is never asked for them, and a future Figma import
 //      gets sensible questions automatically.
 // Each step: { id, kind: 'chips' | 'text' | 'upload', ask, hint?, options?,
-//   optional?, placeholder?, aiField? (gets Suggest/Improve with AI), when?(answers) }.
+//   optional?, placeholder?, aiField? (gets Suggest/Improve with AI),
+//   whenAnswer? ({ stepId, value } - only asked once that answer is given) }.
+// whenAnswer is plain data (not a function) so api/prompt-brief-chat.js can
+// apply the same rule server-side.
 
 // Same limits FieldEditor.jsx enforces (its CHAR_LIMITS) - duplicated rather
 // than imported for the same reason api/ai-suggest.js duplicates it: the
@@ -82,6 +85,8 @@ function zoneStep(zone, partnerLabel) {
   }
 }
 
+export const stepApplies = (step, answers) => !step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value
+
 export function buildSteps(zones = []) {
   const formSteps = [
     {
@@ -93,7 +98,7 @@ export function buildSteps(zones = []) {
     },
     {
       id: 'partnerNew', kind: 'text', ask: "What's the new partner's name?", summaryLabel: 'New partner',
-      placeholder: 'New partner name', when: a => a.partner?.value === ADD_NEW,
+      placeholder: 'New partner name', whenAnswer: { stepId: 'partner', value: ADD_NEW },
     },
     {
       id: 'objective', kind: 'chips', ask: 'What is the objective?', summaryLabel: 'Objective',
@@ -124,7 +129,7 @@ export function partnerNameFrom(answers) {
 // before choosing Edit.
 export function summarizeAnswers(steps, answers) {
   return steps
-    .filter(s => !s.when || s.when(answers))
+    .filter(s => stepApplies(s, answers))
     .filter(s => s.id !== 'partnerNew')
     .map(s => {
       const a = answers[s.id]

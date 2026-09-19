@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { FeatureGrid, WildScaleTip } from './BriefingForm'
 import PromptBriefResultModal from './PromptBriefResultModal'
-import { buildSteps, summarizeAnswers, assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
+import { buildSteps, stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
+import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 
 // "Prompt Brief" screen (Julia's ask, 2026-09-19): replaces the old brief form
@@ -137,12 +138,19 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   const timers = useRef([])
   const blobUrls = useRef([])
   const msgId = useRef(0)
+  // Mirror of `messages` for async code (chat history sent to the assistant), and a
+  // run counter so a reply that arrives after "Start over" is dropped, not shown.
+  const msgsRef = useRef([])
+  const runRef = useRef(0)
   const scrollRef = useRef(null)
   const cardRef = useRef(null)
 
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)) }
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
-  const push = msg => setMessages(m => [...m, { id: ++msgId.current, ...msg }])
+  const push = msg => {
+    msgsRef.current = [...msgsRef.current, { id: ++msgId.current, ...msg }]
+    setMessages(msgsRef.current)
+  }
 
   function ask(step, ack) {
     setCurrentId(null)
@@ -171,6 +179,8 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
 
   function start() {
     clearTimers()
+    runRef.current += 1
+    msgsRef.current = []
     blobUrls.current.forEach(u => URL.revokeObjectURL(u)); blobUrls.current = []
     setMessages([]); setAnswers({}); setCurrentId(null); setFinished(false); setShowResult(false); setDraft(''); setAiShown({}); setAiBusy(false)
     setTyping(true)
@@ -206,11 +216,47 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     }, 750)
   }
 
-  function advance(next, fromId, skipped) {
-    const idx = steps.findIndex(s => s.id === fromId)
-    const nextStep = steps.slice(idx + 1).find(s => !s.when || s.when(next))
-    if (nextStep) ask(nextStep, skipped ? 'No problem.' : ACKS[idx % ACKS.length])
-    else finish()
+  // Everything that happens after the partner's turn. `typed` is free text
+  // they wrote (already shown as a chat bubble): the assistant reads it and may
+  // record answers for this and other steps, or answer a side question. With no
+  // `typed` (a button, an upload, a skip) the answer is already in `answersNow`
+  // and the assistant only phrases the next question. If it is unreachable we
+  // fall back to the scripted wording and take typed text literally.
+  async function respond({ answersNow, fromStep, typed = '', skipped = false }) {
+    const run = runRef.current
+    setCurrentId(null)
+    setTyping(true)
+    // The request runs alongside a short minimum "typing" pause, so a fast
+    // reply still feels like a person answering rather than an instant flash.
+    const [ai] = await Promise.all([
+      askAssistant({ entry, steps, answers: answersNow, currentStepId: fromStep?.id ?? null, userMessage: typed, messages: msgsRef.current }),
+      new Promise(r => setTimeout(r, 650)),
+    ])
+    if (runRef.current !== run) return
+
+    let nextAnswers = answersNow
+    let nextId
+    let text
+    let showHint = true
+    if (ai) {
+      for (const r of ai.recorded) nextAnswers = { ...nextAnswers, [r.stepId]: { value: r.value, display: r.display } }
+      for (const id of ai.skipped) nextAnswers = { ...nextAnswers, [id]: { skipped: true, display: 'Skipped' } }
+      nextId = ai.nextStepId
+      text = ai.reply
+      showHint = steps.find(s => s.id === nextId)?.kind === 'upload'
+    } else {
+      if (typed && fromStep) nextAnswers = { ...nextAnswers, [fromStep.id]: { value: typed, display: typed } }
+      const nextStep = steps.find(s => stepApplies(s, nextAnswers) && !nextAnswers[s.id])
+      nextId = nextStep?.id ?? null
+      const ack = skipped ? 'No problem.' : ACKS[Object.keys(nextAnswers).length % ACKS.length]
+      text = nextStep ? `${ack} ${nextStep.ask}` : ''
+    }
+
+    setAnswers(nextAnswers)
+    setTyping(false)
+    if (!nextId) { finish(); return }
+    push({ from: 'ai', text, hint: showHint ? steps.find(s => s.id === nextId)?.hint : undefined })
+    setCurrentId(nextId)
   }
 
   function submit(step, answer) {
@@ -220,11 +266,8 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
       text: answer.imageUrl ? answer.display : (answer.skipped ? 'Skip for now' : answer.display),
       image: answer.imageUrl ?? null,
     })
-    const next = { ...answers, [step.id]: answer }
-    setAnswers(next)
-    setCurrentId(null)
     setDraft('')
-    later(() => advance(next, step.id, answer.skipped), 350)
+    respond({ answersNow: { ...answers, [step.id]: answer }, fromStep: step, skipped: answer.skipped })
   }
 
   // Suggest / Improve with AI (Julia's ask, 2026-09-19) - reuses the editor's
@@ -247,7 +290,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           field: step.aiField, lang: 'de',
-          context: { vertical: businessType, businessType, about: answers.about?.value, objective: answers.objective?.display, partnerName: partnerNameFrom(answers) },
+          context: { vertical: businessType, businessType, objective: answers.objective?.display, partnerName: partnerNameFrom(answers) },
           ...(seed ? { seed } : {}),
           ...(more ? { exclude: shown } : {}),
         }),
@@ -279,8 +322,10 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
 
   function sendText(step) {
     const t = draft.trim()
-    if (!t) return
-    submit(step, { value: t, display: t })
+    if (!t || currentId !== step.id) return
+    push({ from: 'user', text: t })
+    setDraft('')
+    respond({ answersNow: answers, fromStep: step, typed: t })
   }
 
   // Same pipeline as the editor's own upload (FieldEditor's ImageUpload):
@@ -303,7 +348,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   }
 
   const step = steps.find(s => s.id === currentId) ?? null
-  const activeSteps = steps.filter(s => !s.when || s.when(answers))
+  const activeSteps = steps.filter(s => stepApplies(s, answers))
   const answered = activeSteps.filter(s => answers[s.id]).length
   const rows = summarizeAnswers(steps, answers)
 
