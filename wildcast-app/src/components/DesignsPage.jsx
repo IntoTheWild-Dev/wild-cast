@@ -180,6 +180,20 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
 // is NOT owner-gated - designs are already fully shared/editable by anyone
 // (see ConfirmOpenModal below), so renaming follows that same existing
 // model rather than the newer, deliberately-personal folder-organizing one.
+// Every save writes the full project into sessionStorage (App.jsx's doSave)
+// and re-opening a design reads that copy FIRST. Move/rename only patch the
+// server record, so without patching this copy too, re-opening a design you
+// just moved loaded the OLD folder/owner/name into the editor, and its next
+// autosave wrote them straight back over the move (Julia's report,
+// 2026-09-21: "the buttons work but it doesn't move it").
+function patchCachedProject(id, patch) {
+  try {
+    const key = `wildcast_project_${id}`
+    const cached = sessionStorage.getItem(key)
+    if (cached) sessionStorage.setItem(key, JSON.stringify({ ...JSON.parse(cached), ...patch }))
+  } catch { /* storage unavailable or corrupt - the server copy is still right */ }
+}
+
 function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize, people, onMove, showOwner }) {
   const [moving, setMoving] = useState(false)
   return (
@@ -542,6 +556,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     const next = window.prompt('Rename this design', current)?.trim()
     if (!next || next === current) return
     setProjects(prev => prev.map(p => p.id === project.id ? { ...p, projectName: next } : p))
+    patchCachedProject(project.id, { projectName: next })
     fetch('/api/rename-project', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: project.id, projectName: next }),
@@ -590,11 +605,22 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   function handleMove(project, folder, ownerEmail, ownerName) {
     const targetEmail = ownerEmail || project.ownerEmail
     const targetName = ownerEmail ? (ownerName || ownerEmail) : project.ownerName
-    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, folder, ownerEmail: targetEmail, ownerName: targetName } : p))
+    const before = { folder: project.folder ?? null, ownerEmail: project.ownerEmail ?? null, ownerName: project.ownerName ?? null }
+    const after = { folder: folder || null, ownerEmail: targetEmail, ownerName: targetName }
+    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...after } : p))
+    patchCachedProject(project.id, after)
+    // Put it back and say so if the server did not accept the move - it was
+    // previously ignored, so a failed move looked like it had worked.
     fetch('/api/move-project', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: project.id, folder, ownerEmail, ownerName }),
-    }).catch(() => {})
+    }).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    }).catch(err => {
+      setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...before } : p))
+      patchCachedProject(project.id, before)
+      alert(`Could not move this design (${err.message}). It is still in its original folder.`)
+    })
     if (folder) {
       setFolderRegistry(prev => {
         const mine = prev.find(r => r.ownerEmail === targetEmail)
