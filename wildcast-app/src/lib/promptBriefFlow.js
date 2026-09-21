@@ -143,6 +143,14 @@ export function summarizeAnswers(steps, answers) {
 // the chat's result can enter the existing brief -> editor pipeline as-is.
 // logoUrl/photoUrl carry the chat's uploaded images (blob: URLs, exactly what
 // the editor's own uploads produce and doPersist already converts on save).
+// Answer ids assembleBrief already maps onto their own brief fields - anything
+// else the chat asked about is a zone this template defines beyond the known
+// set (a promo "code" box, a text sticker, ...).
+const KNOWN_ANSWER_IDS = new Set([
+  'partner', 'partnerNew', 'objective', 'projectName', 'about', 'restaurant_name',
+  'headline', 'sub_headline', 'cta', 'tc', 'offer', 'logo', 'photo',
+])
+
 export function assembleBrief(answers, entry) {
   const text = id => {
     const a = answers[id]
@@ -176,5 +184,20 @@ export function assembleBrief(answers, entry) {
     offer: text('offer'),
     logoUrl: answers.logo?.imageUrl ?? null,
     photoUrl: answers.photo?.imageUrl ?? null,
+    // Every other image zone the chat asked about (sticker, QR, ...) - keyed
+    // by zone id. Without this only logo/photo made it out of the chat, so
+    // an uploaded sticker or QR code was collected and then silently dropped.
+    // Same idea for text: extra text zones are keyed by zone id and land in
+    // fields[zoneId], which is exactly what the canvas reads for a text zone.
+    zoneTexts: Object.fromEntries(
+      Object.entries(answers)
+        .filter(([id, a]) => !KNOWN_ANSWER_IDS.has(id) && !a?.imageUrl && !a?.skipped && String(a?.value ?? '').trim())
+        .map(([id, a]) => [id, String(a.value).trim()])
+    ),
+    zoneImageUrls: Object.fromEntries(
+      Object.entries(answers)
+        .filter(([id, a]) => a?.imageUrl && id !== 'logo' && id !== 'photo')
+        .map(([id, a]) => [id, a.imageUrl])
+    ),
   }
 }

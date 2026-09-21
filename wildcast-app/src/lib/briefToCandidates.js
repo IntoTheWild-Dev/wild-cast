@@ -59,10 +59,15 @@ export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
     cta: brief.cta?.trim() || brief.subline?.trim() || '',
     logoUrl: logoUrl || null,
     photoUrl: photoUrl || null,
-    // No live template has a `qr` zone yet (checked directly against
-    // templateZones.js) - collected in the brief, but nothing to render onto
-    // today. Kept as a real key so it's harmless once a qr zone exists.
     qrUrl: null,
+    // Prompt Brief's answers for text zones beyond the known set (promo code
+    // box, text sticker, ...), keyed by zone id.
+    ...(brief.zoneTexts ?? {}),
+    // Prompt Brief's uploaded/picked images for zones beyond logo and photo
+    // (sticker, QR, ...). The canvas reads every image zone from
+    // fields[`${zone.id}Url`], so a zone id with no matching zone on the
+    // chosen template is simply inert, same as the text fields above.
+    ...Object.fromEntries(Object.entries(brief.zoneImageUrls ?? {}).map(([id, url]) => [`${id}Url`, url])),
   }
 }
 
