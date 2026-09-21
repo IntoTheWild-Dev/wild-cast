@@ -117,7 +117,7 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
   return (
     <div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
-        Print templates <WordCarousel words={['in seconds', 'in minutes']} style={{ color: 'var(--primary)' }} />
+        Print templates <span style={{ color: 'var(--primary)' }}>in minutes</span>
       </h1>
       <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
         Tell us what you need, the same way you'd brief a designer - we'll show you templates that fit, ready to fill in live.
