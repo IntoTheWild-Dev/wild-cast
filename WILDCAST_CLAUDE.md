@@ -209,6 +209,8 @@ Instead of manually measuring zones, we use the Figma REST API to derive them au
 - `FIGMA_API_TOKEN` environment variable (Julia's personal token is fine for Phase 2)
 - Figma file must be shared or accessible with that token
 
+> **Update (2026-09-21):** the token-based import above was replaced on 2026-08-13 by a **Figma plugin** ("WildCast Import", run from Figma's Plugins menu, so there is no token to expire) and the paste-a-URL screen is gone. As built: layers are named **`zone:<id>`** (not `[EDIT]`); `zone:logo`, `zone:photo`, `zone:sticker` and `zone:qr` become image zones, and any other id (`headline`, `sub_headline`, `tc`, a promo `code`, ...) becomes a text zone. An import lands as a **draft** on the Import tab, where you review it: X/Y/W/H sliders per zone over a live overlay, **centre guide lines with snapping** and Centre buttons, front/back layer order, font size, Rotate 90°, then Save zone settings and Publish. Convention for a rotated zone (e.g. `tc`): `width`/`height` are the visual narrow×tall box and `textWidth` equals `height`. See `wildcast-app/FIGMA_IMPORT_ROADMAP.md` and `wildcast-app/STATUS.md` for the details.
+
 ---
 
 ## Canvas Editor UI
@@ -231,6 +233,8 @@ Layout stays similar to Phase 1 (left canvas + right field panel). Key changes:
 **Template picker:**
 - Stays the same (thumbnail grid + category filter)
 - Thumbnails now served as PNG from Vercel Blob (faster than PDF rendering)
+
+> **Update (2026-09-21):** the editor was reworked on 2026-09-18 from Annika's mockup and no longer matches the layout above. Now: a live **Guided / Advanced** toggle, an accordion field list with an "X of Y ready" progress bar, one AI icon per field plus a no-AI **Choose preset**, **autosave** (no Save button and no setting - saves 2.5 s after the last edit, shown as a small "Saved" chip), and **Send for Review** as the primary action with **Export PDF locked until a review has been sent**. The editor also has its own URL (`/content/<id>`) so a refresh reopens the design. AI copy suggestions are wired up (see the AI Copy Assistant update). Full description: `wildcast-app/STATUS.md` → "Editor redesign".
 
 ---
 

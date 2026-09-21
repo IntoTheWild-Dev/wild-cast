@@ -145,3 +145,13 @@ method until the plugin's first real test happens.
   Figma file and run the plugin from inside it, then switch to WildCast to review." Given someone
   already needs Figma file access to generate a working token today, this is probably a net
   improvement — but confirm it's still the workflow you want once you've actually used it once.
+
+---
+
+## Update 2026-09-21 — where this stands now
+
+- **The plugin path works and is in daily use** (working since 2026-08-13; the "untested" wording in the sections above is historical). Real imports exist: Restaurant Flyer Option C is live with `logo`, `qr`, `headline`, `sub_headline`, `photo`, `tc` and `sticker` zones, and Option D sits as an archived draft.
+- **Review page additions (2026-09-21):** dashed centre guide lines on the overlay; X/Y sliders snap a zone's centre onto the canvas centre within 3 canvas units (pointer drags only — typed numbers and arrow keys never snap); "Centre horizontally / vertically" buttons per zone that show a tick once centred. The background art's margins are symmetric (about 3.9% left/right, 2.7% top/bottom), so the canvas centre is also the visible card's centre.
+- **Rotated zones — convention and two bugs fixed.** `width`/`height` are the visual narrow×tall box and `textWidth` must equal `height` (the text runs along the long side). Two bugs broke this: the Import H slider didn't update `textWidth` (Option C's `tc` was saved with height 127 but textWidth 150.3), and the editor drew the rotated guide box 90° off, lying sideways off the canvas edge. The slider now keeps them in step, Save zone settings forces `textWidth = height` for every rotated zone, and the guide is drawn upright. Option C's stored `textWidth` corrects itself the next time its zones are saved on the Import page.
+- **Checked and not a bug:** for non-rotated zones the Import overlay and the editor use identical geometry (both stretch the background to the 316×441 canvas and place zones in that space), so a mismatch between them is not a coordinate problem. One thing still unconfirmed: in the editor, text is anchored to the top-left of its box (the box height only limits auto-shrink), it is not vertically centred like a Figma text frame.
+
