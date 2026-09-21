@@ -902,8 +902,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       </div>
 
       {/* Action footer - Julia's editor redesign, 2026-09-18, per Annika's
-          mockup: autosave replaces the manual Save button, leaving Send for
-          Review as the one primary CTA, with Export PDF gated behind it.
+          mockup: Send for Review is the one primary CTA, with Export PDF
+          gated behind it. Autosave runs in the background regardless (status
+          pill in the header); the manual Save button below it was brought
+          back by request on 2026-09-21 as an explicit "I'm done" action on
+          top of that autosave, not a replacement for it.
           Restricted review mode is untouched - it never had autosave (a
           brief-generated candidate's own save flow is deliberately manual,
           see handleSaveAndReturnToPicker in App.jsx) and has no "Advanced"
@@ -958,6 +961,22 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
               </svg>
               Send for Review
+            </button>
+
+            {/* Manual Save, back by request on top of autosave (2026-09-21) -
+                autosave still runs in the background (status pill in the
+                header), this just gives an explicit "I'm done" click too. */}
+            <button
+              onClick={onSave}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '10px', fontSize: 13, fontWeight: 600,
+                background: '#fff', color: saveStatus === 'saved' ? '#16a34a' : 'var(--dark)',
+                border: `1.5px solid ${saveStatus === 'saved' ? '#16a34a' : 'var(--border)'}`,
+                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
             </button>
 
             {reviewSent ? (
