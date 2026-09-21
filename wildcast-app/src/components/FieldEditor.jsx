@@ -10,7 +10,7 @@ function formatDateTime(ts) {
 import AISuggest from './AISuggest'
 import PresetPicker from './PresetPicker'
 import { hasTransparency, cropToContent } from '../lib/image'
-import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT, merchantForUpload } from '../lib/assetLibrary'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
@@ -877,7 +877,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                   // that don't define one) have nothing to auto-tag the merchant
                   // with - fall back to the project name instead of dumping
                   // everything into "General", still with zero extra clicks.
-                  merchant={(fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT}
+                  merchant={merchantForUpload(fields, projectName, template?.name)}
                   autoCropContent={zone.id === 'qr'}
                   restricted={restricted}
                 />

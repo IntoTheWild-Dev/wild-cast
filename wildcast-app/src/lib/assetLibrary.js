@@ -22,6 +22,21 @@ export const FOLDERS = {
 // merchant (e.g. a shared Wolt app-store badge reused across restaurants).
 export const GENERAL_MERCHANT = 'General'
 
+// Which merchant an upload made from inside the editor is tagged with, with
+// zero extra clicks: the restaurant name on the design, else the project name
+// (templates with no restaurant_name field), else General. A project name
+// that is still just the template's own default ("Restaurant Flyer · Option
+// A" - a new design starts with it, see App.jsx) is NOT a merchant, so it
+// must not become one: it used to, and put template names into the Assets
+// merchant dropdown (Julia's report, 2026-09-21).
+export function merchantForUpload(fields, projectName, templateName) {
+  const restaurant = (fields?.restaurant_name || '').trim()
+  if (restaurant) return restaurant
+  const name = (projectName || '').trim()
+  if (name && name !== (templateName || '').trim()) return name
+  return GENERAL_MERCHANT
+}
+
 // Sorted, deduped merchant names present in a set of assets - "General" always
 // sorts first since it's the fallback bucket, not a real merchant.
 export function uniqueMerchants(assets) {
