@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Select from './Select'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
@@ -9,6 +9,17 @@ import { activationHeaders } from '../lib/activationKey'
 // hardcoded-316x441 convention already used everywhere else.
 const CANVAS_W = 316
 const CANVAS_H = 441
+
+// Centre-line snapping (Julia's ask, 2026-09-21: "very difficult to gauge"
+// where the middle is). Dragging a zone's X/Y slider pulls it onto the canvas
+// centre when its own centre comes within SNAP_UNITS of it - canvas units, the
+// same 316x441 space as the sliders. The background art's margins are
+// symmetric (about 3.9% left/right, 2.7% top/bottom), so the canvas centre is
+// also the centre of the visible teal card.
+const SNAP_UNITS = 3
+const centredStart = (size, total) => Math.round(((total - size) / 2) * 10) / 10
+const snapToCentre = (v, size, total) => (Math.abs(v - (total - size) / 2) <= SNAP_UNITS ? centredStart(size, total) : v)
+const isCentred = (start, size, total) => Math.abs(start + size / 2 - total / 2) < 0.5
 
 const zoneColor = z => (z.type === 'image' ? '#3B82F6' : 'var(--primary)')
 
@@ -21,6 +32,9 @@ function ZoneOverlay({ zones, backgroundUrl }) {
   return (
     <div style={{ position: 'relative' }}>
       <img src={templateAssetSrc(backgroundUrl)} alt="" style={{ width: '100%', display: 'block', background: '#F3F4F6' }} />
+      {/* Centre guides - the middle of the canvas, which the X/Y sliders snap to. */}
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, borderLeft: '1px dashed #F59E0B', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, borderTop: '1px dashed #F59E0B', pointerEvents: 'none' }} />
       {zones.map(z => (
         <div
           key={z.id}
@@ -52,7 +66,10 @@ function ZoneOverlay({ zones, backgroundUrl }) {
 // number boxes alone felt "a little bit confusing" to work with. The slider
 // covers "roughly here, drag until it looks right"; the number stays for
 // "I know the exact value I want."
-function SliderField({ label, value, min, max, step = 1, onChange, width }) {
+function SliderField({ label, value, min, max, step = 1, onChange, width, snap }) {
+  // Arrow-key nudges must be able to step off a snap point, so only pointer
+  // drags get pulled onto it.
+  const usingKeys = useRef(false)
   return (
     <div style={width ? { width } : undefined}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
@@ -70,7 +87,13 @@ function SliderField({ label, value, min, max, step = 1, onChange, width }) {
         max={max}
         step={step}
         value={value ?? 0}
-        onChange={e => onChange(Number(e.target.value))}
+        onChange={e => {
+          const v = Number(e.target.value)
+          onChange(snap && !usingKeys.current ? snap(v) : v)
+        }}
+        onKeyDown={() => { usingKeys.current = true }}
+        onKeyUp={() => { usingKeys.current = false }}
+        onBlur={() => { usingKeys.current = false }}
         style={{ width: '100%', accentColor: 'var(--primary)', display: 'block' }}
       />
     </div>
@@ -142,10 +165,30 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange, onMoveForward,
       {expanded && (
         <div style={{ padding: '2px 14px 16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px' }}>
-            <SliderField label="X" value={z.x} min={-50} max={CANVAS_W + 50} onChange={v => onChange({ x: v })} />
-            <SliderField label="Y" value={z.y} min={-50} max={CANVAS_H + 50} onChange={v => onChange({ y: v })} />
+            <SliderField label="X" value={z.x} min={-50} max={CANVAS_W + 50} onChange={v => onChange({ x: v })} snap={v => snapToCentre(v, z.width, CANVAS_W)} />
+            <SliderField label="Y" value={z.y} min={-50} max={CANVAS_H + 50} onChange={v => onChange({ y: v })} snap={v => snapToCentre(v, z.height, CANVAS_H)} />
             <SliderField label="W" value={z.width} min={1} max={CANVAS_W + 100} onChange={v => onChange({ width: v })} />
-            <SliderField label="H" value={z.height} min={1} max={CANVAS_H + 100} onChange={v => onChange({ height: v })} />
+            <SliderField label="H" value={z.height} min={1} max={CANVAS_H + 100} onChange={v => onChange({ height: v, ...(z.rotate ? { textWidth: v } : {}) })} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            {[
+              { label: 'Centre horizontally', on: isCentred(z.x, z.width, CANVAS_W), go: () => onChange({ x: centredStart(z.width, CANVAS_W) }) },
+              { label: 'Centre vertically', on: isCentred(z.y, z.height, CANVAS_H), go: () => onChange({ y: centredStart(z.height, CANVAS_H) }) },
+            ].map(b => (
+              <button
+                key={b.label}
+                type="button"
+                onClick={b.go}
+                style={{
+                  flex: 1, fontSize: 11, fontWeight: 600, padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                  border: `1px solid ${b.on ? '#16a34a' : 'var(--border)'}`,
+                  background: b.on ? '#F0FDF4' : '#fff', color: b.on ? '#16a34a' : 'var(--dark)',
+                }}
+              >
+                {b.on ? '✓ ' : ''}{b.label}
+              </button>
+            ))}
           </div>
 
           {z.type === 'text' && (
@@ -321,7 +364,9 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
     setSavingZones(true)
     setError('')
     try {
-      const zones = zonesWithEdits()
+      // A rotated zone's text runs along its height, so textWidth must match it.
+      // Older saves (edited before the H slider kept it in step) can differ.
+      const zones = zonesWithEdits().map(z => (z.rotate ? { ...z, textWidth: z.height } : z))
       const res = await fetch('/api/publish-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...activationHeaders() },
