@@ -54,38 +54,47 @@ export function FeatureGrid({ columns = 1 }) {
   )
 }
 
-// Made much bigger/bolder with a real standalone button (was a small inline
-// text link) - Julia's ask, 2026-09-15: Wild Scale needed to be "in your
-// face," easy to miss at the old size. Pulled out of HeroColumn so
-// LandingPage.jsx can place it after the 3-column choice-card section
-// instead of inside the narrow hero column (Julia's ask, 2026-09-18).
+// Row layout (text left, compact button right) rather than a stacked,
+// full-width button - the full-width solid-fill button read as the page's
+// dominant CTA and drowned out the actual choice cards above it once this
+// box spanned the full page width on LandingPage.jsx, even after being
+// shrunk down to a compact row (feedback via Amit demo, 2026-09-21: "the
+// core action of this page is to select one of the three options above,
+// not this secondary action"). Button is now an outline/ghost style rather
+// than solid-fill, so it reads as secondary next to the cards' plain white
+// backgrounds. flexWrap lets it degrade to the old stacked look at the
+// narrow 420px width HeroColumn still uses.
 export function WildScaleTip({ maxWidth = 420 }) {
   return (
     <div
       style={{
+        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 20,
         background: 'var(--primary-glow)', border: '1.5px solid var(--primary)', borderRadius: 16,
-        padding: '22px 24px', marginBottom: 36, maxWidth,
+        padding: '18px 22px', marginBottom: 36, maxWidth,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ color: 'var(--primary)', fontSize: 20, lineHeight: 1 }}>✦</span>
-        <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--dark)' }}>Before you upload</span>
+      <div style={{ flex: '1 1 260px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span style={{ color: 'var(--primary)', fontSize: 18, lineHeight: 1 }}>✦</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--dark)' }}>Before you upload</span>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--dark)', margin: 0, lineHeight: 1.5 }}>
+          Product photos should be high resolution - use Wild Scale's <strong>Print</strong> preset
+          (2400×2400px) - with the background removed (transparent PNG).
+        </p>
       </div>
-      <p style={{ fontSize: 14, color: 'var(--dark)', margin: '0 0 18px', lineHeight: 1.6 }}>
-        Product photos should be high resolution - use Wild Scale's <strong>Print</strong> preset
-        (2400×2400px) - with the background removed (transparent PNG).
-      </p>
       <a
         href="https://scale.wildstack.studio"
         target="_blank"
         rel="noreferrer"
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          width: '100%', padding: '16px 20px', fontSize: 16, fontWeight: 400, borderRadius: 12,
-          background: 'var(--primary)', color: '#fff', textDecoration: 'none', boxSizing: 'border-box',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0,
+          padding: '9.5px 16px', fontSize: 13, fontWeight: 700, borderRadius: 10, whiteSpace: 'nowrap',
+          background: '#fff', border: '1.5px solid var(--primary)', color: 'var(--primary)',
+          textDecoration: 'none', boxSizing: 'border-box',
         }}
       >
-        Prep your assets with WildScale →
+        Prep with WildScale →
       </a>
     </div>
   )
@@ -108,7 +117,7 @@ export function HeroColumn({ pickedOption, onOpenTemplateModal, showTemplateStep
   return (
     <div>
       <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: '0 0 20px', lineHeight: 1.08 }}>
-        We help <WordCarousel words={['design', 'export', 'print']} style={{ color: 'var(--primary)' }} />
+        Print templates <WordCarousel words={['in seconds', 'in minutes']} style={{ color: 'var(--primary)' }} />
       </h1>
       <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 420, marginBottom: 36 }}>
         Tell us what you need, the same way you'd brief a designer - we'll show you templates that fit, ready to fill in live.
