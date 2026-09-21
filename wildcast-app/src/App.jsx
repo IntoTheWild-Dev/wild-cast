@@ -16,7 +16,7 @@ import TemplateImportPage from './components/TemplateImportPage'
 import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
-import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from './lib/assetLibrary'
+import { uploadImageForZone, assetFolderForZone, merchantForUpload } from './lib/assetLibrary'
 import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
@@ -1111,7 +1111,7 @@ export default function App() {
       requireTransparent: zone.hint?.toLowerCase().includes('transparent'),
       autoCropContent: zoneId === 'qr',
       folder: assetFolderForZone(zoneId),
-      merchant: (fields.restaurant_name || '').trim() || (projectName || '').trim() || GENERAL_MERCHANT,
+      merchant: merchantForUpload(fields, projectName, selectedTemplate?.name),
     })
     handleFieldChange(`${zoneId}Url`, url)
   }
