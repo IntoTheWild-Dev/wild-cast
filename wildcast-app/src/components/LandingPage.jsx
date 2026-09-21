@@ -43,33 +43,6 @@ const CHOICES = [
   },
 ]
 
-// Roadmap products shown greyed-out below the real choices (ask, 2026-09-21):
-// so a demo (e.g. to Amit) can show the wider Wild Stack roadmap without
-// implying WildLoop/WildProof are actually usable from here yet.
-const ROADMAP = [
-  {
-    key: 'wildloop',
-    title: 'WildLoop',
-    desc: 'Automate recurring campaigns and reminders for your customers.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 2.1l4 4-4 4" /><path d="M3 12.7V12a4 4 0 0 1 4-4h14" />
-        <path d="M7 21.9l-4-4 4-4" /><path d="M21 11.3V12a4 4 0 0 1-4 4H3" />
-      </svg>
-    ),
-  },
-  {
-    key: 'wildproof',
-    title: 'WildProof',
-    desc: 'Client review and approval for exported designs, before they print.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 6L9 17l-5-5" />
-      </svg>
-    ),
-  },
-]
-
 // Laid out vertically (icon, then title+arrow, then desc) rather than the
 // old horizontal icon-left/chevron-right row - that shape worked as a single
 // wide list item, but reads cramped once the 3 choices sit side by side as
@@ -104,35 +77,6 @@ function ChoiceCard({ title, desc, icon, onClick }) {
   )
 }
 
-// Same shape as ChoiceCard but visually muted and inert - no onClick, no
-// hover state, no arrow (there's nowhere for it to take you yet).
-function RoadmapCard({ title, desc, icon }) {
-  return (
-    <div
-      style={{
-        position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12,
-        width: '100%', textAlign: 'left', padding: '24px', borderRadius: 14, border: '1.5px dashed var(--border)',
-        background: '#fafafa', cursor: 'not-allowed', boxSizing: 'border-box',
-      }}
-    >
-      <span style={{
-        position: 'absolute', top: 16, right: 16, fontSize: 10, fontWeight: 700, color: 'var(--mid)',
-        background: '#fff', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 9px',
-        textTransform: 'uppercase', letterSpacing: '0.05em',
-      }}>
-        Coming soon
-      </span>
-      <div style={{ width: 44, height: 44, borderRadius: 12, background: '#ececec', color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--mid)', marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 13, color: 'var(--light)', lineHeight: 1.5 }}>{desc}</div>
-      </div>
-    </div>
-  )
-}
-
 export default function LandingPage({ onNavigate }) {
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
@@ -151,17 +95,6 @@ export default function LandingPage({ onNavigate }) {
         </div>
 
         <div style={{ marginTop: 40 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-            More from Wild Stack
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-            {ROADMAP.map(r => (
-              <RoadmapCard key={r.key} title={r.title} desc={r.desc} icon={r.icon} />
-            ))}
-          </div>
-        </div>
-
-        <div style={{ marginTop: 32 }}>
           <WildScaleTip maxWidth="100%" />
         </div>
 
