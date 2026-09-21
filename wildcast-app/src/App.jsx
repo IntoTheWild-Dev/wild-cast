@@ -1176,8 +1176,10 @@ export default function App() {
     const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
 
     const savedFields = { ...fields }
-    for (const key of ['logoUrl', 'photoUrl', 'qrUrl']) {
-      if (savedFields[key]?.startsWith('blob:')) {
+    // Every image field, not a fixed list - a sticker (or any other image
+    // zone) uploaded from this tab is a blob: URL too, and would save dead.
+    for (const key of Object.keys(savedFields)) {
+      if (key.endsWith('Url') && typeof savedFields[key] === 'string' && savedFields[key].startsWith('blob:')) {
         savedFields[key] = await blobUrlToDataUrl(savedFields[key])
       }
     }
@@ -1405,8 +1407,10 @@ export default function App() {
     if (!template) throw new Error('Template not found.')
     if (!png) throw new Error('The preview is not ready yet.')
     const savedFields = { ...DEFAULT_FIELDS, ...briefFields }
-    for (const key of ['logoUrl', 'photoUrl', 'qrUrl']) {
-      if (savedFields[key]?.startsWith('blob:')) savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+    for (const key of Object.keys(savedFields)) {
+      if (key.endsWith('Url') && typeof savedFields[key] === 'string' && savedFields[key].startsWith('blob:')) {
+        savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+      }
     }
     // Same naming rule as the Edit design hand-off (handleSelectTemplateFromBrief).
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')

@@ -481,11 +481,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             if (zone.rotate) {
               const cx = zone.x + zone.width / 2
               const cy = zone.y + zone.height / 2
+              // width/height are the zone's UNROTATED visual box (narrow x
+              // tall for a -90 sidebar), while the rect is then rotated by
+              // zone.rotate - so its own width/height must be swapped or it
+              // ends up lying sideways, hanging off the canvas edge, out of
+              // line with the text and with the Import page's overlay.
               gr = new fabric.Rect({
                 left: cx, top: cy,
                 originX: 'center', originY: 'center',
-                width: zone.width,
-                height: zone.height,
+                width: Math.abs(zone.rotate) === 90 ? zone.height : zone.width,
+                height: Math.abs(zone.rotate) === 90 ? zone.width : zone.height,
                 angle: zone.rotate,
                 fill:   'transparent',
                 stroke: 'rgba(255,255,255,0.5)',
