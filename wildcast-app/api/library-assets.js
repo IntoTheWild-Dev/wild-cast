@@ -10,21 +10,27 @@ function dataUrlToBuffer(dataUrl) {
   return { contentType: match[1], buffer: Buffer.from(match[2], 'base64') }
 }
 
-// Strips characters that are unsafe in a Blob pathname segment. `+` is the
-// real find here (Julia's report, 2026-09-22): several existing asset names
-// and one merchant ("Wen+Cheng") had a literal + in them, and the private-
-// asset proxy's authenticated fetch (handleGet below) 404s on a path
-// containing a literal + even though the exact same URL resolves fine
-// unauthenticated - confirmed by direct server-side debugging (an
-// unauthenticated fetch to the identical URL got a real 403 - object
-// exists - while the SAME authenticated fetch 404'd, for three different
-// encodings of the same +). Root cause looks like a Vercel Blob platform
-// quirk in how it resolves an authenticated private-blob read against a
-// path containing +, not anything fixable in our own encoding - so the
-// pragmatic fix is to never let + reach a blob pathname at all, same
-// principle as the existing character set below.
+// WHITELIST, not a blacklist (Julia's ask, 2026-09-22, after the first pass
+// of this fix only blocked the one character actually found broken: "what
+// if this happens again... why did this happen in the first place"). The
+// real finding: several existing asset names and one merchant ("Wen+Cheng")
+// had a literal + in them, and the private-asset proxy's authenticated
+// fetch (handleGet below) 404s on a path containing a literal + even though
+// the exact same URL resolves fine unauthenticated - confirmed by direct
+// server-side debugging (an unauthenticated fetch to the identical URL got
+// a real 403 - object exists - while copy()/del()/authenticated-fetch all
+// 404'd on the same key, tried three different encodings). This looks like
+// a genuine Vercel Blob platform bug in how it resolves an authenticated
+// private-blob read/write against a path containing +, not anything in our
+// own request encoding - which means we have NO way to test or guarantee
+// which OTHER characters might trigger the same class of failure (emoji,
+// accented letters, & # etc. from a client's own camera-roll filename are
+// all realistic for "client images", per Julia). A blacklist can only ever
+// block characters someone has already found broken; a whitelist is safe
+// against ones nobody's hit yet. Deliberately ASCII-only (no accented
+// letters) for the same reason - can't verify those are safe either.
 function sanitizeForPath(str) {
-  return str.replace(/[/\\?%*:|"<>+]/g, '_')
+  return str.replace(/[^a-zA-Z0-9 _.()'-]/g, '_')
 }
 
 // Snaps a requested merchant name to an existing merchant's exact casing when
