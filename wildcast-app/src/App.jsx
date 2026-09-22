@@ -769,7 +769,12 @@ export default function App() {
         })))
         setComments(prev => prev.map(c => ({ ...c, resolved: true })))
       }
-      await doSave()
+      // Same treatment as handleSendForReview - a resubmit is exactly the
+      // "back under review" transition for My Tasks too (this override
+      // didn't exist yet when this function was first built on a separate
+      // branch from reviewStatus itself; closing that gap now that both are
+      // merged together).
+      await doSave({ nextReviewStatus: 'review' })
       setHasUnsavedChanges(false)
       setReviewSent(true)
       setResolveResubmitStatus('done')
@@ -1247,12 +1252,10 @@ export default function App() {
   }
 
   // Core save - returns the project id. Used by both handleSave and handleSendForReview.
-  // nextReviewStatus: only passed by handleSendForReview (and, on the
-  // feature/resolve-and-resubmit branch, its own equivalent resubmit action -
-  // give that the same treatment once these two branches are merged
-  // together) to bump the persisted status to 'review' - every other caller
-  // (Save, autosave, Save & pick another) omits it and this simply re-saves
-  // whatever reviewStatus already is, unchanged.
+  // nextReviewStatus: only passed by handleSendForReview and
+  // handleResolveAndResubmit, to bump the persisted status back to 'review' -
+  // every other caller (Save, autosave, Save & pick another) omits it and
+  // this simply re-saves whatever reviewStatus already is, unchanged.
   async function doSave({ nextReviewStatus } = {}) {
     if (!exportRef.current?.getPng) throw new Error('Canvas not ready - please wait a moment and try again.')
 
