@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
+import Select from './Select'
 
 // Shown instead of navigating for any nav item passed disabled=true below -
 // small and local rather than its own file since it's a single temporary
@@ -164,23 +165,22 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {onWorkflowRoleChange && (
-            <div title="Testing toggle - which role you're viewing as. Only Managers can export." style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
-              {WORKFLOW_ROLES.map(role => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => onWorkflowRoleChange(role)}
-                  style={{
-                    padding: '5px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
-                    background: workflowRole === role ? 'var(--primary)' : 'transparent',
-                    color: workflowRole === role ? '#fff' : 'var(--mid)',
-                    fontFamily: 'inherit', transition: 'all 0.15s',
-                  }}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
+            // Dropdown instead of the three-way pill toggle it started as -
+            // the pill crowded the centered nav at normal widths (Julia's
+            // report, 2026-09-22, with screenshots of Import/Help text
+            // overlapping the toggle). A select takes a fixed, small width
+            // regardless of how many roles exist.
+            <Select
+              value={workflowRole}
+              onChange={e => onWorkflowRoleChange(e.target.value)}
+              title="Testing toggle - which role you're viewing as. Only Managers can export."
+              style={{
+                width: 108, fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: '#F3F4F6', color: 'var(--dark)',
+              }}
+            >
+              {WORKFLOW_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
+            </Select>
           )}
           {activation?.clientName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12 }}>
