@@ -639,7 +639,8 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent }) {
+export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole }) {
+  const canExport = workflowRole === 'Manager'
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -1009,7 +1010,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
             </button>
 
-            {reviewSent ? (
+            {reviewSent && canExport ? (
               <button
                 onClick={onExport}
                 disabled={exporting}
@@ -1021,7 +1022,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               </button>
             ) : (
               <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--light)', padding: '4px 0' }}>
-                🔒 Export PDF - unlocks once you send for review
+                {!canExport ? '🔒 Export PDF - only Managers can export' : '🔒 Export PDF - unlocks once you send for review'}
               </div>
             )}
           </>

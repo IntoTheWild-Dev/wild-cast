@@ -397,6 +397,20 @@ export default function App() {
     if (!savedKey) return null
     return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
   })
+
+  // Workflow role toggle (Julia's ask, 2026-09-22): Designer / Reviewer /
+  // Manager - deliberately separate from activation.role (agency/designer/
+  // partner above, which comes from the real activation key/account and
+  // gates Import - stays untouched). This is a provisional, purely
+  // client-side toggle so Julia can preview each role's view without
+  // separate keys - names and what each role can/can't do are explicitly
+  // expected to change. For now the only rule it drives: only Manager can
+  // Export PDF (see handleExport below and FieldEditor's footer).
+  const [workflowRole, setWorkflowRoleState] = useState(() => localStorage.getItem('wildcast_workflow_role') || 'Manager')
+  function setWorkflowRole(role) {
+    setWorkflowRoleState(role)
+    localStorage.setItem('wildcast_workflow_role', role)
+  }
   const [showHelp, setShowHelp]               = useState(false)
   const [showCreditsInfo, setShowCreditsInfo] = useState(false)
   const creditsInfoRef = useRef(null)
@@ -1117,6 +1131,13 @@ export default function App() {
   }
 
   async function handleExport() {
+    // Belt-and-suspenders alongside FieldEditor's own Export PDF button being
+    // disabled/hidden for non-Managers - shouldn't normally be reachable, but
+    // keeps this correct even if the button state is ever stale.
+    if (workflowRole !== 'Manager') {
+      alert('Only Managers can export.')
+      return
+    }
     if (!exportRef.current?.getPng) {
       alert('Canvas not ready - please wait a moment and try again.')
       return
@@ -1601,6 +1622,8 @@ export default function App() {
         onNavigate={handleNavigate}
         activation={activation}
         onHelp={() => setShowHelp(true)}
+        workflowRole={workflowRole}
+        onWorkflowRoleChange={setWorkflowRole}
       />
 
       {screen === 'landing' && (
@@ -1998,6 +2021,7 @@ export default function App() {
             lang={lang}
             onExport={handleExport}
             exporting={exporting}
+            workflowRole={workflowRole}
             template={selectedTemplate}
             templateConfig={templateConfig}
             fontSizes={fontSizes}

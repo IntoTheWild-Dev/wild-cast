@@ -66,7 +66,13 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
   )
 }
 
-export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp }) {
+// Designer / Reviewer / Manager - a provisional workflow-role toggle
+// (Julia's ask, 2026-09-22, so she can preview each role's view without
+// separate keys). Names are explicitly expected to change - kept as one
+// array so relabeling later is a one-line change, not a find-and-replace.
+const WORKFLOW_ROLES = ['Designer', 'Reviewer', 'Manager']
+
+export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [showCreditsInfo, setShowCreditsInfo] = useState(false)
@@ -157,6 +163,25 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           >Help</span>
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {onWorkflowRoleChange && (
+            <div title="Testing toggle - which role you're viewing as. Only Managers can export." style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
+              {WORKFLOW_ROLES.map(role => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => onWorkflowRoleChange(role)}
+                  style={{
+                    padding: '5px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
+                    background: workflowRole === role ? 'var(--primary)' : 'transparent',
+                    color: workflowRole === role ? '#fff' : 'var(--mid)',
+                    fontFamily: 'inherit', transition: 'all 0.15s',
+                  }}
+                >
+                  {role}
+                </button>
+              ))}
+            </div>
+          )}
           {activation?.clientName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12 }}>
               <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
