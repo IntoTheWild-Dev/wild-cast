@@ -33,22 +33,14 @@ async function handleGet(req, res) {
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
   if (req.query.debugEcho) {
-    const target = req.query.url
-    const variants = {
-      asReceived: target,
-      literalPlus: target.replace(/%2B/g, '+'),
-      doubleDecodedPlus: target.replace(/%2B/g, '+').replace(/%28/g, '(').replace(/%29/g, ')'),
-    }
-    const results = {}
-    for (const [label, u] of Object.entries(variants)) {
-      try {
-        const upstream = await fetch(u, { headers: { Authorization: `Bearer ${token}` } })
-        results[label] = { url: u, status: upstream.status }
-      } catch (err) {
-        results[label] = { url: u, error: err.message }
-      }
-    }
-    return res.status(200).json(results)
+    const { blobs } = await list({ prefix: 'library/logos/General/', token })
+    return res.status(200).json(blobs.map(b => ({
+      pathname: b.pathname,
+      pathnameCodes: [...b.pathname].map(c => c.codePointAt(0)),
+      url: b.url,
+      size: b.size,
+      uploadedAt: b.uploadedAt,
+    })))
   }
 
   if (req.query.url) {
