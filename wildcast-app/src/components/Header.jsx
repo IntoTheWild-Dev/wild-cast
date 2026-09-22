@@ -135,6 +135,25 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
   return (
     <>
     <header style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100 }}>
+      {/* Own slim row above the main one, for now (Julia's report, 2026-09-22:
+          the dropdown was still crowding the centered nav and covering Help
+          at normal widths) - moves it off the row entirely instead of
+          fighting for space in it. */}
+      {onWorkflowRoleChange && (
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '6px 32px 0', display: 'flex', justifyContent: 'flex-end' }}>
+          <Select
+            value={workflowRole}
+            onChange={e => onWorkflowRoleChange(e.target.value)}
+            title="Testing toggle - which role you're viewing as. Only Managers can export."
+            style={{
+              width: 108, fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 8,
+              border: '1px solid var(--border)', background: '#F3F4F6', color: 'var(--dark)',
+            }}
+          >
+            {WORKFLOW_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
+          </Select>
+        </div>
+      )}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
         <div onClick={onLogoClick} style={{ cursor: 'pointer' }}>
           <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
@@ -164,24 +183,6 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           >Help</span>
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {onWorkflowRoleChange && (
-            // Dropdown instead of the three-way pill toggle it started as -
-            // the pill crowded the centered nav at normal widths (Julia's
-            // report, 2026-09-22, with screenshots of Import/Help text
-            // overlapping the toggle). A select takes a fixed, small width
-            // regardless of how many roles exist.
-            <Select
-              value={workflowRole}
-              onChange={e => onWorkflowRoleChange(e.target.value)}
-              title="Testing toggle - which role you're viewing as. Only Managers can export."
-              style={{
-                width: 108, fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 8,
-                border: '1px solid var(--border)', background: '#F3F4F6', color: 'var(--dark)',
-              }}
-            >
-              {WORKFLOW_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
-            </Select>
-          )}
           {activation?.clientName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12 }}>
               <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
