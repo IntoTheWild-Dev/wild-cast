@@ -343,6 +343,11 @@ export default function App() {
   const [projectFolder, setProjectFolder]     = useState(null) // subfolder name string | null
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved' - purely cosmetic, auto-clears after 3s (see handleSave etc.)
+  // "Resolve and resubmit" (Notion card, 2026-09-22): its own status flash,
+  // separate from saveStatus, so this button's "Resolved & resubmitted ✓"
+  // confirmation doesn't get stomped by (or stomp on) the unrelated Save
+  // button's own "✓ Saved" a few clicks away in FieldEditor.
+  const [resolveResubmitStatus, setResolveResubmitStatus] = useState(null) // null | 'sending' | 'done'
   // Separate from saveStatus, which is a 3-second flash badge and NOT a
   // reliable "is there anything to lose" signal - the nav-guard below was
   // using saveStatus for exactly that, so leaving the editor more than 3s
@@ -728,6 +733,45 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: currentProjectId, commentId, resolved }),
     }).catch(() => {})
+  }
+
+  // "Resolve and resubmit" (Notion card, 2026-09-22): marks every still-open
+  // comment resolved and re-sends the SAME saved design for review, in one
+  // click, instead of checking each comment then separately hitting Send for
+  // Review. No new asset is created - doSave() already keys off
+  // `currentProjectId || crypto.randomUUID()`, so resubmitting an
+  // already-saved project reuses its existing id (and therefore its existing
+  // review link) exactly like every other re-save already does. Doesn't
+  // reopen the "Ready to share" ReviewModal (unlike handleSendForReview) -
+  // the link hasn't changed since it was first sent, so there's nothing new
+  // to show; a quick inline confirmation next to the button is enough for
+  // what's meant to be a fast, no-extra-dialog action.
+  async function handleResolveAndResubmit() {
+    if (!currentProjectId || saving) return
+    setSaving(true)
+    setResolveResubmitStatus('sending')
+    try {
+      const unresolved = comments.filter(c => !c.resolved)
+      if (unresolved.length > 0) {
+        await Promise.all(unresolved.map(c => fetch('/api/comments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: currentProjectId, commentId: c.id, resolved: true }),
+        })))
+        setComments(prev => prev.map(c => ({ ...c, resolved: true })))
+      }
+      await doSave()
+      setHasUnsavedChanges(false)
+      setReviewSent(true)
+      setResolveResubmitStatus('done')
+      setTimeout(() => setResolveResubmitStatus(null), 3000)
+    } catch (err) {
+      console.error('Resolve and resubmit error:', err)
+      alert('Resolve and resubmit failed: ' + err.message)
+      setResolveResubmitStatus(null)
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleSelectTemplate(template) {
@@ -1829,6 +1873,30 @@ export default function App() {
                   }}
                 >
                   {postingReply ? 'Sending…' : 'Send reply'}
+                </button>
+              </div>
+
+              {/* "Resolve and resubmit" (Notion card, 2026-09-22): resolves
+                  every open comment above and re-sends this same design for
+                  review in one click - no new asset, no separate "check each
+                  box then hit Send for Review" round trip. */}
+              <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A' }}>
+                <button
+                  type="button"
+                  onClick={handleResolveAndResubmit}
+                  disabled={saving}
+                  title="Marks every open comment above as resolved and resubmits this design for review"
+                  style={{
+                    width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: resolveResubmitStatus === 'done' ? '#16a34a' : (saving ? '#E5E7EB' : 'var(--dark)'),
+                    color: saving && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
+                    cursor: saving ? 'default' : 'pointer',
+                  }}
+                >
+                  {resolveResubmitStatus === 'sending' ? 'Resolving & resubmitting…'
+                    : resolveResubmitStatus === 'done' ? '✓ Resolved & resubmitted'
+                    : 'Resolve and resubmit'}
                 </button>
               </div>
             </div>
