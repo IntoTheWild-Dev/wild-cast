@@ -10,6 +10,7 @@ import LandingPage from './components/LandingPage'
 import FieldEditor from './components/FieldEditor'
 import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
+import MyTasksPage from './components/MyTasksPage'
 import LibraryPage from './components/LibraryPage'
 import ReviewPage from './components/ReviewPage'
 import TemplateImportPage from './components/TemplateImportPage'
@@ -364,6 +365,14 @@ export default function App() {
     setReviewSentLoadKey(loadKey)
     setReviewSent(false)
   }
+  // Persisted review status for "My Tasks" (Notion card "Review queue in the
+  // user profile", 2026-09-22) - 'design' | 'review' | 'approved'. Distinct
+  // from reviewSent just above (a session-local Export-PDF gate that resets
+  // every reopen): this is saved on the project record itself (doSave()),
+  // set to 'review' by Send for Review/Resolve and resubmit, and flipped to
+  // 'approved' only by the reviewer's own Approve button on ReviewPage.jsx
+  // (via api/review-status.js) - never by anything on the creator's side.
+  const [reviewStatus, setReviewStatus]       = useState('design')
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
@@ -746,6 +755,7 @@ export default function App() {
     setCurrentProjectId(null)
     setProjectOwner(null)
     setProjectFolder(null)
+    setReviewStatus('design')
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -814,6 +824,7 @@ export default function App() {
     setCurrentProjectId(null)
     setProjectOwner(null)
     setProjectFolder(null)
+    setReviewStatus('design')
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -866,6 +877,7 @@ export default function App() {
     setCurrentProjectId(null)
     setProjectOwner(null)
     setProjectFolder(null)
+    setReviewStatus('design')
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -915,6 +927,7 @@ export default function App() {
     }
     else if (target === 'catalogue') setScreen('catalogue')
     else if (target === 'designs') setScreen('designs')
+    else if (target === 'tasks') setScreen('tasks')
     else if (target === 'library') setScreen('library')
     else if (target === 'import' && activation?.role === 'agency') setScreen('import')
   }
@@ -1190,7 +1203,13 @@ export default function App() {
   }
 
   // Core save - returns the project id. Used by both handleSave and handleSendForReview.
-  async function doSave() {
+  // nextReviewStatus: only passed by handleSendForReview (and, on the
+  // feature/resolve-and-resubmit branch, its own equivalent resubmit action -
+  // give that the same treatment once these two branches are merged
+  // together) to bump the persisted status to 'review' - every other caller
+  // (Save, autosave, Save & pick another) omits it and this simply re-saves
+  // whatever reviewStatus already is, unchanged.
+  async function doSave({ nextReviewStatus } = {}) {
     if (!exportRef.current?.getPng) throw new Error('Canvas not ready - please wait a moment and try again.')
 
     const fullPng = exportRef.current.getPng()
@@ -1220,6 +1239,7 @@ export default function App() {
     // saving in the editor never touches it.
     const ownerEmail = projectOwner?.email ?? activation?.key ?? null
     const ownerName = projectOwner?.name ?? activation?.clientName ?? null
+    const savedReviewStatus = nextReviewStatus ?? reviewStatus
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
@@ -1229,6 +1249,10 @@ export default function App() {
       // Persisted so re-opening this design (from any device/account) keeps
       // AI Suggest strictly scoped to the brief's vertical.
       vertical: designVertical,
+      // "My Tasks" status (Notion card "Review queue in the user profile",
+      // 2026-09-22) - see reviewStatus's own declaration above for the full
+      // state machine.
+      reviewStatus: savedReviewStatus,
     }
 
     const response = await fetch('/api/save-project', {
@@ -1242,6 +1266,7 @@ export default function App() {
     try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
 
     setCurrentProjectId(id)
+    if (nextReviewStatus) setReviewStatus(nextReviewStatus)
     return { id, preview }
   }
 
@@ -1370,7 +1395,7 @@ export default function App() {
     if (!window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
     setSaving(true)
     try {
-      const { id } = await doSave()
+      const { id } = await doSave({ nextReviewStatus: 'review' })
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
@@ -1512,6 +1537,9 @@ export default function App() {
     setCurrentProjectId(project.id)
     setProjectOwner(project.ownerEmail ? { email: project.ownerEmail, name: project.ownerName } : null)
     setProjectFolder(project.folder ?? null)
+    // Absent on any design saved before this shipped, same fallback pattern
+    // as folder/owner above.
+    setReviewStatus(project.reviewStatus ?? 'design')
     // Restore the design's vertical from the saved project (null on projects
     // saved before verticals shipped) so AI Suggest re-scopes to it.
     setDesignVertical(project.vertical ?? null)
@@ -1754,6 +1782,12 @@ export default function App() {
       {screen === 'library' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <LibraryPage onBack={() => setScreen('landing')} />
+        </div>
+      )}
+
+      {screen === 'tasks' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <MyTasksPage onOpenProject={handleOpenProject} activation={activation} onBack={() => setScreen('landing')} />
         </div>
       )}
 

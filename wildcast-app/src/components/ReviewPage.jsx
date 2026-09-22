@@ -16,6 +16,7 @@ export default function ReviewPage({ projectId }) {
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
   const [copied, setCopied]         = useState(false)
+  const [approving, setApproving]   = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -46,6 +47,29 @@ export default function ReviewPage({ projectId }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, commentId, resolved }),
     }).catch(() => {})
+  }
+
+  // "Approve" (Notion card "Review queue in the user profile", 2026-09-22):
+  // the only place reviewStatus ever becomes 'approved' - the creator's own
+  // side (App.jsx's doSave) only ever sets 'design'/'review'. Optimistic,
+  // same pattern as handleToggleResolved above.
+  async function handleApprove() {
+    if (approving || project?.reviewStatus === 'approved') return
+    setApproving(true)
+    setProject(prev => ({ ...prev, reviewStatus: 'approved' }))
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, status: 'approved' }),
+      })
+      if (!res.ok) throw new Error('Failed to approve')
+    } catch (err) {
+      setProject(prev => ({ ...prev, reviewStatus: 'review' }))
+      alert('Could not approve: ' + err.message)
+    } finally {
+      setApproving(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -110,7 +134,27 @@ export default function ReviewPage({ projectId }) {
 
         {/* Panel header */}
         <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--dark)', marginBottom: 2 }}>Review</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--dark)' }}>Review</div>
+            {project?.reviewStatus === 'approved' ? (
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', background: 'rgba(22,163,74,0.1)', padding: '4px 10px', borderRadius: 100, whiteSpace: 'nowrap' }}>
+                ✓ Approved
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={approving}
+                style={{
+                  padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 100, border: 'none',
+                  background: approving ? '#E5E7EB' : '#16a34a', color: approving ? 'var(--mid)' : '#fff',
+                  cursor: approving ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                {approving ? 'Approving…' : '✓ Approve'}
+              </button>
+            )}
+          </div>
           <div style={{ fontSize: 12, color: 'var(--mid)' }}>
             {project?.templateName} · {comments.length} comment{comments.length !== 1 ? 's' : ''}
           </div>
