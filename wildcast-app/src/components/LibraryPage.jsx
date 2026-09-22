@@ -328,7 +328,13 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
 export default function LibraryPage({ onBack }) {
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [merchant, setMerchant] = useState(() => localStorage.getItem(LAST_MERCHANT_KEY) || GENERAL_MERCHANT)
+  // Defaults to "All merchants", not GENERAL_MERCHANT - Julia's report,
+  // 2026-09-22: opening Assets landed on the "General" filter by default,
+  // which only ever shows the handful of assets with no merchant tag, and
+  // read as "my assets are all gone" since most real uploads ARE tagged to
+  // a specific merchant. GENERAL_MERCHANT is still a real, selectable
+  // filter option - just no longer the first thing anyone sees.
+  const [merchant, setMerchant] = useState(() => localStorage.getItem(LAST_MERCHANT_KEY) || ALL_MERCHANTS)
   const [typeFilter, setTypeFilter] = useState(ALL_TYPES)
   const [search, setSearch] = useState('')
 

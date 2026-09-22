@@ -10,6 +10,23 @@ function dataUrlToBuffer(dataUrl) {
   return { contentType: match[1], buffer: Buffer.from(match[2], 'base64') }
 }
 
+// Strips characters that are unsafe in a Blob pathname segment. `+` is the
+// real find here (Julia's report, 2026-09-22): several existing asset names
+// and one merchant ("Wen+Cheng") had a literal + in them, and the private-
+// asset proxy's authenticated fetch (handleGet below) 404s on a path
+// containing a literal + even though the exact same URL resolves fine
+// unauthenticated - confirmed by direct server-side debugging (an
+// unauthenticated fetch to the identical URL got a real 403 - object
+// exists - while the SAME authenticated fetch 404'd, for three different
+// encodings of the same +). Root cause looks like a Vercel Blob platform
+// quirk in how it resolves an authenticated private-blob read against a
+// path containing +, not anything fixable in our own encoding - so the
+// pragmatic fix is to never let + reach a blob pathname at all, same
+// principle as the existing character set below.
+function sanitizeForPath(str) {
+  return str.replace(/[/\\?%*:|"<>+]/g, '_')
+}
+
 // Snaps a requested merchant name to an existing merchant's exact casing when
 // they match case-insensitively — "wen cheng" typed after "Wen Cheng" already
 // exists reuses "Wen Cheng" instead of silently creating a second, visually
@@ -23,7 +40,7 @@ async function resolveMerchant(requested, token) {
     const existing = decodeURIComponent(parts[2])
     if (existing.toLowerCase() === wanted.toLowerCase()) return existing
   }
-  return wanted.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60) || 'General'
+  return sanitizeForPath(wanted).slice(0, 60) || 'General'
 }
 
 async function handleGet(req, res) {
@@ -94,7 +111,7 @@ async function handlePost(req, res) {
     }
     const ext = contentType === 'image/png' ? 'png' : 'jpg'
     const id = crypto.randomUUID()
-    const safeName = name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
+    const safeName = sanitizeForPath(name).slice(0, 80)
     const token = process.env.BLOB_READ_WRITE_TOKEN
     // Merchant folder — one Wolt DE key covers many restaurants, so assets are
     // scoped per merchant (not per activation key). Defaults to "General" for
@@ -141,7 +158,7 @@ async function handlePatch(req, res) {
     const [folder, oldMerchant, id, ext] = merchantMatch
       ? [merchantMatch[1], merchantMatch[2], merchantMatch[3], merchantMatch[5]]
       : [legacyMatch[1], 'General', legacyMatch[2], legacyMatch[4]]
-    const safeName = newName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 80)
+    const safeName = sanitizeForPath(newName).slice(0, 80)
     const token = process.env.BLOB_READ_WRITE_TOKEN
     // Reassigning to a different merchant (the "move" action) goes through the
     // same case-insensitive snap as a fresh upload — moving into "wen cheng"
