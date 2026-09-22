@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
+import { TEXT_PLACEHOLDERS, IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
+
+// Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
+// zone is dimmed to while it's still showing generic placeholder content
+// instead of something the manager actually entered.
+const PLACEHOLDER_OPACITY = 0.45
 
 // Visual-only bleed margin drawn around the canvas in the editor, matching
 // the Figma master's own look (solid page edge + inset dashed trim line) -
@@ -279,8 +285,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           return sizes
         },
         getPng: () => {
-          // Hide all guide rects + centre guide - save state to restore after export
-          const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide)
+          // Hide all guide rects + centre guide, and any zone still showing
+          // placeholder content (Notion card "Pre-filled Template
+          // Placeholders", 2026-09-22 - placeholder text/images are a
+          // display-only stand-in and must never end up baked into an
+          // actual exported/saved/sent flyer) - save state to restore after export
+          const guideObjs = Object.values(zoneObjsRef.current).filter(o => o._wcGuide || o._wcPlaceholder)
           const prevVis = guideObjs.map(o => o.visible !== false)
           guideObjs.forEach(o => o.set('visible', false))
           const cg = zoneObjsRef.current['_centre-guide']
@@ -531,8 +541,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             const cx = zone.x + zone.width / 2
             const cy = zone.y + zone.height / 2
             const textW = zone.textWidth ?? zone.width
+            const placeholderText = placeholderTextFor(zone)
+            const isPlaceholder = !fields[zone.id] && placeholderText != null
 
-            const tb = new fabric.Textbox(fields[zone.id] || '', {
+            const tb = new fabric.Textbox(isPlaceholder ? placeholderText : (fields[zone.id] || ''), {
               left:    isRotated ? cx : zone.x,
               top:     isRotated ? cy : zone.y,
               originX: isRotated ? 'center' : 'left',
@@ -562,6 +574,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
                 ? (zone.align ?? 'left')
                 : (alignmentsRef.current?.[zone.id] ?? zone.align ?? 'left'),
               angle:   zone.rotate || 0,
+              opacity: isPlaceholder ? PLACEHOLDER_OPACITY : 1,
               editable:       !locked,
               selectable:     !locked,
               hasControls:    !locked,
@@ -572,9 +585,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               cornerSize:     10,
               splitByGrapheme: false,
               _wcZoneId: zone.id,
+              _wcPlaceholder: isPlaceholder,
             })
             // Show only the right-edge handle - dragging it reflows text width (Fabric.js Textbox built-in)
             if (!locked) tb.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mtr: false })
+
+            // Designer mode allows typing straight on the canvas (guided mode
+            // edits via FieldEditor's side panel instead, which has its own
+            // select-all-on-focus) - select the placeholder text the instant
+            // editing starts so the first keystroke replaces it, matching the
+            // side panel's behavior instead of inserting mid-placeholder.
+            if (!locked) {
+              tb.on('editing:entered', () => {
+                if (!prevFieldsRef.current[zone.id] && TEXT_PLACEHOLDERS[zone.id] != null) tb.selectAll()
+              })
+            }
 
             tb.on('changed', () => {
               if (syncing.current) return
@@ -757,15 +782,24 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (!obj || obj.type !== 'textbox') return
       if (syncing.current) return
       syncing.current = true
-      if (obj.text !== (value || '')) {
-        obj.set('text', value || '')
+      const zone = zoneCfgRef.current[id]
+      const placeholderText = placeholderTextFor(zone)
+      const isPlaceholder = !value && placeholderText != null
+      const displayText = isPlaceholder ? placeholderText : (value || '')
+      if (obj.text !== displayText) {
+        obj.set('text', displayText)
         changed = true
       }
+      const targetOpacity = isPlaceholder ? PLACEHOLDER_OPACITY : 1
+      if (obj.opacity !== targetOpacity) {
+        obj.set('opacity', targetOpacity)
+        changed = true
+      }
+      obj._wcPlaceholder = isPlaceholder
       // Auto-shrink in guided mode - only when THIS field's text actually changed.
       // Uploading a photo changes fields.photoUrl, not the text content, so we must
       // not re-shrink text zones the user may have manually sized up.
       const textChanged = prevFieldsRef.current[id] !== value
-      const zone = zoneCfgRef.current[id]
       if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
         const startSize = fontSizesRef.current?.[zone.id] ?? zone.fontSize
         let size = startSize
@@ -989,11 +1023,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     config.zones.filter(z => z.type === 'image').forEach(zone => {
       const urlField = `${zone.id}Url`
       const url = fields[urlField]
+      // Pre-filled Template Placeholders (Notion card, 2026-09-22): an empty
+      // image zone shows a greyed generic placeholder graphic instead of a
+      // blank drop target. effectiveUrl is what actually gets loaded/tracked;
+      // `url` itself (and therefore fields state) stays untouched until the
+      // manager uploads or picks a real image.
+      const placeholderUrl = IMAGE_PLACEHOLDERS[zone.id]
+      const isPlaceholder = !url && !!placeholderUrl
+      const effectiveUrl = url || placeholderUrl
 
       const existing = zoneObjsRef.current[`${zone.id}-image`]
 
       // URL unchanged - image already on canvas, don't touch it (preserves user resize/move)
-      if (existing && existing._wcUrl === url) return
+      if (existing && existing._wcUrl === effectiveUrl) return
 
       if (existing) {
         canvas.remove(existing)
@@ -1002,13 +1044,24 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
       const ph = zoneObjsRef.current[`${zone.id}-placeholder`]
 
-      if (!url) {
+      if (!effectiveUrl) {
         if (ph) { ph.set('visible', true); canvas.renderAll() }
         return
       }
 
-      fabric.Image.fromURL(url, img => {
-        if (!fabricRef.current) return
+      fabric.Image.fromURL(effectiveUrl, img => {
+        // Must compare against the SPECIFIC canvas instance this effect run
+        // captured, not just "some canvas exists" - fabricRef.current can
+        // already point at a newer replacement canvas (React StrictMode's
+        // dev-only double-invoke recreates it on every mount) by the time an
+        // async image load resolves. `!fabricRef.current` alone doesn't
+        // catch that case and lets this stale callback mutate/add to an
+        // already-disposed `canvas`, which crashes fabric internally
+        // ("Cannot read properties of null (reading 'clearRect')"). Exposed
+        // by placeholders (2026-09-22): every empty image zone now always
+        // has *some* URL to load, where before an unset zone skipped this
+        // fromURL call entirely, so the pre-existing race almost never fired.
+        if (fabricRef.current !== canvas) return
         // Photos use cover (fill zone, crop center); logos use contain (full logo visible)
         const isCover = zone.fit === 'cover'
         // Always-on overscan so the Position nudge has real crop room in BOTH
@@ -1047,13 +1100,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }
         const scaledW = img.width  * scale
         const scaledH = img.height * scale
-        const imgLocked = !fabricRef.current || mode === 'non-designer'
+        // Placeholder images are display-only - not draggable/resizable like
+        // a real upload, since there's nothing underneath to reposition.
+        const imgLocked = !fabricRef.current || mode === 'non-designer' || isPlaceholder
         const offset0 = clampOffset(zone, scaledW, scaledH, imagePositionsRef.current?.[zone.id])
         img.set({
           left:    zone.x + (zone.width  - scaledW) / 2 + offset0.x,
           top:     zone.y + (zone.height - scaledH) / 2 + offset0.y,
           scaleX:  scale,
           scaleY:  scale,
+          opacity: isPlaceholder ? PLACEHOLDER_OPACITY : 1,
           selectable:   !imgLocked,
           evented:      !imgLocked,
           hasControls:  !imgLocked,
@@ -1080,7 +1136,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         if (!imgLocked) img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
         img._wcZoneId = zone.id
         img._wcBaseScale = scale
-        img._wcUrl = url
+        img._wcUrl = effectiveUrl
+        img._wcPlaceholder = isPlaceholder
 
         // Apply saved user scale immediately after load (the imageScales effect
         // runs before image load completes, so it can't do this itself).

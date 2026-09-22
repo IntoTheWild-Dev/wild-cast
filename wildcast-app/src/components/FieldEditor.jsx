@@ -14,6 +14,7 @@ import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZo
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
+import { IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
 
 const ALL_MERCHANTS = '__all__'
 
@@ -177,10 +178,19 @@ function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, placeholder, suggestFrom, onFocusField, vertical, partnerName }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, suggestFrom, onFocusField, vertical, partnerName, placeholderValue }) {
   const limit = CHAR_LIMITS[fieldKey]
-  const over = limit && value.length > limit
-  const fieldPlaceholder = placeholder ?? `Enter ${label.toLowerCase()}…`
+  // Pre-filled placeholder content (Notion card "Pre-filled Template
+  // Placeholders", 2026-09-22): every text field shows generic greyed-out
+  // example content instead of an empty box until the manager actually
+  // types something. isPlaceholder is true only while the real value is
+  // still empty - the moment they type, value takes over for good.
+  // placeholderValue is resolved by the caller (already correctly cased for
+  // this zone's font - see placeholderTextFor in data/placeholders.js).
+  const hasPlaceholder = placeholderValue != null
+  const isPlaceholder = hasPlaceholder && !value
+  const displayValue = isPlaceholder ? placeholderValue : value
+  const over = limit && !isPlaceholder && value.length > limit
   // Gentle "Did you mean X?" hint, not a blocking popup - Julia's ask,
   // 2026-09-15: catch a small typo (e.g. "Wen Chen" missing the "g") right
   // where it's typed, without interrupting typing the way a popup would.
@@ -202,7 +212,16 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{label}</span>
             {required && <RequiredBadge />}
             {optional && <OptionalBadge />}
-            {limit && (
+            {hasPlaceholder && !isPlaceholder && (
+              <button
+                onClick={() => onChange('')}
+                title="Reset to placeholder"
+                style={{ fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
+              >↺</button>
+            )}
+            {limit && !isPlaceholder && (
               <span style={{ marginLeft: 'auto', fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
                 {value.length}/{limit}
               </span>
@@ -244,27 +263,25 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           keyed on that prop for the actual highlight. */}
       {multiline ? (
         <textarea
-          value={value}
+          value={displayValue}
           onChange={e => onChange(e.target.value)}
-          onFocus={() => onFocusField?.(fieldKey)}
+          onFocus={e => { onFocusField?.(fieldKey); if (isPlaceholder) e.target.select() }}
           onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
           rows={3}
-          placeholder={fieldPlaceholder}
-          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: isPlaceholder ? 'var(--light)' : 'var(--dark)', fontStyle: isPlaceholder ? 'italic' : 'normal', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text', overflowWrap: 'break-word', wordBreak: 'break-word' }}
         />
       ) : (
         <input
           type="text"
-          value={value}
+          value={displayValue}
           onChange={e => onChange(e.target.value)}
-          onFocus={() => onFocusField?.(fieldKey)}
+          onFocus={e => { onFocusField?.(fieldKey); if (isPlaceholder) e.target.select() }}
           onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
-          placeholder={fieldPlaceholder}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
+          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: isPlaceholder ? 'var(--light)' : 'var(--dark)', fontStyle: isPlaceholder ? 'italic' : 'normal', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
         />
       )}
       {suggestion && (
@@ -317,6 +334,14 @@ const ICC_PROFILE = { label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013
 const CANVAS_PPI = 316 / (105 / 25.4)
 
 function ImageUpload({ step, label, required, optional, value, onChange, square, onResetPosition, scalePercent, onScaleChange, onNudge, minWidth, minHeight, requireTransparent, folder, merchant, autoCropContent, restricted, zoneId, onFocusField }) {
+  // Pre-filled placeholder (Notion card "Pre-filled Template Placeholders",
+  // 2026-09-22): an empty image zone shows a greyed generic placeholder
+  // graphic instead of a blank drop target, until the manager uploads or
+  // picks a real image. Purely a display fallback - `value`/fields state
+  // stays null until they actually add something.
+  const placeholderUrl = IMAGE_PLACEHOLDERS[zoneId]
+  const isPlaceholder = !value && !!placeholderUrl
+  const displaySrc = value || placeholderUrl
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -420,6 +445,15 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{label}</span>
             {required && <RequiredBadge />}
             {optional && <OptionalBadge />}
+            {value && placeholderUrl && (
+              <button
+                onClick={e => { e.stopPropagation(); onChange(null) }}
+                title="Reset to placeholder"
+                style={{ marginLeft: 4, fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
+              >✕</button>
+            )}
             {value && onResetPosition && (
               <button
                 onClick={e => { e.stopPropagation(); onResetPosition() }}
@@ -445,8 +479,8 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
           disabled={restricted}
           style={{ flex: 1, minWidth: 0, border: `1.5px dashed ${value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: '10px 8px', cursor: restricted ? 'default' : 'pointer', background: value ? 'var(--primary-glow)' : '#FAFAF8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit', textAlign: 'center' }}
         >
-          {value ? (
-            <img src={value} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: square ? 4 : 6, flexShrink: 0 }} />
+          {displaySrc ? (
+            <img src={displaySrc} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: square ? 4 : 6, flexShrink: 0, opacity: isPlaceholder ? 0.6 : 1 }} />
           ) : (
             <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -606,7 +640,8 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent }) {
+export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole }) {
+  const canExport = workflowRole === 'Manager'
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -622,6 +657,16 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
     if (alignments?.[zoneId] != null) return alignments[zoneId]
     const zone = templateConfig?.zones?.find(z => z.id === zoneId)
     return zone?.align ?? fallback
+  }
+
+  // Falls back to a synthetic {id: zoneId} zone (no fontFamily) when this
+  // template doesn't define the zone (e.g. headline on a template without
+  // one) - placeholderTextFor's own fallback then defaults to the omnes-cond
+  // capitalization rule, same as TemplateCanvas.jsx's zone.fontFamily ||
+  // 'omnes-cond' default.
+  function effectivePlaceholder(zoneId) {
+    const zone = templateConfig?.zones?.find(z => z.id === zoneId) ?? { id: zoneId }
+    return placeholderTextFor(zone)
   }
 
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
@@ -663,12 +708,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'headline':
         return (
           <StepFieldRow
-            step={step} label="Headline" fieldKey="headline"
+            step={step} label="Headline" fieldKey="headline" placeholderValue={effectivePlaceholder('headline')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
             value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-            placeholder={template?.id === 'opt-b-flyer2-simple' ? "z.B. MCDONALD'S?" : undefined}
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
@@ -685,7 +729,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'sub_headline':
         return (
           <StepFieldRow
-            step={step} label="Sub-headline" fieldKey="sub_headline"
+            step={step} label="Sub-headline" fieldKey="sub_headline" placeholderValue={effectivePlaceholder('sub_headline')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -702,7 +746,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'restaurant_name':
         return (
           <StepFieldRow
-            step={step} label="Restaurant name" fieldKey="restaurant_name"
+            step={step} label="Restaurant name" fieldKey="restaurant_name" placeholderValue={effectivePlaceholder('restaurant_name')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -718,12 +762,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'offer':
         return (
           <StepFieldRow
-            step={step} label="Offer" fieldKey="offer"
+            step={step} label="Offer" fieldKey="offer" placeholderValue={effectivePlaceholder('offer')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
             value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-            placeholder="z.B. 30% Rabatt"
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
@@ -741,7 +784,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'tc':
         return (
           <StepFieldRow
-            step={step} label="T&amp;Cs" fieldKey="tc"
+            step={step} label="T&amp;Cs" fieldKey="tc" placeholderValue={effectivePlaceholder('tc')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -761,12 +804,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'cta':
         return (
           <StepFieldRow
-            step={step} label="App download line" fieldKey="cta"
+            step={step} label="App download line" fieldKey="cta" placeholderValue={effectivePlaceholder('cta')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
-            placeholder="z.B. Lieblingsessen bei McDonald's bestellen."
             credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
@@ -843,8 +885,8 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                 key={key}
                 label={zone ? imageZoneLabel(zone) : TEXT_FIELD_LABELS[key]}
                 ready={isFieldReady(key)}
-                preview={zone ? null : fields[key]}
-                thumb={zone ? fields[`${zone.id}Url`] : null}
+                preview={zone ? null : (fields[key] || effectivePlaceholder(key))}
+                thumb={zone ? (fields[`${zone.id}Url`] || IMAGE_PLACEHOLDERS[zone.id]) : null}
                 onClick={() => setExpandedKey(key)}
               />
             )
@@ -979,7 +1021,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
             </button>
 
-            {reviewSent ? (
+            {reviewSent && canExport ? (
               <button
                 onClick={onExport}
                 disabled={exporting}
@@ -991,7 +1033,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               </button>
             ) : (
               <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--light)', padding: '4px 0' }}>
-                🔒 Export PDF - unlocks once you send for review
+                {!canExport ? '🔒 Export PDF - only Managers can export' : '🔒 Export PDF - unlocks once you send for review'}
               </div>
             )}
           </>
