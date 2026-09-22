@@ -33,7 +33,15 @@ async function handleGet(req, res) {
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
   if (req.query.debugEcho) {
-    return res.status(200).json({ received: req.query.url, rawQueryString: req.url })
+    const target = req.query.url
+    let fetchResult = null
+    try {
+      const upstream = await fetch(target, { headers: { Authorization: `Bearer ${token}` } })
+      fetchResult = { ok: upstream.ok, status: upstream.status, finalUrl: upstream.url }
+    } catch (err) {
+      fetchResult = { error: err.message }
+    }
+    return res.status(200).json({ received: target, urlObjectHref: new URL(target).href, fetchResult })
   }
 
   if (req.query.url) {
