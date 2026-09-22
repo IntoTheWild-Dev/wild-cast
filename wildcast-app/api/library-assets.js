@@ -34,14 +34,21 @@ async function handleGet(req, res) {
   // access and a plain <img> can't attach the Authorization header itself).
   if (req.query.debugEcho) {
     const target = req.query.url
-    let fetchResult = null
-    try {
-      const upstream = await fetch(target, { headers: { Authorization: `Bearer ${token}` } })
-      fetchResult = { ok: upstream.ok, status: upstream.status, finalUrl: upstream.url }
-    } catch (err) {
-      fetchResult = { error: err.message }
+    const variants = {
+      asReceived: target,
+      literalPlus: target.replace(/%2B/g, '+'),
+      doubleDecodedPlus: target.replace(/%2B/g, '+').replace(/%28/g, '(').replace(/%29/g, ')'),
     }
-    return res.status(200).json({ received: target, urlObjectHref: new URL(target).href, fetchResult })
+    const results = {}
+    for (const [label, u] of Object.entries(variants)) {
+      try {
+        const upstream = await fetch(u, { headers: { Authorization: `Bearer ${token}` } })
+        results[label] = { url: u, status: upstream.status }
+      } catch (err) {
+        results[label] = { url: u, error: err.message }
+      }
+    }
+    return res.status(200).json(results)
   }
 
   if (req.query.url) {
