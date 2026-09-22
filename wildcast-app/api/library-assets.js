@@ -32,17 +32,6 @@ async function handleGet(req, res) {
   // ?url=<blobUrl> — proxy a single private blob's bytes through to the
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
-  if (req.query.debugEcho) {
-    const { blobs } = await list({ prefix: 'library/logos/General/', token })
-    return res.status(200).json(blobs.map(b => ({
-      pathname: b.pathname,
-      pathnameCodes: [...b.pathname].map(c => c.codePointAt(0)),
-      url: b.url,
-      size: b.size,
-      uploadedAt: b.uploadedAt,
-    })))
-  }
-
   if (req.query.url) {
     try {
       const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
