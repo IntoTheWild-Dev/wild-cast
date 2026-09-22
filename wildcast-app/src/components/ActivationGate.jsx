@@ -222,7 +222,10 @@ export default function ActivationGate({ onActivated }) {
                   needsName only becomes true once the server's confirmed this
                   email has never signed in before, so the name field doesn't
                   show up front for a returning person logging in normally. */}
-              {seats && (
+              {/* Nothing meaningful to show once SEAT_CAP is uncapped for the
+                  pilot (api/_lib/accounts.js) - total/remaining both come
+                  back as Infinity, which isn't a number worth printing. */}
+              {seats && Number.isFinite(seats.total) && (
                 <div style={{
                   marginBottom: 14, padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: 'center',
                   background: seats.remaining <= 0 ? '#FEF2F2' : '#F3F4F6',

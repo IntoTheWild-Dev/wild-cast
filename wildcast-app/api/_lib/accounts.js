@@ -4,7 +4,14 @@
 import { list, put } from '@vercel/blob'
 
 export const WILD_STACK_DOMAIN = 'wildstack.studio'
-export const SEAT_CAP = 5
+// Uncapped during the pilot (Julia's ask, 2026-09-22: "remove the seat limit,
+// this is just during the pilot") - was a hard 5-seat cap for the Wolt test
+// group (see countPartnerSeats below). Restore a real number here once the
+// pilot ends; every place that reads SEAT_CAP (api/account-auth.js's signup
+// check, api/account-seats.js's display endpoint) already treats it as the
+// single source of truth, so this is the only line that needs to change
+// either way.
+export const SEAT_CAP = Infinity
 
 export function folderPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')

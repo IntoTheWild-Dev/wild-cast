@@ -9,6 +9,10 @@ export default async function handler(req, res) {
 
   try {
     const used = await countPartnerSeats()
+    // SEAT_CAP is Infinity during the pilot (accounts.js) - res.json() has no
+    // representation for that and silently serializes both fields to `null`,
+    // which is exactly what ActivationGate.jsx's Number.isFinite(seats.total)
+    // check expects to hide the seat-count banner entirely. Not a bug.
     return res.status(200).json({ used, total: SEAT_CAP, remaining: Math.max(0, SEAT_CAP - used) })
   } catch (err) {
     console.error('account-seats error:', err)
