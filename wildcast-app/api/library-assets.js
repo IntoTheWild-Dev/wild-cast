@@ -32,6 +32,10 @@ async function handleGet(req, res) {
   // ?url=<blobUrl> — proxy a single private blob's bytes through to the
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
+  if (req.query.debugEcho) {
+    return res.status(200).json({ received: req.query.url, rawQueryString: req.url })
+  }
+
   if (req.query.url) {
     try {
       const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
