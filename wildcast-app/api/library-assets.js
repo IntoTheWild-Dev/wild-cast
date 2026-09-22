@@ -49,22 +49,6 @@ async function handleGet(req, res) {
   // ?url=<blobUrl> — proxy a single private blob's bytes through to the
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
-  if (req.query.debugMigrate) {
-    const { blobs } = await list({ prefix: 'library/', token })
-    const target = blobs.find(b => b.pathname.includes('Flink'))
-    if (!target) return res.status(200).json({ error: 'not found in list' })
-    const attempts = {}
-    // Try copy() with the pathname (literal +, matches list() exactly)
-    // instead of the URL-encoded .url field.
-    try {
-      const r = await copy(target.pathname, 'library/logos/General/__debugtest__Flink.png', { access: 'private', addRandomSuffix: false, allowOverwrite: true, token })
-      attempts.copyWithPathname = { ok: true, url: r.url }
-    } catch (err) {
-      attempts.copyWithPathname = { ok: false, error: err.message }
-    }
-    return res.status(200).json({ targetPathname: target.pathname, targetUrl: target.url, attempts })
-  }
-
   if (req.query.url) {
     try {
       const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
