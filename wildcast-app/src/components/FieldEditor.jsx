@@ -14,7 +14,7 @@ import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZo
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
-import { TEXT_PLACEHOLDERS, IMAGE_PLACEHOLDERS } from '../data/placeholders'
+import { IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
 
 const ALL_MERCHANTS = '__all__'
 
@@ -178,14 +178,15 @@ function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, suggestFrom, onFocusField, vertical, partnerName }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, suggestFrom, onFocusField, vertical, partnerName, placeholderValue }) {
   const limit = CHAR_LIMITS[fieldKey]
   // Pre-filled placeholder content (Notion card "Pre-filled Template
   // Placeholders", 2026-09-22): every text field shows generic greyed-out
   // example content instead of an empty box until the manager actually
   // types something. isPlaceholder is true only while the real value is
   // still empty - the moment they type, value takes over for good.
-  const placeholderValue = TEXT_PLACEHOLDERS[fieldKey]
+  // placeholderValue is resolved by the caller (already correctly cased for
+  // this zone's font - see placeholderTextFor in data/placeholders.js).
   const hasPlaceholder = placeholderValue != null
   const isPlaceholder = hasPlaceholder && !value
   const displayValue = isPlaceholder ? placeholderValue : value
@@ -658,6 +659,16 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
     return zone?.align ?? fallback
   }
 
+  // Falls back to a synthetic {id: zoneId} zone (no fontFamily) when this
+  // template doesn't define the zone (e.g. headline on a template without
+  // one) - placeholderTextFor's own fallback then defaults to the omnes-cond
+  // capitalization rule, same as TemplateCanvas.jsx's zone.fontFamily ||
+  // 'omnes-cond' default.
+  function effectivePlaceholder(zoneId) {
+    const zone = templateConfig?.zones?.find(z => z.id === zoneId) ?? { id: zoneId }
+    return placeholderTextFor(zone)
+  }
+
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
     .filter(k => k === 'headline' || templateConfig?.zones?.some(z => z.id === k))
   const imageZoneKeys = imageZones.map(z => z.id)
@@ -697,7 +708,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'headline':
         return (
           <StepFieldRow
-            step={step} label="Headline" fieldKey="headline"
+            step={step} label="Headline" fieldKey="headline" placeholderValue={effectivePlaceholder('headline')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -718,7 +729,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'sub_headline':
         return (
           <StepFieldRow
-            step={step} label="Sub-headline" fieldKey="sub_headline"
+            step={step} label="Sub-headline" fieldKey="sub_headline" placeholderValue={effectivePlaceholder('sub_headline')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -735,7 +746,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'restaurant_name':
         return (
           <StepFieldRow
-            step={step} label="Restaurant name" fieldKey="restaurant_name"
+            step={step} label="Restaurant name" fieldKey="restaurant_name" placeholderValue={effectivePlaceholder('restaurant_name')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -751,7 +762,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'offer':
         return (
           <StepFieldRow
-            step={step} label="Offer" fieldKey="offer"
+            step={step} label="Offer" fieldKey="offer" placeholderValue={effectivePlaceholder('offer')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -773,7 +784,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'tc':
         return (
           <StepFieldRow
-            step={step} label="T&amp;Cs" fieldKey="tc"
+            step={step} label="T&amp;Cs" fieldKey="tc" placeholderValue={effectivePlaceholder('tc')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -793,7 +804,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       case 'cta':
         return (
           <StepFieldRow
-            step={step} label="App download line" fieldKey="cta"
+            step={step} label="App download line" fieldKey="cta" placeholderValue={effectivePlaceholder('cta')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -874,7 +885,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                 key={key}
                 label={zone ? imageZoneLabel(zone) : TEXT_FIELD_LABELS[key]}
                 ready={isFieldReady(key)}
-                preview={zone ? null : (fields[key] || TEXT_PLACEHOLDERS[key])}
+                preview={zone ? null : (fields[key] || effectivePlaceholder(key))}
                 thumb={zone ? (fields[`${zone.id}Url`] || IMAGE_PLACEHOLDERS[zone.id]) : null}
                 onClick={() => setExpandedKey(key)}
               />

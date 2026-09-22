@@ -6,12 +6,28 @@
 // stand-ins rather than per-template "original design" content. Every value
 // here fits under FieldEditor.jsx's own CHAR_LIMITS for that field.
 export const TEXT_PLACEHOLDERS = {
-  headline:        'Your headline here',
-  sub_headline:    'Place your subline here',
+  headline:        'Headline',
+  sub_headline:    'Subline',
   restaurant_name: 'Restaurant Name',
   offer:           '30% off',
   tc:              'Terms and conditions apply. Valid while stocks last. See in-store or online for full details.',
   cta:             'Order your favourite food on the app',
+}
+
+// headline/sub_headline/offer/restaurant_name are always set in omnes-cond
+// (the WOLTCond display font, see src/index.css's @font-face rules and every
+// zone's fontFamily in templateZones.js) - App.jsx's handleFieldChange
+// already uppercases real typed content for that font (zone?.fontFamily ===
+// 'omnes-cond' ? value.toUpperCase() : value), so placeholder text must
+// follow the same rule or it visibly mismatches real content's casing
+// (Julia's ask, 2026-09-22: "make Wolt cond capital"). tc/cta are omnes-pro
+// body text and stay as-typed. Falls back to 'omnes-cond' with no zone
+// found, matching TemplateCanvas.jsx's own `zone.fontFamily || 'omnes-cond'`.
+const CAPS_FONT_FAMILY = 'omnes-cond'
+export function placeholderTextFor(zone) {
+  const text = TEXT_PLACEHOLDERS[zone?.id]
+  if (text == null) return undefined
+  return (zone?.fontFamily || CAPS_FONT_FAMILY) === CAPS_FONT_FAMILY ? text.toUpperCase() : text
 }
 
 // Neutral labeled box, not a fake photo/logo/QR - matches the "greyed out,

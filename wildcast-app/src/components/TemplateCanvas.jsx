@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
-import { TEXT_PLACEHOLDERS, IMAGE_PLACEHOLDERS } from '../data/placeholders'
+import { TEXT_PLACEHOLDERS, IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
 
 // Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
 // zone is dimmed to while it's still showing generic placeholder content
@@ -541,7 +541,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             const cx = zone.x + zone.width / 2
             const cy = zone.y + zone.height / 2
             const textW = zone.textWidth ?? zone.width
-            const placeholderText = TEXT_PLACEHOLDERS[zone.id]
+            const placeholderText = placeholderTextFor(zone)
             const isPlaceholder = !fields[zone.id] && placeholderText != null
 
             const tb = new fabric.Textbox(isPlaceholder ? placeholderText : (fields[zone.id] || ''), {
@@ -782,7 +782,8 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (!obj || obj.type !== 'textbox') return
       if (syncing.current) return
       syncing.current = true
-      const placeholderText = TEXT_PLACEHOLDERS[id]
+      const zone = zoneCfgRef.current[id]
+      const placeholderText = placeholderTextFor(zone)
       const isPlaceholder = !value && placeholderText != null
       const displayText = isPlaceholder ? placeholderText : (value || '')
       if (obj.text !== displayText) {
@@ -799,7 +800,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       // Uploading a photo changes fields.photoUrl, not the text content, so we must
       // not re-shrink text zones the user may have manually sized up.
       const textChanged = prevFieldsRef.current[id] !== value
-      const zone = zoneCfgRef.current[id]
       if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
         const startSize = fontSizesRef.current?.[zone.id] ?? zone.fontSize
         let size = startSize
