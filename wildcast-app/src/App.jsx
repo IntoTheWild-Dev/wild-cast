@@ -1815,7 +1815,12 @@ export default function App() {
 
       {screen === 'review' && reviewProjectId && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <ReviewPage projectId={reviewProjectId} />
+          {/* Prefills the "Your name" field for a signed-in visitor (Notion
+              card "Partner review link", 2026-09-22) - a review link is
+              reachable without any activation at all (see the gate above),
+              so activation may genuinely be null here; ReviewPage.jsx falls
+              back to its normal blank/manual-entry field in that case. */}
+          <ReviewPage projectId={reviewProjectId} reviewerName={activation?.clientName} />
         </div>
       )}
 
