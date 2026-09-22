@@ -135,30 +135,21 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
   return (
     <>
     <header style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100 }}>
-      {/* Own slim row above the main one, for now (Julia's report, 2026-09-22:
-          the dropdown was still crowding the centered nav and covering Help
-          at normal widths) - moves it off the row entirely instead of
-          fighting for space in it. */}
-      {onWorkflowRoleChange && (
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '6px 32px 0', display: 'flex', justifyContent: 'flex-end' }}>
-          <Select
-            value={workflowRole}
-            onChange={e => onWorkflowRoleChange(e.target.value)}
-            title="Testing toggle - which role you're viewing as. Only Managers can export."
-            style={{
-              width: 108, fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 8,
-              border: '1px solid var(--border)', background: '#F3F4F6', color: 'var(--dark)',
-            }}
-          >
-            {WORKFLOW_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
-          </Select>
-        </div>
-      )}
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-        <div onClick={onLogoClick} style={{ cursor: 'pointer' }}>
+      {/* Real flex layout, not the old position:absolute-centered nav
+          (Julia's report, 2026-09-22: header still overlapping/cramped even
+          after moving the role dropdown to its own row). Absolute centering
+          ignored how much room the left/right groups actually needed, so it
+          could overlap either one depending on viewport width - no amount of
+          nudging one element fixes that at every width. Nav is now a normal
+          flex child that takes the actual remaining space between logo and
+          the right-side group, and wraps onto a second line instead of
+          overlapping anything if that space ever gets tight - dynamic at any
+          window width, not just the ones actually tested. */}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '10px 32px', minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8, columnGap: 16 }}>
+        <div onClick={onLogoClick} style={{ cursor: 'pointer', flexShrink: 0 }}>
           <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
-        <nav style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 4 }}>
+        <nav style={{ display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 4, flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }}>
           {navItem(
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <HugeiconsIcon icon={PlusSignIcon} size={14} />
@@ -182,7 +173,20 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
           >Help</span>
         </nav>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {onWorkflowRoleChange && (
+            <Select
+              value={workflowRole}
+              onChange={e => onWorkflowRoleChange(e.target.value)}
+              title="Testing toggle - which role you're viewing as. Only Managers can export."
+              style={{
+                width: 108, fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: '#F3F4F6', color: 'var(--dark)',
+              }}
+            >
+              {WORKFLOW_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
+            </Select>
+          )}
           {activation?.clientName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12 }}>
               <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
