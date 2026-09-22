@@ -7,15 +7,29 @@ function formatDateTime(ts) {
   })
 }
 
-export default function ReviewPage({ projectId }) {
+export default function ReviewPage({ projectId, reviewerName }) {
   const [project, setProject]       = useState(null)
   const [comments, setComments]     = useState([])
-  const [name, setName]             = useState('')
+  // Prefilled for a signed-in visitor (Notion card "Partner review link",
+  // 2026-09-22: "Account holders get their name prefilled") - still a plain
+  // editable field either way, the user can always type over it.
+  const [name, setName]             = useState(reviewerName || '')
   const [text, setText]             = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
   const [copied, setCopied]         = useState(false)
+
+  // App.jsx's own activation state resolves asynchronously (a re-validation
+  // fetch, not something available on the very first paint - see its own
+  // useState initializer), so reviewerName is reliably still empty at the
+  // moment this component first mounts and the useState above runs. This
+  // fills the field in once it actually arrives, but only while the visitor
+  // hasn't started typing their own name yet (prev || reviewerName) - it
+  // must never clobber a name someone's already entered.
+  useEffect(() => {
+    if (reviewerName) setName(prev => prev || reviewerName)
+  }, [reviewerName])
 
   useEffect(() => {
     Promise.all([
