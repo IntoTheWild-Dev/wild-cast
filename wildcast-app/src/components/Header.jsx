@@ -159,6 +159,13 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           )}
           {navItem('Templates', 'catalogue')}
           {navItem('Design library', 'designs')}
+          {/* "My Tasks" (Notion card "Review queue in the user profile",
+              2026-09-22) - grouped with the other "browse your stuff" pages
+              rather than next to New Brief, which is a standalone action
+              button, not a content page. The header's already flex-wrap
+              (see the comment on the row above), so one more item here
+              just wraps instead of crowding anything. */}
+          {navItem('My Tasks', 'tasks')}
           {navItem('Assets', 'library')}
           {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
               role:'designer' (client-facing test keys) sees it greyed out with
