@@ -42,9 +42,9 @@ async function handleList(req, res) {
             ownerName: project.ownerName ?? null,
             folder: project.folder ?? null,
             // "My Tasks" status (Notion card "Review queue in the user
-            // profile", 2026-09-22) - 'design' | 'review' | 'approved'.
-            // Absent on any project saved before this shipped, same
-            // fallback convention as folder/owner above.
+            // profile", 2026-09-22) - 'design' | 'review' | 'changes_requested'
+            // | 'approved'. Absent on any project saved before this shipped,
+            // same fallback convention as folder/owner above.
             reviewStatus: project.reviewStatus ?? 'design',
           }
         } catch {
@@ -60,12 +60,13 @@ async function handleList(req, res) {
   }
 }
 
-const VALID_REVIEW_STATUSES = ['design', 'review', 'approved']
+const VALID_REVIEW_STATUSES = ['design', 'review', 'changes_requested', 'approved']
 
 // Flips a saved project's persisted review status only - used by
-// ReviewPage.jsx's Approve button (the only writer of 'approved'; the
-// creator's own side only ever sets 'review', via App.jsx's doSave()
-// passing the full project through the POST handler below instead). Folded
+// ReviewPage.jsx's Approve/Request changes buttons (the only writer of
+// 'approved'/'changes_requested'; the creator's own side only ever sets
+// 'review', via App.jsx's doSave() passing the full project through the
+// POST handler below instead). Folded
 // in here rather than its own route - this codebase has already hit and
 // worked around a real per-deployment serverless function count limit once
 // (see comments.js's own note on merging get-comments.js + add-comment.js),

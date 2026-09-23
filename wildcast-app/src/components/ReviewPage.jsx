@@ -20,6 +20,7 @@ export default function ReviewPage({ projectId, reviewerName }) {
   const [error, setError]           = useState(null)
   const [copied, setCopied]         = useState(false)
   const [approving, setApproving]   = useState(false)
+  const [requestingChanges, setRequestingChanges] = useState(false)
 
   // App.jsx's own activation state resolves asynchronously (a re-validation
   // fetch, not something available on the very first paint - see its own
@@ -98,6 +99,32 @@ export default function ReviewPage({ projectId, reviewerName }) {
     }
   }
 
+  // "Request changes" (Mark's ask via Julia, 2026-09-23: a design should
+  // either get approved first-shot or go back to the creator's task list
+  // with the necessary changes, not just sit under "review" indefinitely
+  // with no distinct signal). Gated on an open comment so the request
+  // always carries a written reason - the same "Send comment" box above
+  // this panel is how a reviewer leaves that reason before clicking this.
+  // Same optimistic/rollback pattern as handleApprove.
+  async function handleRequestChanges() {
+    if (requestingChanges || !hasOpenFeedback || project?.reviewStatus === 'changes_requested') return
+    setRequestingChanges(true)
+    setProject(prev => ({ ...prev, reviewStatus: 'changes_requested' }))
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, status: 'changes_requested' }),
+      })
+      if (!res.ok) throw new Error('Failed to request changes')
+    } catch (err) {
+      setProject(prev => ({ ...prev, reviewStatus: 'review' }))
+      alert('Could not request changes: ' + err.message)
+    } finally {
+      setRequestingChanges(false)
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim() || !text.trim() || submitting) return
@@ -117,6 +144,8 @@ export default function ReviewPage({ projectId, reviewerName }) {
       setSubmitting(false)
     }
   }
+
+  const hasOpenFeedback = comments.some(c => !c.resolved)
 
   if (loading) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mid)', fontSize: 14 }}>
@@ -166,19 +195,39 @@ export default function ReviewPage({ projectId, reviewerName }) {
               <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', background: 'rgba(22,163,74,0.1)', padding: '4px 10px', borderRadius: 100, whiteSpace: 'nowrap' }}>
                 ✓ Approved
               </span>
+            ) : project?.reviewStatus === 'changes_requested' ? (
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#B45309', background: 'rgba(180,83,9,0.1)', padding: '4px 10px', borderRadius: 100, whiteSpace: 'nowrap' }}>
+                ↺ Changes requested
+              </span>
             ) : (
-              <button
-                type="button"
-                onClick={handleApprove}
-                disabled={approving}
-                style={{
-                  padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 100, border: 'none',
-                  background: approving ? '#E5E7EB' : '#16a34a', color: approving ? 'var(--mid)' : '#fff',
-                  cursor: approving ? 'default' : 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                {approving ? 'Approving…' : '✓ Approve'}
-              </button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={handleRequestChanges}
+                  disabled={requestingChanges || !hasOpenFeedback}
+                  title={hasOpenFeedback ? 'Sends this back to the creator with your comments above' : 'Leave a comment below first, so the creator knows what to change'}
+                  style={{
+                    padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 100, border: '1px solid #D97706',
+                    background: '#fff', color: (requestingChanges || !hasOpenFeedback) ? 'var(--light)' : '#B45309',
+                    borderColor: (requestingChanges || !hasOpenFeedback) ? 'var(--border)' : '#D97706',
+                    cursor: (requestingChanges || !hasOpenFeedback) ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {requestingChanges ? 'Sending…' : '↺ Request changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApprove}
+                  disabled={approving}
+                  style={{
+                    padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 100, border: 'none',
+                    background: approving ? '#E5E7EB' : '#16a34a', color: approving ? 'var(--mid)' : '#fff',
+                    cursor: approving ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {approving ? 'Approving…' : '✓ Approve'}
+                </button>
+              </div>
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--mid)' }}>

@@ -3,12 +3,18 @@ import { useState, useEffect } from 'react'
 // "Review queue in the user profile" (Notion card, 2026-09-22): "A simple
 // task board under the profile. Each asset shows its state: under design,
 // under review, approved. No more than that." Deliberately no search, no
-// filters beyond the three fixed status columns below - just "my own
-// designs, grouped by where they are."
+// filters beyond the fixed status columns below - just "my own designs,
+// grouped by where they are." A fourth column was added 2026-09-23 (Mark's
+// ask via Julia) once "under review" needed to distinguish "still waiting
+// on a first look" from "reviewer sent it back."
 const STATUS_COLUMNS = [
-  { key: 'design',   label: 'Under design' },
-  { key: 'review',   label: 'Under review' },
-  { key: 'approved', label: 'Approved' },
+  { key: 'design',             label: 'Under design' },
+  { key: 'review',             label: 'Under review' },
+  // "Request changes" (Mark's ask via Julia, 2026-09-23) - its own column so
+  // a design sent back by a reviewer doesn't blend into "Under review",
+  // where it would look identical to one still just waiting on a first look.
+  { key: 'changes_requested',  label: 'Needs changes' },
+  { key: 'approved',           label: 'Approved' },
 ]
 
 function formatDate(ts) {
