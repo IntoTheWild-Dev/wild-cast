@@ -18,6 +18,22 @@ export function templateAssetSrc(url) {
 // zones/background and must never enter the zonesById/cards merge (there's
 // nothing real to render, and Option A/B's actual data is the static
 // templateZones.js/templates.js import, untouched by any of this).
+//
+// normalizeZone (Julia's ask, 2026-09-24): records imported by OLDER
+// versions of the import pipeline can be missing `autoShrink` (so long
+// headlines never auto-resized and spilled past their zone) and can carry
+// `align: 'left'` straight from Figma's text-node settings (so text didn't
+// come out centred). Normalizing HERE - at merge time, on every fetch -
+// fixes every already-saved record retroactively, no re-import needed.
+// Rotated zones (the tc sidebar) keep their configured left align; every
+// other text zone renders centred.
+function normalizeZone(zone) {
+  if (zone?.type !== 'text') return zone
+  const fixed = { ...zone, autoShrink: true }
+  if (!fixed.rotate) fixed.align = 'center'
+  return fixed
+}
+
 export function customZonesEntry(record) {
   if (record.isOverrideOnly) return {}
   const config = {
@@ -25,7 +41,7 @@ export function customZonesEntry(record) {
     canvasH: record.canvasH,
     backgroundUrl: templateAssetSrc(record.backgroundUrl),
     backgroundFill: record.backgroundFill,
-    zones: record.zones,
+    zones: (record.zones ?? []).map(normalizeZone),
   }
   return {
     [record.slotKey]: config,
