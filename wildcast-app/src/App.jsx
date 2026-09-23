@@ -285,27 +285,33 @@ export default function App() {
   // eslint-disable-next-line no-unused-vars
   const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
-  // Guided/Advanced toggle (Julia's editor redesign, 2026-09-18, per
-  // Annika's mockup): replaces the old fixed-per-template guided-vs-designer
-  // split with a live in-session toggle. Guided hides font-size/position
-  // controls and locks the canvas (nudge-only); Advanced shows full manual
-  // controls and unlocks free dragging - exactly today's non-designer vs
-  // designer behavior, just now user-switchable instead of fixed by which
-  // template id was picked. Safe to do this way because a template's
-  // "-simple" (guided) and non-suffixed (designer) ids always point at the
-  // IDENTICAL zone layout (see templateZones.js's own comments on this) -
-  // toggling only ever changes controls visibility/lock state, never which
-  // zones exist or where they sit. Resets to the template's own starting
-  // mode every time a different template loads.
+// Guided/Advanced toggle (Julia's editor redesign, 2026-09-18, per Annika's
+// mockup): replaces the old fixed-per-template guided-vs-designer split with
+// a live in-session toggle. Guided hides font-size/position controls and
+// locks the canvas (nudge-only); Advanced shows full manual controls and
+// unlocks free dragging - exactly today's non-designer vs designer behavior,
+// just now user-switchable instead of fixed by which template id was picked.
+// Safe to do this way because a template's "-simple" (guided) and
+// non-suffixed (designer) ids always point at the IDENTICAL zone layout (see
+// templateZones.js's own comments on this) - toggling only ever changes
+// controls visibility/lock state, never which zones exist or where they sit.
+// Resets to the template's own starting mode every time a different template
+// loads.
+//
+// HIDDEN (Julia's ask, 2026-09-24): the toggle is removed from the UI for
+// now - everyone stays in Guided. Everything below still works; flip this
+// one flag to true to bring the toggle back.
+const SHOW_MODE_TOGGLE = false
   const [advancedModeTemplateId, setAdvancedModeTemplateId] = useState(selectedTemplate?.id)
-  const [advancedMode, setAdvancedMode] = useState(selectedTemplate?.mode === 'designer')
+  // Toggle hidden → always Guided, even for a designer-mode template id.
+  const [advancedMode, setAdvancedMode] = useState(SHOW_MODE_TOGGLE && selectedTemplate?.mode === 'designer')
   // Adjusts state during render (not an effect) when the selected template
   // changes - same pattern FieldEditor.jsx's useOrderedKeys uses for the
   // same reason: resets in the same render instead of flashing the stale
   // mode for one frame first.
   if (advancedModeTemplateId !== selectedTemplate?.id) {
     setAdvancedModeTemplateId(selectedTemplate?.id)
-    setAdvancedMode(selectedTemplate?.mode === 'designer')
+    setAdvancedMode(SHOW_MODE_TOGGLE && selectedTemplate?.mode === 'designer')
   }
   // Which zone's field is currently focused/hovered in the side panel - lights
   // up that zone's boundary on the canvas (Annika's ask via Julia, 2026-09-18).
@@ -2061,8 +2067,10 @@ export default function App() {
 
             {/* Guided/Advanced toggle (Julia's editor redesign, 2026-09-18,
                 per Annika's mockup) - not shown in restricted review, which
-                has no "Advanced" concept (see effectiveMode above). */}
-            {!restrictedReview && (
+                has no "Advanced" concept (see effectiveMode above).
+                HIDDEN 2026-09-24 (SHOW_MODE_TOGGLE = false above) - flip the
+                flag to bring this whole block back. */}
+            {!restrictedReview && SHOW_MODE_TOGGLE && (
               <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                 <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
                   {[['non-designer', 'Guided'], ['designer', 'Advanced']].map(([m, label]) => (
