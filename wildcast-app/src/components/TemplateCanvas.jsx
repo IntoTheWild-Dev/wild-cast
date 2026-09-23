@@ -734,6 +734,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           if (!p) return
           const obj = zoneObjsRef.current[zone.id]
           if (!obj) return
+          // Placeholder guide text is always static - it sits at the zone's
+          // designed position/size no matter what drags a saved project
+          // carries (Julia's ask, 2026-09-24: guide text must stay centred
+          // on the page; a stray old Designer drag must not shove it
+          // off-canvas). Saved positions only ever apply to real content.
+          if (obj._wcPlaceholder) return
           obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
           obj.setCoords()
         })
@@ -828,6 +834,25 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         changed = true
       }
       obj._wcPlaceholder = isPlaceholder
+      // Placeholder guide text is always STATIC - snap it back to the zone's
+      // designed position/size on every sync (Julia's ask, 2026-09-24: guide
+      // text must sit exactly where the designer put it, centred on the
+      // page, never shifted by a saved drag or a stray override). Real typed
+      // content keeps whatever position it legitimately has.
+      if (isPlaceholder && zone) {
+        const isRotated = !!zone.rotate
+        const cx = zone.x + zone.width / 2
+        const cy = zone.y + zone.height / 2
+        const staticGeo = isRotated
+          ? { left: cx, top: cy }
+          : { left: zone.x, top: zone.y, width: zone.textWidth ?? zone.width }
+        if (obj.left !== staticGeo.left || obj.top !== staticGeo.top ||
+            (staticGeo.width != null && obj.width !== staticGeo.width)) {
+          obj.set(staticGeo)
+          obj.setCoords()
+          changed = true
+        }
+      }
       // Auto-resize when text changes - find the LARGEST fontSize that fits
       // the zone, growing short text to fill the bounding box and shrinking
       // long text that overflows. Runs for every autoShrink zone regardless
