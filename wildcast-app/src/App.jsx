@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import Header from './components/Header'
+import Header, { WORKFLOW_ROLES } from './components/Header'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
@@ -375,6 +375,16 @@ export default function App() {
   // or the matching buttons on ReviewPage.jsx (via api/save-project.js's
   // PATCH handler) - never by anything else on the creator's side.
   const [reviewStatus, setReviewStatus]       = useState('design')
+  // Sticky "was this ever sent back for changes" flag for My Tasks'
+  // second-round color-coding (see MyTasksPage.jsx). Bug fix, 2026-09-24:
+  // this used to live only on the server (api/save-project.js), never
+  // mirrored into component state - doSave()'s save payload is built from
+  // component state fields, so it had no way to carry this along, and every
+  // ordinary save (autosave, manual Save, a resubmit) silently overwrote the
+  // stored value back to missing/false. Now tracked here exactly like
+  // reviewStatus itself: read from the loaded project, included in every
+  // save, updated locally the moment Request changes succeeds.
+  const [everRequestedChanges, setEverRequestedChanges] = useState(false)
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
@@ -421,7 +431,17 @@ export default function App() {
   // separate keys - names and what each role can/can't do are explicitly
   // expected to change. For now the only rule it drives: only Manager can
   // Export PDF (see handleExport below and FieldEditor's footer).
-  const [workflowRole, setWorkflowRoleState] = useState(() => localStorage.getItem('wildcast_workflow_role') || 'Manager')
+  // Validated against the current WORKFLOW_ROLES list (2026-09-24 fix) -
+  // 'Reviewer' used to be a real, selectable, persisted option here until
+  // it was removed from Header.jsx. Without this check, any browser that
+  // had it stored kept that dead value forever: the <select> silently
+  // showed no matching option and every workflowRole === 'Manager' gate
+  // (Export PDF, the in-editor Approve/Request-changes panel) evaluated
+  // false with nothing telling the user why they'd lost Manager access.
+  const [workflowRole, setWorkflowRoleState] = useState(() => {
+    const stored = localStorage.getItem('wildcast_workflow_role')
+    return WORKFLOW_ROLES.includes(stored) ? stored : 'Manager'
+  })
   function setWorkflowRole(role) {
     setWorkflowRoleState(role)
     localStorage.setItem('wildcast_workflow_role', role)
@@ -785,8 +805,10 @@ export default function App() {
   async function handleRequestChangesInEditor() {
     const hasOpenFeedback = comments.some(c => !c.resolved)
     if (editorRequestingChanges || !currentProjectId || !hasOpenFeedback || reviewStatus === 'changes_requested') return
+    const wasEverRequestedChanges = everRequestedChanges
     setEditorRequestingChanges(true)
     setReviewStatus('changes_requested')
+    setEverRequestedChanges(true)
     try {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
@@ -797,6 +819,10 @@ export default function App() {
       setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
+      // Rolled back to whatever it was before this attempt, not hardcoded
+      // false - a design already on its second round shouldn't lose that
+      // history just because a later attempt happened to fail.
+      setEverRequestedChanges(wasEverRequestedChanges)
       alert('Could not request changes: ' + err.message)
     } finally {
       setEditorRequestingChanges(false)
@@ -821,6 +847,7 @@ export default function App() {
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
+    setEverRequestedChanges(false)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -890,6 +917,7 @@ export default function App() {
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
+    setEverRequestedChanges(false)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -943,6 +971,7 @@ export default function App() {
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
+    setEverRequestedChanges(false)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -1316,6 +1345,10 @@ export default function App() {
       // 2026-09-22) - see reviewStatus's own declaration above for the full
       // state machine.
       reviewStatus: savedReviewStatus,
+      // Bug fix, 2026-09-24: was missing entirely, so every save (autosave,
+      // manual Save, a resubmit) silently dropped this back to missing/false
+      // on the server - see everRequestedChanges's own declaration above.
+      everRequestedChanges,
     }
 
     const response = await fetch('/api/save-project', {
@@ -1468,6 +1501,13 @@ export default function App() {
     // exporting ("skips exporting... first"), which is now backwards: this
     // IS what unlocks Export PDF, not something instead of it.
     if (!isResubmit && !window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
+    // Bug fix, 2026-09-24: isResubmit alone treated an already-approved
+    // design the same as a plain in-progress resubmit, so clicking this
+    // button again silently reverted an approval back to 'review' with no
+    // warning at all. A normal resubmit (from 'review'/'changes_requested')
+    // stays confirmation-free on purpose - only the "this undoes an
+    // approval" case needs its own explicit heads-up.
+    if (isResubmit && reviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
     setSaving(true)
     try {
       if (isResubmit) {
@@ -1638,6 +1678,7 @@ export default function App() {
     // Absent on any design saved before this shipped, same fallback pattern
     // as folder/owner above.
     setReviewStatus(project.reviewStatus ?? 'design')
+    setEverRequestedChanges(project.everRequestedChanges ?? false)
     // Restore the design's vertical from the saved project (null on projects
     // saved before verticals shipped) so AI Suggest re-scopes to it.
     setDesignVertical(project.vertical ?? null)
