@@ -344,11 +344,6 @@ export default function App() {
   const [projectFolder, setProjectFolder]     = useState(null) // subfolder name string | null
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved' - purely cosmetic, auto-clears after 3s (see handleSave etc.)
-  // "Resolve and resubmit" (Notion card, 2026-09-22): its own status flash,
-  // separate from saveStatus, so this button's "Resolved & resubmitted ✓"
-  // confirmation doesn't get stomped by (or stomp on) the unrelated Save
-  // button's own "✓ Saved" a few clicks away in FieldEditor.
-  const [resolveResubmitStatus, setResolveResubmitStatus] = useState(null) // null | 'sending' | 'done'
   // Separate from saveStatus, which is a 3-second flash badge and NOT a
   // reliable "is there anything to lose" signal - the nav-guard below was
   // using saveStatus for exactly that, so leaving the editor more than 3s
@@ -371,12 +366,14 @@ export default function App() {
     setReviewSent(false)
   }
   // Persisted review status for "My Tasks" (Notion card "Review queue in the
-  // user profile", 2026-09-22) - 'design' | 'review' | 'approved'. Distinct
-  // from reviewSent just above (a session-local Export-PDF gate that resets
-  // every reopen): this is saved on the project record itself (doSave()),
-  // set to 'review' by Send for Review/Resolve and resubmit, and flipped to
-  // 'approved' only by the reviewer's own Approve button on ReviewPage.jsx
-  // (via api/review-status.js) - never by anything on the creator's side.
+  // user profile", 2026-09-22) - 'design' | 'review' | 'changes_requested' |
+  // 'approved'. Distinct from reviewSent just above (a session-local
+  // Export-PDF gate that resets every reopen): this is saved on the project
+  // record itself (doSave()). handleSendForReview sets 'review' on every
+  // send, first or resubmit; 'changes_requested'/'approved' are set by
+  // handleRequestChangesInEditor/handleApproveInEditor here (Manager role)
+  // or the matching buttons on ReviewPage.jsx (via api/save-project.js's
+  // PATCH handler) - never by anything else on the creator's side.
   const [reviewStatus, setReviewStatus]       = useState('design')
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
@@ -801,58 +798,6 @@ export default function App() {
     }
   }
 
-  // "Resolve and resubmit" (Notion card, 2026-09-22): marks every still-open
-  // comment resolved and re-sends the SAME saved design for review, in one
-  // click, instead of checking each comment then separately hitting Send for
-  // Review. No new asset is created - doSave() already keys off
-  // `currentProjectId || crypto.randomUUID()`, so resubmitting an
-  // already-saved project reuses its existing id (and therefore its existing
-  // review link) exactly like every other re-save already does. Doesn't
-  // reopen the "Ready to share" ReviewModal (unlike handleSendForReview) -
-  // the link hasn't changed since it was first sent, so there's nothing new
-  // to show; a quick inline confirmation next to the button is enough for
-  // what's meant to be a fast, no-extra-dialog action.
-  async function handleResolveAndResubmit() {
-    if (!currentProjectId || saving) return
-    setSaving(true)
-    setResolveResubmitStatus('sending')
-    try {
-      const unresolved = comments.filter(c => !c.resolved)
-      if (unresolved.length > 0) {
-        await Promise.all(unresolved.map(c => fetch('/api/comments', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: currentProjectId, commentId: c.id, resolved: true }),
-        })))
-        setComments(prev => prev.map(c => ({ ...c, resolved: true })))
-      }
-      // Same treatment as handleSendForReview - a resubmit is exactly the
-      // "back under review" transition for My Tasks too (this override
-      // didn't exist yet when this function was first built on a separate
-      // branch from reviewStatus itself; closing that gap now that both are
-      // merged together).
-      await doSave({ nextReviewStatus: 'review' })
-      setHasUnsavedChanges(false)
-      setReviewSent(true)
-      setResolveResubmitStatus('done')
-      // Julia's ask (2026-09-23), from Mark's original complaint: staying on
-      // the canvas after this made it look like nothing happened, which is
-      // what led to the re-click in the first place. Show the checkmark
-      // briefly, then leave the editor entirely instead of leaving the user
-      // sitting in front of a design that's already been sent off. Routes to
-      // My Tasks specifically (not plain Designs) - Julia's follow-up ask,
-      // same day: "so everyone gets an overview, designer and manager" -
-      // My Tasks is exactly the status board (Under review / Needs changes
-      // / Approved) both roles need to see right after this action.
-      setTimeout(() => setScreen('tasks'), 900)
-    } catch (err) {
-      console.error('Resolve and resubmit error:', err)
-      alert('Resolve and resubmit failed: ' + err.message)
-      setResolveResubmitStatus(null)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   function handleSelectTemplate(template) {
     historyRef.current = []; setCanUndo(false)
@@ -1318,8 +1263,8 @@ export default function App() {
   }
 
   // Core save - returns the project id. Used by both handleSave and handleSendForReview.
-  // nextReviewStatus: only passed by handleSendForReview and
-  // handleResolveAndResubmit, to bump the persisted status back to 'review' -
+  // nextReviewStatus: only passed by handleSendForReview (both its first-send
+  // and resubmit paths), to bump the persisted status back to 'review' -
   // every other caller (Save, autosave, Save & pick another) omits it and
   // this simply re-saves whatever reviewStatus already is, unchanged.
   async function doSave({ nextReviewStatus } = {}) {
@@ -1500,21 +1445,52 @@ export default function App() {
   // straight to a shareable link instead of exporting/continuing to edit
   // here, and used to be explained only in small gray footer text - easy to
   // click without realizing it's the one-way option.
+  //
+  // Also doubles as the resubmit action (2026-09-23, Julia: "why is Resolve
+  // and resubmit still there? I don't think we need it hey" - this button
+  // already re-sends for review every time it's clicked, a second button
+  // doing the same thing was redundant). Branches only on whether anything's
+  // been sent before (reviewStatus still 'design' means never): first time
+  // keeps the exact same confirm-then-show-the-link behavior; any later
+  // click resolves the open feedback first (what the old Resolve and
+  // resubmit did) and leaves for My Tasks instead of reopening a popup for
+  // a link that hasn't changed - no confirm dialog either, since resending
+  // isn't a new decision the way the very first send is.
   async function handleSendForReview() {
+    const isResubmit = reviewStatus !== 'design'
     // Wording updated for the Export-behind-review gate (Julia's editor
     // redesign, 2026-09-18) - this used to be framed as an alternative to
     // exporting ("skips exporting... first"), which is now backwards: this
     // IS what unlocks Export PDF, not something instead of it.
-    if (!window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
+    if (!isResubmit && !window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
     setSaving(true)
     try {
+      if (isResubmit) {
+        const unresolved = comments.filter(c => !c.resolved)
+        if (unresolved.length > 0) {
+          await Promise.all(unresolved.map(c => fetch('/api/comments', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId: currentProjectId, commentId: c.id, resolved: true }),
+          })))
+          setComments(prev => prev.map(c => ({ ...c, resolved: true })))
+        }
+      }
       const { id } = await doSave({ nextReviewStatus: 'review' })
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
-      setReviewSent(true)
-      setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
-      offerMoreFormats()
+      if (isResubmit) {
+        // Same "don't get stuck on the canvas" fix as the old Resolve and
+        // resubmit had, and the same My Tasks destination (not Designs) -
+        // see its own note on the status board being what both the
+        // designer and the manager need to see right after this.
+        setTimeout(() => setScreen('tasks'), 900)
+      } else {
+        setReviewSent(true)
+        setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
+        offerMoreFormats()
+      }
     } catch (err) {
       console.error('Send for Review error:', err)
       alert('Send for Review failed: ' + err.message)
@@ -1659,12 +1635,6 @@ export default function App() {
     setComments(freshComments)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
-    // Prevents a stale green "✓ Resolved & resubmitted" from a previous
-    // project leaking onto this one's button - it used to self-clear after
-    // 3s, but now stays 'done' until navigated away (see
-    // handleResolveAndResubmit), so a project opened shortly after a
-    // resubmit could otherwise inherit someone else's confirmation state.
-    setResolveResubmitStatus(null)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -1712,14 +1682,6 @@ export default function App() {
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
   // meaningful to unlock on an already-generated candidate).
   const effectiveMode = restrictedReview ? (selectedTemplate?.mode ?? 'designer') : (advancedMode ? 'designer' : 'non-designer')
-  // Mark's ask (PR comment, 2026-09-23): "Resolve and resubmit" stayed
-  // clickable after it had already run - resolveResubmitStatus is transient
-  // component state (resets after 3s, and on any page refresh), not a
-  // reflection of whether there's actually anything left to resubmit. Once
-  // every comment is resolved and there are no new edits, a repeat click
-  // would resolve nothing and resave the exact same design, so that's the
-  // real "already resubmitted" condition - persisted, survives a refresh.
-  const nothingToResubmit = comments.length > 0 && comments.every(c => c.resolved) && !hasUnsavedChanges
   // "X of Y ready" progress bar (Julia's editor redesign, 2026-09-18, per
   // Annika's mockup) - mirrors FieldEditor.jsx's own fieldOrder/isFieldReady
   // logic (same shared lib/fieldOrder.js order) since the bar renders up
@@ -2047,30 +2009,6 @@ export default function App() {
                 )
               )}
 
-              {/* "Resolve and resubmit" (Notion card, 2026-09-22): resolves
-                  every open comment above and re-sends this same design for
-                  review in one click - no new asset, no separate "check each
-                  box then hit Send for Review" round trip. */}
-              <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A' }}>
-                <button
-                  type="button"
-                  onClick={handleResolveAndResubmit}
-                  disabled={saving || nothingToResubmit}
-                  title={nothingToResubmit && resolveResubmitStatus !== 'sending' ? 'Already resubmitted - nothing new to send since last time' : 'Marks every open comment above as resolved and resubmits this design for review'}
-                  style={{
-                    width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: resolveResubmitStatus === 'done' ? '#16a34a' : ((saving || nothingToResubmit) ? '#E5E7EB' : 'var(--dark)'),
-                    color: (saving || nothingToResubmit) && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
-                    cursor: (saving || nothingToResubmit) ? 'default' : 'pointer',
-                  }}
-                >
-                  {resolveResubmitStatus === 'sending' ? 'Resolving & resubmitting…'
-                    : resolveResubmitStatus === 'done' ? '✓ Resolved & resubmitted'
-                    : nothingToResubmit ? 'Already resubmitted'
-                    : 'Resolve and resubmit'}
-                </button>
-              </div>
             </div>
           )}
 
