@@ -1672,6 +1672,17 @@ export default function App() {
       ownerEmail: activation?.key ?? null,
       ownerName: activation?.clientName ?? null,
       folder: null,
+      // A duplicate is also a fresh, never-submitted design, not a
+      // continuation of the original's review history (Julia, 2026-09-24:
+      // "when duplicate and edit is chosen it should be handled as a new
+      // design"). Without this, `...original` above carried over e.g.
+      // reviewStatus:'review', so handleSendForReview saw the copy as
+      // already-sent and treated the very first click as a resubmit - no
+      // confirm dialog, no share-link popup, straight to My Tasks. Comments
+      // don't need a matching reset: they're keyed by this new `id`, which
+      // has no comment thread of its own yet.
+      reviewStatus: 'design',
+      everRequestedChanges: false,
     }
 
     const response = await fetch('/api/save-project', {
