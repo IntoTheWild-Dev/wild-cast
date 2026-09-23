@@ -115,6 +115,36 @@ function overflowsFitWidth(obj, zone) {
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
 }
 
+// Bug fix, 2026-09-24 (Julia: long headlines lost centering after the
+// auto-resize rework): Fabric's Textbox silently widens itself past our
+// fixed `width` whenever a single word doesn't fit at the current font
+// size (`dynamicMinWidth` in fabric's textbox.class.js) - and it never
+// narrows back down once that happens. Every unrotated zone is left-
+// anchored (originX:'left', left: zone.x - see the Textbox construction
+// below), so a box that's silently grown wider stays pinned at the same
+// left edge and its right edge drifts past the zone/canvas edge -
+// textAlign:'center' only centers glyphs *inside* the box, it can't fix
+// the box itself no longer matching the zone rectangle. Short headlines
+// rarely contain a single word wide enough to trigger this; long ones
+// (more words, longer words) hit it often, matching exactly what was
+// reported: short headlines fine, long ones drifted off-center.
+// Applies a font size, pins the box back to the zone's real width every
+// time, and folds "a word didn't fit at this width" into the same
+// overflow signal the resize loops already check - a too-wide word
+// should mean "still doesn't fit, keep shrinking," not "silently expand
+// the box instead."
+function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
+  const textW = zone.textWidth ?? zone.width
+  obj.set('fontSize', fontSize)
+  obj.set('width', textW)
+  obj.initDimensions()
+  if (obj.width > textW) {
+    obj.set('width', textW)
+    obj.initDimensions()
+  }
+  return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
+}
+
 export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
@@ -645,8 +675,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           const fitLimit = zone.rotate ? zone.width : zone.height
           if (savedSize != null) {
             // Saved size is the source of truth - skip auto-resize entirely.
-            tb.set('fontSize', savedSize)
-            tb.initDimensions()
+            // Still routed through the shared helper so a saved size that
+            // happens to contain an unbreakable word doesn't ratchet the
+            // box wider than the zone (see applyFontSizeAndCheckFit).
+            applyFontSizeAndCheckFit(tb, savedSize, zone, fitLimit)
           } else if (tb._wcPlaceholder) {
             // Placeholder text shrink-to-fits ONLY, never grows: several
             // placeholders now carry real-flyer-length copy (e.g. Option A's
@@ -654,34 +686,27 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             // full zone fontSize. Real text typed by the user gets the full
             // grow+shrink auto-resize in the fields-sync effect below.
             let size = zone.fontSize ?? 24
-            tb.set('fontSize', size)
-            tb.initDimensions()
-            while ((tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) && size > 6) {
+            let overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+            while (overflows && size > 6) {
               size -= 0.5
-              tb.set('fontSize', size)
-              tb.initDimensions()
+              overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
             }
           } else {
             // First open with no saved state - find the largest fontSize that fits.
             let size = zone.fontSize ?? 24
-            tb.set('fontSize', size)
-            tb.initDimensions()
             // Shrink to fit first (long text may overflow at zone default)
-            while ((tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) && size > 6) {
+            let overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+            while (overflows && size > 6) {
               size -= 0.5
-              tb.set('fontSize', size)
-              tb.initDimensions()
+              overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
             }
             // Then grow to fill - short text should be as large as the
             // bounding box allows. Keeps growing until the next step would
             // overflow, then steps back to the last fitting size.
             while (size + 0.5 <= 120) {
               const next = size + 0.5
-              tb.set('fontSize', next)
-              tb.initDimensions()
-              if (tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) {
-                tb.set('fontSize', size)
-                tb.initDimensions()
+              if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
+                applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
                 break
               }
               size = next
@@ -835,13 +860,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           // then shrink-to-fit ONLY (placeholders never grow, and several
           // carry real-flyer-length copy that overflows at full size).
           let size = zone?.fontSize ?? 24
-          obj.set('fontSize', size)
-          obj.initDimensions()
           const fitLimit = zone.rotate ? zone.width : zone.height
-          while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
+          let overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+          while (overflows && size > 6) {
             size -= 0.5
-            obj.set('fontSize', size)
-            obj.initDimensions()
+            overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           changed = true
           onAutoShrinkRef.current?.(zone.id, size)
@@ -851,23 +874,18 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           // growing (short text) or shrinking (long text).
           const startSize = zone.fontSize ?? 24
           let size = startSize
-          obj.set('fontSize', size)
-          obj.initDimensions()
           const fitLimit = zone.rotate ? zone.width : zone.height
           // Shrink to fit first
-          while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
+          let overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+          while (overflows && size > 6) {
             size -= 0.5
-            obj.set('fontSize', size)
-            obj.initDimensions()
+            overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           // Then grow to fill the bounding box
           while (size + 0.5 <= 120) {
             const next = size + 0.5
-            obj.set('fontSize', next)
-            obj.initDimensions()
-            if (obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) {
-              obj.set('fontSize', size)
-              obj.initDimensions()
+            if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
+              applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
               break
             }
             size = next
