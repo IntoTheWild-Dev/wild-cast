@@ -1646,6 +1646,14 @@ export default function App() {
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
   // meaningful to unlock on an already-generated candidate).
   const effectiveMode = restrictedReview ? (selectedTemplate?.mode ?? 'designer') : (advancedMode ? 'designer' : 'non-designer')
+  // Mark's ask (PR comment, 2026-09-23): "Resolve and resubmit" stayed
+  // clickable after it had already run - resolveResubmitStatus is transient
+  // component state (resets after 3s, and on any page refresh), not a
+  // reflection of whether there's actually anything left to resubmit. Once
+  // every comment is resolved and there are no new edits, a repeat click
+  // would resolve nothing and resave the exact same design, so that's the
+  // real "already resubmitted" condition - persisted, survives a refresh.
+  const nothingToResubmit = comments.length > 0 && comments.every(c => c.resolved) && !hasUnsavedChanges
   // "X of Y ready" progress bar (Julia's editor redesign, 2026-09-18, per
   // Annika's mockup) - mirrors FieldEditor.jsx's own fieldOrder/isFieldReady
   // logic (same shared lib/fieldOrder.js order) since the bar renders up
@@ -1932,18 +1940,19 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleResolveAndResubmit}
-                  disabled={saving}
-                  title="Marks every open comment above as resolved and resubmits this design for review"
+                  disabled={saving || nothingToResubmit}
+                  title={nothingToResubmit && resolveResubmitStatus !== 'sending' ? 'Already resubmitted - nothing new to send since last time' : 'Marks every open comment above as resolved and resubmits this design for review'}
                   style={{
                     width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: resolveResubmitStatus === 'done' ? '#16a34a' : (saving ? '#E5E7EB' : 'var(--dark)'),
-                    color: saving && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
-                    cursor: saving ? 'default' : 'pointer',
+                    background: resolveResubmitStatus === 'done' ? '#16a34a' : ((saving || nothingToResubmit) ? '#E5E7EB' : 'var(--dark)'),
+                    color: (saving || nothingToResubmit) && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
+                    cursor: (saving || nothingToResubmit) ? 'default' : 'pointer',
                   }}
                 >
                   {resolveResubmitStatus === 'sending' ? 'Resolving & resubmitting…'
                     : resolveResubmitStatus === 'done' ? '✓ Resolved & resubmitted'
+                    : nothingToResubmit ? 'Already resubmitted'
                     : 'Resolve and resubmit'}
                 </button>
               </div>
