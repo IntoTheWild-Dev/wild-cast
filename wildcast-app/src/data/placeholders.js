@@ -4,7 +4,7 @@
 // designed text/images (see api/_lib/figma-import.js - only geometry/font/
 // color survive import), so these are deliberately generic, on-brand-neutral
 // stand-ins rather than per-template "original design" content. Every value
-// here fits under FieldEditor.jsx's own CHAR_LIMITS for that field.
+// here fits under FieldEditor.jsx's CHAR_LIMITS for that field.
 export const TEXT_PLACEHOLDERS = {
   headline:        'Headline',
   sub_headline:    'Subline',
@@ -12,6 +12,46 @@ export const TEXT_PLACEHOLDERS = {
   offer:           '30% off',
   tc:              'Terms and conditions apply. Valid while stocks last. See in-store or online for full details.',
   cta:             'Order your favourite food on the app',
+}
+
+// Per-template placeholder overrides (Julia's exec ask, 2026-09-24): the
+// generic "HEADLINE"/"SUBLINE" stand-ins above read as template jargon -
+// the exec wanted placeholder copy that feels like a real-life flyer, per
+// catalogue option. Keys are template ids minus the trailing "-simple"
+// (both variants of a template share the same placeholder copy). Zones not
+// listed here fall back to the generic TEXT_PLACEHOLDERS above, so e.g.
+// Option B's app-download line and every T&C zone stay exactly as they
+// were. Note: these deliberately mirror the real flyer artwork and can run
+// slightly over FieldEditor's CHAR_LIMITS - placeholders are display-only
+// (never saved/exported, see TemplateCanvas.jsx's getPng), so the limits
+// don't apply to them.
+const TEMPLATE_TEXT_PLACEHOLDERS = {
+  // Option A (Wen Cheng art): headline, subline and offer
+  'wen-cheng-flyer2': {
+    headline:     'Potsdams neues Dreamteam',
+    sub_headline: 'Wen Cheng ♥ Wolt',
+    offer:        '30% sparen',
+  },
+  'wen-cheng-flyer1': {
+    headline:     'Potsdams neues Dreamteam',
+    sub_headline: 'Wen Cheng ♥ Wolt',
+    offer:        '30% sparen',
+  },
+  // Option B (McDonald's art): just the headline - CTA at the bottom stays
+  // as the generic copy
+  'opt-b-flyer2': {
+    headline: 'McDonald’s',
+  },
+  // Option C (ANKO Berlin art): headline only
+  'restaurant-flyer-option-c': {
+    headline: 'Chick this out, Berlin.',
+  },
+}
+
+// '-simple' is purely a mode suffix (guided vs designer canvas lock) - both
+// ids point at the identical zone layout, so they share placeholder copy.
+function templatePlaceholderKey(templateId) {
+  return templateId ? templateId.replace(/-simple$/, '') : null
 }
 
 // headline/sub_headline/offer/restaurant_name are always set in omnes-cond
@@ -24,8 +64,9 @@ export const TEXT_PLACEHOLDERS = {
 // body text and stay as-typed. Falls back to 'omnes-cond' with no zone
 // found, matching TemplateCanvas.jsx's own `zone.fontFamily || 'omnes-cond'`.
 const CAPS_FONT_FAMILY = 'omnes-cond'
-export function placeholderTextFor(zone) {
-  const text = TEXT_PLACEHOLDERS[zone?.id]
+export function placeholderTextFor(zone, templateId) {
+  const overrides = TEMPLATE_TEXT_PLACEHOLDERS[templatePlaceholderKey(templateId)]
+  const text = overrides?.[zone?.id] ?? TEXT_PLACEHOLDERS[zone?.id]
   if (text == null) return undefined
   return (zone?.fontFamily || CAPS_FONT_FAMILY) === CAPS_FONT_FAMILY ? text.toUpperCase() : text
 }
