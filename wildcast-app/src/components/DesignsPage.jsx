@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import Select from './Select'
 import { TEMPLATES } from '../data/templates'
 import { isCloseMatch } from '../lib/fuzzyMatch'
+import { patchCachedProject } from '../lib/projectCache'
 
 const ALL = '__all__'
 
@@ -180,19 +181,13 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
 // is NOT owner-gated - designs are already fully shared/editable by anyone
 // (see ConfirmOpenModal below), so renaming follows that same existing
 // model rather than the newer, deliberately-personal folder-organizing one.
-// Every save writes the full project into sessionStorage (App.jsx's doSave)
-// and re-opening a design reads that copy FIRST. Move/rename only patch the
-// server record, so without patching this copy too, re-opening a design you
-// just moved loaded the OLD folder/owner/name into the editor, and its next
-// autosave wrote them straight back over the move (Julia's report,
-// 2026-09-21: "the buttons work but it doesn't move it").
-function patchCachedProject(id, patch) {
-  try {
-    const key = `wildcast_project_${id}`
-    const cached = sessionStorage.getItem(key)
-    if (cached) sessionStorage.setItem(key, JSON.stringify({ ...JSON.parse(cached), ...patch }))
-  } catch { /* storage unavailable or corrupt - the server copy is still right */ }
-}
+// Move/rename only patch the server record, so patchCachedProject (see
+// lib/projectCache.js) keeps the sessionStorage copy in sync too - without
+// it, re-opening a design you just moved loaded the OLD folder/owner/name
+// into the editor, and its next autosave wrote them straight back over the
+// move (Julia's report, 2026-09-21: "the buttons work but it doesn't move
+// it"). Extracted to a shared module 2026-09-24 once App.jsx needed the
+// identical fix for a different field (reviewStatus).
 
 function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize, people, onMove, showOwner }) {
   const [moving, setMoving] = useState(false)
@@ -574,6 +569,12 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     try {
       await onOpenProject(project)
       setPendingProject(null)
+    } catch (err) {
+      // Bug fix, 2026-09-24: same gap handleDuplicate had right below this
+      // function - no catch meant a failed open just reset the busy
+      // spinner with zero explanation, an unhandled promise rejection
+      // visible only in the console.
+      alert('Could not open this design: ' + err.message)
     } finally {
       setPendingBusy(false)
       setLoadingId(null)

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Header, { WORKFLOW_ROLES } from './components/Header'
+import { patchCachedProject } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
@@ -823,6 +824,15 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
       })
       if (!res.ok) throw new Error('Failed to approve')
+      // Bug fix, 2026-09-24 (found by review): flushUnsavedEditBeforeLeaving
+      // only touches sessionStorage when there's an actual pending edit to
+      // save - a Manager who approves without editing anything (the common
+      // case) left the cached copy holding the pre-approval reviewStatus.
+      // Reopening the same design in this tab afterward (My Tasks, Designs)
+      // read that stale cache and showed it as un-reviewed again, even
+      // though the server was already correct. Same fix DesignsPage.jsx
+      // already uses for folder/owner moves - see lib/projectCache.js.
+      patchCachedProject(currentProjectId, { reviewStatus: 'approved' })
       await flushUnsavedEditBeforeLeaving('approved')
       // Every status change lands on My Tasks (Julia, 2026-09-23: "auto
       // reload to My Tasks on all tiers") - same fix as handleSendForReview's
@@ -848,6 +858,9 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
+      // Bug fix, 2026-09-24 (found by review) - see the matching note in
+      // handleApproveInEditor above.
+      patchCachedProject(currentProjectId, { reviewStatus: 'changes_requested' })
       await flushUnsavedEditBeforeLeaving('changes_requested')
       setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
