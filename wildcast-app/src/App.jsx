@@ -770,6 +770,10 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
       })
       if (!res.ok) throw new Error('Failed to approve')
+      // Every status change lands on My Tasks (Julia, 2026-09-23: "auto
+      // reload to My Tasks on all tiers") - same fix as handleSendForReview's
+      // resubmit path, applied to this decision too, not just resending.
+      setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
       alert('Could not approve: ' + err.message)
@@ -790,6 +794,7 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
+      setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
       alert('Could not request changes: ' + err.message)
@@ -1480,6 +1485,11 @@ export default function App() {
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
+      // Unlocks Export PDF for this session either way - reviewSent resets
+      // on every reopen by design (see its own declaration), so a resubmit
+      // needs to set it too, same as the old Resolve and resubmit did.
+      // Missed on the first pass of merging these two functions together.
+      setReviewSent(true)
       if (isResubmit) {
         // Same "don't get stuck on the canvas" fix as the old Resolve and
         // resubmit had, and the same My Tasks destination (not Designs) -
@@ -1487,7 +1497,6 @@ export default function App() {
         // designer and the manager need to see right after this.
         setTimeout(() => setScreen('tasks'), 900)
       } else {
-        setReviewSent(true)
         setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
         offerMoreFormats()
       }
@@ -1906,19 +1915,35 @@ export default function App() {
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
-          {/* Reviewer feedback - left panel, visible when comments exist */}
-          {comments.length > 0 && (
+          {/* Review panel - left, always present in the normal editor
+              (2026-09-23: used to only mount once comments.length > 0,
+              which is exactly why Approve/Request changes "went missing" -
+              a Manager reviewing a design nobody had commented on yet could
+              never see this panel at all, regardless of role. Now everything
+              about the review lifecycle - comments, replying, approving,
+              sending/resending - lives in this one place, always in the
+              same spot, per Julia's ask: "confusing on the changes canvas"
+              having it split between here and the right panel. Restricted
+              review (brief-generated candidates) keeps its own simpler
+              footer in FieldEditor.jsx untouched - this is the normal
+              editor only. */}
+          {!restrictedReview && (
             <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Feedback · {comments.length}
+                  Review · {comments.length} comment{comments.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {comments.length === 0 && (
+                  <div style={{ color: '#92400E', fontSize: 12, textAlign: 'center', paddingTop: 16, opacity: 0.7 }}>
+                    No comments yet
+                  </div>
+                )}
                 {comments.map(c => (
                   <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : '#FDE68A'}`, opacity: c.resolved ? 0.6 : 1 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
@@ -1961,14 +1986,16 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Approve / Request changes, Manager role only (2026-09-23,
-                  moved below Send reply per Julia's ask: "so when manager
-                  comes in she can either request more changes or just press
-                  approve" - reads top to bottom as comments, then reply,
-                  then the decision. Everyone else (Designer/Reviewer)
-                  doesn't see this; those actions still also exist on the
-                  external review link for partners without an account. */}
-              {workflowRole === 'Manager' && (
+              {/* Approve / Request changes, Manager role only, and only once
+                  something's actually been sent (approving a design that
+                  was never submitted doesn't mean anything). Below Send
+                  reply per Julia's ask: "so when manager comes in she can
+                  either request more changes or just press approve" - reads
+                  top to bottom as comments, then reply, then the decision.
+                  Designer doesn't see this; these actions still also exist
+                  on the external review link for partners without an
+                  account. */}
+              {workflowRole === 'Manager' && reviewStatus !== 'design' && (
                 reviewStatus === 'approved' ? (
                   <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(22,163,74,0.1)', borderTop: '1px solid #FDE68A' }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
@@ -2008,6 +2035,28 @@ export default function App() {
                   </div>
                 )
               )}
+
+              {/* Send review link - moved here from the right panel
+                  (2026-09-23, Julia: "send for review should also be on
+                  the left, it's confusing on the changes canvas") so every
+                  review-lifecycle action lives in one place instead of
+                  split across both sides of the canvas. Same
+                  handleSendForReview either way - first send or a resubmit,
+                  see its own comment for how it tells those apart. */}
+              <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A' }}>
+                <button
+                  type="button"
+                  onClick={handleSendForReview}
+                  disabled={saving}
+                  style={{
+                    width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
+                    background: saving ? '#E5E7EB' : 'var(--dark)', color: saving ? 'var(--mid)' : '#fff',
+                    cursor: saving ? 'default' : 'pointer',
+                  }}
+                >
+                  {saving ? 'Sending…' : 'Send review link'}
+                </button>
+              </div>
 
             </div>
           )}

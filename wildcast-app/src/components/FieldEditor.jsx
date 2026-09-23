@@ -969,7 +969,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
               </svg>
-              Send for Review
+              Send review link
             </button>
             <button
               onClick={onSave}
@@ -987,23 +987,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
           </>
         ) : (
           <>
-            <button
-              onClick={onSendForReview}
-              disabled={saving}
-              style={{
-                width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
-                background: saving ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
-                borderRadius: 10, cursor: saving ? 'default' : 'pointer', transition: 'background 0.15s',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              }}
-              onMouseEnter={e => { if (!saving) e.currentTarget.style.background = 'var(--primary-dark)' }}
-              onMouseLeave={e => { if (!saving) e.currentTarget.style.background = 'var(--primary)' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-              </svg>
-              Send for Review
-            </button>
+            {/* Send for Review moved to the left Review panel in App.jsx
+                (2026-09-23, Julia: "send for review should also be on the
+                left, it's confusing on the changes canvas") - that panel is
+                always present now, so every review-lifecycle action lives
+                in one place instead of split across both sides. */}
 
             {/* Manual Save, back by request on top of autosave (2026-09-21) -
                 autosave still runs in the background (status pill in the
