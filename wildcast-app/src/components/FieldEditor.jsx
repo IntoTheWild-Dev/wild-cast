@@ -189,8 +189,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
   // this zone's font - see placeholderTextFor in data/placeholders.js).
   const hasPlaceholder = placeholderValue != null
   const isPlaceholder = hasPlaceholder && !value
-  const displayValue = isPlaceholder ? placeholderValue : value
-  const over = limit && !isPlaceholder && value.length > limit
+  const over = limit && value && value.length > limit
   // Gentle "Did you mean X?" hint, not a blocking popup - Julia's ask,
   // 2026-09-15: catch a small typo (e.g. "Wen Chen" missing the "g") right
   // where it's typed, without interrupting typing the way a popup would.
@@ -263,25 +262,27 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
           keyed on that prop for the actual highlight. */}
       {multiline ? (
         <textarea
-          value={displayValue}
+          value={value || ''}
+          placeholder={isPlaceholder ? placeholderValue : undefined}
           onChange={e => onChange(e.target.value)}
-          onFocus={e => { onFocusField?.(fieldKey); if (isPlaceholder) e.target.select() }}
+          onFocus={e => { onFocusField?.(fieldKey); e.target.select() }}
           onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
           rows={3}
-          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: isPlaceholder ? 'var(--light)' : 'var(--dark)', fontStyle: isPlaceholder ? 'italic' : 'normal', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', resize: 'vertical', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontStyle: 'normal', fontFamily: 'inherit', lineHeight: 1.5, cursor: readOnly ? 'default' : 'text', overflowWrap: 'break-word', wordBreak: 'break-word' }}
         />
       ) : (
         <input
           type="text"
-          value={displayValue}
+          value={value || ''}
+          placeholder={isPlaceholder ? placeholderValue : undefined}
           onChange={e => onChange(e.target.value)}
-          onFocus={e => { onFocusField?.(fieldKey); if (isPlaceholder) e.target.select() }}
+          onFocus={e => { onFocusField?.(fieldKey); e.target.select() }}
           onBlur={() => onFocusField?.(null)}
           readOnly={readOnly}
           maxLength={limit}
-          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: isPlaceholder ? 'var(--light)' : 'var(--dark)', fontStyle: isPlaceholder ? 'italic' : 'normal', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
+          style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${over ? '#EF4444' : 'var(--border)'}`, borderRadius: 8, outline: 'none', background: readOnly ? '#F3F4F6' : 'var(--surface)', color: 'var(--dark)', fontStyle: 'normal', fontFamily: 'inherit', cursor: readOnly ? 'default' : 'text' }}
         />
       )}
       {suggestion && (

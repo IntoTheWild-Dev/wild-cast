@@ -648,6 +648,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           if (!locked && !zone.alwaysShrink) return
           const tb = zoneObjsRef.current[zone.id]
           if (!tb || !tb.text) return
+          // Placeholder text is a visual stand-in, not real content - skip
+          // auto-shrink so it renders at the zone's original fontSize
+          // (the "original pixels" the designer configured). Real text
+          // typed by the user gets auto-shrunk normally in the fields-sync
+          // effect below. This avoids the placeholder "HEADLINE" being
+          // shrunk to fit a tight zone and then that shrunk size persisting
+          // as the baseline when the user types their own copy.
+          if (tb._wcPlaceholder) return
           const savedSize = fontSizesRef.current?.[zone.id]
           // A rotated zone's pre-rotation height becomes the visual thickness once
           // drawn at -90° - must fit zone.width, not zone.height (axes swap).
@@ -801,7 +809,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       // not re-shrink text zones the user may have manually sized up.
       const textChanged = prevFieldsRef.current[id] !== value
       if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
-        const startSize = fontSizesRef.current?.[zone.id] ?? zone.fontSize
+        // Always start from the zone default fontSize, not the current fontSizes
+        // state - this ensures text renders at the LARGEST size that fits the
+        // zone. Starting from a previously-shrunk size (e.g. from placeholder
+        // text or a longer previous headline) kept the text stuck at that smaller
+        // size even when shorter text would fit at a larger size. The zone
+        // default is the designer's intended "original pixels".
+        const startSize = zone.fontSize ?? 24
         let size = startSize
         obj.set('fontSize', size)
         obj.initDimensions()
