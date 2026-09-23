@@ -438,6 +438,10 @@ function ManageMenu({ record, onAction, onDelete, onRequestArchive }) {
 }
 
 // ── Options view (drilled in) ─────────────────────────────────────────────────
+// SHOW_MODE_CHOOSER (Julia's ask, 2026-09-24): the "Choose your mode" popup is
+// removed - clicking a template card goes straight into the editor in Guided
+// mode. Flip this flag to true to restore the popup.
+const SHOW_MODE_CHOOSER = false
 function OptionsView({ group, customCards, customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
@@ -539,7 +543,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
           </div>
         </div>
 
-        {modal && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
+        {modal && SHOW_MODE_CHOOSER && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
         {archiveConfirm && (
           <ArchiveConfirmModal
             label={archiveConfirm.label}
@@ -561,7 +565,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
             if (t.live) return (
               <div
                 key={i}
-                onClick={() => setModal(t)}
+                onClick={() => (SHOW_MODE_CHOOSER ? setModal(t) : handlePick(t.templateIdGuided ?? t.templateIdDesigner))}
                 style={{ position: 'relative', background: '#fff', borderRadius: 14, border: '1.5px solid var(--border)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}

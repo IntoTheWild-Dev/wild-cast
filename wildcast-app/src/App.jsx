@@ -302,6 +302,12 @@ export default function App() {
 // now - everyone stays in Guided. Everything below still works; flip this
 // one flag to true to bring the toggle back.
 const SHOW_MODE_TOGGLE = false
+
+// "Choose your mode" popup (Julia's ask, 2026-09-24): removed entirely -
+// picking a template (brief flow) goes straight into the editor in Guided
+// mode. Flip to true to bring the popup back (brief submit then sets
+// briefModeEntry again - see the onSubmitted handler in the JSX below).
+const SHOW_MODE_CHOOSER = false
   const [advancedModeTemplateId, setAdvancedModeTemplateId] = useState(selectedTemplate?.id)
   // Toggle hidden → always Guided, even for a designer-mode template id.
   const [advancedMode, setAdvancedMode] = useState(SHOW_MODE_TOGGLE && selectedTemplate?.mode === 'designer')
@@ -1776,10 +1782,14 @@ const SHOW_MODE_TOGGLE = false
               setCompletedFormats(new Set())
               setTemplateSelectFormat(null)
               // Template is already picked (Step 1 of the brief, per Julia's
-              // ask 2026-09-10) - open "Choose your mode" directly instead of
-              // routing to the old card-grid template-select screen.
+              // ask 2026-09-10). "Choose your mode" removed 2026-09-24 -
+              // go straight into the editor in Guided mode.
               const entry = entryForGuidedId(brief.preSelectedTemplateIds?.[0], customTemplates.cards, customTemplates.records)
-              if (entry) setBriefModeEntry(entry)
+              const guidedId = entry?.templateIdGuided
+              const template = guidedId
+                ? (TEMPLATES.find(t => t.id === guidedId) ?? customTemplates.cards.find(t => t.id === guidedId))
+                : null
+              if (template) handleSelectTemplateFromBrief(template)
               // Shouldn't happen - BriefingForm now requires a pick before it
               // submits - but fall back rather than a dead end if the picked
               // id somehow doesn't resolve to a real entry.
@@ -1789,7 +1799,10 @@ const SHOW_MODE_TOGGLE = false
         </div>
       )}
 
-      {briefModeEntry && (
+      {/* "Choose your mode" popup removed 2026-09-24 (Julia's ask) - brief
+          submit goes straight into the editor in Guided mode. briefModeEntry
+          is never set anymore; flip SHOW_MODE_CHOOSER below to restore. */}
+      {SHOW_MODE_CHOOSER && briefModeEntry && (
         <LayoutModal
           entry={briefModeEntry}
           onPick={templateId => {
