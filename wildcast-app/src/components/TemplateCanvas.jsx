@@ -570,9 +570,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               // font's raw metrics (glyph descenders) without the extra leading.
               lineHeight: 1.05,
               fill:    zone.color || '#FFFFFF',
+              // Zones with no declared align default to CENTER, not left
+              // (Julia's ask, 2026-09-24: display text should come out
+              // centred from the get-go - users shouldn't need Position
+              // arrows to fix it). Zones that explicitly declare an align
+              // (tc: 'left', restaurant_name: 'right') keep it.
               textAlign: modeRef.current === 'non-designer'
-                ? (zone.align ?? 'left')
-                : (alignmentsRef.current?.[zone.id] ?? zone.align ?? 'left'),
+                ? (zone.align ?? 'center')
+                : (alignmentsRef.current?.[zone.id] ?? zone.align ?? 'center'),
               angle:   zone.rotate || 0,
               opacity: isPlaceholder ? PLACEHOLDER_OPACITY : 1,
               editable:       !locked,
@@ -916,9 +921,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     config.zones.forEach(zone => {
       const obj = zoneObjsRef.current[zone.id]
       if (!obj || obj.type !== 'textbox') return
+      // Same center-default as the canvas init above - zones with no
+      // declared align render centred, explicit configs (tc/restaurant_name)
+      // still win.
       const align = modeRef.current === 'non-designer'
-        ? (zone.align ?? 'left')
-        : (alignments?.[zone.id] ?? zone.align ?? 'left')
+        ? (zone.align ?? 'center')
+        : (alignments?.[zone.id] ?? zone.align ?? 'center')
       if (obj.textAlign !== align) obj.set('textAlign', align)
     })
     canvas.renderAll()
