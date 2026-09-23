@@ -698,13 +698,19 @@ export default function App() {
     setActivation({ key, clientName, credits, role: role || 'partner' })
   }
 
-  // Fetch comments whenever the open project changes
+  // Fetch comments whenever the open project changes, then poll so a reply
+  // the reviewer posts on their own link shows up here without a manual
+  // reload (Mark's ask, 2026-09-23: "refresh in real-time so you can see it
+  // in the thread") - same fix as ReviewPage.jsx's own polling effect.
   useEffect(() => {
     if (!currentProjectId) { setComments([]); return }
-    fetch(`/api/comments?id=${currentProjectId}`)
+    const load = () => fetch(`/api/comments?id=${currentProjectId}`)
       .then(r => r.json())
       .then(d => setComments(d.comments || []))
       .catch(() => {})
+    load()
+    const interval = setInterval(load, 5000)
+    return () => clearInterval(interval)
   }, [currentProjectId])
 
   // Lets the signed-in designer reply right from the editor's Feedback

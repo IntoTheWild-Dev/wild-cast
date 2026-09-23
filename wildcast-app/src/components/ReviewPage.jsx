@@ -52,6 +52,18 @@ export default function ReviewPage({ projectId, reviewerName }) {
     setComments(data.comments || [])
   }
 
+  // Poll so a reply the designer posts while this reviewer has the page open
+  // shows up without a manual reload (Mark's ask, 2026-09-23: "refresh in
+  // real-time so you can see it in the thread"). This is a JSON-blob-backed
+  // API with no websocket/SSE channel, so polling is the pragmatic fix
+  // rather than a push-based one. Skipped while `loading`/`error` so it
+  // never fires before projectId has a real thread to read.
+  useEffect(() => {
+    if (loading || error) return
+    const interval = setInterval(loadComments, 5000)
+    return () => clearInterval(interval)
+  }, [projectId, loading, error]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Optimistic - matches the same pattern used on the designer's side
   // (App.jsx's Feedback sidebar) so the checkbox feels instant either way.
   function handleToggleResolved(commentId, resolved) {
