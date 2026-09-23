@@ -587,6 +587,14 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     try {
       await onDuplicateProject(project)
       setPendingProject(null)
+    } catch (err) {
+      // Bug fix, 2026-09-24: this had no catch at all, so a failed
+      // duplicate (e.g. api/save-project.js's POST now surfaces a real
+      // 500 instead of silently swallowing a transient read error) just
+      // reset the busy state with zero explanation - an unhandled promise
+      // rejection visible only in the console, not to the person waiting
+      // on the popup.
+      alert('Could not duplicate this design: ' + err.message)
     } finally {
       setPendingBusy(false)
       setLoadingId(null)

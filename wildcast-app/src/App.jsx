@@ -783,10 +783,21 @@ export default function App() {
   // change the review status, not the design content, the fix is to save
   // that pending content ourselves before leaving, rather than either
   // losing it or blocking the status change on it.
-  async function flushUnsavedEditBeforeLeaving() {
+  // Bug fix, 2026-09-24 (found by review): takes the just-confirmed status
+  // as an explicit argument rather than reading the component's own
+  // `reviewStatus` state. handleApproveInEditor/handleRequestChangesInEditor
+  // call setReviewStatus(...) and then, still inside that same handler
+  // invocation, call this function - but that handler is a closure fixed
+  // at the render it was attached from, so a bare `doSave()` in here would
+  // still see THAT render's `reviewStatus` (the value from before the
+  // click), not the one just set, no matter how much time the awaited PATCH
+  // took. Passing it through explicitly as `nextReviewStatus` sidesteps the
+  // stale-closure entirely and reuses doSave's existing, already-correct
+  // handling of an explicit transition.
+  async function flushUnsavedEditBeforeLeaving(knownReviewStatus) {
     if (!hasUnsavedChanges) return
     try {
-      await doSave()
+      await doSave({ nextReviewStatus: knownReviewStatus })
       setHasUnsavedChanges(false)
     } catch (err) {
       alert('Status updated, but your last edit could not be saved: ' + err.message)
@@ -812,7 +823,7 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
       })
       if (!res.ok) throw new Error('Failed to approve')
-      await flushUnsavedEditBeforeLeaving()
+      await flushUnsavedEditBeforeLeaving('approved')
       // Every status change lands on My Tasks (Julia, 2026-09-23: "auto
       // reload to My Tasks on all tiers") - same fix as handleSendForReview's
       // resubmit path, applied to this decision too, not just resending.
@@ -837,7 +848,7 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
-      await flushUnsavedEditBeforeLeaving()
+      await flushUnsavedEditBeforeLeaving('changes_requested')
       setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
@@ -1382,11 +1393,12 @@ export default function App() {
     // cache lost track of reviewStatus entirely, and openLoadedProject reads
     // this cache back as if it were the complete, authoritative state,
     // falling back to 'design' and hiding the Review panel/Approve/Request-
-    // changes buttons until a hard reload bypassed the stale cache. This
-    // tab's own reviewStatus state is always correct for its own actions
-    // (it only goes stale relative to a DIFFERENT tab/actor's change, a
-    // separate, narrower issue), so the cached copy always includes it.
-    const cachedProject = { ...project, reviewStatus: nextReviewStatus ?? reviewStatus }
+    // changes buttons until a hard reload bypassed the stale cache. Falls
+    // back to local `reviewStatus` state only when `project.reviewStatus` is
+    // itself absent (an ordinary save with no explicit transition) - reads
+    // the same value `project` above already decided rather than
+    // re-deriving the nextReviewStatus-or-not branch a second time.
+    const cachedProject = { ...project, reviewStatus: project.reviewStatus ?? reviewStatus }
     try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(cachedProject)) } catch { /* storage full */ }
 
     setCurrentProjectId(id)
@@ -1529,34 +1541,46 @@ export default function App() {
     // exporting ("skips exporting... first"), which is now backwards: this
     // IS what unlocks Export PDF, not something instead of it.
     if (!isResubmit && !window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
-    // Bug fix, 2026-09-24: isResubmit alone treated an already-approved
-    // design the same as a plain in-progress resubmit, so clicking this
-    // button again silently reverted an approval back to 'review' with no
-    // warning at all. A normal resubmit (from 'review'/'changes_requested')
-    // stays confirmation-free on purpose - only the "this undoes an
-    // approval" case needs its own explicit heads-up.
-    //
-    // Second bug fix, same day: the local `reviewStatus` this check first
-    // relied on is never re-synced from the server while the editor stays
-    // open (unlike ReviewPage.jsx's own copy, which now polls). If someone
-    // else approved the design after this tab loaded, local state still
-    // said 'review' and the warning above never fired - exactly the
-    // scenario it was built to catch. Refetch the real current status
-    // right before deciding, so a stale local copy can't silently swallow
-    // the warning for an approval that already happened elsewhere.
-    let currentReviewStatus = reviewStatus
-    if (isResubmit && currentProjectId) {
-      try {
-        const res = await fetch(`/api/get-review?id=${currentProjectId}`)
-        if (res.ok) {
-          const fresh = await res.json()
-          if (fresh.reviewStatus) currentReviewStatus = fresh.reviewStatus
-        }
-      } catch { /* network error - fall back to local state rather than block sending */ }
-    }
-    if (isResubmit && currentReviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
+
+    // Bug fix, 2026-09-24 (found by review): setSaving(true) now runs
+    // immediately, before any of the async work below - it used to wait
+    // until after the fresh-status fetch a few lines down, leaving the
+    // button (guarded only by disabled={saving}) clickable for the whole
+    // round trip. A double-click in that window could start two
+    // overlapping resubmits - duplicate saves, duplicate comment-resolve
+    // batches, a confirm dialog firing twice. The early `return`s below are
+    // now inside this try, so `finally` still always resets it.
     setSaving(true)
     try {
+      // Bug fix, 2026-09-24: isResubmit alone treated an already-approved
+      // design the same as a plain in-progress resubmit, so clicking this
+      // button again silently reverted an approval back to 'review' with no
+      // warning at all. A normal resubmit (from 'review'/'changes_requested')
+      // stays confirmation-free on purpose - only the "this undoes an
+      // approval" case needs its own explicit heads-up.
+      //
+      // Second bug fix, same day: the local `reviewStatus` this check first
+      // relied on is never re-synced from the server while the editor stays
+      // open (unlike ReviewPage.jsx's own copy, which now polls). If someone
+      // else approved the design after this tab loaded, local state still
+      // said 'review' and the warning above never fired - exactly the
+      // scenario it was built to catch. Refetch the real current status
+      // right before deciding, so a stale local copy can't silently swallow
+      // the warning for an approval that already happened elsewhere. Skipped
+      // when local state already says 'approved' - the warning fires either
+      // way then, so the round trip has nothing left to confirm.
+      let currentReviewStatus = reviewStatus
+      if (isResubmit && currentProjectId && reviewStatus !== 'approved') {
+        try {
+          const res = await fetch(`/api/get-review?id=${currentProjectId}`)
+          if (res.ok) {
+            const fresh = await res.json()
+            if (fresh.reviewStatus) currentReviewStatus = fresh.reviewStatus
+          }
+        } catch { /* network error - fall back to local state rather than block sending */ }
+      }
+      if (isResubmit && currentReviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
+
       if (isResubmit) {
         const unresolved = comments.filter(c => !c.resolved)
         if (unresolved.length > 0) {
