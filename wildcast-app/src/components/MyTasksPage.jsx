@@ -9,30 +9,41 @@ import { useState, useEffect } from 'react'
 // on a first look" from "reviewer sent it back."
 const STATUS_COLUMNS = [
   { key: 'design',             label: 'Under design' },
-  { key: 'review',             label: 'Under review' },
+  // Relabeled 2026-09-23 (Julia) for plainer, more encouraging language -
+  // same 'review'/'changes_requested' keys underneath, just clearer wording.
+  { key: 'review',             label: 'Ready for review' },
   // "Request changes" (Mark's ask via Julia, 2026-09-23) - its own column so
-  // a design sent back by a reviewer doesn't blend into "Under review",
+  // a design sent back by a reviewer doesn't blend into "Ready for review",
   // where it would look identical to one still just waiting on a first look.
-  { key: 'changes_requested',  label: 'Needs changes' },
+  { key: 'changes_requested',  label: 'Adjustment needed' },
   { key: 'approved',           label: 'Approved' },
 ]
+
+// "First round vs second round" color-coding on the review column (Julia's
+// ask, 2026-09-23): a card whose design has already been sent back for
+// changes at least once reads differently from one still on its first pass
+// - both grey by default, the review column's cards go amber/yellow once
+// project.everRequestedChanges is true (set server-side, sticky - see
+// api/save-project.js). Scoped to the 'review' column only, matching her
+// wording ("first/second round review").
+const REVIEW_ROUND_COLOR = '#D97706'
 
 function formatDate(ts) {
   if (!ts) return ''
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-function TaskCard({ project, opening, onOpen }) {
+function TaskCard({ project, opening, onOpen, borderColor = 'var(--border)' }) {
   return (
     <div
       onClick={() => onOpen(project)}
       style={{
-        background: '#fff', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden',
+        background: '#fff', border: `${borderColor === 'var(--border)' ? 1 : 2}px solid ${borderColor}`, borderRadius: 10, overflow: 'hidden',
         cursor: opening ? 'default' : 'pointer', display: 'flex', gap: 10, padding: 8,
         opacity: opening ? 0.7 : 1, transition: 'border-color 0.15s',
       }}
       onMouseEnter={e => { if (!opening) e.currentTarget.style.borderColor = 'var(--primary)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = borderColor }}
     >
       <div style={{ width: 44, height: 62, flexShrink: 0, background: '#00C2CB', borderRadius: 6, overflow: 'hidden' }}>
         {project.thumbnail && (
@@ -124,7 +135,13 @@ export default function MyTasksPage({ onOpenProject, activation, onBack }) {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {items.map(p => (
-                        <TaskCard key={p.id} project={p} opening={openingId === p.id} onOpen={handleOpen} />
+                        <TaskCard
+                          key={p.id}
+                          project={p}
+                          opening={openingId === p.id}
+                          onOpen={handleOpen}
+                          borderColor={col.key === 'review' && p.everRequestedChanges ? REVIEW_ROUND_COLOR : undefined}
+                        />
                       ))}
                     </div>
                   )}

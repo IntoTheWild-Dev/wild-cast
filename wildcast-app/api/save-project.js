@@ -49,6 +49,12 @@ async function handleList(req, res) {
             // | 'approved'. Absent on any project saved before this shipped,
             // same fallback convention as folder/owner above.
             reviewStatus: project.reviewStatus ?? 'design',
+            // My Tasks "second round" color-coding (Julia's ask, 2026-09-23):
+            // true once this design has ever had changes requested against
+            // it, so a resubmission sitting under review again reads
+            // differently from a design being looked at for the first time.
+            // Sticky once true - never cleared by an ordinary review pass.
+            everRequestedChanges: project.everRequestedChanges ?? false,
           }
         } catch {
           return null
@@ -94,6 +100,9 @@ async function handlePatch(req, res) {
     const project = await new Response(result.stream).json()
 
     project.reviewStatus = status
+    // Sticky "second round" flag for My Tasks - see its own note above on
+    // the GET side. Only ever flips on, never off.
+    if (status === 'changes_requested') project.everRequestedChanges = true
     await put(`projects/${projectId}.json`, JSON.stringify(project), {
       access: 'private',
       addRandomSuffix: false,
