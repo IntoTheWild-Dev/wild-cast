@@ -106,7 +106,7 @@ function ReviewModal({ items, onClose }) {
           onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--dark)'}
           onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
         >
-          Close
+          Done
         </button>
       </div>
     </div>
@@ -1915,19 +1915,19 @@ export default function App() {
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
-          {/* Review panel - left, always present in the normal editor
-              (2026-09-23: used to only mount once comments.length > 0,
-              which is exactly why Approve/Request changes "went missing" -
-              a Manager reviewing a design nobody had commented on yet could
-              never see this panel at all, regardless of role. Now everything
-              about the review lifecycle - comments, replying, approving,
-              sending/resending - lives in this one place, always in the
-              same spot, per Julia's ask: "confusing on the changes canvas"
-              having it split between here and the right panel. Restricted
-              review (brief-generated candidates) keeps its own simpler
-              footer in FieldEditor.jsx untouched - this is the normal
-              editor only. */}
-          {!restrictedReview && (
+          {/* Review panel - left, shown once this design has actually been
+              sent for review at least once (reviewStatus !== 'design').
+              Was comments.length > 0, which is why Approve/Request changes
+              "went missing" for a Manager on a submitted design nobody had
+              commented on yet. Was briefly "always shown regardless of
+              status," which broke the opposite way - Julia, 2026-09-23:
+              "comments and approved button shouldn't show" on a design
+              that's never been sent at all. reviewStatus is the right
+              signal either way: it only leaves 'design' once Send review
+              link has actually been clicked once. Restricted review
+              (brief-generated candidates) keeps its own simpler footer in
+              FieldEditor.jsx untouched - this is the normal editor only. */}
+          {!restrictedReview && reviewStatus !== 'design' && (
             <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -2035,28 +2035,6 @@ export default function App() {
                   </div>
                 )
               )}
-
-              {/* Send review link - moved here from the right panel
-                  (2026-09-23, Julia: "send for review should also be on
-                  the left, it's confusing on the changes canvas") so every
-                  review-lifecycle action lives in one place instead of
-                  split across both sides of the canvas. Same
-                  handleSendForReview either way - first send or a resubmit,
-                  see its own comment for how it tells those apart. */}
-              <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A' }}>
-                <button
-                  type="button"
-                  onClick={handleSendForReview}
-                  disabled={saving}
-                  style={{
-                    width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
-                    background: saving ? '#E5E7EB' : 'var(--dark)', color: saving ? 'var(--mid)' : '#fff',
-                    cursor: saving ? 'default' : 'pointer',
-                  }}
-                >
-                  {saving ? 'Sending…' : 'Send review link'}
-                </button>
-              </div>
 
             </div>
           )}
@@ -2277,7 +2255,11 @@ export default function App() {
       )}
 
       {/* Share / Send for Review modal */}
-      {reviewItems && <ReviewModal items={reviewItems} onClose={() => setReviewItems(null)} />}
+      {/* Julia's ask, 2026-09-23: the first send should only leave for My
+          Tasks once the link's been copied and "Done" is pressed - unlike a
+          resubmit (handleSendForReview's own setTimeout), which has no new
+          link to show and so can leave right away. */}
+      {reviewItems && <ReviewModal items={reviewItems} onClose={() => { setReviewItems(null); setScreen('tasks') }} />}
       {formatPromptOptions.length > 0 && (
         <MoreFormatsModal
           formats={formatPromptOptions}
