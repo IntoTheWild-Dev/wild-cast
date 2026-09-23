@@ -839,8 +839,12 @@ export default function App() {
       // the canvas after this made it look like nothing happened, which is
       // what led to the re-click in the first place. Show the checkmark
       // briefly, then leave the editor entirely instead of leaving the user
-      // sitting in front of a design that's already been sent off.
-      setTimeout(() => setScreen('designs'), 900)
+      // sitting in front of a design that's already been sent off. Routes to
+      // My Tasks specifically (not plain Designs) - Julia's follow-up ask,
+      // same day: "so everyone gets an overview, designer and manager" -
+      // My Tasks is exactly the status board (Under review / Needs changes
+      // / Approved) both roles need to see right after this action.
+      setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       console.error('Resolve and resubmit error:', err)
       alert('Resolve and resubmit failed: ' + err.message)
@@ -1952,50 +1956,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Approve / Request changes, Manager role only (2026-09-23) -
-                  everyone else (Designer/Reviewer) doesn't see this; those
-                  actions still also exist on the external review link. */}
-              {workflowRole === 'Manager' && (
-                reviewStatus === 'approved' ? (
-                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(22,163,74,0.1)', borderBottom: '1px solid #FDE68A' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
-                  </div>
-                ) : reviewStatus === 'changes_requested' ? (
-                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(180,83,9,0.1)', borderBottom: '1px solid #FDE68A' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#B45309' }}>↺ Changes requested</span>
-                  </div>
-                ) : (
-                  <div style={{ padding: '10px 14px', display: 'flex', gap: 6, borderBottom: '1px solid #FDE68A' }}>
-                    <button
-                      type="button"
-                      onClick={handleRequestChangesInEditor}
-                      disabled={editorRequestingChanges || !comments.some(c => !c.resolved)}
-                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Leave an open comment first, so the creator knows what to change'}
-                      style={{
-                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
-                        background: '#fff', color: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--light)' : '#B45309',
-                        borderColor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--border)' : '#D97706',
-                        cursor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'default' : 'pointer',
-                      }}
-                    >
-                      {editorRequestingChanges ? 'Sending…' : '↺ Request changes'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleApproveInEditor}
-                      disabled={editorApproving}
-                      style={{
-                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: 'none',
-                        background: editorApproving ? '#E5E7EB' : '#16a34a', color: editorApproving ? 'var(--mid)' : '#fff',
-                        cursor: editorApproving ? 'default' : 'pointer',
-                      }}
-                    >
-                      {editorApproving ? 'Approving…' : '✓ Approve'}
-                    </button>
-                  </div>
-                )
-              )}
-
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {comments.map(c => (
                   <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : '#FDE68A'}`, opacity: c.resolved ? 0.6 : 1 }}>
@@ -2038,6 +1998,54 @@ export default function App() {
                   {postingReply ? 'Sending…' : 'Send reply'}
                 </button>
               </div>
+
+              {/* Approve / Request changes, Manager role only (2026-09-23,
+                  moved below Send reply per Julia's ask: "so when manager
+                  comes in she can either request more changes or just press
+                  approve" - reads top to bottom as comments, then reply,
+                  then the decision. Everyone else (Designer/Reviewer)
+                  doesn't see this; those actions still also exist on the
+                  external review link for partners without an account. */}
+              {workflowRole === 'Manager' && (
+                reviewStatus === 'approved' ? (
+                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(22,163,74,0.1)', borderTop: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
+                  </div>
+                ) : reviewStatus === 'changes_requested' ? (
+                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(180,83,9,0.1)', borderTop: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#B45309' }}>↺ Changes requested</span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '10px 14px', display: 'flex', gap: 6, borderTop: '1px solid #FDE68A' }}>
+                    <button
+                      type="button"
+                      onClick={handleRequestChangesInEditor}
+                      disabled={editorRequestingChanges || !comments.some(c => !c.resolved)}
+                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Leave an open comment first, so the creator knows what to change'}
+                      style={{
+                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
+                        background: '#fff', color: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--light)' : '#B45309',
+                        borderColor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--border)' : '#D97706',
+                        cursor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'default' : 'pointer',
+                      }}
+                    >
+                      {editorRequestingChanges ? 'Sending…' : '↺ Request changes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApproveInEditor}
+                      disabled={editorApproving}
+                      style={{
+                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: 'none',
+                        background: editorApproving ? '#E5E7EB' : '#16a34a', color: editorApproving ? 'var(--mid)' : '#fff',
+                        cursor: editorApproving ? 'default' : 'pointer',
+                      }}
+                    >
+                      {editorApproving ? 'Approving…' : '✓ Approve'}
+                    </button>
+                  </div>
+                )
+              )}
 
               {/* "Resolve and resubmit" (Notion card, 2026-09-22): resolves
                   every open comment above and re-sends this same design for
