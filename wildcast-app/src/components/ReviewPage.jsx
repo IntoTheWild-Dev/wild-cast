@@ -53,6 +53,23 @@ export default function ReviewPage({ projectId, reviewerName }) {
     setComments(data.comments || [])
   }
 
+  // Bug fix, 2026-09-24: this page fetched reviewStatus once on mount and
+  // never again, unlike comments (polled below). A reviewer whose tab
+  // loaded while status was 'changes_requested' would see that banner
+  // (which hides both action buttons) forever, even after the creator
+  // resubmitted elsewhere and the real status moved back to 'review' -
+  // stuck until a full manual page reload. Only reviewStatus is merged in
+  // (not the whole project) so this can't clobber the optimistic local
+  // update handleApprove/handleRequestChanges make the instant either
+  // button is clicked, and doesn't re-fetch the preview/thumbnail images
+  // every 5s for no reason.
+  async function refreshReviewStatus() {
+    const res = await fetch(`/api/get-review?id=${projectId}`)
+    if (!res.ok) return
+    const data = await res.json()
+    setProject(prev => prev ? { ...prev, reviewStatus: data.reviewStatus } : prev)
+  }
+
   // Poll so a reply the designer posts while this reviewer has the page open
   // shows up without a manual reload (Mark's ask, 2026-09-23: "refresh in
   // real-time so you can see it in the thread"). This is a JSON-blob-backed
@@ -61,7 +78,7 @@ export default function ReviewPage({ projectId, reviewerName }) {
   // never fires before projectId has a real thread to read.
   useEffect(() => {
     if (loading || error) return
-    const interval = setInterval(loadComments, 5000)
+    const interval = setInterval(() => { loadComments(); refreshReviewStatus() }, 5000)
     return () => clearInterval(interval)
   }, [projectId, loading, error]) // eslint-disable-line react-hooks/exhaustive-deps
 

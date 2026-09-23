@@ -124,9 +124,42 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    const project = req.body
-    if (!project?.id || !project?.templateId) {
+    const incoming = req.body
+    if (!incoming?.id || !incoming?.templateId) {
       return res.status(400).json({ error: 'Missing project id or templateId' })
+    }
+
+    const token = process.env.BLOB_READ_WRITE_TOKEN
+
+    // Bug fix, 2026-09-24 (root cause behind the everRequestedChanges fix
+    // above, and the wider class it's one instance of): a plain save
+    // (autosave, manual Save) used to write the client's in-memory
+    // reviewStatus/everRequestedChanges straight through, full overwrite,
+    // no matter how stale. Since neither field is ever polled while the
+    // editor's open, a designer typing while a Manager/reviewer PATCHes a
+    // status change elsewhere could have their next autosave silently
+    // revert that change moments later - exactly what happened to
+    // everRequestedChanges specifically, but the same risk applies to
+    // reviewStatus itself. Root fix: these two fields are the review
+    // lifecycle's own state, not ordinary editor content - a plain save
+    // has no business touching either. reviewStatus is only set from the
+    // client when doSave() passes it explicitly (an intentional
+    // transition - Send review link's first-send or resubmit); otherwise
+    // it's preserved from whatever's already stored. everRequestedChanges
+    // is never taken from the client at all - handlePatch above is its
+    // only writer, full stop.
+    let existingReviewStatus, existingEverRequestedChanges
+    const existing = await get(`projects/${incoming.id}.json`, { access: 'private', useCache: false, token }).catch(() => null)
+    if (existing) {
+      const existingProject = await new Response(existing.stream).json()
+      existingReviewStatus = existingProject.reviewStatus
+      existingEverRequestedChanges = existingProject.everRequestedChanges
+    }
+
+    const project = {
+      ...incoming,
+      reviewStatus: incoming.reviewStatus ?? existingReviewStatus ?? 'design',
+      everRequestedChanges: existingEverRequestedChanges ?? false,
     }
 
     const blob = await put(`projects/${project.id}.json`, JSON.stringify(project), {
@@ -134,7 +167,7 @@ export default async function handler(req, res) {
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: 'application/json',
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      token,
     })
 
     return res.status(200).json({ id: project.id, url: blob.url })

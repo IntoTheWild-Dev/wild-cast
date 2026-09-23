@@ -375,16 +375,18 @@ export default function App() {
   // or the matching buttons on ReviewPage.jsx (via api/save-project.js's
   // PATCH handler) - never by anything else on the creator's side.
   const [reviewStatus, setReviewStatus]       = useState('design')
-  // Sticky "was this ever sent back for changes" flag for My Tasks'
-  // second-round color-coding (see MyTasksPage.jsx). Bug fix, 2026-09-24:
-  // this used to live only on the server (api/save-project.js), never
-  // mirrored into component state - doSave()'s save payload is built from
-  // component state fields, so it had no way to carry this along, and every
-  // ordinary save (autosave, manual Save, a resubmit) silently overwrote the
-  // stored value back to missing/false. Now tracked here exactly like
-  // reviewStatus itself: read from the loaded project, included in every
-  // save, updated locally the moment Request changes succeeds.
-  const [everRequestedChanges, setEverRequestedChanges] = useState(false)
+  // everRequestedChanges (My Tasks' "second round" color-coding flag) is
+  // deliberately NOT mirrored into component state here, after a first
+  // attempt at exactly that (2026-09-24) turned out to just move the bug
+  // rather than fix it: any ordinary save from a tab holding a stale local
+  // copy could still silently revert a status change someone else made
+  // via PATCH elsewhere. Root fix instead lives server-side, in this
+  // file's doSave() (only ever sends reviewStatus for an explicit
+  // transition, never a bare value that might be stale) and
+  // api/save-project.js's POST handler (never trusts a client-sent
+  // everRequestedChanges at all - handlePatch is its only writer). My
+  // Tasks reads the field straight from the server, which is now always
+  // authoritative for it.
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
@@ -771,6 +773,26 @@ export default function App() {
     }).catch(() => {})
   }
 
+  // Bug fix, 2026-09-24: Approve/Request changes both leave the editor
+  // ~900ms after succeeding (see setTimeout below), and the debounced
+  // autosave effect has `screen` in its dependency array - so that
+  // navigation was cancelling any pending autosave in its cleanup before
+  // it ever fired, silently discarding a field edit made moments earlier
+  // with none of the "Leave without saving?" warning every other way of
+  // leaving the editor gives. Since these actions only ever intend to
+  // change the review status, not the design content, the fix is to save
+  // that pending content ourselves before leaving, rather than either
+  // losing it or blocking the status change on it.
+  async function flushUnsavedEditBeforeLeaving() {
+    if (!hasUnsavedChanges) return
+    try {
+      await doSave()
+      setHasUnsavedChanges(false)
+    } catch (err) {
+      alert('Status updated, but your last edit could not be saved: ' + err.message)
+    }
+  }
+
   // Approve / Request changes, right from the editor's Feedback sidebar
   // (Julia's ask, 2026-09-23: a Manager shouldn't have to leave the editor
   // and hunt down the separate external review link just to approve their
@@ -790,6 +812,7 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
       })
       if (!res.ok) throw new Error('Failed to approve')
+      await flushUnsavedEditBeforeLeaving()
       // Every status change lands on My Tasks (Julia, 2026-09-23: "auto
       // reload to My Tasks on all tiers") - same fix as handleSendForReview's
       // resubmit path, applied to this decision too, not just resending.
@@ -805,10 +828,8 @@ export default function App() {
   async function handleRequestChangesInEditor() {
     const hasOpenFeedback = comments.some(c => !c.resolved)
     if (editorRequestingChanges || !currentProjectId || !hasOpenFeedback || reviewStatus === 'changes_requested') return
-    const wasEverRequestedChanges = everRequestedChanges
     setEditorRequestingChanges(true)
     setReviewStatus('changes_requested')
-    setEverRequestedChanges(true)
     try {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
@@ -816,13 +837,10 @@ export default function App() {
         body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
+      await flushUnsavedEditBeforeLeaving()
       setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
-      // Rolled back to whatever it was before this attempt, not hardcoded
-      // false - a design already on its second round shouldn't lose that
-      // history just because a later attempt happened to fail.
-      setEverRequestedChanges(wasEverRequestedChanges)
       alert('Could not request changes: ' + err.message)
     } finally {
       setEditorRequestingChanges(false)
@@ -847,7 +865,6 @@ export default function App() {
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
-    setEverRequestedChanges(false)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -917,7 +934,6 @@ export default function App() {
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
-    setEverRequestedChanges(false)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -971,7 +987,6 @@ export default function App() {
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
-    setEverRequestedChanges(false)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
@@ -1331,7 +1346,6 @@ export default function App() {
     // saving in the editor never touches it.
     const ownerEmail = projectOwner?.email ?? activation?.key ?? null
     const ownerName = projectOwner?.name ?? activation?.clientName ?? null
-    const savedReviewStatus = nextReviewStatus ?? reviewStatus
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
@@ -1343,12 +1357,15 @@ export default function App() {
       vertical: designVertical,
       // "My Tasks" status (Notion card "Review queue in the user profile",
       // 2026-09-22) - see reviewStatus's own declaration above for the full
-      // state machine.
-      reviewStatus: savedReviewStatus,
-      // Bug fix, 2026-09-24: was missing entirely, so every save (autosave,
-      // manual Save, a resubmit) silently dropped this back to missing/false
-      // on the server - see everRequestedChanges's own declaration above.
-      everRequestedChanges,
+      // state machine. Bug fix, 2026-09-24: only included when this save is
+      // an explicit transition (nextReviewStatus passed - the first send or
+      // a resubmit). An ordinary autosave/manual Save omits it entirely, so
+      // it can never carry a stale local copy back to the server and
+      // silently revert a status change someone else made via PATCH while
+      // this tab sat open - api/save-project.js's POST handler preserves
+      // whatever's already stored when this field is absent. everRequestedChanges
+      // is deliberately never sent at all - see its own note above.
+      ...(nextReviewStatus ? { reviewStatus: nextReviewStatus } : {}),
     }
 
     const response = await fetch('/api/save-project', {
@@ -1678,7 +1695,6 @@ export default function App() {
     // Absent on any design saved before this shipped, same fallback pattern
     // as folder/owner above.
     setReviewStatus(project.reviewStatus ?? 'design')
-    setEverRequestedChanges(project.everRequestedChanges ?? false)
     // Restore the design's vertical from the saved project (null on projects
     // saved before verticals shipped) so AI Suggest re-scopes to it.
     setDesignVertical(project.vertical ?? null)
@@ -1721,9 +1737,11 @@ export default function App() {
       // already-sent and treated the very first click as a resubmit - no
       // confirm dialog, no share-link popup, straight to My Tasks. Comments
       // don't need a matching reset: they're keyed by this new `id`, which
-      // has no comment thread of its own yet.
+      // has no comment thread of its own yet. everRequestedChanges needs no
+      // explicit reset here either (unlike this comment's earlier version) -
+      // the server never trusts a client-sent value for it at all now, and
+      // this brand-new id has no existing blob to inherit one from anyway.
       reviewStatus: 'design',
-      everRequestedChanges: false,
     }
 
     const response = await fetch('/api/save-project', {
