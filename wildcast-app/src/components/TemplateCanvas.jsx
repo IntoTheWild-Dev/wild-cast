@@ -313,23 +313,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           const zone = zones.find(z => z.id === zoneId)
           if (zone) { snapZone(zone); canvas.renderAll() }
         },
-        // Restores text-zone positions from an undo snapshot (mirrors the saved-project
-        // restore in the canvas-init effect, but callable at any time with arbitrary data).
-        applyZonePositions: (positions) => {
-          if (!positions) return
-          // Same Guided-mode width guard as the canvas-init restore below -
-          // an undo step should never be able to reintroduce a stray
-          // Designer-mode width into a locked Guided canvas either.
-          const locked = mode === 'non-designer'
-          zones.forEach(zone => {
-            if (zone.type !== 'text') return
-            const p = positions[zone.id]
-            if (!p) return
-            const obj = zoneObjsRef.current[zone.id]
-            if (!obj) return
-            obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
-            obj.setCoords()
-          })
+        // Text-zone positions are no longer restorable - see applyZonePositions
+        // in the canvas-init effect below. Undo snapshots still carry
+        // zonePositions (harmless), but applying them would resurrect legacy
+        // Designer-mode drags that text zones must never inherit.
+        applyZonePositions: () => {
           canvas.renderAll()
         },
       }
@@ -713,36 +701,18 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }
       }
 
-      // Restore saved drag positions for text zones (designer mode re-open).
-      // Width is Designer-only - Guided mode's canvas is locked, so a zone's
-      // width there can never have been legitimately changed by the user,
-      // only ever carried over from a stray/accidental Designer-mode resize
-      // saved into this same project at some point (a single bad drag on a
-      // tiny rotated zone like `tc` persists forever otherwise, since every
-      // later save just re-captures whatever width is currently applied -
-      // Julia's report, 2026-09-10: the T&Cs zone had been dragged wide
-      // enough that a whole sentence rendered as one unwrapped line, most of
-      // it pushed off-canvas). Guided mode always uses the template's own
-      // configured width instead of trusting a saved one.
+      // Saved drag positions for text zones are NO LONGER applied at all
+      // (Julia's ask, 2026-09-24: text must always sit exactly at the zone's
+      // designed geometry, centred on the page). Designer mode - the only
+      // thing that could ever create a legitimate text drag - is removed
+      // from the UI, so every saved text position/width in existing projects
+      // is legacy from before that (a single bad drag used to persist
+      // forever: a stretched headline box re-wrapped long text wider than
+      // its own guide rect, spilling past it - exactly the bug this fixes).
+      // Text zones therefore always render at their zone defaults; the
+      // function stays for structural symmetry with exportRef's undo hook
+      // below and applies nothing.
       function applyZonePositions() {
-        const saved = zonePositionsRef.current
-        if (!saved || !Object.keys(saved).length) return
-        const locked = mode === 'non-designer'
-        zones.forEach(zone => {
-          if (zone.type !== 'text') return
-          const p = saved[zone.id]
-          if (!p) return
-          const obj = zoneObjsRef.current[zone.id]
-          if (!obj) return
-          // Placeholder guide text is always static - it sits at the zone's
-          // designed position/size no matter what drags a saved project
-          // carries (Julia's ask, 2026-09-24: guide text must stay centred
-          // on the page; a stray old Designer drag must not shove it
-          // off-canvas). Saved positions only ever apply to real content.
-          if (obj._wcPlaceholder) return
-          obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
-          obj.setCoords()
-        })
         canvas.renderAll()
       }
 
