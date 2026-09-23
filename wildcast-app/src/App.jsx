@@ -784,7 +784,12 @@ export default function App() {
       setHasUnsavedChanges(false)
       setReviewSent(true)
       setResolveResubmitStatus('done')
-      setTimeout(() => setResolveResubmitStatus(null), 3000)
+      // Julia's ask (2026-09-23), from Mark's original complaint: staying on
+      // the canvas after this made it look like nothing happened, which is
+      // what led to the re-click in the first place. Show the checkmark
+      // briefly, then leave the editor entirely instead of leaving the user
+      // sitting in front of a design that's already been sent off.
+      setTimeout(() => setScreen('designs'), 900)
     } catch (err) {
       console.error('Resolve and resubmit error:', err)
       alert('Resolve and resubmit failed: ' + err.message)
@@ -1599,6 +1604,12 @@ export default function App() {
     setComments(freshComments)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
+    // Prevents a stale green "✓ Resolved & resubmitted" from a previous
+    // project leaking onto this one's button - it used to self-clear after
+    // 3s, but now stays 'done' until navigated away (see
+    // handleResolveAndResubmit), so a project opened shortly after a
+    // resubmit could otherwise inherit someone else's confirmation state.
+    setResolveResubmitStatus(null)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
