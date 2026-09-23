@@ -1374,9 +1374,20 @@ export default function App() {
     })
     if (!response.ok) throw new Error(await response.text())
 
-    // Write the full project to sessionStorage so re-opens within this session
-    // always get the exact saved state - no CDN or browser cache involved.
-    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
+    // Write to sessionStorage so re-opens within this session always get the
+    // exact saved state - no CDN or browser cache involved. Bug fix,
+    // 2026-09-24: `project` (the server payload above) deliberately omits
+    // reviewStatus on an ordinary save, for the server-side merge to work
+    // correctly - but writing that same incomplete object here meant the
+    // cache lost track of reviewStatus entirely, and openLoadedProject reads
+    // this cache back as if it were the complete, authoritative state,
+    // falling back to 'design' and hiding the Review panel/Approve/Request-
+    // changes buttons until a hard reload bypassed the stale cache. This
+    // tab's own reviewStatus state is always correct for its own actions
+    // (it only goes stale relative to a DIFFERENT tab/actor's change, a
+    // separate, narrower issue), so the cached copy always includes it.
+    const cachedProject = { ...project, reviewStatus: nextReviewStatus ?? reviewStatus }
+    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(cachedProject)) } catch { /* storage full */ }
 
     setCurrentProjectId(id)
     if (nextReviewStatus) setReviewStatus(nextReviewStatus)
@@ -1524,7 +1535,26 @@ export default function App() {
     // warning at all. A normal resubmit (from 'review'/'changes_requested')
     // stays confirmation-free on purpose - only the "this undoes an
     // approval" case needs its own explicit heads-up.
-    if (isResubmit && reviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
+    //
+    // Second bug fix, same day: the local `reviewStatus` this check first
+    // relied on is never re-synced from the server while the editor stays
+    // open (unlike ReviewPage.jsx's own copy, which now polls). If someone
+    // else approved the design after this tab loaded, local state still
+    // said 'review' and the warning above never fired - exactly the
+    // scenario it was built to catch. Refetch the real current status
+    // right before deciding, so a stale local copy can't silently swallow
+    // the warning for an approval that already happened elsewhere.
+    let currentReviewStatus = reviewStatus
+    if (isResubmit && currentProjectId) {
+      try {
+        const res = await fetch(`/api/get-review?id=${currentProjectId}`)
+        if (res.ok) {
+          const fresh = await res.json()
+          if (fresh.reviewStatus) currentReviewStatus = fresh.reviewStatus
+        }
+      } catch { /* network error - fall back to local state rather than block sending */ }
+    }
+    if (isResubmit && currentReviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
     setSaving(true)
     try {
       if (isResubmit) {

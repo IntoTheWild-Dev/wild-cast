@@ -148,18 +148,23 @@ export default async function handler(req, res) {
     // it's preserved from whatever's already stored. everRequestedChanges
     // is never taken from the client at all - handlePatch above is its
     // only writer, full stop.
-    let existingReviewStatus, existingEverRequestedChanges
-    const existing = await get(`projects/${incoming.id}.json`, { access: 'private', useCache: false, token }).catch(() => null)
-    if (existing) {
-      const existingProject = await new Response(existing.stream).json()
-      existingReviewStatus = existingProject.reviewStatus
-      existingEverRequestedChanges = existingProject.everRequestedChanges
-    }
+    // Bug fix, 2026-09-24 (found by review): the `.catch(() => null)` this
+    // line originally had treated a genuine read failure (network blip,
+    // auth issue, transient Blob error) exactly like "project doesn't
+    // exist yet" - get() already resolves null on a real 404 with no
+    // catch needed (same as handlePatch above), so this catch only ever
+    // fired on unexpected errors, silently downgrading an already-
+    // approved/second-round design back to 'design'/false on nothing more
+    // than a one-off read error. Removed - a real error now propagates to
+    // the outer try/catch below and returns a 500, the same way handlePatch
+    // already handles it, instead of corrupting the stored status.
+    const existing = await get(`projects/${incoming.id}.json`, { access: 'private', useCache: false, token })
+    const existingProject = existing ? await new Response(existing.stream).json() : null
 
     const project = {
       ...incoming,
-      reviewStatus: incoming.reviewStatus ?? existingReviewStatus ?? 'design',
-      everRequestedChanges: existingEverRequestedChanges ?? false,
+      reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',
+      everRequestedChanges: existingProject?.everRequestedChanges ?? false,
     }
 
     const blob = await put(`projects/${project.id}.json`, JSON.stringify(project), {
