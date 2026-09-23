@@ -835,7 +835,12 @@ export default function App() {
       setHasUnsavedChanges(false)
       setReviewSent(true)
       setResolveResubmitStatus('done')
-      setTimeout(() => setResolveResubmitStatus(null), 3000)
+      // Julia's ask (2026-09-23), from Mark's original complaint: staying on
+      // the canvas after this made it look like nothing happened, which is
+      // what led to the re-click in the first place. Show the checkmark
+      // briefly, then leave the editor entirely instead of leaving the user
+      // sitting in front of a design that's already been sent off.
+      setTimeout(() => setScreen('designs'), 900)
     } catch (err) {
       console.error('Resolve and resubmit error:', err)
       alert('Resolve and resubmit failed: ' + err.message)
@@ -1650,6 +1655,12 @@ export default function App() {
     setComments(freshComments)
     setSaveStatus(null)
     setHasUnsavedChanges(false)
+    // Prevents a stale green "✓ Resolved & resubmitted" from a previous
+    // project leaking onto this one's button - it used to self-clear after
+    // 3s, but now stays 'done' until navigated away (see
+    // handleResolveAndResubmit), so a project opened shortly after a
+    // resubmit could otherwise inherit someone else's confirmation state.
+    setResolveResubmitStatus(null)
     setLoadKey(k => k + 1)
     setScreen('editor')
   }
@@ -1697,6 +1708,14 @@ export default function App() {
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
   // meaningful to unlock on an already-generated candidate).
   const effectiveMode = restrictedReview ? (selectedTemplate?.mode ?? 'designer') : (advancedMode ? 'designer' : 'non-designer')
+  // Mark's ask (PR comment, 2026-09-23): "Resolve and resubmit" stayed
+  // clickable after it had already run - resolveResubmitStatus is transient
+  // component state (resets after 3s, and on any page refresh), not a
+  // reflection of whether there's actually anything left to resubmit. Once
+  // every comment is resolved and there are no new edits, a repeat click
+  // would resolve nothing and resave the exact same design, so that's the
+  // real "already resubmitted" condition - persisted, survives a refresh.
+  const nothingToResubmit = comments.length > 0 && comments.every(c => c.resolved) && !hasUnsavedChanges
   // "X of Y ready" progress bar (Julia's editor redesign, 2026-09-18, per
   // Annika's mockup) - mirrors FieldEditor.jsx's own fieldOrder/isFieldReady
   // logic (same shared lib/fieldOrder.js order) since the bar renders up
@@ -2028,18 +2047,19 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleResolveAndResubmit}
-                  disabled={saving}
-                  title="Marks every open comment above as resolved and resubmits this design for review"
+                  disabled={saving || nothingToResubmit}
+                  title={nothingToResubmit && resolveResubmitStatus !== 'sending' ? 'Already resubmitted - nothing new to send since last time' : 'Marks every open comment above as resolved and resubmits this design for review'}
                   style={{
                     width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: resolveResubmitStatus === 'done' ? '#16a34a' : (saving ? '#E5E7EB' : 'var(--dark)'),
-                    color: saving && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
-                    cursor: saving ? 'default' : 'pointer',
+                    background: resolveResubmitStatus === 'done' ? '#16a34a' : ((saving || nothingToResubmit) ? '#E5E7EB' : 'var(--dark)'),
+                    color: (saving || nothingToResubmit) && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
+                    cursor: (saving || nothingToResubmit) ? 'default' : 'pointer',
                   }}
                 >
                   {resolveResubmitStatus === 'sending' ? 'Resolving & resubmitting…'
                     : resolveResubmitStatus === 'done' ? '✓ Resolved & resubmitted'
+                    : nothingToResubmit ? 'Already resubmitted'
                     : 'Resolve and resubmit'}
                 </button>
               </div>
