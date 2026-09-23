@@ -115,7 +115,7 @@ function overflowsFitWidth(obj, zone) {
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -541,7 +541,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             const cx = zone.x + zone.width / 2
             const cy = zone.y + zone.height / 2
             const textW = zone.textWidth ?? zone.width
-            const placeholderText = placeholderTextFor(zone)
+            const placeholderText = placeholderTextFor(zone, templateId)
             const isPlaceholder = !fields[zone.id] && placeholderText != null
 
             const tb = new fabric.Textbox(isPlaceholder ? placeholderText : (fields[zone.id] || ''), {
@@ -648,18 +648,26 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           if (zone.type !== 'text' || !zone.autoShrink) return
           const tb = zoneObjsRef.current[zone.id]
           if (!tb || !tb.text) return
-          // Placeholder text is a visual stand-in, not real content - skip
-          // auto-resize so it renders at the zone's original fontSize
-          // (the "original pixels" the designer configured). Real text
-          // typed by the user gets auto-resized normally in the fields-sync
-          // effect below.
-          if (tb._wcPlaceholder) return
           const savedSize = fontSizesRef.current?.[zone.id]
           const fitLimit = zone.rotate ? zone.width : zone.height
           if (savedSize != null) {
             // Saved size is the source of truth - skip auto-resize entirely.
             tb.set('fontSize', savedSize)
             tb.initDimensions()
+          } else if (tb._wcPlaceholder) {
+            // Placeholder text shrink-to-fits ONLY, never grows: several
+            // placeholders now carry real-flyer-length copy (e.g. Option A's
+            // "POTSDAMS NEUES DREAMTEAM") that would overflow the zone at
+            // full zone fontSize. Real text typed by the user gets the full
+            // grow+shrink auto-resize in the fields-sync effect below.
+            let size = zone.fontSize ?? 24
+            tb.set('fontSize', size)
+            tb.initDimensions()
+            while ((tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) && size > 6) {
+              size -= 0.5
+              tb.set('fontSize', size)
+              tb.initDimensions()
+            }
           } else {
             // First open with no saved state - find the largest fontSize that fits.
             let size = zone.fontSize ?? 24
@@ -802,7 +810,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (syncing.current) return
       syncing.current = true
       const zone = zoneCfgRef.current[id]
-      const placeholderText = placeholderTextFor(zone)
+      const placeholderText = placeholderTextFor(zone, templateId)
       const isPlaceholder = !value && placeholderText != null
       const displayText = isPlaceholder ? placeholderText : (value || '')
       if (obj.text !== displayText) {
@@ -823,15 +831,20 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const textChanged = prevFieldsRef.current[id] !== value
       if (textChanged && zone?.autoShrink) {
         if (isPlaceholder) {
-          // Field cleared back to placeholder - reset to zone default fontSize
-          // so placeholder renders at original size, not a stale auto-grown size.
-          const defaultSize = zone?.fontSize ?? 24
-          if (obj.fontSize !== defaultSize) {
-            obj.set('fontSize', defaultSize)
+          // Field cleared back to placeholder - reset to the zone default,
+          // then shrink-to-fit ONLY (placeholders never grow, and several
+          // carry real-flyer-length copy that overflows at full size).
+          let size = zone?.fontSize ?? 24
+          obj.set('fontSize', size)
+          obj.initDimensions()
+          const fitLimit = zone.rotate ? zone.width : zone.height
+          while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
+            size -= 0.5
+            obj.set('fontSize', size)
             obj.initDimensions()
-            changed = true
-            onAutoShrinkRef.current?.(zone.id, defaultSize)
           }
+          changed = true
+          onAutoShrinkRef.current?.(zone.id, size)
         } else {
           // Always start from the zone default fontSize - this ensures text
           // renders at the LARGEST size that fits the zone, whether that means

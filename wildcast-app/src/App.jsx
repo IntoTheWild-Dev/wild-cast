@@ -2129,6 +2129,7 @@ const SHOW_MODE_CHOOSER = false
             <TemplateCanvas
               key={loadKey}
               config={templateConfig}
+              templateId={selectedTemplate?.id}
               fields={fields}
               onFieldChange={handleFieldChange}
               exportRef={exportRef}

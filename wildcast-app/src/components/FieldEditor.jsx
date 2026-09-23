@@ -667,7 +667,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // 'omnes-cond' default.
   function effectivePlaceholder(zoneId) {
     const zone = templateConfig?.zones?.find(z => z.id === zoneId) ?? { id: zoneId }
-    return placeholderTextFor(zone)
+    return placeholderTextFor(zone, template?.id)
   }
 
   const textFieldKeys = ['headline', 'sub_headline', 'restaurant_name', 'offer', 'tc', 'cta']
