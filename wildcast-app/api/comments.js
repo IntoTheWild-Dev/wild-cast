@@ -9,19 +9,19 @@
 // link, so there's no separate name field to type there; `resolved` is a
 // plain boolean either side can flip, no access control, matching this
 // project's existing trust model (Designs/Library have none either).
-import { put, list } from '@vercel/blob'
+import { put, get } from '@vercel/blob'
 
 async function loadComments(projectId, token) {
-  const { blobs } = await list({ prefix: `comments/${projectId}`, token })
-  if (!blobs.length) return []
-  // Cache-bust so a reply posted a moment ago is never masked by a stale
-  // CDN-cached read - the same fix this project has needed repeatedly
-  // elsewhere (list-templates.js, save-project.js, etc.), and matters more
-  // here now that both sides read/write in the same short conversation.
-  const cacheBustUrl = blobs[0].url + (blobs[0].url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
-  const response = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) return []
-  return response.json()
+  // Was list() + a hand-rolled `?_t=` cache-bust on the returned URL. That
+  // still went through list()'s own index, which lagged just enough after a
+  // put() that the very next read (i.e. the second comment's read-modify-
+  // write) could see an empty result and silently overwrite the file,
+  // dropping the first comment. get() reads the known pathname directly -
+  // no list-index step - and useCache:false is the documented way to bypass
+  // the CDN for a private blob, replacing the unofficial query-param hack.
+  const result = await get(`comments/${projectId}.json`, { access: 'private', useCache: false, token })
+  if (!result) return []
+  return new Response(result.stream).json()
 }
 
 async function saveComments(projectId, comments, token) {
