@@ -636,43 +636,54 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         })
 
-        // Shrink text zones with pre-filled content on initial load - guided mode
-        // always; designer mode too for zones marked `alwaysShrink` (no manual
-        // size controls exposed in FieldEditor, e.g. restaurant_name, so there's
-        // no other way for the user to fix an overflow).
+        // Auto-resize text zones on initial load - find the LARGEST fontSize
+        // that fits the zone, growing short text to fill the bounding box and
+        // shrinking long text that overflows. Runs for every autoShrink zone
+        // regardless of mode (headlines and sublines should always fill their
+        // box, whether in guided or designer mode).
         // If a saved font size exists, apply it directly - it already represents
-        // the exact displayed state from last save (post-shrink + any manual adjustments).
-        // Only run the shrink loop when there is NO saved size (first open of a fresh template).
+        // the exact displayed state from last save (post-resize + any manual adjustments).
+        // Only run the resize loop when there is NO saved size (first open of a fresh template).
         zones.forEach(zone => {
           if (zone.type !== 'text' || !zone.autoShrink) return
-          if (!locked && !zone.alwaysShrink) return
           const tb = zoneObjsRef.current[zone.id]
           if (!tb || !tb.text) return
           // Placeholder text is a visual stand-in, not real content - skip
-          // auto-shrink so it renders at the zone's original fontSize
+          // auto-resize so it renders at the zone's original fontSize
           // (the "original pixels" the designer configured). Real text
-          // typed by the user gets auto-shrunk normally in the fields-sync
-          // effect below. This avoids the placeholder "HEADLINE" being
-          // shrunk to fit a tight zone and then that shrunk size persisting
-          // as the baseline when the user types their own copy.
+          // typed by the user gets auto-resized normally in the fields-sync
+          // effect below.
           if (tb._wcPlaceholder) return
           const savedSize = fontSizesRef.current?.[zone.id]
-          // A rotated zone's pre-rotation height becomes the visual thickness once
-          // drawn at -90° - must fit zone.width, not zone.height (axes swap).
           const fitLimit = zone.rotate ? zone.width : zone.height
           if (savedSize != null) {
-            // Saved size is the source of truth - skip auto-shrink entirely.
+            // Saved size is the source of truth - skip auto-resize entirely.
             tb.set('fontSize', savedSize)
             tb.initDimensions()
           } else {
-            // First open with no saved state - shrink from the zone default to fit.
+            // First open with no saved state - find the largest fontSize that fits.
             let size = zone.fontSize ?? 24
             tb.set('fontSize', size)
             tb.initDimensions()
+            // Shrink to fit first (long text may overflow at zone default)
             while ((tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) && size > 6) {
               size -= 0.5
               tb.set('fontSize', size)
               tb.initDimensions()
+            }
+            // Then grow to fill - short text should be as large as the
+            // bounding box allows. Keeps growing until the next step would
+            // overflow, then steps back to the last fitting size.
+            while (size + 0.5 <= 120) {
+              const next = size + 0.5
+              tb.set('fontSize', next)
+              tb.initDimensions()
+              if (tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) {
+                tb.set('fontSize', size)
+                tb.initDimensions()
+                break
+              }
+              size = next
             }
           }
         })
@@ -804,39 +815,55 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         changed = true
       }
       obj._wcPlaceholder = isPlaceholder
-      // Auto-shrink in guided mode - only when THIS field's text actually changed.
-      // Uploading a photo changes fields.photoUrl, not the text content, so we must
-      // not re-shrink text zones the user may have manually sized up.
+      // Auto-resize when text changes - find the LARGEST fontSize that fits
+      // the zone, growing short text to fill the bounding box and shrinking
+      // long text that overflows. Runs for every autoShrink zone regardless
+      // of mode. Only triggers on actual text changes, not unrelated field
+      // updates (e.g. uploading a photo).
       const textChanged = prevFieldsRef.current[id] !== value
-      if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
-        // Always start from the zone default fontSize, not the current fontSizes
-        // state - this ensures text renders at the LARGEST size that fits the
-        // zone. Starting from a previously-shrunk size (e.g. from placeholder
-        // text or a longer previous headline) kept the text stuck at that smaller
-        // size even when shorter text would fit at a larger size. The zone
-        // default is the designer's intended "original pixels".
-        const startSize = zone.fontSize ?? 24
-        let size = startSize
-        obj.set('fontSize', size)
-        obj.initDimensions()
-        // A rotated zone's pre-rotation height becomes the visual thickness once
-        // drawn at -90° - must fit zone.width, not zone.height (axes swap).
-        const fitLimit = zone.rotate ? zone.width : zone.height
-        while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
-          size -= 0.5
+      if (textChanged && zone?.autoShrink) {
+        if (isPlaceholder) {
+          // Field cleared back to placeholder - reset to zone default fontSize
+          // so placeholder renders at original size, not a stale auto-grown size.
+          const defaultSize = zone?.fontSize ?? 24
+          if (obj.fontSize !== defaultSize) {
+            obj.set('fontSize', defaultSize)
+            obj.initDimensions()
+            changed = true
+            onAutoShrinkRef.current?.(zone.id, defaultSize)
+          }
+        } else {
+          // Always start from the zone default fontSize - this ensures text
+          // renders at the LARGEST size that fits the zone, whether that means
+          // growing (short text) or shrinking (long text).
+          const startSize = zone.fontSize ?? 24
+          let size = startSize
           obj.set('fontSize', size)
           obj.initDimensions()
+          const fitLimit = zone.rotate ? zone.width : zone.height
+          // Shrink to fit first
+          while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
+            size -= 0.5
+            obj.set('fontSize', size)
+            obj.initDimensions()
+          }
+          // Then grow to fill the bounding box
+          while (size + 0.5 <= 120) {
+            const next = size + 0.5
+            obj.set('fontSize', next)
+            obj.initDimensions()
+            if (obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) {
+              obj.set('fontSize', size)
+              obj.initDimensions()
+              break
+            }
+            size = next
+          }
+          changed = true
+          // Report the actual rendered size back so the panel's pt number
+          // and the +/- stepper both stay truthful.
+          if (size !== startSize) onAutoShrinkRef.current?.(zone.id, size)
         }
-        changed = true
-        // This shrink only ever touches the live Fabric object, never the
-        // `fontSizes` React state it started from - so the panel's number
-        // (and the +/- stepper's next click) went stale the moment typing
-        // triggered a shrink, making "+" jump from the STALE displayed size
-        // straight up rather than nudging the REAL rendered size (Julia's
-        // report, 2026-09-08: "scale up jumps to a high amount"). Report the
-        // real size back whenever it actually changed so the panel and the
-        // stepper both stay truthful while you type.
-        if (size !== startSize) onAutoShrinkRef.current?.(zone.id, size)
       }
       syncing.current = false
     })
