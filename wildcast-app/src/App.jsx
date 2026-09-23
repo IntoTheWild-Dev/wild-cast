@@ -381,6 +381,10 @@ export default function App() {
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
+  // Approve/Request changes from inside the editor (2026-09-23, Manager
+  // role only) - see handleApproveInEditor/handleRequestChangesInEditor.
+  const [editorApproving, setEditorApproving]                 = useState(false)
+  const [editorRequestingChanges, setEditorRequestingChanges] = useState(false)
   // Editor-side reply box state (Julia's ask, 2026-09-16: the Feedback
   // sidebar was read-only - designer could see reviewer comments but never
   // reply from inside the app).
@@ -748,6 +752,53 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: currentProjectId, commentId, resolved }),
     }).catch(() => {})
+  }
+
+  // Approve / Request changes, right from the editor's Feedback sidebar
+  // (Julia's ask, 2026-09-23: a Manager shouldn't have to leave the editor
+  // and hunt down the separate external review link just to approve their
+  // own team's work - that link is for external partners without an
+  // account). Same handlers/endpoint ReviewPage.jsx's own Approve/Request
+  // changes use, just updating this editor's local reviewStatus instead of
+  // ReviewPage's local `project` state. Gated to workflowRole === 'Manager'
+  // in the JSX below - Designer/Reviewer roles don't get these buttons.
+  async function handleApproveInEditor() {
+    if (editorApproving || !currentProjectId || reviewStatus === 'approved') return
+    setEditorApproving(true)
+    setReviewStatus('approved')
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
+      })
+      if (!res.ok) throw new Error('Failed to approve')
+    } catch (err) {
+      setReviewStatus('review')
+      alert('Could not approve: ' + err.message)
+    } finally {
+      setEditorApproving(false)
+    }
+  }
+
+  async function handleRequestChangesInEditor() {
+    const hasOpenFeedback = comments.some(c => !c.resolved)
+    if (editorRequestingChanges || !currentProjectId || !hasOpenFeedback || reviewStatus === 'changes_requested') return
+    setEditorRequestingChanges(true)
+    setReviewStatus('changes_requested')
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
+      })
+      if (!res.ok) throw new Error('Failed to request changes')
+    } catch (err) {
+      setReviewStatus('review')
+      alert('Could not request changes: ' + err.message)
+    } finally {
+      setEditorRequestingChanges(false)
+    }
   }
 
   // "Resolve and resubmit" (Notion card, 2026-09-22): marks every still-open
@@ -1881,6 +1932,51 @@ export default function App() {
                   Feedback · {comments.length}
                 </span>
               </div>
+
+              {/* Approve / Request changes, Manager role only (2026-09-23) -
+                  everyone else (Designer/Reviewer) doesn't see this; those
+                  actions still also exist on the external review link. */}
+              {workflowRole === 'Manager' && (
+                reviewStatus === 'approved' ? (
+                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(22,163,74,0.1)', borderBottom: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
+                  </div>
+                ) : reviewStatus === 'changes_requested' ? (
+                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(180,83,9,0.1)', borderBottom: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#B45309' }}>↺ Changes requested</span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '10px 14px', display: 'flex', gap: 6, borderBottom: '1px solid #FDE68A' }}>
+                    <button
+                      type="button"
+                      onClick={handleRequestChangesInEditor}
+                      disabled={editorRequestingChanges || !comments.some(c => !c.resolved)}
+                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Leave an open comment first, so the creator knows what to change'}
+                      style={{
+                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
+                        background: '#fff', color: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--light)' : '#B45309',
+                        borderColor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--border)' : '#D97706',
+                        cursor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'default' : 'pointer',
+                      }}
+                    >
+                      {editorRequestingChanges ? 'Sending…' : '↺ Request changes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApproveInEditor}
+                      disabled={editorApproving}
+                      style={{
+                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: 'none',
+                        background: editorApproving ? '#E5E7EB' : '#16a34a', color: editorApproving ? 'var(--mid)' : '#fff',
+                        cursor: editorApproving ? 'default' : 'pointer',
+                      }}
+                    >
+                      {editorApproving ? 'Approving…' : '✓ Approve'}
+                    </button>
+                  </div>
+                )
+              )}
+
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {comments.map(c => (
                   <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : '#FDE68A'}`, opacity: c.resolved ? 0.6 : 1 }}>

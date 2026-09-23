@@ -1,4 +1,4 @@
-import { put, list } from '@vercel/blob'
+import { put, list, get } from '@vercel/blob'
 
 // Designs used to only be discoverable via a per-browser localStorage
 // registry — nobody but the person who saved a design could ever see it
@@ -14,13 +14,16 @@ async function handleList(req, res) {
     const projects = await Promise.all(
       blobs.map(async b => {
         try {
-          // Cache-bust so a rapid save-then-list can't read back a stale
-          // pre-save version from Cloudflare's CDN — same pattern used
-          // throughout this project's other list endpoints.
-          const cacheBustUrl = b.url + (b.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
-          const r = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
-          if (!r.ok) return null
-          const project = await r.json()
+          // get()+useCache:false reads this blob's content straight from
+          // origin storage instead of through the CDN, so a status flip
+          // that just landed (e.g. Request changes, PATCHed via handlePatch
+          // below) can't be masked by a stale cached read here - same fix
+          // as comments.js's own loadComments(), which had the identical
+          // symptom (a just-written value not showing up on the very next
+          // read) for the same reason.
+          const result = await get(b.pathname, { access: 'private', useCache: false, token })
+          if (!result) return null
+          const project = await new Response(result.stream).json()
           return {
             id: project.id,
             url: b.url,
@@ -81,13 +84,14 @@ async function handlePatch(req, res) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
   try {
-    const { blobs } = await list({ prefix: `projects/${projectId}.json`, token, limit: 1 })
-    if (!blobs.length) return res.status(404).json({ error: 'Project not found' })
-
-    const cacheBustUrl = blobs[0].url + (blobs[0].url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
-    const response = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
-    if (!response.ok) throw new Error(`Blob fetch failed: ${response.status}`)
-    const project = await response.json()
+    // Known, deterministic pathname (addRandomSuffix: false on every save)
+    // - reads it directly instead of list()-then-fetch, same fix as
+    // handleList above and comments.js's loadComments(). This one matters
+    // more: a stale read here doesn't just show a stale status, it gets
+    // written BACK, silently reverting whatever the stale read missed.
+    const result = await get(`projects/${projectId}.json`, { access: 'private', useCache: false, token })
+    if (!result) return res.status(404).json({ error: 'Project not found' })
+    const project = await new Response(result.stream).json()
 
     project.reviewStatus = status
     await put(`projects/${projectId}.json`, JSON.stringify(project), {
