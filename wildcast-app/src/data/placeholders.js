@@ -26,25 +26,35 @@ export const TEXT_PLACEHOLDERS = {
 // (never saved/exported, see TemplateCanvas.jsx's getPng), so the limits
 // don't apply to them.
 const TEMPLATE_TEXT_PLACEHOLDERS = {
-  // Option A (Wen Cheng art): headline, subline and offer
+  // Option A (Wen Cheng art): the real flyer's "Potsdams neues Dreamteam"
+  // hero text is two zones, not one - sub_headline carries the smaller
+  // intro line, headline carries just the big dominant word below it.
+  // Giving headline the FULL phrase (an earlier version of this fix) left
+  // sub_headline showing nothing real above it and duplicated the
+  // restaurant_name zone's "Wen Cheng ♥ Wolt" line instead of matching the
+  // actual two-line headline split - corrected per Julia's confirmation,
+  // 2026-09-24, checking against the real Wen Cheng flyer line-by-line.
   'wen-cheng-flyer2': {
-    headline:     'Potsdams neues Dreamteam',
-    sub_headline: 'Wen Cheng ♥ Wolt',
+    sub_headline: 'Potsdams neues',
+    headline:     'Dreamteam',
     offer:        '30% sparen',
   },
   'wen-cheng-flyer1': {
-    headline:     'Potsdams neues Dreamteam',
-    sub_headline: 'Wen Cheng ♥ Wolt',
+    sub_headline: 'Potsdams neues',
+    headline:     'Dreamteam',
     offer:        '30% sparen',
   },
-  // Option B (McDonald's art): just the headline - CTA at the bottom stays
-  // as the generic copy
+  // Option B (McDonald's art): just the headline - no sub_headline zone on
+  // this template at all, CTA at the bottom stays as the generic copy.
   'opt-b-flyer2': {
     headline: 'McDonald’s',
   },
-  // Option C (ANKO Berlin art): headline only
+  // Option C (ANKO Berlin art): same two-zone split as Option A - "Chick
+  // this out," is the smaller intro line (sub_headline), "Berlin." is the
+  // big dominant word (headline).
   'restaurant-flyer-option-c': {
-    headline: 'Chick this out, Berlin.',
+    sub_headline: 'Chick this out,',
+    headline:     'Berlin.',
   },
 }
 
@@ -91,4 +101,23 @@ export const IMAGE_PLACEHOLDERS = {
   photo:   placeholderSvg('PHOTO'),
   sticker: placeholderSvg('DISCOUNT'),
   qr:      placeholderSvg('QR CODE'),
+}
+
+// Per-template photo placeholder overrides (Julia's ask, 2026-09-24): a flat
+// grey "PHOTO" box doesn't show what kind of shot actually belongs in the
+// zone - these are the real (WildScale-prepped, transparent-background)
+// campaign photos for each catalogue option, shown at the same
+// PLACEHOLDER_OPACITY as every other placeholder (see TemplateCanvas.jsx)
+// so they read as a translucent guide, not real uploaded content. Same
+// template-id-minus-"-simple" keying as TEMPLATE_TEXT_PLACEHOLDERS above.
+const TEMPLATE_IMAGE_PLACEHOLDERS = {
+  'wen-cheng-flyer2': { photo: '/placeholders/wen-cheng-photo.png' },
+  'wen-cheng-flyer1': { photo: '/placeholders/wen-cheng-photo.png' },
+  'opt-b-flyer2':     { photo: '/placeholders/mcdonalds-photo.png' },
+  'restaurant-flyer-option-c': { photo: '/placeholders/akko-photo.png' },
+}
+
+export function placeholderImageFor(zone, templateId) {
+  const overrides = TEMPLATE_IMAGE_PLACEHOLDERS[templatePlaceholderKey(templateId)]
+  return overrides?.[zone?.id] ?? IMAGE_PLACEHOLDERS[zone?.id]
 }

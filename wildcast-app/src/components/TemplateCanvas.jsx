@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
-import { TEXT_PLACEHOLDERS, IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
+import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
 
 // Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
 // zone is dimmed to while it's still showing generic placeholder content
@@ -1103,7 +1103,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       // blank drop target. effectiveUrl is what actually gets loaded/tracked;
       // `url` itself (and therefore fields state) stays untouched until the
       // manager uploads or picks a real image.
-      const placeholderUrl = IMAGE_PLACEHOLDERS[zone.id]
+      const placeholderUrl = placeholderImageFor(zone, templateId)
       const isPlaceholder = !url && !!placeholderUrl
       const effectiveUrl = url || placeholderUrl
 
