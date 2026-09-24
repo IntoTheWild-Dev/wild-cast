@@ -109,10 +109,21 @@ async function loadFonts() {
 // zone's width (~276 of ~300 there, just inside the panel). Only applies to
 // unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
 // design, and a rotated zone's width axis is its visual height.
+//
+// zone.fitWidthRatio lets a specific zone opt out of the 8% margin (default
+// 1 = only the raw zone width matters, no extra safety buffer). Needed for
+// Option A's headline/sub_headline (wen-cheng-flyer2, templateZones.js):
+// their fontSize was captured directly from the real Figma master, which
+// deliberately runs "Dreamteam" almost edge-to-edge - splitting the old
+// two-line "Potsdams neues Dreamteam" placeholder into these two single-line
+// zones (Julia's ask, 2026-09-24) made them single-line for the first time,
+// newly subjecting them to this margin and shrinking a correctly-calibrated
+// size down to ~37pt ("lost its auto fit and auto size", Julia's report).
+// Option B/C's zones are untouched and keep the default 0.92 margin.
 const FIT_WIDTH_RATIO = 0.92
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
-  return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
+  return obj.calcTextWidth() > zone.width * (zone.fitWidthRatio ?? FIT_WIDTH_RATIO)
 }
 
 // Bug fix, 2026-09-24 (Julia: long headlines lost centering after the
@@ -667,12 +678,27 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         // If a saved font size exists, apply it directly - it already represents
         // the exact displayed state from last save (post-resize + any manual adjustments).
         // Only run the resize loop when there is NO saved size (first open of a fresh template).
+        //
+        // zone.fitHeight lets a zone's height check use a taller limit than its
+        // own positioning `height` (default: use `height` itself). Needed for
+        // Option A's headline/sub_headline (wen-cheng-flyer2, templateZones.js):
+        // per that file's own comment, their `height` values are deliberately
+        // tight NON-OVERLAPPING SPACING rectangles from the Figma import, not
+        // a box sized to contain the actual rendered text - a fabric Textbox at
+        // their real calibrated fontSize (measured, 2026-09-24) is genuinely
+        // taller (headline: ~64 vs height 40.46; sub_headline: ~44 vs height
+        // 36.09). That mismatch was invisible while both zones' placeholder was
+        // one long two-line phrase (shrinking to fit was expected either way);
+        // splitting it into two single-line zones exposed it as an unwanted
+        // shrink from the correct 56.6pt/38.78pt down to ~37pt - "lost its auto
+        // fit and auto size" (Julia's report). Other templates' zones are
+        // untouched and keep using their own `height` as before.
         zones.forEach(zone => {
           if (zone.type !== 'text' || !zone.autoShrink) return
           const tb = zoneObjsRef.current[zone.id]
           if (!tb || !tb.text) return
           const savedSize = fontSizesRef.current?.[zone.id]
-          const fitLimit = zone.rotate ? zone.width : zone.height
+          const fitLimit = zone.rotate ? zone.width : (zone.fitHeight ?? zone.height)
           if (savedSize != null) {
             // Saved size is the source of truth - skip auto-resize entirely.
             // Still routed through the shared helper so a saved size that
@@ -860,7 +886,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           // then shrink-to-fit ONLY (placeholders never grow, and several
           // carry real-flyer-length copy that overflows at full size).
           let size = zone?.fontSize ?? 24
-          const fitLimit = zone.rotate ? zone.width : zone.height
+          const fitLimit = zone.rotate ? zone.width : (zone.fitHeight ?? zone.height)
           let overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           while (overflows && size > 6) {
             size -= 0.5
@@ -874,7 +900,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           // growing (short text) or shrinking (long text).
           const startSize = zone.fontSize ?? 24
           let size = startSize
-          const fitLimit = zone.rotate ? zone.width : zone.height
+          const fitLimit = zone.rotate ? zone.width : (zone.fitHeight ?? zone.height)
           // Shrink to fit first
           let overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           while (overflows && size > 6) {

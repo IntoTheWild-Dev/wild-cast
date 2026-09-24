@@ -110,6 +110,20 @@ const WEN_CHENG_V3_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // This fontSize is the real Figma master's calibrated value, not a
+    // generic default - "Potsdams neues" at 38.78pt already runs to ~95%
+    // of the zone width by design (fitWidthRatio opts out of the generic
+    // 92%-of-width safety margin, which doesn't know that) and its real
+    // rendered box is taller (~44) than this zone's own `height` (36.09 -
+    // a tight non-overlapping SPACING rectangle from Figma, not a
+    // fits-the-text box - see this file's own top-of-file comment).
+    // Both went unnoticed while this zone's placeholder was still part of
+    // one long two-line phrase; splitting it into single-line text exposed
+    // them as an unwanted shrink from 38.78pt down to ~37pt (Julia's
+    // report, 2026-09-24: "lost its auto fit and auto size"). fitHeight
+    // gives the real single-line box (~44, measured) room instead.
+    fitWidthRatio: 1,
+    fitHeight: 44,
   },
   {
     id: 'headline',
@@ -122,6 +136,11 @@ const WEN_CHENG_V3_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // Same reasoning as sub_headline above - "Dreamteam" at 56.6pt runs to
+    // ~99% of the zone width and its real single-line box is ~64 tall vs
+    // this zone's own (deliberately tighter) 40.46 positioning height.
+    fitWidthRatio: 1,
+    fitHeight: 64,
   },
   {
     id: 'offer',
