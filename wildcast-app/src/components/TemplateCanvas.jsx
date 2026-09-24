@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
-import { TEXT_PLACEHOLDERS, IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
+import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
 
 // Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
 // zone is dimmed to while it's still showing generic placeholder content
@@ -115,7 +115,37 @@ function overflowsFitWidth(obj, zone) {
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId }) {
+// Bug fix, 2026-09-24 (Julia: long headlines lost centering after the
+// auto-resize rework): Fabric's Textbox silently widens itself past our
+// fixed `width` whenever a single word doesn't fit at the current font
+// size (`dynamicMinWidth` in fabric's textbox.class.js) - and it never
+// narrows back down once that happens. Every unrotated zone is left-
+// anchored (originX:'left', left: zone.x - see the Textbox construction
+// below), so a box that's silently grown wider stays pinned at the same
+// left edge and its right edge drifts past the zone/canvas edge -
+// textAlign:'center' only centers glyphs *inside* the box, it can't fix
+// the box itself no longer matching the zone rectangle. Short headlines
+// rarely contain a single word wide enough to trigger this; long ones
+// (more words, longer words) hit it often, matching exactly what was
+// reported: short headlines fine, long ones drifted off-center.
+// Applies a font size, pins the box back to the zone's real width every
+// time, and folds "a word didn't fit at this width" into the same
+// overflow signal the resize loops already check - a too-wide word
+// should mean "still doesn't fit, keep shrinking," not "silently expand
+// the box instead."
+function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
+  const textW = zone.textWidth ?? zone.width
+  obj.set('fontSize', fontSize)
+  obj.set('width', textW)
+  obj.initDimensions()
+  if (obj.width > textW) {
+    obj.set('width', textW)
+    obj.initDimensions()
+  }
+  return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
+}
+
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -313,23 +343,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           const zone = zones.find(z => z.id === zoneId)
           if (zone) { snapZone(zone); canvas.renderAll() }
         },
-        // Restores text-zone positions from an undo snapshot (mirrors the saved-project
-        // restore in the canvas-init effect, but callable at any time with arbitrary data).
-        applyZonePositions: (positions) => {
-          if (!positions) return
-          // Same Guided-mode width guard as the canvas-init restore below -
-          // an undo step should never be able to reintroduce a stray
-          // Designer-mode width into a locked Guided canvas either.
-          const locked = mode === 'non-designer'
-          zones.forEach(zone => {
-            if (zone.type !== 'text') return
-            const p = positions[zone.id]
-            if (!p) return
-            const obj = zoneObjsRef.current[zone.id]
-            if (!obj) return
-            obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
-            obj.setCoords()
-          })
+        // Text-zone positions are no longer restorable - see applyZonePositions
+        // in the canvas-init effect below. Undo snapshots still carry
+        // zonePositions (harmless), but applying them would resurrect legacy
+        // Designer-mode drags that text zones must never inherit.
+        applyZonePositions: () => {
           canvas.renderAll()
         },
       }
@@ -541,7 +559,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             const cx = zone.x + zone.width / 2
             const cy = zone.y + zone.height / 2
             const textW = zone.textWidth ?? zone.width
-            const placeholderText = placeholderTextFor(zone)
+            const placeholderText = placeholderTextFor(zone, templateId)
             const isPlaceholder = !fields[zone.id] && placeholderText != null
 
             const tb = new fabric.Textbox(isPlaceholder ? placeholderText : (fields[zone.id] || ''), {
@@ -570,9 +588,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               // font's raw metrics (glyph descenders) without the extra leading.
               lineHeight: 1.05,
               fill:    zone.color || '#FFFFFF',
+              // Zones with no declared align default to CENTER, not left
+              // (Julia's ask, 2026-09-24: display text should come out
+              // centred from the get-go - users shouldn't need Position
+              // arrows to fix it). Zones that explicitly declare an align
+              // (tc: 'left', restaurant_name: 'right') keep it.
               textAlign: modeRef.current === 'non-designer'
-                ? (zone.align ?? 'left')
-                : (alignmentsRef.current?.[zone.id] ?? zone.align ?? 'left'),
+                ? (zone.align ?? 'center')
+                : (alignmentsRef.current?.[zone.id] ?? zone.align ?? 'center'),
               angle:   zone.rotate || 0,
               opacity: isPlaceholder ? PLACEHOLDER_OPACITY : 1,
               editable:       !locked,
@@ -636,35 +659,57 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           }
         })
 
-        // Shrink text zones with pre-filled content on initial load - guided mode
-        // always; designer mode too for zones marked `alwaysShrink` (no manual
-        // size controls exposed in FieldEditor, e.g. restaurant_name, so there's
-        // no other way for the user to fix an overflow).
+        // Auto-resize text zones on initial load - find the LARGEST fontSize
+        // that fits the zone, growing short text to fill the bounding box and
+        // shrinking long text that overflows. Runs for every autoShrink zone
+        // regardless of mode (headlines and sublines should always fill their
+        // box, whether in guided or designer mode).
         // If a saved font size exists, apply it directly - it already represents
-        // the exact displayed state from last save (post-shrink + any manual adjustments).
-        // Only run the shrink loop when there is NO saved size (first open of a fresh template).
+        // the exact displayed state from last save (post-resize + any manual adjustments).
+        // Only run the resize loop when there is NO saved size (first open of a fresh template).
         zones.forEach(zone => {
           if (zone.type !== 'text' || !zone.autoShrink) return
-          if (!locked && !zone.alwaysShrink) return
           const tb = zoneObjsRef.current[zone.id]
           if (!tb || !tb.text) return
           const savedSize = fontSizesRef.current?.[zone.id]
-          // A rotated zone's pre-rotation height becomes the visual thickness once
-          // drawn at -90° - must fit zone.width, not zone.height (axes swap).
           const fitLimit = zone.rotate ? zone.width : zone.height
           if (savedSize != null) {
-            // Saved size is the source of truth - skip auto-shrink entirely.
-            tb.set('fontSize', savedSize)
-            tb.initDimensions()
-          } else {
-            // First open with no saved state - shrink from the zone default to fit.
+            // Saved size is the source of truth - skip auto-resize entirely.
+            // Still routed through the shared helper so a saved size that
+            // happens to contain an unbreakable word doesn't ratchet the
+            // box wider than the zone (see applyFontSizeAndCheckFit).
+            applyFontSizeAndCheckFit(tb, savedSize, zone, fitLimit)
+          } else if (tb._wcPlaceholder) {
+            // Placeholder text shrink-to-fits ONLY, never grows: several
+            // placeholders now carry real-flyer-length copy (e.g. Option A's
+            // "POTSDAMS NEUES DREAMTEAM") that would overflow the zone at
+            // full zone fontSize. Real text typed by the user gets the full
+            // grow+shrink auto-resize in the fields-sync effect below.
             let size = zone.fontSize ?? 24
-            tb.set('fontSize', size)
-            tb.initDimensions()
-            while ((tb.height > fitLimit + 2 || overflowsFitWidth(tb, zone)) && size > 6) {
+            let overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+            while (overflows && size > 6) {
               size -= 0.5
-              tb.set('fontSize', size)
-              tb.initDimensions()
+              overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+            }
+          } else {
+            // First open with no saved state - find the largest fontSize that fits.
+            let size = zone.fontSize ?? 24
+            // Shrink to fit first (long text may overflow at zone default)
+            let overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+            while (overflows && size > 6) {
+              size -= 0.5
+              overflows = applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+            }
+            // Then grow to fill - short text should be as large as the
+            // bounding box allows. Keeps growing until the next step would
+            // overflow, then steps back to the last fitting size.
+            while (size + 0.5 <= 120) {
+              const next = size + 0.5
+              if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
+                applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
+                break
+              }
+              size = next
             }
           }
         })
@@ -681,30 +726,18 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         }
       }
 
-      // Restore saved drag positions for text zones (designer mode re-open).
-      // Width is Designer-only - Guided mode's canvas is locked, so a zone's
-      // width there can never have been legitimately changed by the user,
-      // only ever carried over from a stray/accidental Designer-mode resize
-      // saved into this same project at some point (a single bad drag on a
-      // tiny rotated zone like `tc` persists forever otherwise, since every
-      // later save just re-captures whatever width is currently applied -
-      // Julia's report, 2026-09-10: the T&Cs zone had been dragged wide
-      // enough that a whole sentence rendered as one unwrapped line, most of
-      // it pushed off-canvas). Guided mode always uses the template's own
-      // configured width instead of trusting a saved one.
+      // Saved drag positions for text zones are NO LONGER applied at all
+      // (Julia's ask, 2026-09-24: text must always sit exactly at the zone's
+      // designed geometry, centred on the page). Designer mode - the only
+      // thing that could ever create a legitimate text drag - is removed
+      // from the UI, so every saved text position/width in existing projects
+      // is legacy from before that (a single bad drag used to persist
+      // forever: a stretched headline box re-wrapped long text wider than
+      // its own guide rect, spilling past it - exactly the bug this fixes).
+      // Text zones therefore always render at their zone defaults; the
+      // function stays for structural symmetry with exportRef's undo hook
+      // below and applies nothing.
       function applyZonePositions() {
-        const saved = zonePositionsRef.current
-        if (!saved || !Object.keys(saved).length) return
-        const locked = mode === 'non-designer'
-        zones.forEach(zone => {
-          if (zone.type !== 'text') return
-          const p = saved[zone.id]
-          if (!p) return
-          const obj = zoneObjsRef.current[zone.id]
-          if (!obj) return
-          obj.set(locked ? { left: p.left, top: p.top } : { left: p.left, top: p.top, width: p.width })
-          obj.setCoords()
-        })
         canvas.renderAll()
       }
 
@@ -783,7 +816,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       if (syncing.current) return
       syncing.current = true
       const zone = zoneCfgRef.current[id]
-      const placeholderText = placeholderTextFor(zone)
+      const placeholderText = placeholderTextFor(zone, templateId)
       const isPlaceholder = !value && placeholderText != null
       const displayText = isPlaceholder ? placeholderText : (value || '')
       if (obj.text !== displayText) {
@@ -796,33 +829,72 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         changed = true
       }
       obj._wcPlaceholder = isPlaceholder
-      // Auto-shrink in guided mode - only when THIS field's text actually changed.
-      // Uploading a photo changes fields.photoUrl, not the text content, so we must
-      // not re-shrink text zones the user may have manually sized up.
-      const textChanged = prevFieldsRef.current[id] !== value
-      if (textChanged && zone?.autoShrink && (modeRef.current === 'non-designer' || zone.alwaysShrink)) {
-        const startSize = fontSizesRef.current?.[zone.id] ?? zone.fontSize
-        let size = startSize
-        obj.set('fontSize', size)
-        obj.initDimensions()
-        // A rotated zone's pre-rotation height becomes the visual thickness once
-        // drawn at -90° - must fit zone.width, not zone.height (axes swap).
-        const fitLimit = zone.rotate ? zone.width : zone.height
-        while ((obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)) && size > 6) {
-          size -= 0.5
-          obj.set('fontSize', size)
-          obj.initDimensions()
+      // Placeholder guide text is always STATIC - snap it back to the zone's
+      // designed position/size on every sync (Julia's ask, 2026-09-24: guide
+      // text must sit exactly where the designer put it, centred on the
+      // page, never shifted by a saved drag or a stray override). Real typed
+      // content keeps whatever position it legitimately has.
+      if (isPlaceholder && zone) {
+        const isRotated = !!zone.rotate
+        const cx = zone.x + zone.width / 2
+        const cy = zone.y + zone.height / 2
+        const staticGeo = isRotated
+          ? { left: cx, top: cy }
+          : { left: zone.x, top: zone.y, width: zone.textWidth ?? zone.width }
+        if (obj.left !== staticGeo.left || obj.top !== staticGeo.top ||
+            (staticGeo.width != null && obj.width !== staticGeo.width)) {
+          obj.set(staticGeo)
+          obj.setCoords()
+          changed = true
         }
-        changed = true
-        // This shrink only ever touches the live Fabric object, never the
-        // `fontSizes` React state it started from - so the panel's number
-        // (and the +/- stepper's next click) went stale the moment typing
-        // triggered a shrink, making "+" jump from the STALE displayed size
-        // straight up rather than nudging the REAL rendered size (Julia's
-        // report, 2026-09-08: "scale up jumps to a high amount"). Report the
-        // real size back whenever it actually changed so the panel and the
-        // stepper both stay truthful while you type.
-        if (size !== startSize) onAutoShrinkRef.current?.(zone.id, size)
+      }
+      // Auto-resize when text changes - find the LARGEST fontSize that fits
+      // the zone, growing short text to fill the bounding box and shrinking
+      // long text that overflows. Runs for every autoShrink zone regardless
+      // of mode. Only triggers on actual text changes, not unrelated field
+      // updates (e.g. uploading a photo).
+      const textChanged = prevFieldsRef.current[id] !== value
+      if (textChanged && zone?.autoShrink) {
+        if (isPlaceholder) {
+          // Field cleared back to placeholder - reset to the zone default,
+          // then shrink-to-fit ONLY (placeholders never grow, and several
+          // carry real-flyer-length copy that overflows at full size).
+          let size = zone?.fontSize ?? 24
+          const fitLimit = zone.rotate ? zone.width : zone.height
+          let overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+          while (overflows && size > 6) {
+            size -= 0.5
+            overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+          }
+          changed = true
+          onAutoShrinkRef.current?.(zone.id, size)
+        } else {
+          // Always start from the zone default fontSize - this ensures text
+          // renders at the LARGEST size that fits the zone, whether that means
+          // growing (short text) or shrinking (long text).
+          const startSize = zone.fontSize ?? 24
+          let size = startSize
+          const fitLimit = zone.rotate ? zone.width : zone.height
+          // Shrink to fit first
+          let overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+          while (overflows && size > 6) {
+            size -= 0.5
+            overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+          }
+          // Then grow to fill the bounding box
+          while (size + 0.5 <= 120) {
+            const next = size + 0.5
+            if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
+              applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
+              break
+            }
+            size = next
+          }
+          changed = true
+          // Report the actual rendered size back so the panel's pt number
+          // and the +/- stepper both stay truthful.
+          if (size !== startSize) onAutoShrinkRef.current?.(zone.id, size)
+        }
       }
       syncing.current = false
     })
@@ -862,9 +934,12 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     config.zones.forEach(zone => {
       const obj = zoneObjsRef.current[zone.id]
       if (!obj || obj.type !== 'textbox') return
+      // Same center-default as the canvas init above - zones with no
+      // declared align render centred, explicit configs (tc/restaurant_name)
+      // still win.
       const align = modeRef.current === 'non-designer'
-        ? (zone.align ?? 'left')
-        : (alignments?.[zone.id] ?? zone.align ?? 'left')
+        ? (zone.align ?? 'center')
+        : (alignments?.[zone.id] ?? zone.align ?? 'center')
       if (obj.textAlign !== align) obj.set('textAlign', align)
     })
     canvas.renderAll()
@@ -1028,7 +1103,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       // blank drop target. effectiveUrl is what actually gets loaded/tracked;
       // `url` itself (and therefore fields state) stays untouched until the
       // manager uploads or picks a real image.
-      const placeholderUrl = IMAGE_PLACEHOLDERS[zone.id]
+      const placeholderUrl = placeholderImageFor(zone, templateId)
       const isPlaceholder = !url && !!placeholderUrl
       const effectiveUrl = url || placeholderUrl
 

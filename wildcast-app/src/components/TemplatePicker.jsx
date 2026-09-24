@@ -170,19 +170,22 @@ export function LayoutModal({ entry, onPick, onClose }) {
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><line x1="4" y1="21" x2="20" y2="21"/></svg>,
     },
     {
+      key: 'designer-image',
+      type: 'Designer',
+      desc: 'Full control with food photo and logo zones.',
+      templateId: entry.templateIdDesigner,
+      icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+      // Hidden (Julia's ask, 2026-09-24): Designer is off the menu for now -
+      // partners only get Guided. Set disabled:false to bring it back.
+      disabled: true,
+    },
+    {
       key: 'designer-text',
       type: 'Text only · Designer',
       desc: 'Full control - move, resize and restyle any element freely.',
       templateId: entry.templateIdDesignerText,
       icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
       disabled: true,
-    },
-    {
-      key: 'designer-image',
-      type: 'Designer',
-      desc: 'Full control with food photo and logo zones.',
-      templateId: entry.templateIdDesigner,
-      icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
     },
   ].filter(opt => !opt.disabled)
 
@@ -435,6 +438,10 @@ function ManageMenu({ record, onAction, onDelete, onRequestArchive }) {
 }
 
 // ── Options view (drilled in) ─────────────────────────────────────────────────
+// SHOW_MODE_CHOOSER (Julia's ask, 2026-09-24): the "Choose your mode" popup is
+// removed - clicking a template card goes straight into the editor in Guided
+// mode. Flip this flag to true to restore the popup.
+const SHOW_MODE_CHOOSER = false
 function OptionsView({ group, customCards, customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
   const [modal, setModal] = useState(null)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
@@ -536,7 +543,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
           </div>
         </div>
 
-        {modal && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
+        {modal && SHOW_MODE_CHOOSER && <LayoutModal entry={modal} onPick={handlePick} onClose={() => setModal(null)} />}
         {archiveConfirm && (
           <ArchiveConfirmModal
             label={archiveConfirm.label}
@@ -558,7 +565,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
             if (t.live) return (
               <div
                 key={i}
-                onClick={() => setModal(t)}
+                onClick={() => (SHOW_MODE_CHOOSER ? setModal(t) : handlePick(t.templateIdGuided ?? t.templateIdDesigner))}
                 style={{ position: 'relative', background: '#fff', borderRadius: 14, border: '1.5px solid var(--border)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}

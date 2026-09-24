@@ -110,3 +110,8 @@ body {
   color: var(--dark);
   -webkit-font-smoothing: antialiased;
 }
+
+input::placeholder, textarea::placeholder {
+  color: var(--light);
+  font-style: italic;
+}

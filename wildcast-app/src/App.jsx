@@ -285,27 +285,39 @@ export default function App() {
   // eslint-disable-next-line no-unused-vars
   const [savedCandidatePreviews, setSavedCandidatePreviews] = useState({})
   const [selectedTemplate, setSelectedTemplate] = useState(null)
-  // Guided/Advanced toggle (Julia's editor redesign, 2026-09-18, per
-  // Annika's mockup): replaces the old fixed-per-template guided-vs-designer
-  // split with a live in-session toggle. Guided hides font-size/position
-  // controls and locks the canvas (nudge-only); Advanced shows full manual
-  // controls and unlocks free dragging - exactly today's non-designer vs
-  // designer behavior, just now user-switchable instead of fixed by which
-  // template id was picked. Safe to do this way because a template's
-  // "-simple" (guided) and non-suffixed (designer) ids always point at the
-  // IDENTICAL zone layout (see templateZones.js's own comments on this) -
-  // toggling only ever changes controls visibility/lock state, never which
-  // zones exist or where they sit. Resets to the template's own starting
-  // mode every time a different template loads.
+// Guided/Advanced toggle (Julia's editor redesign, 2026-09-18, per Annika's
+// mockup): replaces the old fixed-per-template guided-vs-designer split with
+// a live in-session toggle. Guided hides font-size/position controls and
+// locks the canvas (nudge-only); Advanced shows full manual controls and
+// unlocks free dragging - exactly today's non-designer vs designer behavior,
+// just now user-switchable instead of fixed by which template id was picked.
+// Safe to do this way because a template's "-simple" (guided) and
+// non-suffixed (designer) ids always point at the IDENTICAL zone layout (see
+// templateZones.js's own comments on this) - toggling only ever changes
+// controls visibility/lock state, never which zones exist or where they sit.
+// Resets to the template's own starting mode every time a different template
+// loads.
+//
+// HIDDEN (Julia's ask, 2026-09-24): the toggle is removed from the UI for
+// now - everyone stays in Guided. Everything below still works; flip this
+// one flag to true to bring the toggle back.
+const SHOW_MODE_TOGGLE = false
+
+// "Choose your mode" popup (Julia's ask, 2026-09-24): removed entirely -
+// picking a template (brief flow) goes straight into the editor in Guided
+// mode. Flip to true to bring the popup back (brief submit then sets
+// briefModeEntry again - see the onSubmitted handler in the JSX below).
+const SHOW_MODE_CHOOSER = false
   const [advancedModeTemplateId, setAdvancedModeTemplateId] = useState(selectedTemplate?.id)
-  const [advancedMode, setAdvancedMode] = useState(selectedTemplate?.mode === 'designer')
+  // Toggle hidden → always Guided, even for a designer-mode template id.
+  const [advancedMode, setAdvancedMode] = useState(SHOW_MODE_TOGGLE && selectedTemplate?.mode === 'designer')
   // Adjusts state during render (not an effect) when the selected template
   // changes - same pattern FieldEditor.jsx's useOrderedKeys uses for the
   // same reason: resets in the same render instead of flashing the stale
   // mode for one frame first.
   if (advancedModeTemplateId !== selectedTemplate?.id) {
     setAdvancedModeTemplateId(selectedTemplate?.id)
-    setAdvancedMode(selectedTemplate?.mode === 'designer')
+    setAdvancedMode(SHOW_MODE_TOGGLE && selectedTemplate?.mode === 'designer')
   }
   // Which zone's field is currently focused/hovered in the side panel - lights
   // up that zone's boundary on the canvas (Annika's ask via Julia, 2026-09-18).
@@ -1770,10 +1782,14 @@ export default function App() {
               setCompletedFormats(new Set())
               setTemplateSelectFormat(null)
               // Template is already picked (Step 1 of the brief, per Julia's
-              // ask 2026-09-10) - open "Choose your mode" directly instead of
-              // routing to the old card-grid template-select screen.
+              // ask 2026-09-10). "Choose your mode" removed 2026-09-24 -
+              // go straight into the editor in Guided mode.
               const entry = entryForGuidedId(brief.preSelectedTemplateIds?.[0], customTemplates.cards, customTemplates.records)
-              if (entry) setBriefModeEntry(entry)
+              const guidedId = entry?.templateIdGuided
+              const template = guidedId
+                ? (TEMPLATES.find(t => t.id === guidedId) ?? customTemplates.cards.find(t => t.id === guidedId))
+                : null
+              if (template) handleSelectTemplateFromBrief(template)
               // Shouldn't happen - BriefingForm now requires a pick before it
               // submits - but fall back rather than a dead end if the picked
               // id somehow doesn't resolve to a real entry.
@@ -1783,7 +1799,10 @@ export default function App() {
         </div>
       )}
 
-      {briefModeEntry && (
+      {/* "Choose your mode" popup removed 2026-09-24 (Julia's ask) - brief
+          submit goes straight into the editor in Guided mode. briefModeEntry
+          is never set anymore; flip SHOW_MODE_CHOOSER below to restore. */}
+      {SHOW_MODE_CHOOSER && briefModeEntry && (
         <LayoutModal
           entry={briefModeEntry}
           onPick={templateId => {
@@ -2061,8 +2080,10 @@ export default function App() {
 
             {/* Guided/Advanced toggle (Julia's editor redesign, 2026-09-18,
                 per Annika's mockup) - not shown in restricted review, which
-                has no "Advanced" concept (see effectiveMode above). */}
-            {!restrictedReview && (
+                has no "Advanced" concept (see effectiveMode above).
+                HIDDEN 2026-09-24 (SHOW_MODE_TOGGLE = false above) - flip the
+                flag to bring this whole block back. */}
+            {!restrictedReview && SHOW_MODE_TOGGLE && (
               <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                 <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 3, gap: 2 }}>
                   {[['non-designer', 'Guided'], ['designer', 'Advanced']].map(([m, label]) => (
@@ -2108,6 +2129,7 @@ export default function App() {
             <TemplateCanvas
               key={loadKey}
               config={templateConfig}
+              templateId={selectedTemplate?.id}
               fields={fields}
               onFieldChange={handleFieldChange}
               exportRef={exportRef}
