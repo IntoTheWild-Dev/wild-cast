@@ -487,6 +487,27 @@ const SHOW_MODE_CHOOSER = false
   const [importDirty, setImportDirty] = useState(false)
   const exportRef = useRef(null)
 
+  // Bug fix, 2026-09-24 (Julia's report: a design started from scratch and
+  // sent for review never moved into My Tasks' "Needs changes" column).
+  // doSave() mints a fresh id with `currentProjectId || crypto.randomUUID()`
+  // whenever nothing has been saved yet - fine for one caller at a time, but
+  // doSave() is also called by the 2.5s autosave debounce independently of
+  // any button click. If that timer's callback and a manual Send for Review
+  // click both reach doSave() before either has resolved its own
+  // setCurrentProjectId(id) (a real window - doSave() awaits thumbnail/
+  // preview generation first), BOTH read currentProjectId as still null and
+  // each mints its own crypto.randomUUID() - two separate project records
+  // for what looks like one design. Whichever id wins setCurrentProjectId
+  // last is the one the editor (and every later autosave) keeps editing;
+  // the review link and the reviewer's "Request changes" PATCH operate on
+  // the OTHER, now-orphaned id, so the card the designer is watching in My
+  // Tasks never sees the status change. A ref (unlike state) is written
+  // synchronously - the first doSave() call to actually reach this line
+  // claims the id and every concurrent call reads the same one back,
+  // regardless of how many are mid-flight. Reset to null everywhere a
+  // genuinely new, unsaved project starts (grep setCurrentProjectId(null)).
+  const pendingNewIdRef = useRef(null)
+
   // ── Undo history ─────────────────────────────────────────────────────────────
   const historyRef         = useRef([])           // snapshots of { fields, fontSizes, alignments, imageScales }
   const [canUndo, setCanUndo] = useState(false)
@@ -898,6 +919,7 @@ const SHOW_MODE_CHOOSER = false
     setZonePositions({})
     setProjectName(template.name)
     setCurrentProjectId(null)
+    pendingNewIdRef.current = null
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
@@ -967,6 +989,7 @@ const SHOW_MODE_CHOOSER = false
     const nameTag = [prefilledFields?.restaurant_name, prefilledFields?.offer].filter(Boolean).join(' – ')
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
+    pendingNewIdRef.current = null
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
@@ -1020,6 +1043,7 @@ const SHOW_MODE_CHOOSER = false
     const nameTag = [prefilledFields.restaurant_name, prefilledFields.offer].filter(Boolean).join(' – ')
     setProjectName(brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name))
     setCurrentProjectId(null)
+    pendingNewIdRef.current = null
     setProjectOwner(null)
     setProjectFolder(null)
     setReviewStatus('design')
@@ -1367,7 +1391,7 @@ const SHOW_MODE_CHOOSER = false
       }
     }
 
-    const id = currentProjectId || crypto.randomUUID()
+    const id = currentProjectId || (pendingNewIdRef.current ??= crypto.randomUUID())
     const currentZonePositions = exportRef.current?.getZonePositions?.() ?? {}
     // Merge canvas's actual (post-auto-shrink) font sizes with any manual overrides so
     // re-opens restore the exact displayed size regardless of font-loading timing.
