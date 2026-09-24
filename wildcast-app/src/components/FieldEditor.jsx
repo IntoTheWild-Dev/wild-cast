@@ -21,9 +21,12 @@ const ALL_MERCHANTS = '__all__'
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
 
 // Fields whose content is factual (the restaurant's real name, the real
-// promo, legal fine print) - AI-generated copy would be invented, not
-// helpful, so these get Choose preset only, no AI Suggest.
-const NO_AI_FIELDS = new Set(['restaurant_name', 'offer', 'tc'])
+// promo, legal fine print, Option B's fixed app-download line) - AI-
+// generated copy would be invented, not helpful, so these get Choose preset
+// only, no AI Suggest. Julia's ask, 2026-09-24: only Headline and
+// Sub-headline should keep it - cta added here alongside the three Anang's
+// original pass already covered.
+const NO_AI_FIELDS = new Set(['restaurant_name', 'offer', 'tc', 'cta'])
 
 // Matches the label each case in renderTextStep's switch passes to
 // StepFieldRow - used by the accordion's collapsed row, which needs a
