@@ -20,6 +20,11 @@ const ALL_MERCHANTS = '__all__'
 
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
 
+// Fields whose content is factual (the restaurant's real name, the real
+// promo, legal fine print) - AI-generated copy would be invented, not
+// helpful, so these get Choose preset only, no AI Suggest.
+const NO_AI_FIELDS = new Set(['restaurant_name', 'offer', 'tc'])
+
 // Matches the label each case in renderTextStep's switch passes to
 // StepFieldRow - used by the accordion's collapsed row, which needs a
 // field's label without rendering its full step.
@@ -311,12 +316,14 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
               editor - this is that wiring. Sits next to AI Suggest, not
               merged into it, since "no AI at all" is the entire point. */}
           <PresetPicker field={fieldKey} onApply={val => onChange(val)} partnerName={partnerName} vertical={vertical} />
+          {!NO_AI_FIELDS.has(fieldKey) && <>
           {/* One button, not two (Julia's editor redesign, 2026-09-18) -
               AISuggest itself decides generate-vs-improve from seedText.
               vertical ("Restaurant"/"Retail" from the brief) strictly scopes
               which KB examples and rules it retrieves - without it the
               backend falls back to the unfiltered library. */}
           <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
+          </>}
         </div>
       )}
     </div>
