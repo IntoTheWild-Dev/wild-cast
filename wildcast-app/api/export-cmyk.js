@@ -146,7 +146,7 @@ function buildPdfX4({ cmykZ, iccProfile, profileMeta }) {
   push(
     '3 0 obj\n' +
     '<< /Type /OutputIntent\n' +
-    '   /S /GTS_PDFIX\n' +
+    '   /S /GTS_PDFX\n' +
     `   /OutputConditionIdentifier (${profileMeta.identifier})\n` +
     `   /Info (${profileMeta.info})\n` +
     '   /RegistryName (http://www.color.org)\n' +
