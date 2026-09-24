@@ -178,7 +178,7 @@ function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, suggestFrom, onFocusField, vertical, partnerName, placeholderValue }) {
+function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, suggestFrom, onFocusField, vertical, partnerName, placeholderValue, showAISuggest = true }) {
   const limit = CHAR_LIMITS[fieldKey]
   // Pre-filled placeholder content (Notion card "Pre-filled Template
   // Placeholders", 2026-09-22): every text field shows generic greyed-out
@@ -315,8 +315,16 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
               AISuggest itself decides generate-vs-improve from seedText.
               vertical ("Restaurant"/"Retail" from the brief) strictly scopes
               which KB examples and rules it retrieves - without it the
-              backend falls back to the unfiltered library. */}
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
+              backend falls back to the unfiltered library.
+              showAISuggest (Notion card, Anang, 2026-09-24): AI Suggest only
+              makes sense where the copy is genuinely creative (Headline,
+              Sub-headline) - restaurant name, T&Cs, offer text and the app-
+              download line are all either a fixed fact, legal boilerplate, or
+              copy with little room for "creative" phrasing, so AI Suggest is
+              hidden there (still opt-in per field, defaults to shown). */}
+          {showAISuggest && (
+            <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
+          )}
         </div>
       )}
     </div>
@@ -758,6 +766,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             fontSize={20}
             align="right"
             suggestFrom={PLACEHOLDER_PARTNERS}
+            showAISuggest={false}
           />
         )
       case 'offer':
@@ -780,6 +789,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             // fix overlap without switching to Designer mode (Julia's ask,
             // 2026-09-08).
             onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('offer', axis, delta) : undefined}
+            showAISuggest={false}
           />
         )
       case 'tc':
@@ -800,6 +810,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             // already had it - Julia's ask, 2026-09-16, to make Position
             // nudge available on T&Cs too in guided mode, same as the others.
             onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('tc', axis, delta) : undefined}
+            showAISuggest={false}
           />
         )
       case 'cta':
@@ -816,6 +827,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}
             align={effectiveAlign('cta', 'center')} onAlign={a => onAlignChange('cta', a)}
             onResetPosition={() => onResetZone?.('cta')}
+            showAISuggest={false}
           />
         )
       default:
