@@ -67,11 +67,20 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
   )
 }
 
-// Designer / Reviewer / Manager - a provisional workflow-role toggle
-// (Julia's ask, 2026-09-22, so she can preview each role's view without
-// separate keys). Names are explicitly expected to change - kept as one
-// array so relabeling later is a one-line change, not a find-and-replace.
-const WORKFLOW_ROLES = ['Designer', 'Reviewer', 'Manager']
+// Designer / Manager - a provisional workflow-role toggle (Julia's ask,
+// 2026-09-22, so she can preview each role's view without separate keys).
+// 'Reviewer' removed 2026-09-23 (Julia: "let's remove Reviewer for now,
+// only keeping designer and manager") - it never drove any distinct
+// behavior of its own, only "is this Manager or not" ever mattered.
+// Names are explicitly expected to change - kept as one array so
+// relabeling later is a one-line change, not a find-and-replace.
+// Exported so App.jsx can validate a persisted localStorage value against
+// the current list (2026-09-24 fix) - without this, a browser that had
+// 'Reviewer' selected before it was removed here silently kept that dead
+// value forever (the <select> had no matching <option>, and every
+// workflowRole === 'Manager' check just evaluated false with no
+// indication why - see App.jsx's own note where this is imported).
+export const WORKFLOW_ROLES = ['Designer', 'Manager']
 
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange }) {
   const [showComingSoon, setShowComingSoon] = useState(false)

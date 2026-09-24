@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import Header from './components/Header'
+import Header, { WORKFLOW_ROLES } from './components/Header'
+import { patchCachedProject } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
@@ -106,7 +107,7 @@ function ReviewModal({ items, onClose }) {
           onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--dark)'}
           onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
         >
-          Close
+          Done
         </button>
       </div>
     </div>
@@ -356,11 +357,6 @@ const SHOW_MODE_CHOOSER = false
   const [projectFolder, setProjectFolder]     = useState(null) // subfolder name string | null
   const [saving, setSaving]                   = useState(false)
   const [saveStatus, setSaveStatus]           = useState(null) // null | 'saved' - purely cosmetic, auto-clears after 3s (see handleSave etc.)
-  // "Resolve and resubmit" (Notion card, 2026-09-22): its own status flash,
-  // separate from saveStatus, so this button's "Resolved & resubmitted ✓"
-  // confirmation doesn't get stomped by (or stomp on) the unrelated Save
-  // button's own "✓ Saved" a few clicks away in FieldEditor.
-  const [resolveResubmitStatus, setResolveResubmitStatus] = useState(null) // null | 'sending' | 'done'
   // Separate from saveStatus, which is a 3-second flash badge and NOT a
   // reliable "is there anything to lose" signal - the nav-guard below was
   // using saveStatus for exactly that, so leaving the editor more than 3s
@@ -383,16 +379,34 @@ const SHOW_MODE_CHOOSER = false
     setReviewSent(false)
   }
   // Persisted review status for "My Tasks" (Notion card "Review queue in the
-  // user profile", 2026-09-22) - 'design' | 'review' | 'approved'. Distinct
-  // from reviewSent just above (a session-local Export-PDF gate that resets
-  // every reopen): this is saved on the project record itself (doSave()),
-  // set to 'review' by Send for Review/Resolve and resubmit, and flipped to
-  // 'approved' only by the reviewer's own Approve button on ReviewPage.jsx
-  // (via api/review-status.js) - never by anything on the creator's side.
+  // user profile", 2026-09-22) - 'design' | 'review' | 'changes_requested' |
+  // 'approved'. Distinct from reviewSent just above (a session-local
+  // Export-PDF gate that resets every reopen): this is saved on the project
+  // record itself (doSave()). handleSendForReview sets 'review' on every
+  // send, first or resubmit; 'changes_requested'/'approved' are set by
+  // handleRequestChangesInEditor/handleApproveInEditor here (Manager role)
+  // or the matching buttons on ReviewPage.jsx (via api/save-project.js's
+  // PATCH handler) - never by anything else on the creator's side.
   const [reviewStatus, setReviewStatus]       = useState('design')
+  // everRequestedChanges (My Tasks' "second round" color-coding flag) is
+  // deliberately NOT mirrored into component state here, after a first
+  // attempt at exactly that (2026-09-24) turned out to just move the bug
+  // rather than fix it: any ordinary save from a tab holding a stale local
+  // copy could still silently revert a status change someone else made
+  // via PATCH elsewhere. Root fix instead lives server-side, in this
+  // file's doSave() (only ever sends reviewStatus for an explicit
+  // transition, never a bare value that might be stale) and
+  // api/save-project.js's POST handler (never trusts a client-sent
+  // everRequestedChanges at all - handlePatch is its only writer). My
+  // Tasks reads the field straight from the server, which is now always
+  // authoritative for it.
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
   const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
   const [comments, setComments]               = useState([])
+  // Approve/Request changes from inside the editor (2026-09-23, Manager
+  // role only) - see handleApproveInEditor/handleRequestChangesInEditor.
+  const [editorApproving, setEditorApproving]                 = useState(false)
+  const [editorRequestingChanges, setEditorRequestingChanges] = useState(false)
   // Editor-side reply box state (Julia's ask, 2026-09-16: the Feedback
   // sidebar was read-only - designer could see reviewer comments but never
   // reply from inside the app).
@@ -432,7 +446,17 @@ const SHOW_MODE_CHOOSER = false
   // separate keys - names and what each role can/can't do are explicitly
   // expected to change. For now the only rule it drives: only Manager can
   // Export PDF (see handleExport below and FieldEditor's footer).
-  const [workflowRole, setWorkflowRoleState] = useState(() => localStorage.getItem('wildcast_workflow_role') || 'Manager')
+  // Validated against the current WORKFLOW_ROLES list (2026-09-24 fix) -
+  // 'Reviewer' used to be a real, selectable, persisted option here until
+  // it was removed from Header.jsx. Without this check, any browser that
+  // had it stored kept that dead value forever: the <select> silently
+  // showed no matching option and every workflowRole === 'Manager' gate
+  // (Export PDF, the in-editor Approve/Request-changes panel) evaluated
+  // false with nothing telling the user why they'd lost Manager access.
+  const [workflowRole, setWorkflowRoleState] = useState(() => {
+    const stored = localStorage.getItem('wildcast_workflow_role')
+    return WORKFLOW_ROLES.includes(stored) ? stored : 'Manager'
+  })
   function setWorkflowRole(role) {
     setWorkflowRoleState(role)
     localStorage.setItem('wildcast_workflow_role', role)
@@ -762,49 +786,103 @@ const SHOW_MODE_CHOOSER = false
     }).catch(() => {})
   }
 
-  // "Resolve and resubmit" (Notion card, 2026-09-22): marks every still-open
-  // comment resolved and re-sends the SAME saved design for review, in one
-  // click, instead of checking each comment then separately hitting Send for
-  // Review. No new asset is created - doSave() already keys off
-  // `currentProjectId || crypto.randomUUID()`, so resubmitting an
-  // already-saved project reuses its existing id (and therefore its existing
-  // review link) exactly like every other re-save already does. Doesn't
-  // reopen the "Ready to share" ReviewModal (unlike handleSendForReview) -
-  // the link hasn't changed since it was first sent, so there's nothing new
-  // to show; a quick inline confirmation next to the button is enough for
-  // what's meant to be a fast, no-extra-dialog action.
-  async function handleResolveAndResubmit() {
-    if (!currentProjectId || saving) return
-    setSaving(true)
-    setResolveResubmitStatus('sending')
+  // Bug fix, 2026-09-24: Approve/Request changes both leave the editor
+  // ~900ms after succeeding (see setTimeout below), and the debounced
+  // autosave effect has `screen` in its dependency array - so that
+  // navigation was cancelling any pending autosave in its cleanup before
+  // it ever fired, silently discarding a field edit made moments earlier
+  // with none of the "Leave without saving?" warning every other way of
+  // leaving the editor gives. Since these actions only ever intend to
+  // change the review status, not the design content, the fix is to save
+  // that pending content ourselves before leaving, rather than either
+  // losing it or blocking the status change on it.
+  // Bug fix, 2026-09-24 (found by review): takes the just-confirmed status
+  // as an explicit argument rather than reading the component's own
+  // `reviewStatus` state. handleApproveInEditor/handleRequestChangesInEditor
+  // call setReviewStatus(...) and then, still inside that same handler
+  // invocation, call this function - but that handler is a closure fixed
+  // at the render it was attached from, so a bare `doSave()` in here would
+  // still see THAT render's `reviewStatus` (the value from before the
+  // click), not the one just set, no matter how much time the awaited PATCH
+  // took. Passing it through explicitly as `nextReviewStatus` sidesteps the
+  // stale-closure entirely and reuses doSave's existing, already-correct
+  // handling of an explicit transition.
+  async function flushUnsavedEditBeforeLeaving(knownReviewStatus) {
+    if (!hasUnsavedChanges) return
     try {
-      const unresolved = comments.filter(c => !c.resolved)
-      if (unresolved.length > 0) {
-        await Promise.all(unresolved.map(c => fetch('/api/comments', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: currentProjectId, commentId: c.id, resolved: true }),
-        })))
-        setComments(prev => prev.map(c => ({ ...c, resolved: true })))
-      }
-      // Same treatment as handleSendForReview - a resubmit is exactly the
-      // "back under review" transition for My Tasks too (this override
-      // didn't exist yet when this function was first built on a separate
-      // branch from reviewStatus itself; closing that gap now that both are
-      // merged together).
-      await doSave({ nextReviewStatus: 'review' })
+      await doSave({ nextReviewStatus: knownReviewStatus })
       setHasUnsavedChanges(false)
-      setReviewSent(true)
-      setResolveResubmitStatus('done')
-      setTimeout(() => setResolveResubmitStatus(null), 3000)
     } catch (err) {
-      console.error('Resolve and resubmit error:', err)
-      alert('Resolve and resubmit failed: ' + err.message)
-      setResolveResubmitStatus(null)
-    } finally {
-      setSaving(false)
+      alert('Status updated, but your last edit could not be saved: ' + err.message)
     }
   }
+
+  // Approve / Request changes, right from the editor's Feedback sidebar
+  // (Julia's ask, 2026-09-23: a Manager shouldn't have to leave the editor
+  // and hunt down the separate external review link just to approve their
+  // own team's work - that link is for external partners without an
+  // account). Same handlers/endpoint ReviewPage.jsx's own Approve/Request
+  // changes use, just updating this editor's local reviewStatus instead of
+  // ReviewPage's local `project` state. Gated to workflowRole === 'Manager'
+  // in the JSX below - Designer/Reviewer roles don't get these buttons.
+  async function handleApproveInEditor() {
+    if (editorApproving || !currentProjectId || reviewStatus === 'approved') return
+    setEditorApproving(true)
+    setReviewStatus('approved')
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
+      })
+      if (!res.ok) throw new Error('Failed to approve')
+      // Bug fix, 2026-09-24 (found by review): flushUnsavedEditBeforeLeaving
+      // only touches sessionStorage when there's an actual pending edit to
+      // save - a Manager who approves without editing anything (the common
+      // case) left the cached copy holding the pre-approval reviewStatus.
+      // Reopening the same design in this tab afterward (My Tasks, Designs)
+      // read that stale cache and showed it as un-reviewed again, even
+      // though the server was already correct. Same fix DesignsPage.jsx
+      // already uses for folder/owner moves - see lib/projectCache.js.
+      patchCachedProject(currentProjectId, { reviewStatus: 'approved' })
+      await flushUnsavedEditBeforeLeaving('approved')
+      // Every status change lands on My Tasks (Julia, 2026-09-23: "auto
+      // reload to My Tasks on all tiers") - same fix as handleSendForReview's
+      // resubmit path, applied to this decision too, not just resending.
+      setTimeout(() => setScreen('tasks'), 900)
+    } catch (err) {
+      setReviewStatus('review')
+      alert('Could not approve: ' + err.message)
+    } finally {
+      setEditorApproving(false)
+    }
+  }
+
+  async function handleRequestChangesInEditor() {
+    const hasOpenFeedback = comments.some(c => !c.resolved)
+    if (editorRequestingChanges || !currentProjectId || !hasOpenFeedback || reviewStatus === 'changes_requested') return
+    setEditorRequestingChanges(true)
+    setReviewStatus('changes_requested')
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
+      })
+      if (!res.ok) throw new Error('Failed to request changes')
+      // Bug fix, 2026-09-24 (found by review) - see the matching note in
+      // handleApproveInEditor above.
+      patchCachedProject(currentProjectId, { reviewStatus: 'changes_requested' })
+      await flushUnsavedEditBeforeLeaving('changes_requested')
+      setTimeout(() => setScreen('tasks'), 900)
+    } catch (err) {
+      setReviewStatus('review')
+      alert('Could not request changes: ' + err.message)
+    } finally {
+      setEditorRequestingChanges(false)
+    }
+  }
+
 
   function handleSelectTemplate(template) {
     historyRef.current = []; setCanUndo(false)
@@ -1270,8 +1348,8 @@ const SHOW_MODE_CHOOSER = false
   }
 
   // Core save - returns the project id. Used by both handleSave and handleSendForReview.
-  // nextReviewStatus: only passed by handleSendForReview and
-  // handleResolveAndResubmit, to bump the persisted status back to 'review' -
+  // nextReviewStatus: only passed by handleSendForReview (both its first-send
+  // and resubmit paths), to bump the persisted status back to 'review' -
   // every other caller (Save, autosave, Save & pick another) omits it and
   // this simply re-saves whatever reviewStatus already is, unchanged.
   async function doSave({ nextReviewStatus } = {}) {
@@ -1304,7 +1382,6 @@ const SHOW_MODE_CHOOSER = false
     // saving in the editor never touches it.
     const ownerEmail = projectOwner?.email ?? activation?.key ?? null
     const ownerName = projectOwner?.name ?? activation?.clientName ?? null
-    const savedReviewStatus = nextReviewStatus ?? reviewStatus
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
@@ -1316,8 +1393,15 @@ const SHOW_MODE_CHOOSER = false
       vertical: designVertical,
       // "My Tasks" status (Notion card "Review queue in the user profile",
       // 2026-09-22) - see reviewStatus's own declaration above for the full
-      // state machine.
-      reviewStatus: savedReviewStatus,
+      // state machine. Bug fix, 2026-09-24: only included when this save is
+      // an explicit transition (nextReviewStatus passed - the first send or
+      // a resubmit). An ordinary autosave/manual Save omits it entirely, so
+      // it can never carry a stale local copy back to the server and
+      // silently revert a status change someone else made via PATCH while
+      // this tab sat open - api/save-project.js's POST handler preserves
+      // whatever's already stored when this field is absent. everRequestedChanges
+      // is deliberately never sent at all - see its own note above.
+      ...(nextReviewStatus ? { reviewStatus: nextReviewStatus } : {}),
     }
 
     const response = await fetch('/api/save-project', {
@@ -1326,9 +1410,21 @@ const SHOW_MODE_CHOOSER = false
     })
     if (!response.ok) throw new Error(await response.text())
 
-    // Write the full project to sessionStorage so re-opens within this session
-    // always get the exact saved state - no CDN or browser cache involved.
-    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(project)) } catch { /* storage full */ }
+    // Write to sessionStorage so re-opens within this session always get the
+    // exact saved state - no CDN or browser cache involved. Bug fix,
+    // 2026-09-24: `project` (the server payload above) deliberately omits
+    // reviewStatus on an ordinary save, for the server-side merge to work
+    // correctly - but writing that same incomplete object here meant the
+    // cache lost track of reviewStatus entirely, and openLoadedProject reads
+    // this cache back as if it were the complete, authoritative state,
+    // falling back to 'design' and hiding the Review panel/Approve/Request-
+    // changes buttons until a hard reload bypassed the stale cache. Falls
+    // back to local `reviewStatus` state only when `project.reviewStatus` is
+    // itself absent (an ordinary save with no explicit transition) - reads
+    // the same value `project` above already decided rather than
+    // re-deriving the nextReviewStatus-or-not branch a second time.
+    const cachedProject = { ...project, reviewStatus: project.reviewStatus ?? reviewStatus }
+    try { sessionStorage.setItem(`wildcast_project_${id}`, JSON.stringify(cachedProject)) } catch { /* storage full */ }
 
     setCurrentProjectId(id)
     if (nextReviewStatus) setReviewStatus(nextReviewStatus)
@@ -1452,21 +1548,94 @@ const SHOW_MODE_CHOOSER = false
   // straight to a shareable link instead of exporting/continuing to edit
   // here, and used to be explained only in small gray footer text - easy to
   // click without realizing it's the one-way option.
+  //
+  // Also doubles as the resubmit action (2026-09-23, Julia: "why is Resolve
+  // and resubmit still there? I don't think we need it hey" - this button
+  // already re-sends for review every time it's clicked, a second button
+  // doing the same thing was redundant). Branches only on whether anything's
+  // been sent before (reviewStatus still 'design' means never): first time
+  // keeps the exact same confirm-then-show-the-link behavior; any later
+  // click resolves the open feedback first (what the old Resolve and
+  // resubmit did) and leaves for My Tasks instead of reopening a popup for
+  // a link that hasn't changed - no confirm dialog either, since resending
+  // isn't a new decision the way the very first send is.
   async function handleSendForReview() {
+    const isResubmit = reviewStatus !== 'design'
     // Wording updated for the Export-behind-review gate (Julia's editor
     // redesign, 2026-09-18) - this used to be framed as an alternative to
     // exporting ("skips exporting... first"), which is now backwards: this
     // IS what unlocks Export PDF, not something instead of it.
-    if (!window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
+    if (!isResubmit && !window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
+
+    // Bug fix, 2026-09-24 (found by review): setSaving(true) now runs
+    // immediately, before any of the async work below - it used to wait
+    // until after the fresh-status fetch a few lines down, leaving the
+    // button (guarded only by disabled={saving}) clickable for the whole
+    // round trip. A double-click in that window could start two
+    // overlapping resubmits - duplicate saves, duplicate comment-resolve
+    // batches, a confirm dialog firing twice. The early `return`s below are
+    // now inside this try, so `finally` still always resets it.
     setSaving(true)
     try {
+      // Bug fix, 2026-09-24: isResubmit alone treated an already-approved
+      // design the same as a plain in-progress resubmit, so clicking this
+      // button again silently reverted an approval back to 'review' with no
+      // warning at all. A normal resubmit (from 'review'/'changes_requested')
+      // stays confirmation-free on purpose - only the "this undoes an
+      // approval" case needs its own explicit heads-up.
+      //
+      // Second bug fix, same day: the local `reviewStatus` this check first
+      // relied on is never re-synced from the server while the editor stays
+      // open (unlike ReviewPage.jsx's own copy, which now polls). If someone
+      // else approved the design after this tab loaded, local state still
+      // said 'review' and the warning above never fired - exactly the
+      // scenario it was built to catch. Refetch the real current status
+      // right before deciding, so a stale local copy can't silently swallow
+      // the warning for an approval that already happened elsewhere. Skipped
+      // when local state already says 'approved' - the warning fires either
+      // way then, so the round trip has nothing left to confirm.
+      let currentReviewStatus = reviewStatus
+      if (isResubmit && currentProjectId && reviewStatus !== 'approved') {
+        try {
+          const res = await fetch(`/api/get-review?id=${currentProjectId}`)
+          if (res.ok) {
+            const fresh = await res.json()
+            if (fresh.reviewStatus) currentReviewStatus = fresh.reviewStatus
+          }
+        } catch { /* network error - fall back to local state rather than block sending */ }
+      }
+      if (isResubmit && currentReviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
+
+      if (isResubmit) {
+        const unresolved = comments.filter(c => !c.resolved)
+        if (unresolved.length > 0) {
+          await Promise.all(unresolved.map(c => fetch('/api/comments', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId: currentProjectId, commentId: c.id, resolved: true }),
+          })))
+          setComments(prev => prev.map(c => ({ ...c, resolved: true })))
+        }
+      }
       const { id } = await doSave({ nextReviewStatus: 'review' })
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
+      // Unlocks Export PDF for this session either way - reviewSent resets
+      // on every reopen by design (see its own declaration), so a resubmit
+      // needs to set it too, same as the old Resolve and resubmit did.
+      // Missed on the first pass of merging these two functions together.
       setReviewSent(true)
-      setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
-      offerMoreFormats()
+      if (isResubmit) {
+        // Same "don't get stuck on the canvas" fix as the old Resolve and
+        // resubmit had, and the same My Tasks destination (not Designs) -
+        // see its own note on the status board being what both the
+        // designer and the manager need to see right after this.
+        setTimeout(() => setScreen('tasks'), 900)
+      } else {
+        setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
+        offerMoreFormats()
+      }
     } catch (err) {
       console.error('Send for Review error:', err)
       alert('Send for Review failed: ' + err.message)
@@ -1639,6 +1808,19 @@ const SHOW_MODE_CHOOSER = false
       ownerEmail: activation?.key ?? null,
       ownerName: activation?.clientName ?? null,
       folder: null,
+      // A duplicate is also a fresh, never-submitted design, not a
+      // continuation of the original's review history (Julia, 2026-09-24:
+      // "when duplicate and edit is chosen it should be handled as a new
+      // design"). Without this, `...original` above carried over e.g.
+      // reviewStatus:'review', so handleSendForReview saw the copy as
+      // already-sent and treated the very first click as a resubmit - no
+      // confirm dialog, no share-link popup, straight to My Tasks. Comments
+      // don't need a matching reset: they're keyed by this new `id`, which
+      // has no comment thread of its own yet. everRequestedChanges needs no
+      // explicit reset here either (unlike this comment's earlier version) -
+      // the server never trusts a client-sent value for it at all now, and
+      // this brand-new id has no existing blob to inherit one from anyway.
+      reviewStatus: 'design',
     }
 
     const response = await fetch('/api/save-project', {
@@ -1889,18 +2071,35 @@ const SHOW_MODE_CHOOSER = false
       {screen === 'editor' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
-          {/* Reviewer feedback - left panel, visible when comments exist */}
-          {comments.length > 0 && (
+          {/* Review panel - left, shown once this design has actually been
+              sent for review at least once (reviewStatus !== 'design').
+              Was comments.length > 0, which is why Approve/Request changes
+              "went missing" for a Manager on a submitted design nobody had
+              commented on yet. Was briefly "always shown regardless of
+              status," which broke the opposite way - Julia, 2026-09-23:
+              "comments and approved button shouldn't show" on a design
+              that's never been sent at all. reviewStatus is the right
+              signal either way: it only leaves 'design' once Send review
+              link has actually been clicked once. Restricted review
+              (brief-generated candidates) keeps its own simpler footer in
+              FieldEditor.jsx untouched - this is the normal editor only. */}
+          {!restrictedReview && reviewStatus !== 'design' && (
             <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Feedback · {comments.length}
+                  Review · {comments.length} comment{comments.length !== 1 ? 's' : ''}
                 </span>
               </div>
+
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {comments.length === 0 && (
+                  <div style={{ color: '#92400E', fontSize: 12, textAlign: 'center', paddingTop: 16, opacity: 0.7 }}>
+                    No comments yet
+                  </div>
+                )}
                 {comments.map(c => (
                   <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : '#FDE68A'}`, opacity: c.resolved ? 0.6 : 1 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
@@ -1943,29 +2142,56 @@ const SHOW_MODE_CHOOSER = false
                 </button>
               </div>
 
-              {/* "Resolve and resubmit" (Notion card, 2026-09-22): resolves
-                  every open comment above and re-sends this same design for
-                  review in one click - no new asset, no separate "check each
-                  box then hit Send for Review" round trip. */}
-              <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A' }}>
-                <button
-                  type="button"
-                  onClick={handleResolveAndResubmit}
-                  disabled={saving}
-                  title="Marks every open comment above as resolved and resubmits this design for review"
-                  style={{
-                    width: '100%', padding: '9px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: resolveResubmitStatus === 'done' ? '#16a34a' : (saving ? '#E5E7EB' : 'var(--dark)'),
-                    color: saving && resolveResubmitStatus !== 'done' ? 'var(--mid)' : '#fff',
-                    cursor: saving ? 'default' : 'pointer',
-                  }}
-                >
-                  {resolveResubmitStatus === 'sending' ? 'Resolving & resubmitting…'
-                    : resolveResubmitStatus === 'done' ? '✓ Resolved & resubmitted'
-                    : 'Resolve and resubmit'}
-                </button>
-              </div>
+              {/* Approve / Request changes, Manager role only, and only once
+                  something's actually been sent (approving a design that
+                  was never submitted doesn't mean anything). Below Send
+                  reply per Julia's ask: "so when manager comes in she can
+                  either request more changes or just press approve" - reads
+                  top to bottom as comments, then reply, then the decision.
+                  Designer doesn't see this; these actions still also exist
+                  on the external review link for partners without an
+                  account. */}
+              {workflowRole === 'Manager' && reviewStatus !== 'design' && (
+                reviewStatus === 'approved' ? (
+                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(22,163,74,0.1)', borderTop: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
+                  </div>
+                ) : reviewStatus === 'changes_requested' ? (
+                  <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(180,83,9,0.1)', borderTop: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#B45309' }}>↺ Changes requested</span>
+                  </div>
+                ) : (
+                  <div style={{ padding: '10px 14px', display: 'flex', gap: 6, borderTop: '1px solid #FDE68A' }}>
+                    <button
+                      type="button"
+                      onClick={handleRequestChangesInEditor}
+                      disabled={editorRequestingChanges || !comments.some(c => !c.resolved)}
+                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Leave an open comment first, so the creator knows what to change'}
+                      style={{
+                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
+                        background: '#fff', color: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--light)' : '#B45309',
+                        borderColor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--border)' : '#D97706',
+                        cursor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'default' : 'pointer',
+                      }}
+                    >
+                      {editorRequestingChanges ? 'Sending…' : '↺ Request changes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApproveInEditor}
+                      disabled={editorApproving}
+                      style={{
+                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: 'none',
+                        background: editorApproving ? '#E5E7EB' : '#16a34a', color: editorApproving ? 'var(--mid)' : '#fff',
+                        cursor: editorApproving ? 'default' : 'pointer',
+                      }}
+                    >
+                      {editorApproving ? 'Approving…' : '✓ Approve'}
+                    </button>
+                  </div>
+                )
+              )}
+
             </div>
           )}
 
@@ -2188,7 +2414,11 @@ const SHOW_MODE_CHOOSER = false
       )}
 
       {/* Share / Send for Review modal */}
-      {reviewItems && <ReviewModal items={reviewItems} onClose={() => setReviewItems(null)} />}
+      {/* Julia's ask, 2026-09-23: the first send should only leave for My
+          Tasks once the link's been copied and "Done" is pressed - unlike a
+          resubmit (handleSendForReview's own setTimeout), which has no new
+          link to show and so can leave right away. */}
+      {reviewItems && <ReviewModal items={reviewItems} onClose={() => { setReviewItems(null); setScreen('tasks') }} />}
       {formatPromptOptions.length > 0 && (
         <MoreFormatsModal
           formats={formatPromptOptions}

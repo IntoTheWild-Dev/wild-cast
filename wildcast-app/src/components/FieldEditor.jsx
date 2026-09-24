@@ -970,7 +970,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
               </svg>
-              Send for Review
+              Send review link
             </button>
             <button
               onClick={onSave}
@@ -988,6 +988,13 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
           </>
         ) : (
           <>
+            {/* Briefly moved to the left Review panel (2026-09-23), then
+                moved back here - that panel only exists once reviewStatus
+                has left 'design' (see App.jsx), so it can't also be where
+                the very first send happens. Kept here instead as the one
+                consistent place for both the first send and every resend -
+                Julia confirmed the panel-hidden-until-submitted behavior
+                matters more than the left placement. */}
             <button
               onClick={onSendForReview}
               disabled={saving}
@@ -1003,7 +1010,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
               </svg>
-              Send for Review
+              Send review link
             </button>
 
             {/* Manual Save, back by request on top of autosave (2026-09-21) -
