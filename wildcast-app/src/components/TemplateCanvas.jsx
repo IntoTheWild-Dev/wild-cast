@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
+import { aiFieldSettingsFor } from '../data/templateZones'
 
 // Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
 // zone is dimmed to while it's still showing generic placeholder content
@@ -177,6 +178,28 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const [dropError, setDropError] = useState(null)   // transient message when a dropped file gets rejected
   const dropErrorTimerRef = useRef(null)
   const [dropBusy, setDropBusy] = useState(false)   // dropped file still being processed (background removal)
+
+  // ── Caps rendering (spec §4.1: "caps = true when the template sets the
+  // text in caps") ──────────────────────────────────────────────────────────
+  // The Copy Library stores lockups in normal case ("Potsdams neues" /
+  // "Dreamteam") and the printed flyer sets them in caps ("POTSDAMS NEUES" /
+  // "DREAMTEAM"). Zones whose §4.1 AI settings declare caps: true render
+  // uppercased on the canvas — exports (getPng) inherit it automatically,
+  // and the stored field value keeps normal case, exactly like the library.
+  // Option A/B carry caps on their zones in templateZones.js; imported
+  // templates (Option C) get it from the aiFieldSettingsFor name/id map.
+  const capsZoneIds = useMemo(() => {
+    const ids = new Set()
+    const settings = aiFieldSettingsFor(config, undefined, templateId) ?? {}
+    for (const [key, s] of Object.entries(settings)) {
+      if (s?.caps) ids.add(key)
+    }
+    return ids
+  }, [config, templateId])
+  const zoneDisplayText = useCallback((zoneId, text) => {
+    const raw = text ?? ''
+    return capsZoneIds.has(zoneId) ? raw.toUpperCase() : raw
+  }, [capsZoneIds])
 
   // Clamps a user nudge offset to how far the image can move without breaking
   // its fit contract, so a nudge can never reveal zone background behind it
@@ -563,7 +586,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             const placeholderText = placeholderTextFor(zone, templateId)
             const isPlaceholder = !fields[zone.id] && placeholderText != null
 
-            const tb = new fabric.Textbox(isPlaceholder ? placeholderText : (fields[zone.id] || ''), {
+            const tb = new fabric.Textbox(zoneDisplayText(zone.id, isPlaceholder ? placeholderText : (fields[zone.id] || '')), {
               left:    isRotated ? cx : zone.x,
               top:     isRotated ? cy : zone.y,
               originX: isRotated ? 'center' : 'left',
@@ -819,7 +842,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const zone = zoneCfgRef.current[id]
       const placeholderText = placeholderTextFor(zone, templateId)
       const isPlaceholder = !value && placeholderText != null
-      const displayText = isPlaceholder ? placeholderText : (value || '')
+      // Caps zones render uppercased (see capsZoneIds above); the comparison
+      // uses the transformed text so sync stays stable round-trip
+      // (toUpperCase is idempotent — canvas edits already store caps).
+      const displayText = zoneDisplayText(id, isPlaceholder ? placeholderText : (value || ''))
       if (obj.text !== displayText) {
         obj.set('text', displayText)
         changed = true
