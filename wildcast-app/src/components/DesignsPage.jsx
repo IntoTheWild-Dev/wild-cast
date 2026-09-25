@@ -216,7 +216,16 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
     >
       <div style={{ background: '#00C2CB', aspectRatio: '316 / 441', overflow: 'hidden', position: 'relative' }}>
         {project.thumbnail ? (
-          <img src={project.thumbnail} alt={project.templateName} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          // Sharp 632x882 preview from save-project.js's ?thumb= route; the
+          // tiny inline list thumbnail sits behind it as a placeholder while
+          // it loads (it alone was being stretched ~3x on retina - blurry).
+          <img
+            src={`/api/save-project?thumb=${encodeURIComponent(project.id)}&v=${project.savedAt ?? ''}`}
+            alt={project.templateName}
+            loading="lazy"
+            decoding="async"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', backgroundImage: `url(${project.thumbnail})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+          />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
             No preview
