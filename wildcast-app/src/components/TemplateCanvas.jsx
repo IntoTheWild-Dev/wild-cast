@@ -1291,19 +1291,20 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         </div>
       )}
 
-      {/* top: 4, not the container's full 40px padding - Julia's report,
-          2026-09-18: this badge (plain HTML, not drawn on the Fabric canvas)
-          was overlapping the canvas's own top few pixels, which is exactly
-          where a zone's number-1 chip usually sits (Logo is always step 1,
-          and logos are almost always placed near the top of these flyer
-          templates) - no amount of Fabric-side z-ordering can fix a real
-          HTML element sitting visually on top of the whole canvas. */}
+      {/* Top-left corner of the dark area, not centred above the canvas.
+          Centred, it sat right on top of the design whenever the canvas was
+          tall enough to reach the top of this area - covering the logo
+          zone, which is almost always at the top of these flyers (Julia's
+          report 2026-09-18, again Anang's 2026-09-25; nudging `top` never
+          fixed it for every canvas height). The canvas is always centred
+          with plenty of dark space either side, so the corner stays clear.
+          Same translucent-dark pill style as the zoom controls. */}
       {mode === 'non-designer' && !loading && (
         <div style={{
-          position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--primary)', color: '#fff',
+          position: 'absolute', top: 16, left: 16,
+          background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.85)',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-          padding: '5px 14px', borderRadius: 20,
+          padding: '6px 12px', borderRadius: 20,
           display: 'flex', alignItems: 'center', gap: 6,
           whiteSpace: 'nowrap', zIndex: 5, pointerEvents: 'none',
         }}>
