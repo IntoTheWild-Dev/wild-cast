@@ -509,7 +509,14 @@ export default async function handler(req, res) {
     }
 
     if (passing.length === 0) {
-      return res.status(502).json({ error: 'Could not write a line. Try again.' })
+      // Same user-safe message as §7.2, but carry the check verdicts for
+      // the §11 test runs — "everything was dropped" is undiagnosable
+      // without knowing which check fired.
+      return res.status(502).json({
+        error: 'Could not write a line. Try again.',
+        flags: [...new Set(flags)],
+        dropped: failed.map(f => ({ check: f.reason, subheadline: f.pair.subheadline, headline: f.pair.headline })),
+      })
     }
 
     // Order: rank 1 first; stable tiebreak on the model's own order.

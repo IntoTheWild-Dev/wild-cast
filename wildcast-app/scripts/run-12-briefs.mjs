@@ -4,7 +4,13 @@
 // Mark asked to see before this becomes a PR.
 //
 // Usage:
-//   node scripts/run-12-briefs.mjs https://your-preview.vercel.app [outDir]
+//   node scripts/run-12-briefs.mjs https://your-preview.vercel.app [outDir] [bypassToken]
+//
+// Preview deployments are usually protected by Vercel Authentication (401
+// "Protected deployment" for scripts). Either turn it off under
+// Project → Settings → Deployment Protection, or paste a "Protection Bypass
+// for Automation" token from the same page as the third argument (or env
+// VERCEL_BYPASS_TOKEN). Production (main) is unaffected either way.
 //
 // T12 is the queue test (client clicks, credits) — not runnable via the API;
 // it's skipped here and stays a manual click-through (see STATUS.md checklist).
@@ -14,10 +20,12 @@ import { join } from 'node:path'
 
 const BASE = process.argv[2]
 if (!BASE) {
-  console.error('Usage: node scripts/run-12-briefs.mjs https://your-preview.vercel.app [outDir]')
+  console.error('Usage: node scripts/run-12-briefs.mjs https://your-preview.vercel.app [outDir] [bypassToken]')
   process.exit(1)
 }
 const OUT = process.argv[3] ?? 'mark-12-briefs'
+const BYPASS = process.argv[4] ?? process.env.VERCEL_BYPASS_TOKEN ?? ''
+const HEADERS = { 'Content-Type': 'application/json', ...(BYPASS ? { 'x-vercel-protection-bypass': BYPASS } : {}) }
 
 // ── Box limits + static text per template (spec §11; estimates until Julia
 // measures the real ones) ─────────────────────────────────────────────────────
@@ -217,7 +225,7 @@ for (const [id, spec] of Object.entries(briefs)) {
   try {
     const res = await fetch(`${BASE.replace(/\/$/, '')}/api/ai-suggest`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: HEADERS,
       body: JSON.stringify(body),
     })
     json = await res.json()
@@ -231,7 +239,7 @@ for (const [id, spec] of Object.entries(briefs)) {
   const pairs = json.pairs ?? []
   results.push({ id, label: spec.label, ok, pairs: pairs.length, flags: json.flags ?? [], dropped: (json.dropped ?? []).length, ms })
   console.log(`${ok ? '✓' : '✗'} ${id}  ${String(pairs.length).padStart(2)} pairs  ${ms}ms  flags=[${(json.flags ?? []).join(', ')}]  ${spec.label}`)
-  if (!ok) console.log(`   └─ ${json.error}`)
+  if (!ok) console.log(`   └─ ${typeof json.error === 'string' ? json.error : JSON.stringify(json.error)}`)
   for (const p of pairs) console.log(`   ${p.rank}. ${p.subheadline} / ${p.headline}  (${p.route}, ${p.pattern})`)
 }
 
