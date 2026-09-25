@@ -203,6 +203,19 @@ export default function App() {
   const [resolvingDeepLink, setResolvingDeepLink] = useState(
     () => /^\/content\/[^/]+\/?$/.test(window.location.pathname)
   )
+  // Where the editor's Back button returns to - whichever screen the user
+  // was on right before entering the editor (Designs, My Tasks, the brief
+  // form, ...), instead of always Designs. A /content/<id> deep link never
+  // really showed a previous screen (landing is just the placeholder behind
+  // the loading state), so that case keeps the Designs fallback.
+  const prevScreenRef = useRef(null)
+  const editorBackTargetRef = useRef('designs')
+  useEffect(() => {
+    if (screen === 'editor' && prevScreenRef.current && prevScreenRef.current !== 'editor') {
+      editorBackTargetRef.current = prevScreenRef.current
+    }
+    if (!resolvingDeepLink) prevScreenRef.current = screen
+  }, [screen, resolvingDeepLink])
   // Which output ICC profile export-cmyk.js should convert to - see
   // ICC_PROFILES in api/export-cmyk.js. No longer user-choosable (FOGRA39
   // removed, Julia's ask, 2026-09-18) - every export uses FOGRA51 now.
@@ -1054,7 +1067,7 @@ const SHOW_MODE_CHOOSER = false
   }
 
   function handleBack() {
-    setScreen('designs')
+    setScreen(editorBackTargetRef.current)
   }
 
   // Julia's ask (2026-08-07): the top nav (Templates/Library/Designs/etc.)
@@ -2229,16 +2242,19 @@ const SHOW_MODE_CHOOSER = false
                 instead of buried in the scrollable field list. */}
             <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                <span
+                {/* Plain Back button (was a "← Designs → template name"
+                    breadcrumb) - returns to whichever screen opened the
+                    editor, see editorBackTargetRef. */}
+                <button
                   onClick={handleBack}
-                  style={{ fontSize: 13, color: 'var(--mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
-                  onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
+                  title="Back to previous page"
+                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', flexShrink: 0 }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
                 >
-                  ← Designs
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--light)', flexShrink: 0 }}>→</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTemplate?.name}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                  Back
+                </button>
                 {/* Reflects real save state now that autosave replaced the
                     manual Save button (Julia's editor redesign, 2026-09-18)
                     - this is the only save feedback left for the normal
