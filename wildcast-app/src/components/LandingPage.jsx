@@ -1,4 +1,5 @@
 import { HeroColumn, FeatureGrid, WildScaleTip } from './BriefingForm'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 // New home screen (Julia's ask, 2026-09-11): the brief form used to be the
 // very first thing anyone saw. Now the landing page is just a choice between
@@ -80,7 +81,7 @@ function ChoiceCard({ title, desc, icon, onClick }) {
 export default function LandingPage({ onNavigate }) {
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
         {/* Reworked from the old left-hero/right-cards 2-column split into a
             single stacked column - the 3 choice cards sit side by side below
             the hero copy, the WildScale tip box comes after that (moved out

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { PAGE_PADDING_X } from '../lib/layout'
+import PageSpinner from './PageSpinner'
 
 // "Review queue in the user profile" (Notion card, 2026-09-22): "A simple
 // task board under the profile. Each asset shows its state: under design,
@@ -99,7 +101,7 @@ export default function MyTasksPage({ onOpenProject, activation, onBack }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
 
       {/* Page header - same shape as LibraryPage/DesignsPage's own */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>My Tasks</h1>
           {onBack && (
@@ -116,10 +118,9 @@ export default function MyTasksPage({ onOpenProject, activation, onBack }) {
         </div>
       </div>
 
-      <div style={{ padding: '28px 40px', flex: 1 }}>
-        {loading ? (
-          <div style={{ color: 'var(--mid)', fontSize: 13 }}>Loading…</div>
-        ) : !activation?.key ? (
+      {loading ? <PageSpinner label="Loading your tasks…" /> : (
+      <div style={{ padding: `28px ${PAGE_PADDING_X}`, flex: 1 }}>
+        {!activation?.key ? (
           <div style={{ color: 'var(--mid)', fontSize: 13 }}>Sign in to see your tasks.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 28 }}>
@@ -151,6 +152,7 @@ export default function MyTasksPage({ onOpenProject, activation, onBack }) {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

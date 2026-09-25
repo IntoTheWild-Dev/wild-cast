@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 // Default AI credits given to a self-signed-up individual account - only AI
 // Suggest/Improve usage spends these now, PDF export is free (Julia's ask,
@@ -111,7 +112,7 @@ export default function ActivationGate({ onActivated }) {
 
       {/* Header - matches the main app header */}
       <header style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px', height: 58, display: 'flex', alignItems: 'center' }}>
+        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `0 ${PAGE_GUTTER}px`, height: 58, display: 'flex', alignItems: 'center' }}>
           <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
       </header>
@@ -338,7 +339,7 @@ export default function ActivationGate({ onActivated }) {
           line: max-w-6xl (1152px) mx-auto, px-6 py-6 (24px), text-xs
           (12px), text-gray-400 (var(--light), same hex), text-center. */}
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1152, margin: '0 auto', padding: 24, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
+        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `24px ${PAGE_GUTTER}px`, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
           © {new Date().getFullYear()} Wildstack Studio
         </div>
       </footer>

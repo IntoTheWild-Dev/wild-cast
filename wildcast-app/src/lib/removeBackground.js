@@ -70,7 +70,7 @@ async function toPngBlob(blob) {
 // solid square with transparent rounded corners (the McDonald's logo that
 // found this, 2026-09-25) has a few transparent pixels but its background is
 // very much still there - that one needs removing too.
-async function isAlreadyCutOut(url) {
+export async function isAlreadyCutOut(url) {
   const img = await loadImage(url)
   const size = 64
   const canvas = document.createElement('canvas')

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { TEMPLATES } from '../data/templates'
 import { activationHeaders } from '../lib/activationKey'
 import { FORMAT_TEMPLATE_GROUP } from '../lib/briefConstants'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import PageSpinner from './PageSpinner'
 
 // Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label -
 // duplicated (not imported) to keep this file's only dependency on that one
@@ -273,10 +275,10 @@ function GroupCard({ group, onViewAll }) {
 }
 
 // ── Catalogue view (all template groups) ──────────────────────────────────────
-function CatalogueView({ groups, onViewGroup, onBack }) {
+function CatalogueView({ groups, onViewGroup, onBack, loading }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `40px ${PAGE_GUTTER}px 64px` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
           <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0 }}>All templates</h1>
           {onBack && (
@@ -291,11 +293,13 @@ function CatalogueView({ groups, onViewGroup, onBack }) {
             </button>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
-          {groups.map(g => (
-            <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
-          ))}
-        </div>
+        {loading ? <PageSpinner label="Loading templates…" /> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+            {groups.map(g => (
+              <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -521,7 +525,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px 64px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `40px ${PAGE_GUTTER}px 64px` }}>
 
         {/* Back + heading */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 32 }}>
@@ -819,7 +823,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) - reached via the header logo.
 // mode="catalogue": full template grid - reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, loading }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
@@ -847,7 +851,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
   }
 
   if (mode === 'catalogue') {
-    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} onBack={onBack} />
+    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} onBack={onBack} loading={loading} />
   }
 
   function handleBriefSubmit({ category, format }) {
@@ -857,7 +861,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'center' }}>
 
           {/* Left: hero copy */}

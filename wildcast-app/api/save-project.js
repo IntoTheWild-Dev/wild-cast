@@ -1,4 +1,5 @@
 import { put, list, get } from '@vercel/blob'
+import { notifyOwner } from './_lib/notifications.js'
 
 // Designs used to only be discoverable via a per-browser localStorage
 // registry — nobody but the person who saved a design could ever see it
@@ -113,7 +114,7 @@ const VALID_REVIEW_STATUSES = ['design', 'review', 'changes_requested', 'approve
 // and this is a small, single-field mutation against the exact same
 // `projects/${id}.json` blob POST already writes to.
 async function handlePatch(req, res) {
-  const { projectId, status } = req.body ?? {}
+  const { projectId, status, by } = req.body ?? {}
   if (!projectId || !VALID_REVIEW_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Missing or invalid projectId/status' })
   }
@@ -129,6 +130,7 @@ async function handlePatch(req, res) {
     const result = await get(`projects/${projectId}.json`, { access: 'private', useCache: false, token })
     if (!result) return res.status(404).json({ error: 'Project not found' })
     const project = await new Response(result.stream).json()
+    const previousStatus = project.reviewStatus
 
     project.reviewStatus = status
     // Sticky "second round" flag for My Tasks - see its own note above on
@@ -141,6 +143,19 @@ async function handlePatch(req, res) {
       contentType: 'application/json',
       token,
     })
+
+    // Tell the design's owner - only for a reviewer's verdict (the only
+    // two statuses ReviewPage.jsx sends), and only when it actually changed,
+    // so a double-click doesn't notify twice. `by` is the name typed or
+    // prefilled on the review page; blank if the reviewer never entered one.
+    if ((status === 'approved' || status === 'changes_requested') && previousStatus !== status) {
+      await notifyOwner(project.ownerEmail, {
+        type: status,
+        projectId,
+        projectName: project.projectName || project.templateName || 'Untitled design',
+        actor: typeof by === 'string' && by.trim() ? by.trim().slice(0, 80) : null,
+      }, token)
+    }
 
     return res.status(200).json({ ok: true })
   } catch (err) {

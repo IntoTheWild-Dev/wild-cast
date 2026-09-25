@@ -6,6 +6,7 @@ import { buildSteps, stepApplies, summarizeAnswers, assembleBrief, partnerNameFr
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 // "Prompt Brief" screen (Julia's ask, 2026-09-19): replaces the old brief form
 // with a chat. Same page shell as the landing page (hero copy, tip box,
@@ -33,7 +34,9 @@ function Bubble({ msg, activeStepId, onPickOption }) {
     <div style={{ display: 'flex', gap: 10, justifyContent: isUser ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
       {!isUser && <AssistantAvatar />}
       <div style={{
-        maxWidth: '78%', padding: '11px 15px', borderRadius: 16, fontSize: 14, lineHeight: 1.5,
+        // Capped in px too now the card is full page width - 78% alone gave
+        // ~1000px-wide lines that are hard to read.
+        maxWidth: 'min(78%, 680px)', padding: '11px 15px', borderRadius: 16, fontSize: 14, lineHeight: 1.5,
         borderBottomLeftRadius: isUser ? 16 : 4, borderBottomRightRadius: isUser ? 4 : 16,
         background: isUser ? 'var(--primary)' : '#fff', color: isUser ? '#fff' : 'var(--dark)',
         border: isUser ? 'none' : '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
@@ -401,7 +404,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <style>{'@keyframes pb-dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }'}</style>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 36 }}>
           <div>
@@ -432,7 +435,9 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
           </div>
         </div>
 
-        <div ref={cardRef} style={{ maxWidth: 760, margin: '0 auto', background: '#fff', border: '1px solid var(--border)', borderRadius: 18, scrollMarginTop: 74, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: CHAT_HEIGHT, boxShadow: '0 8px 32px rgba(2,6,24,0.06)' }}>
+        {/* Full page width (was 760), so the card lines up with the page's
+            edges like everything else - see lib/layout.js. */}
+        <div ref={cardRef} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 18, scrollMarginTop: 74, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: CHAT_HEIGHT, boxShadow: '0 8px 32px rgba(2,6,24,0.06)' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
             <AssistantAvatar />
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -513,7 +518,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
           </div>
         </div>
 
-        <div style={{ maxWidth: 760, margin: '32px auto 0' }}>
+        <div style={{ marginTop: 32 }}>
           <WildScaleTip maxWidth="100%" />
         </div>
 

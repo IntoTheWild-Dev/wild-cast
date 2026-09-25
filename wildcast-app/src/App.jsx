@@ -23,6 +23,7 @@ import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
 import { sortIdsByFieldOrder } from './lib/fieldOrder'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from './lib/layout'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -493,6 +494,9 @@ const SHOW_MODE_CHOOSER = false
   // Figma-imported templates (draft + live), fetched once and merged with the
   // static TEMPLATE_ZONES/TEMPLATES - see src/lib/customTemplates.js
   const [customTemplates, setCustomTemplates] = useState({ zonesById: {}, cards: [], records: [] })
+  // Whether that first fetch has finished (either way) - the Templates page
+  // shows a spinner until then instead of a catalogue missing its imports.
+  const [customTemplatesLoaded, setCustomTemplatesLoaded] = useState(false)
   // Mirrors hasUnsavedChanges below, but for TemplateImportPage's staged
   // zone-setting edits instead of the editor's fields - lets handleNavigate
   // warn before leaving the Import page with unsaved zone edits the same
@@ -1131,6 +1135,7 @@ const SHOW_MODE_CHOOSER = false
         return merged
       })
       .catch(() => null)
+      .finally(() => setCustomTemplatesLoaded(true))
   }
 
   // Applies a publish-template.js response directly to local state instead of
@@ -1826,6 +1831,22 @@ const SHOW_MODE_CHOOSER = false
     await openLoadedProject(project)
   }
 
+  // Opens a design from a header notification - only its id is known, so
+  // this reads it the same way the /content/<id> deep link does. Same
+  // unsaved-changes guard as the nav (handleNavigate), since it leaves
+  // whatever's open in the editor.
+  async function handleOpenProjectById(id) {
+    if (screen === 'editor' && hasUnsavedChanges && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
+    try {
+      const res = await fetch(`/api/load-project?id=${encodeURIComponent(id)}&_t=${Date.now()}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Design not found')
+      await openLoadedProject(await res.json())
+    } catch (err) {
+      console.error('Open from notification error:', err)
+      alert('Could not open that design - it may have been deleted.')
+    }
+  }
+
   // Designs are shared across every activation key now - anyone can open
   // anyone else's. Duplicating first (rather than editing in place) is the
   // safety net: it saves a brand-new, independent copy under a fresh id
@@ -1936,6 +1957,7 @@ const SHOW_MODE_CHOOSER = false
         onHelp={() => setShowHelp(true)}
         workflowRole={workflowRole}
         onWorkflowRoleChange={setWorkflowRole}
+        onOpenNotificationProject={handleOpenProjectById}
       />
 
       {screen === 'landing' && (
@@ -2053,6 +2075,7 @@ const SHOW_MODE_CHOOSER = false
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <TemplatePicker
             mode="catalogue"
+            loading={!customTemplatesLoaded}
             onSelect={handleSelectTemplate}
             customCards={customTemplates.cards}
             customRecords={customTemplates.records}
@@ -2482,7 +2505,7 @@ const SHOW_MODE_CHOOSER = false
           line: max-w-6xl (1152px) mx-auto, px-6 py-6 (24px), text-xs
           (12px), text-gray-400 (var(--light), same hex), text-center. */}
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1152, margin: '0 auto', padding: 24, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
+        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `24px ${PAGE_GUTTER}px`, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
           © {new Date().getFullYear()} Wildstack Studio
         </div>
       </footer>

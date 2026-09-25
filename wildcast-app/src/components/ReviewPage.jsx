@@ -105,7 +105,7 @@ export default function ReviewPage({ projectId, reviewerName }) {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, status: 'approved' }),
+        body: JSON.stringify({ projectId, status: 'approved', by: name }),
       })
       if (!res.ok) throw new Error('Failed to approve')
     } catch (err) {
@@ -131,7 +131,7 @@ export default function ReviewPage({ projectId, reviewerName }) {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, status: 'changes_requested' }),
+        body: JSON.stringify({ projectId, status: 'changes_requested', by: name }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
     } catch (err) {
