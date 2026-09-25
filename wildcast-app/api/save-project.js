@@ -69,6 +69,37 @@ async function handleList(req, res) {
   }
 }
 
+// GET ?thumb=<id>&v=<savedAt> - a design's card image for the Designs /
+// My Tasks grids, served as a real JPEG instead of inline in the list JSON.
+// The list's own `thumbnail` is only 158x221 - a card is ~250px wide, so on
+// a retina screen it was being stretched ~3x and looked pixelated (Julia's
+// report, 2026-09-25). Every project already stores a 632x882 `preview`
+// (the review page's image); this serves that. Kept out of handleList on
+// purpose: ~110KB each inline would hit Vercel's 4.5MB response cap after
+// a few dozen designs. `v` changes on every save, so the response can be
+// cached hard - the browser and CDN only ever fetch each version once.
+const PROJECT_ID_PATTERN = /^[A-Za-z0-9_-]+$/
+
+async function handleThumb(req, res) {
+  const id = String(req.query.thumb)
+  if (!PROJECT_ID_PATTERN.test(id)) return res.status(400).end()
+  try {
+    const result = await get(`projects/${id}.json`, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN })
+    if (!result) return res.status(404).end()
+    const project = await new Response(result.stream).json()
+    const match = /^data:([^;]+);base64,(.+)$/.exec(project.preview || project.thumbnail || '')
+    if (!match) return res.status(404).end()
+    res.setHeader('Content-Type', match[1])
+    res.setHeader('Cache-Control', req.query.v
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=60')
+    return res.status(200).send(Buffer.from(match[2], 'base64'))
+  } catch (err) {
+    console.error('save-project thumb error:', err)
+    return res.status(500).end()
+  }
+}
+
 const VALID_REVIEW_STATUSES = ['design', 'review', 'changes_requested', 'approved']
 
 // Flips a saved project's persisted review status only - used by
@@ -119,6 +150,7 @@ async function handlePatch(req, res) {
 }
 
 export default async function handler(req, res) {
+  if (req.method === 'GET' && req.query.thumb) return handleThumb(req, res)
   if (req.method === 'GET') return handleList(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)
   if (req.method !== 'POST') return res.status(405).end()
