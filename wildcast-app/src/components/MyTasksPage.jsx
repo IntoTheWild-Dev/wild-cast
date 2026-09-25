@@ -35,11 +35,12 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-function TaskCard({ project, opening, onOpen, borderColor = 'var(--border)' }) {
+function TaskCard({ project, opening, onOpen, hasUpdate, borderColor = 'var(--border)' }) {
   return (
     <div
       onClick={() => onOpen(project)}
       style={{
+        position: 'relative',
         background: '#fff', border: `${borderColor === 'var(--border)' ? 1 : 2}px solid ${borderColor}`, borderRadius: 10, overflow: 'hidden',
         cursor: opening ? 'default' : 'pointer', display: 'flex', gap: 10, padding: 8,
         opacity: opening ? 0.7 : 1, transition: 'border-color 0.15s',
@@ -47,6 +48,11 @@ function TaskCard({ project, opening, onOpen, borderColor = 'var(--border)' }) {
       onMouseEnter={e => { if (!opening) e.currentTarget.style.borderColor = 'var(--primary)' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = borderColor }}
     >
+      {/* Unread notification for this design (approved / changes requested
+          / a comment) - clears once it's opened. See useNotifications. */}
+      {hasUpdate && (
+        <span title="New update" role="img" aria-label="New update" style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', background: '#DC2626' }} />
+      )}
       <div style={{ width: 44, height: 62, flexShrink: 0, background: '#00C2CB', borderRadius: 6, overflow: 'hidden' }}>
         {project.thumbnail && (
           <img src={project.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -67,7 +73,7 @@ function TaskCard({ project, opening, onOpen, borderColor = 'var(--border)' }) {
   )
 }
 
-export default function MyTasksPage({ onOpenProject, activation, onBack }) {
+export default function MyTasksPage({ onOpenProject, activation, unreadProjectIds, onBack }) {
   const [projects, setProjects] = useState([])
   const [loading, setLoading]   = useState(true)
   const [openingId, setOpeningId] = useState(null)
@@ -141,6 +147,7 @@ export default function MyTasksPage({ onOpenProject, activation, onBack }) {
                           project={p}
                           opening={openingId === p.id}
                           onOpen={handleOpen}
+                          hasUpdate={unreadProjectIds?.has(p.id)}
                           borderColor={col.key === 'review' && p.everRequestedChanges ? REVIEW_ROUND_COLOR : undefined}
                         />
                       ))}

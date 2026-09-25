@@ -16,6 +16,7 @@ import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
+import { ResetIcon } from './ActionIcons'
 
 const ALL_MERCHANTS = '__all__'
 
@@ -224,10 +225,10 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
               <button
                 onClick={() => onChange('')}
                 title="Reset to placeholder"
-                style={{ fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+                style={{ display: 'inline-flex', alignItems: 'center', fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
-              >↺</button>
+              ><ResetIcon /></button>
             )}
             {limit && !isPlaceholder && (
               <span style={{ marginLeft: 'auto', fontSize: 11, color: over ? '#EF4444' : 'var(--light)', fontVariantNumeric: 'tabular-nums' }}>
@@ -253,7 +254,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
                 style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--light)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, lineHeight: 1, flexShrink: 0 }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--light)' }}
-              >↺</button>
+              ><ResetIcon /></button>
             )}
           </div>
           {onNudge && (
@@ -474,10 +475,10 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
               <button
                 onClick={e => { e.stopPropagation(); onResetPosition() }}
                 title="Reset image position"
-                style={{ marginLeft: 4, fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+                style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 4, fontSize: 13, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--mid)' }}
-              >↺</button>
+              ><ResetIcon /></button>
             )}
           </div>
         </div>

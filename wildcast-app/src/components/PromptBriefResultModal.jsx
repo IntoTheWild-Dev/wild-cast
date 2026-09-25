@@ -239,9 +239,9 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 )}
                 <button
                   type="button" onClick={sent ? () => setView('summary') : onClose}
-                  style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: 'transparent', color: 'var(--mid)', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: '11px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--dark)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
-                  {sent ? '← Back' : 'Back to chat'}
+                  {sent ? 'Back' : 'Back to chat'}
                 </button>
               </div>
             </div>

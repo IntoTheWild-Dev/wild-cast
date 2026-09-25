@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { ApproveIcon, RequestChangesIcon } from './ActionIcons'
 
 function formatDateTime(ts) {
   return new Date(ts).toLocaleString('en-GB', {
@@ -7,7 +8,7 @@ function formatDateTime(ts) {
   })
 }
 
-export default function ReviewPage({ projectId, reviewerName }) {
+export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   const [project, setProject]       = useState(null)
   const [comments, setComments]     = useState([])
   // Prefilled for a signed-in visitor (Notion card "Partner review link",
@@ -21,6 +22,17 @@ export default function ReviewPage({ projectId, reviewerName }) {
   const [copied, setCopied]         = useState(false)
   const [approving, setApproving]   = useState(false)
   const [requestingChanges, setRequestingChanges] = useState(false)
+  // Only a Manager approves / requests changes (Anang's ask, 2026-09-25).
+  // "View as: Designer" makes that bar read-only. A reviewer who isn't
+  // signed in has no role picked, and App.jsx defaults that to Manager - so
+  // an outside partner opening the link can still decide, as before.
+  const canDecide = workflowRole !== 'Designer'
+  // Request changes needs a written reason (an open comment). Instead of a
+  // greyed-out button that only explained itself in a hover tooltip - it
+  // read as "read-only" (Anang, 2026-09-25) - the button is always
+  // clickable; with no comment yet it points at the comment box instead.
+  const commentBoxRef = useRef(null)
+  const [needsCommentHint, setNeedsCommentHint] = useState(false)
 
   // App.jsx's own activation state resolves asynchronously (a re-validation
   // fetch, not something available on the very first paint - see its own
@@ -98,7 +110,7 @@ export default function ReviewPage({ projectId, reviewerName }) {
   // side (App.jsx's doSave) only ever sets 'design'/'review'. Optimistic,
   // same pattern as handleToggleResolved above.
   async function handleApprove() {
-    if (approving || project?.reviewStatus === 'approved') return
+    if (!canDecide || approving || project?.reviewStatus === 'approved') return
     setApproving(true)
     setProject(prev => ({ ...prev, reviewStatus: 'approved' }))
     try {
@@ -124,7 +136,13 @@ export default function ReviewPage({ projectId, reviewerName }) {
   // this panel is how a reviewer leaves that reason before clicking this.
   // Same optimistic/rollback pattern as handleApprove.
   async function handleRequestChanges() {
-    if (requestingChanges || !hasOpenFeedback || project?.reviewStatus === 'changes_requested') return
+    if (!canDecide || requestingChanges || project?.reviewStatus === 'changes_requested') return
+    if (!hasOpenFeedback) {
+      setNeedsCommentHint(true)
+      commentBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      commentBoxRef.current?.focus()
+      return
+    }
     setRequestingChanges(true)
     setProject(prev => ({ ...prev, reviewStatus: 'changes_requested' }))
     try {
@@ -188,39 +206,47 @@ export default function ReviewPage({ projectId, reviewerName }) {
           canvas - now they're the first thing anyone sees on the page). */}
       {project?.reviewStatus === 'approved' ? (
         <div style={{ padding: '14px 20px', textAlign: 'center', background: 'rgba(22,163,74,0.08)', borderBottom: '1px solid rgba(22,163,74,0.25)', flexShrink: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#16a34a' }}><ApproveIcon size={18} /> Approved</span>
         </div>
       ) : project?.reviewStatus === 'changes_requested' ? (
         <div style={{ padding: '14px 20px', textAlign: 'center', background: 'rgba(180,83,9,0.08)', borderBottom: '1px solid rgba(180,83,9,0.25)', flexShrink: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#B45309' }}>↺ Changes requested - waiting on the creator</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#B45309' }}><RequestChangesIcon size={18} /> Changes requested - waiting on the creator</span>
+        </div>
+      ) : !canDecide ? (
+        // View as Designer: the decision is the Manager's, so this is
+        // read-only here - commenting still works below.
+        <div style={{ padding: '14px 20px', textAlign: 'center', background: '#F9FAFB', borderBottom: '1px solid var(--border)', flexShrink: 0, fontSize: 13, color: 'var(--mid)' }}>
+          Waiting for a Manager to approve or request changes. You're viewing as <strong style={{ color: 'var(--dark)' }}>Designer</strong> - view only.
         </div>
       ) : (
         <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#F9FAFB', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <button
             type="button"
             onClick={handleRequestChanges}
-            disabled={requestingChanges || !hasOpenFeedback}
-            title={hasOpenFeedback ? 'Sends this back to the creator with your comments below' : 'Leave a comment below first, so the creator knows what to change'}
+            disabled={requestingChanges}
+            title={hasOpenFeedback ? 'Sends this back to the creator with your comments' : 'Tell the designer what to change - add a comment first'}
             style={{
-              padding: '10px 20px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
-              background: '#fff', color: (requestingChanges || !hasOpenFeedback) ? 'var(--light)' : '#B45309',
-              borderColor: (requestingChanges || !hasOpenFeedback) ? 'var(--border)' : '#D97706',
-              cursor: (requestingChanges || !hasOpenFeedback) ? 'default' : 'pointer', whiteSpace: 'nowrap',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 22px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: '1px solid #D97706',
+              background: '#fff', color: requestingChanges ? 'var(--light)' : '#B45309',
+              borderColor: requestingChanges ? 'var(--border)' : '#D97706',
+              cursor: requestingChanges ? 'default' : 'pointer', whiteSpace: 'nowrap',
             }}
           >
-            {requestingChanges ? 'Sending…' : '↺ Request changes'}
+            {!requestingChanges && <RequestChangesIcon size={18} />}
+            {requestingChanges ? 'Sending…' : 'Request changes'}
           </button>
           <button
             type="button"
             onClick={handleApprove}
             disabled={approving}
             style={{
-              padding: '10px 20px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 22px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none',
               background: approving ? '#E5E7EB' : '#16a34a', color: approving ? 'var(--mid)' : '#fff',
               cursor: approving ? 'default' : 'pointer', whiteSpace: 'nowrap',
             }}
           >
-            {approving ? 'Approving…' : '✓ Approve'}
+            {!approving && <ApproveIcon size={18} />}
+            {approving ? 'Approving…' : 'Approve'}
           </button>
         </div>
       )}
@@ -294,15 +320,21 @@ export default function ReviewPage({ projectId, reviewerName }) {
             onFocus={e => e.currentTarget.style.borderColor = 'var(--primary)'}
             onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
           />
+          {needsCommentHint && !hasOpenFeedback && (
+            <div role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: '#92400E', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: '8px 10px' }}>
+              Tell the designer what to change first - send a comment here, then click <strong>Request changes</strong> again.
+            </div>
+          )}
           <textarea
+            ref={commentBoxRef}
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder="Leave your feedback…"
+            placeholder={needsCommentHint && !hasOpenFeedback ? 'What should the designer change?' : 'Leave your feedback…'}
             required
             rows={4}
-            style={{ padding: '9px 11px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5 }}
+            style={{ padding: '9px 11px', fontSize: 13, border: `1px solid ${needsCommentHint && !hasOpenFeedback ? '#F59E0B' : 'var(--border)'}`, borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5 }}
             onFocus={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-            onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
+            onBlur={e => e.currentTarget.style.borderColor = needsCommentHint && !hasOpenFeedback ? '#F59E0B' : 'var(--border)'}
           />
           <button
             type="submit"

@@ -24,6 +24,8 @@ import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefC
 import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
 import { sortIdsByFieldOrder } from './lib/fieldOrder'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from './lib/layout'
+import useNotifications from './lib/useNotifications'
+import { ApproveIcon, RequestChangesIcon } from './components/ActionIcons'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -425,6 +427,10 @@ const SHOW_MODE_CHOOSER = false
   // sidebar was read-only - designer could see reviewer comments but never
   // reply from inside the app).
   const [replyText, setReplyText]             = useState('')
+  // Request changes with no open comment points at this box instead of
+  // being a greyed-out button (same as ReviewPage.jsx - see its note).
+  const replyBoxRef = useRef(null)
+  const [needsReplyHint, setNeedsReplyHint]   = useState(false)
   const [postingReply, setPostingReply]       = useState(false)
   // activation: null = not logged in, object = { key, clientName, credits, role }.
   // Seeded synchronously from localStorage (not just in the useEffect below) so
@@ -451,6 +457,8 @@ const SHOW_MODE_CHOOSER = false
     if (!savedKey) return null
     return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
   })
+  // Header bell + My Tasks dots - one shared list, see lib/useNotifications.js.
+  const notifications = useNotifications(activation?.key)
 
   // Workflow role toggle (Julia's ask, 2026-09-22): Designer / Reviewer /
   // Manager - deliberately separate from activation.role (agency/designer/
@@ -898,7 +906,13 @@ const SHOW_MODE_CHOOSER = false
 
   async function handleRequestChangesInEditor() {
     const hasOpenFeedback = comments.some(c => !c.resolved)
-    if (editorRequestingChanges || !currentProjectId || !hasOpenFeedback || reviewStatus === 'changes_requested') return
+    if (editorRequestingChanges || !currentProjectId || reviewStatus === 'changes_requested') return
+    if (!hasOpenFeedback) {
+      setNeedsReplyHint(true)
+      replyBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      replyBoxRef.current?.focus()
+      return
+    }
     setEditorRequestingChanges(true)
     setReviewStatus('changes_requested')
     try {
@@ -1791,6 +1805,10 @@ const SHOW_MODE_CHOOSER = false
       ?? templatesSource.cards.find(t => t.id === project.templateId)
     if (!template) throw new Error(`Template "${project.templateId}" not found`)
 
+    // Opening a design counts as seeing its notifications - clears its dot
+    // on My Tasks and its share of the bell's count (boss's call, 2026-09-25).
+    notifications.markProjectRead(project.id)
+
     // Fetch comments directly - can't rely on the useEffect because the
     // project id may not have changed (same project re-opened from Designs)
     let freshComments = []
@@ -1958,6 +1976,7 @@ const SHOW_MODE_CHOOSER = false
         workflowRole={workflowRole}
         onWorkflowRoleChange={setWorkflowRole}
         onOpenNotificationProject={handleOpenProjectById}
+        notifications={notifications}
       />
 
       {screen === 'landing' && (
@@ -2101,7 +2120,7 @@ const SHOW_MODE_CHOOSER = false
 
       {screen === 'tasks' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <MyTasksPage onOpenProject={handleOpenProject} activation={activation} onBack={() => setScreen('landing')} />
+          <MyTasksPage onOpenProject={handleOpenProject} activation={activation} unreadProjectIds={notifications.unreadProjectIds} onBack={() => setScreen('landing')} />
         </div>
       )}
 
@@ -2124,7 +2143,7 @@ const SHOW_MODE_CHOOSER = false
               reachable without any activation at all (see the gate above),
               so activation may genuinely be null here; ReviewPage.jsx falls
               back to its normal blank/manual-entry field in that case. */}
-          <ReviewPage projectId={reviewProjectId} reviewerName={activation?.clientName} />
+          <ReviewPage projectId={reviewProjectId} reviewerName={activation?.clientName} workflowRole={workflowRole} />
         </div>
       )}
 
@@ -2180,12 +2199,18 @@ const SHOW_MODE_CHOOSER = false
               {/* Reply box - the panel used to be read-only; Julia's ask,
                   2026-09-16, was real back-and-forth from inside the editor. */}
               <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {needsReplyHint && !comments.some(c => !c.resolved) && (
+                  <div role="alert" style={{ fontSize: 11, lineHeight: 1.45, color: '#92400E', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: '7px 9px' }}>
+                    Tell the designer what to change first - send a comment here, then click <strong>Request changes</strong> again.
+                  </div>
+                )}
                 <textarea
+                  ref={replyBoxRef}
                   value={replyText}
                   onChange={e => setReplyText(e.target.value)}
-                  placeholder="Reply to feedback…"
+                  placeholder={needsReplyHint && !comments.some(c => !c.resolved) ? 'What should the designer change?' : 'Reply to feedback…'}
                   rows={2}
-                  style={{ padding: '8px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5, background: '#fff' }}
+                  style={{ padding: '8px 10px', fontSize: 12, border: `1px solid ${needsReplyHint && !comments.some(c => !c.resolved) ? '#F59E0B' : 'var(--border)'}`, borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5, background: '#fff' }}
                 />
                 <button
                   type="button"
@@ -2214,39 +2239,41 @@ const SHOW_MODE_CHOOSER = false
               {workflowRole === 'Manager' && reviewStatus !== 'design' && (
                 reviewStatus === 'approved' ? (
                   <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(22,163,74,0.1)', borderTop: '1px solid #FDE68A' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Approved</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#16a34a' }}><ApproveIcon size={16} /> Approved</span>
                   </div>
                 ) : reviewStatus === 'changes_requested' ? (
                   <div style={{ padding: '10px 14px', textAlign: 'center', background: 'rgba(180,83,9,0.1)', borderTop: '1px solid #FDE68A' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#B45309' }}>↺ Changes requested</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#B45309' }}><RequestChangesIcon size={16} /> Changes requested</span>
                   </div>
                 ) : (
                   <div style={{ padding: '10px 14px', display: 'flex', gap: 6, borderTop: '1px solid #FDE68A' }}>
                     <button
                       type="button"
                       onClick={handleRequestChangesInEditor}
-                      disabled={editorRequestingChanges || !comments.some(c => !c.resolved)}
-                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Leave an open comment first, so the creator knows what to change'}
+                      disabled={editorRequestingChanges}
+                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Tell the designer what to change - add a comment first'}
                       style={{
-                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
-                        background: '#fff', color: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--light)' : '#B45309',
-                        borderColor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'var(--border)' : '#D97706',
-                        cursor: (editorRequestingChanges || !comments.some(c => !c.resolved)) ? 'default' : 'pointer',
+                        flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 8px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
+                        background: '#fff', color: editorRequestingChanges ? 'var(--light)' : '#B45309',
+                        borderColor: editorRequestingChanges ? 'var(--border)' : '#D97706',
+                        cursor: editorRequestingChanges ? 'default' : 'pointer',
                       }}
                     >
-                      {editorRequestingChanges ? 'Sending…' : '↺ Request changes'}
+                      {!editorRequestingChanges && <RequestChangesIcon size={16} />}
+                      {editorRequestingChanges ? 'Sending…' : 'Request changes'}
                     </button>
                     <button
                       type="button"
                       onClick={handleApproveInEditor}
                       disabled={editorApproving}
                       style={{
-                        flex: 1, padding: '7px 6px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: 'none',
+                        flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 8px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none',
                         background: editorApproving ? '#E5E7EB' : '#16a34a', color: editorApproving ? 'var(--mid)' : '#fff',
                         cursor: editorApproving ? 'default' : 'pointer',
                       }}
                     >
-                      {editorApproving ? 'Approving…' : '✓ Approve'}
+                      {!editorApproving && <ApproveIcon size={16} />}
+                      {editorApproving ? 'Approving…' : 'Approve'}
                     </button>
                   </div>
                 )
