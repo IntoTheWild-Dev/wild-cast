@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getLibraryAssets, saveAssetToLibrary, libraryAssetSrc } from '../lib/assetLibrary'
-import { hasTransparency } from '../lib/image'
+import { getLibraryAssets, saveAssetToLibrary, libraryAssetSrc, removeBackgroundForUpload } from '../lib/assetLibrary'
+import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 
 // "Nothing in the library yet" reads as broken if you don't know why - these
 // folders only ever get populated by uploading through the Library page
@@ -16,12 +16,9 @@ const EMPTY_HINTS = {
 
 // A compact "pick an existing asset from the shared Library, or upload a new
 // one" field - used for Sticker, QR code and Food photo in the briefing
-// form. Uploads go through the exact same validation as everywhere else in
-// the app (see LibraryPage.jsx's UPLOADABLE_FOLDERS / lib/image.js's
-// hasTransparency): requireTransparent fields must be a real transparent
-// PNG, not a flattened image with a solid background - same "no misfit
-// backgrounds" rule Julia set for the canvas/Library page uploads. A
-// successful upload both saves to the shared Library AND selects it for
+// form. Uploads get their background removed automatically first (see
+// lib/removeBackground.js, same pipeline as every other upload), except QR
+// codes. A successful upload both saves to the shared Library AND selects it for
 // this field in one step, since picking is the point here (unlike the
 // Library page's plain "add to library").
 export default function LibraryAssetPickerField({ label, hint, folder, merchant, value, onSelect, requireTransparent }) {
@@ -54,25 +51,17 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
       const file = e.target.files[0]
       if (!file) return
 
-      if (requireTransparent && file.type !== 'image/png') {
-        setUploadError('This image has a background - please upload a transparent PNG.')
+      setUploading(true)
+      let saved
+      try {
+        const { url, name } = await removeBackgroundForUpload(file, { folder, requireTransparent })
+        saved = await saveAssetToLibrary(folder, name, url, merchant)
+        URL.revokeObjectURL(url)
+      } catch (err) {
+        setUploading(false)
+        setUploadError(err.message)
         return
       }
-
-      const blobUrl = URL.createObjectURL(file)
-
-      if (requireTransparent) {
-        const transparent = await hasTransparency(blobUrl)
-        if (!transparent) {
-          setUploadError('This image has a background - please upload a transparent PNG.')
-          URL.revokeObjectURL(blobUrl)
-          return
-        }
-      }
-
-      setUploading(true)
-      const saved = await saveAssetToLibrary(folder, file.name, blobUrl, merchant)
-      URL.revokeObjectURL(blobUrl)
       setUploading(false)
 
       if (!saved) {
@@ -114,6 +103,9 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
               <button onClick={() => setOpen(false)} style={{ width: 26, height: 26, border: 'none', background: '#F3F4F6', borderRadius: '50%', cursor: 'pointer', fontSize: 14, color: 'var(--mid)', lineHeight: 1 }}>×</button>
             </div>
 
+            {shouldRemoveBackground(folder) && (
+              <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 6 }}>{AUTO_REMOVE_BG_NOTE}</div>
+            )}
             <button
               type="button"
               onClick={handleUploadClick}
@@ -126,7 +118,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
                 opacity: uploading ? 0.6 : 1,
               }}
             >
-              {uploading ? 'Uploading…' : `↑ Upload from computer${requireTransparent ? ' (transparent PNG)' : ''}`}
+              {uploading ? (shouldRemoveBackground(folder) ? 'Removing background…' : 'Uploading…') : '↑ Upload from computer'}
             </button>
             {uploadError && (
               <div style={{ marginBottom: 12, fontSize: 11, color: '#B91C1C' }}>✕ {uploadError}</div>

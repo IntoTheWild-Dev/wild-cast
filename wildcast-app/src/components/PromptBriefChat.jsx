@@ -5,6 +5,7 @@ import PromptBriefAssetPicker from './PromptBriefAssetPicker'
 import { buildSteps, stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 
 // "Prompt Brief" screen (Julia's ask, 2026-09-19): replaces the old brief form
 // with a chat. Same page shell as the landing page (hero copy, tip box,
@@ -99,8 +100,15 @@ function Chip({ children, onClick, primary }) {
   )
 }
 
-function UploadDrop({ label, onFile }) {
+function UploadDrop({ label, onFile, busyLabel }) {
   const [over, setOver] = useState(false)
+  if (busyLabel) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', border: '1.5px dashed var(--primary)', borderRadius: 12, background: 'var(--primary-glow)', color: 'var(--primary)', fontSize: 13, fontWeight: 600 }}>
+        {busyLabel}
+      </div>
+    )
+  }
   return (
     <label
       onDragOver={e => { e.preventDefault(); setOver(true) }}
@@ -136,6 +144,9 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   const [aiBusy, setAiBusy] = useState(false)
   // Step id whose "Choose from Assets" popup is open (upload steps only).
   const [pickerId, setPickerId] = useState(null)
+  // Step id whose upload is still being processed (background removal can
+  // take a few seconds) - blocks a second file and shows progress meanwhile.
+  const [uploadingId, setUploadingId] = useState(null)
   // Suggestions already shown per step, sent back as `exclude` on "Suggest more".
   const [aiShown, setAiShown] = useState({})
   const timers = useRef([])
@@ -332,11 +343,12 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   }
 
   // Same pipeline as the editor's own upload (FieldEditor's ImageUpload):
-  // the zone's transparent-PNG rule, then a copy saved into the partner's
-  // Library. A rejected file is explained in the chat and the step stays open.
+  // automatic background removal, then a copy saved into the partner's
+  // Library. A failed upload is explained in the chat and the step stays open.
   async function pickFile(step, file) {
-    if (currentId !== step.id) return
+    if (currentId !== step.id || uploadingId) return
     const zone = config?.zones?.find(z => z.id === step.id)
+    setUploadingId(step.id)
     try {
       const { url, name } = await uploadImageForZone(file, {
         requireTransparent: zone?.hint?.toLowerCase().includes('transparent'),
@@ -347,6 +359,8 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
       submit(step, { value: name, display: name, imageUrl: url })
     } catch (err) {
       push({ from: 'ai', text: `${err.message} Please try another file, or skip it for now.` })
+    } finally {
+      setUploadingId(null)
     }
   }
 
@@ -470,9 +484,17 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
                   </div>
                 )}
                 {step?.kind === 'upload' ? (
+                  <>
+                  {shouldRemoveBackground(assetFolderForZone(step.id)) && (
+                    <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE}</div>
+                  )}
                   <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 260px', display: 'flex' }}>
-                      <UploadDrop label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`} onFile={f => pickFile(step, f)} />
+                      <UploadDrop
+                        label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`}
+                        onFile={f => pickFile(step, f)}
+                        busyLabel={uploadingId === step.id ? (shouldRemoveBackground(assetFolderForZone(step.id)) ? 'Removing background…' : 'Uploading…') : null}
+                      />
                     </div>
                     <button
                       type="button" onClick={() => setPickerId(step.id)}
@@ -484,6 +506,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
                       Choose from Assets
                     </button>
                   </div>
+                  </>
                 ) : inputRow}
               </>
             )}

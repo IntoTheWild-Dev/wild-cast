@@ -176,6 +176,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const [dropZoneId, setDropZoneId] = useState(null) // image zone highlighted while a file is dragged over it
   const [dropError, setDropError] = useState(null)   // transient message when a dropped file gets rejected
   const dropErrorTimerRef = useRef(null)
+  const [dropBusy, setDropBusy] = useState(false)   // dropped file still being processed (background removal)
 
   // Clamps a user nudge offset to how far the image can move without breaking
   // its fit contract, so a nudge can never reveal zone background behind it
@@ -1081,10 +1082,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       showDropError('That file isn’t an image.')
       return
     }
+    setDropBusy(true)
     try {
       await onImageDrop(zoneId, file)
     } catch (err) {
       showDropError(err.message)
+    } finally {
+      setDropBusy(false)
     }
   }
 
@@ -1362,6 +1366,16 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             }} />
           )}
         </div>
+        {dropBusy && !dropError && (
+          <div style={{
+            position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.75)', color: '#fff', fontSize: 12, fontWeight: 600,
+            padding: '7px 14px', borderRadius: 20, whiteSpace: 'nowrap',
+            zIndex: 9, boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          }}>
+            Processing image…
+          </div>
+        )}
         {dropError && (
           <div style={{
             position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
