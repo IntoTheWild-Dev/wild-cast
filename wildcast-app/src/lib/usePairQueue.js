@@ -38,6 +38,13 @@ function contextKey(parts) {
 
 const other = key => (key === 'headline' ? 'sub_headline' : 'headline')
 
+// Case-insensitive text comparison for session bookkeeping. The editor
+// stores omnes-cond field values UPPERCASED (App.jsx handleFieldChange,
+// 2026-09-09), while the queue records the lines it sent in their original
+// case — so every "is this field still holding a session line?" check must
+// normalize case or the session dies after the first apply.
+const normText = s => (s || '').trim().toLowerCase()
+
 export function usePairQueue(options) {
   // Always-fresh options inside event handlers: the ref syncs in an effect
   // (after commit, before any click can happen), so click handlers never
@@ -88,8 +95,8 @@ export function usePairQueue(options) {
     ])
     if (s.ctxKey !== key) return true
     for (const k of ['headline', 'sub_headline']) {
-      const text = (o.getFieldText(k) || '').trim()
-      const allowed = new Set([s.baseTexts[k], ...s.appliedTexts[k]])
+      const text = normText(o.getFieldText(k))
+      const allowed = new Set([s.baseTexts[k], ...s.appliedTexts[k]].map(normText))
       if (text && !allowed.has(text)) return true
       if (!text && s.baseTexts[k] && !s.appliedTexts[k].length) return true // cleared a user draft
     }
@@ -207,8 +214,8 @@ export function usePairQueue(options) {
     const o = optRef.current
     if (!s || refilling) return
     const untouched = s.pairs.filter((_, i) =>
-      !s.appliedTexts.headline.includes(pairText(s, i, 'headline')) &&
-      !s.appliedTexts.sub_headline.includes(pairText(s, i, 'sub_headline')))
+      !s.appliedTexts.headline.map(normText).includes(normText(pairText(s, i, 'headline'))) &&
+      !s.appliedTexts.sub_headline.map(normText).includes(normText(pairText(s, i, 'sub_headline'))))
     if (untouched.length > 1) return
     if (recentBatchCount() >= MAX_BATCHES_PER_HOUR) return
     if (o.credits != null && o.credits <= 0) return
@@ -282,8 +289,9 @@ export function usePairQueue(options) {
           const text = pairText(s, nextIndex, clickedField)
           // If the other field still holds the previous pair's partner line
           // (AI-applied, not hand-edited), offer its new match as a link.
+          // Case-insensitive: the editor may store the line uppercased.
           const prevPartnerLine = nextIndex > 0 ? pairText(s, nextIndex - 1, otherKey) : null
-          if (otherText && prevPartnerLine && otherText === prevPartnerLine && o.fieldProvenance(otherKey) !== 'user_draft') {
+          if (otherText && prevPartnerLine && normText(otherText) === normText(prevPartnerLine) && o.fieldProvenance(otherKey) !== 'user_draft') {
             setPartnerLineLink({ fieldKey: otherKey, text: pairText(s, nextIndex, otherKey), pairIndex: nextIndex })
           } else if (partnerLineLink?.fieldKey === clickedField || partnerLineLink?.fieldKey === otherKey) {
             setPartnerLineLink(null)

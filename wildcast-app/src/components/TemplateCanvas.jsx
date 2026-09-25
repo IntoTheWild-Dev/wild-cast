@@ -927,7 +927,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     prevFieldsRef.current = { ...fields }
     if (changed) canvas.renderAll()
-  }, [fields])
+  }, [fields, templateId, zoneDisplayText])
 
   // ── Sync font size overrides → canvas ──────────────────────────────────────
   // Real bug found 2026-08-03 (Julia: "sizing the headline also resizes the

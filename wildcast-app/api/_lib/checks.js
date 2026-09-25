@@ -177,12 +177,12 @@ export function checkBlockedWords(pair, ctx) { // eslint-disable-line no-unused-
   const texts = { headline: pair.headline, subheadline: pair.subheadline }
   for (const [fieldKey, value] of Object.entries(texts)) {
     // Formal address is matched on the ORIGINAL case — capitalized
-    // Sie/Ihnen/Ihr(e|n|em|es) is the formal you anywhere in the line
-    // (including line start, where the declined forms are unambiguous),
-    // while lowercase "sie" (she/they) and "ihr" (informal plural you)
-    // are perfectly valid du-form words and must NOT be flagged. Wolt
-    // voice is always "du" (P1), so any capital-I form fails.
-    if (/\b(Sie|Ihnen|Ihr(e|n|em|es)?)\b/.test(value)) {
+    // Sie/Ihnen/Ihr… (all declined forms: Ihre, Ihren, Ihrer, Ihrem, Ihres)
+    // is the formal you anywhere in the line (including line start), while
+    // lowercase "sie" (she/they) and "ihr" (informal plural you) are
+    // perfectly valid du-form words and must NOT be flagged. Wolt voice is
+    // always "du" (P1), so any capital-I form fails.
+    if (/\b(Sie|Ihnen|Ihr(e|n|en|em|er|es)?)\b/.test(value)) {
       return `${fieldKey} uses formal "Sie/Ihr"`
     }
     const text = (value || '').toLowerCase()

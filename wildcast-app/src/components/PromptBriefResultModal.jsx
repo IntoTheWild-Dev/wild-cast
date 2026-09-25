@@ -251,7 +251,11 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
 
       {fields && config && (
         <div style={{ position: 'absolute', left: -9999, top: 0, width: 1, height: 1, overflow: 'hidden' }}>
-          <TemplateCanvas config={config} fields={fields} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
+          {/* templateId drives the caps-zone lookup for imported templates
+              (Option C's zones carry no ai blocks of their own) - without it
+              this preview - and the PNG saved via Send for review - would
+              print Option C in normal case while the editor prints caps. */}
+          <TemplateCanvas config={config} fields={fields} templateId={entry.templateIdGuided} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
         </div>
       )}
     </div>

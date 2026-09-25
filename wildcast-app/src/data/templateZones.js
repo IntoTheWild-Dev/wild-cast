@@ -484,8 +484,9 @@ export const TEMPLATE_ZONES = {
 // sub-headline 20 chars (24 at min pt), headline 9 chars (11 at min pt).
 const AI_SETTINGS_IMPORTED = [
   {
-    // covers "Option C", "option-c", "OptionC" in either the slotKey or the label
-    match: idOrName => /option\s*-?\s*c/i.test(idOrName ?? ''),
+    // Anchored: "Option C", "option-c", "OptionC" all match, but a future
+    // "Option C2" does NOT ("c" followed by a digit fails the lookahead).
+    match: idOrName => /(^|[^a-z0-9])option\s*-?\s*c(?![a-z0-9])/i.test(idOrName ?? ''),
     settings: {
       sub_headline: {
         ...AI_SUB_HEADLINE_SETUP,
