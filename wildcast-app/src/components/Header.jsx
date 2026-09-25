@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
-import Select from './Select'
+import NotificationBell from './NotificationBell'
+import UserMenu from './UserMenu'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 // Shown instead of navigating for any nav item passed disabled=true below -
 // small and local rather than its own file since it's a single temporary
@@ -82,24 +84,9 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
 // indication why - see App.jsx's own note where this is imported).
 export const WORKFLOW_ROLES = ['Designer', 'Manager']
 
-export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange }) {
+export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange, onOpenNotificationProject }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
-  const [showCreditsInfo, setShowCreditsInfo] = useState(false)
-  const creditsInfoRef = useRef(null)
-
-  useEffect(() => {
-    if (!showCreditsInfo) return
-    // 'fixed' backdrop divs don't work here since the header's backdropFilter
-    // makes them contain to the header's own box instead of the viewport, so
-    // this closes on any outside click instead.
-    function handleOutsideClick(e) {
-      if (creditsInfoRef.current && !creditsInfoRef.current.contains(e.target)) setShowCreditsInfo(false)
-    }
-    document.addEventListener('mousedown', handleOutsideClick)
-    return () => document.removeEventListener('mousedown', handleOutsideClick)
-  }, [showCreditsInfo])
-
   function handleSignOut() {
     // Clears both possible sign-in paths unconditionally rather than
     // checking wildcast_auth_type first - removing a key that was never set
@@ -154,7 +141,10 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           the right-side group, and wraps onto a second line instead of
           overlapping anything if that space ever gets tight - dynamic at any
           window width, not just the ones actually tested. */}
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '10px 32px', minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8, columnGap: 16 }}>
+      {/* PAGE_MAX_WIDTH (lib/layout.js) - the same width every page's content
+          uses, so the header's edges line up with the page below. Widened
+          from 1100 when the notification bell was added (2026-09-25). */}
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `10px ${PAGE_GUTTER}px`, minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8, columnGap: 16 }}>
         <div onClick={onLogoClick} style={{ cursor: 'pointer', flexShrink: 0 }}>
           <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
@@ -189,58 +179,21 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
           >Help</span>
         </nav>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {onWorkflowRoleChange && (
-            <Select
-              value={workflowRole}
-              onChange={e => onWorkflowRoleChange(e.target.value)}
-              title="Testing toggle - which role you're viewing as. Only Managers can export."
-              style={{
-                width: 108, fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 8,
-                border: '1px solid var(--border)', background: '#F3F4F6', color: 'var(--dark)',
-              }}
-            >
-              {WORKFLOW_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
-            </Select>
-          )}
-          {activation?.clientName && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12 }}>
-              <span style={{ fontSize: 12, color: 'var(--mid)', fontWeight: 500 }}>
-                {/* {activation.clientName} */}
-              </span>
-              <div ref={creditsInfoRef} style={{ position: 'relative' }}>
-                <span
-                  onClick={() => setShowCreditsInfo(v => !v)}
-                  style={{
-                    fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
-                    background: activation.credits <= 5 ? 'rgba(239,68,68,0.1)' : 'rgba(2,6,24,0.06)',
-                    color: activation.credits <= 5 ? '#DC2626' : 'var(--mid)',
-                    border: `1px solid ${activation.credits <= 5 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-                    cursor: 'pointer',
-                  }}>
-                  {activation.credits} AI credit{activation.credits !== 1 ? 's' : ''}
-                </span>
-                {showCreditsInfo && (
-                  <div style={{
-                    position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200,
-                    width: 220, padding: '10px 12px', borderRadius: 8, background: '#fff',
-                    border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                    fontSize: 12, color: 'var(--mid)', lineHeight: 1.5,
-                  }}>
-                    AI credits are used for AI Suggest and Improve with AI. PDF export is free and doesn't use them.
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => setShowSignOutConfirm(true)}
-                title="Sign Out"
-                style={{ fontSize: 13, color: 'var(--light)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, transition: 'color 0.15s', color: 'var(--mid)' }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--light)'}
-              >
-                Sign out
-              </button>
-            </div>
+        {/* position:relative - both the bell's and UserMenu's dropdowns
+            anchor to this group's right edge, so they open in exactly the
+            same spot. */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {/* Same identity My Tasks uses for "mine" - see NotificationBell. */}
+          <NotificationBell ownerId={activation?.key} onOpenProject={onOpenNotificationProject} />
+          {/* Role toggle, AI credits and Sign out all live in here now. */}
+          {activation && (
+            <UserMenu
+              activation={activation}
+              roles={WORKFLOW_ROLES}
+              workflowRole={workflowRole}
+              onWorkflowRoleChange={onWorkflowRoleChange}
+              onSignOut={() => setShowSignOutConfirm(true)}
+            />
           )}
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Select from './Select'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 // Matches every live template config's canvasW/canvasH (src/data/templateZones.js)
 // and the record api/import-figma-plugin.js builds - no single shared
@@ -426,7 +427,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '40px 32px 64px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `40px ${PAGE_GUTTER}px 64px` }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
           Review Figma imports
         </h1>

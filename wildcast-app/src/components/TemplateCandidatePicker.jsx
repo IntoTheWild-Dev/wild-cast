@@ -4,6 +4,7 @@ import { TEMPLATE_ZONES } from '../data/templateZones'
 import { TEMPLATES } from '../data/templates'
 import { CANDIDATE_TEMPLATE_IDS, getMatchingTemplateIds, buildCandidateFields, fetchMerchantAssets } from '../lib/briefToCandidates'
 import { OBJECTIVES, resolvePartnerName } from '../lib/briefConstants'
+import { PAGE_PADDING_X } from '../lib/layout'
 
 const [OPTION_A_ID, OPTION_B_ID] = CANDIDATE_TEMPLATE_IDS
 const CANDIDATE_LABELS = { [OPTION_A_ID]: 'Option A', [OPTION_B_ID]: 'Option B' }
@@ -27,7 +28,7 @@ function NoMatchFallback({ brief, onEdit }) {
 
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>No matching template yet</h1>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)', maxWidth: 520 }}>
           Right now only Restaurant + Flyer has live templates to generate from. Here's what you entered - nothing's been saved.
@@ -134,7 +135,7 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
 
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Pick a design</h1>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mid)', maxWidth: 520 }}>
           Generated from your brief. Tick one or both, then send for review or edit one further.

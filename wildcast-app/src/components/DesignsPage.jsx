@@ -4,6 +4,8 @@ import Select from './Select'
 import { TEMPLATES } from '../data/templates'
 import { isCloseMatch } from '../lib/fuzzyMatch'
 import { patchCachedProject } from '../lib/projectCache'
+import { PAGE_PADDING_X } from '../lib/layout'
+import PageSpinner from './PageSpinner'
 
 const ALL = '__all__'
 
@@ -725,7 +727,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       {/* Inline "Viewing" filter bar, same placement/style as LibraryPage.jsx -
           replaces the old "Find a design" popup that gated the whole list
           until submitted (Julia's ask, 2026-09-15). */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Design library</h1>
           {onBack && (
@@ -830,6 +832,8 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         )}
       </div>
 
+      {status === 'loading' && <PageSpinner label="Loading designs…" />}
+
       {status === 'ready' && projects.length === 0 && (
         <EmptyState title="No saved designs yet" desc="Open a template, fill in your content, and click Save - it will appear here." />
       )}
@@ -839,7 +843,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       )}
 
       {status === 'ready' && projects.length > 0 && viewMode === 'all' && filtered.length > 0 && (
-        <div style={{ padding: '32px 40px 40px' }}>
+        <div style={{ padding: `32px ${PAGE_PADDING_X} 40px` }}>
           {grouped.map(([group, items]) => (
             <div key={group} style={{ marginBottom: 36 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)', margin: '0 0 16px' }}>
@@ -867,7 +871,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       )}
 
       {status === 'ready' && projects.length > 0 && viewMode === 'folders' && !activePerson && (
-        <div style={{ padding: '32px 40px 40px' }}>
+        <div style={{ padding: `32px ${PAGE_PADDING_X} 40px` }}>
           {/* Each card here is a TEAM MEMBER (a distinct sign-in - activation
               key or account), not a folder - folders live one level in, per
               person. Without this heading the grid alone reads as if each
@@ -887,7 +891,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       )}
 
       {status === 'ready' && viewMode === 'folders' && activePerson && !activeFolder && (
-        <div style={{ padding: '32px 40px 40px' }}>
+        <div style={{ padding: `32px ${PAGE_PADDING_X} 40px` }}>
           {isOwnSpace && (
             <button
               type="button"
@@ -942,7 +946,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       )}
 
       {status === 'ready' && viewMode === 'folders' && activePerson && activeFolder && (
-        <div style={{ padding: '32px 40px 40px' }}>
+        <div style={{ padding: `32px ${PAGE_PADDING_X} 40px` }}>
           {activeFolderDesigns.length === 0 ? (
             <EmptyState title="This folder is empty" desc="Move a design here from its card, or from the Unsorted list in this person's folder." />
           ) : (

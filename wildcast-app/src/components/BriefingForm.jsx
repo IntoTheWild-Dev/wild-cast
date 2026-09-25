@@ -4,6 +4,7 @@ import ChoiceButton from './ChoiceButton'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
 import { liveFormatsFor, entryForGuidedId } from './TemplatePicker'
 import TemplatePreviewModal from './TemplatePreviewModal'
+import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -327,7 +328,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
 
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 32px' }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
 
           <HeroColumn pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} showFeatures={false} />

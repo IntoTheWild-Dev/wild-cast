@@ -10,6 +10,7 @@
 // plain boolean either side can flip, no access control, matching this
 // project's existing trust model (Designs/Library have none either).
 import { put, get } from '@vercel/blob'
+import { notifyOwner } from './_lib/notifications.js'
 
 async function loadComments(projectId, token) {
   // Was list() + a hand-rolled `?_t=` cache-bust on the returned URL. That
@@ -71,6 +72,28 @@ async function handlePost(req, res) {
       createdAt: Date.now(),
     })
     await saveComments(projectId, comments, token)
+
+    // A reviewer's comment notifies the design's owner. The designer's own
+    // replies (from: 'designer', posted from the editor) don't - they'd only
+    // be notifying themselves.
+    if (from !== 'designer') {
+      try {
+        const result = await get(`projects/${projectId}.json`, { access: 'private', useCache: false, token })
+        if (result) {
+          const project = await new Response(result.stream).json()
+          await notifyOwner(project.ownerEmail, {
+            type: 'comment',
+            projectId,
+            projectName: project.projectName || project.templateName || 'Untitled design',
+            actor: name.trim().slice(0, 80),
+            text: text.trim().slice(0, 200),
+          }, token)
+        }
+      } catch (err) {
+        console.error('comment notification error:', err)
+      }
+    }
+
     return res.status(200).json({ ok: true, count: comments.length })
   } catch (err) {
     console.error('add-comment error:', err)

@@ -5,7 +5,9 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Delete02Icon } from '@hugeicons/core-free-icons'
 import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset, uniqueMerchants, removeBackgroundForUpload, LIBRARY_MAX_DIM } from '../lib/assetLibrary'
 import { FRAME_PRESETS, imageSize, resizeToFrame } from '../lib/image'
-import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground, isAlreadyCutOut } from '../lib/removeBackground'
+import { PAGE_PADDING_X } from '../lib/layout'
+import PageSpinner from './PageSpinner'
 
 const ALL_MERCHANTS = '__all__'
 const ALL_TYPES = '__all__'
@@ -51,58 +53,162 @@ function EmptyState() {
 // connection existed. Now it asks explicitly, every time, right where the
 // decision actually needs to be made.
 //
-// Also picks the output frame size, like wild-scale: two presets or Custom.
-// Custom is the default and starts at the uploaded image's own size (capped
-// to what the Library stores - LIBRARY_MAX_DIM), so doing nothing keeps the
-// image as it is. That's why the file is chosen BEFORE this opens.
-function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onConfirm, removesBackground, fileName, originalSize, previewUrl }) {
+// Several images at once, processed in one go (Anang's ask, 2026-09-25,
+// modelled on wild-scale): files are chosen BEFORE this opens, shown as a
+// grid (more can be added, any removed), and each one's background removal
+// + framing + save runs with its own status. Up to UPLOAD_CONCURRENCY run
+// at a time - same limit wild-scale uses.
+//
+// Frame size, like wild-scale: two presets or Custom / Original. The default
+// keeps every image at its own size (capped to what the Library stores -
+// LIBRARY_MAX_DIM). With one image the width/height boxes show that size;
+// typing a size applies it to every image.
+const UPLOAD_CONCURRENCY = 3
+
+// Turns picked Files into grid items: preview URL (kept alive while the
+// modal is open), real size, and whether it's already cut out (the "NO BG"
+// badge - those skip Photoroom, see lib/removeBackground.js).
+async function loadUploadItems(files, checkCutOut) {
+  const items = []
+  for (const file of files) {
+    const previewUrl = URL.createObjectURL(file)
+    try {
+      const size = await imageSize(previewUrl)
+      const alreadyCutOut = checkCutOut ? await isAlreadyCutOut(previewUrl).catch(() => false) : false
+      items.push({ id: crypto.randomUUID(), file, previewUrl, size, alreadyCutOut, status: 'waiting', error: null })
+    } catch {
+      URL.revokeObjectURL(previewUrl)
+    }
+  }
+  return items
+}
+
+function cappedSize({ width, height }) {
+  const cap = Math.min(1, LIBRARY_MAX_DIM / Math.max(width, height))
+  return { width: Math.round(width * cap), height: Math.round(height * cap) }
+}
+
+function pickImageFiles(onPicked) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.multiple = true
+  input.onchange = e => {
+    const files = [...(e.target.files ?? [])].filter(f => f.type.startsWith('image/'))
+    if (files.length) onPicked(files)
+  }
+  input.click()
+}
+
+const STATUS_LABEL = {
+  'remove-bg': 'Removing background…',
+  resize: 'Resizing…',
+  save: 'Saving…',
+  done: 'Uploaded',
+}
+
+function UploadModal({ label, merchants, defaultMerchant, removesBackground, initialItems, onClose, onUploadItem }) {
   const hasExisting = merchants.length > 0
   const [mode, setMode] = useState(hasExisting ? 'existing' : 'new')
   const [existingChoice, setExistingChoice] = useState(defaultMerchant || merchants[0] || '')
   const [newName, setNewName] = useState('')
+  const [items, setItems] = useState(initialItems)
+  const [adding, setAdding] = useState(false)
 
-  const cap = Math.min(1, LIBRARY_MAX_DIM / Math.max(originalSize.width, originalSize.height))
-  const defaultSize = { width: Math.round(originalSize.width * cap), height: Math.round(originalSize.height * cap) }
-  const [preset, setPreset] = useState(null) // null = Custom
-  const [customSize, setCustomSize] = useState(defaultSize)
-  const frame = preset ?? customSize
+  const [preset, setPreset] = useState(null) // null = Custom / Original
+  const [customSize, setCustomSize] = useState(null) // null = each image keeps its own size
   const clampDim = v => Math.min(LIBRARY_MAX_DIM, Math.max(1, parseInt(v, 10) || 1))
+  const single = items.length === 1
+  // What the width/height boxes show while nothing's been typed: one image's
+  // own size, or blank ("Original") for several different ones.
+  const shownSize = preset ?? customSize ?? (single ? cappedSize(items[0].size) : null)
 
-  // Upload runs while this modal stays open, step by step, so the partner
-  // can see what's happening (background removal alone takes a few seconds).
-  // Nothing can close it mid-way - backdrop and Cancel are disabled until it
-  // either finishes (parent closes it) or fails (error shown, can retry).
-  const steps = [
-    ...(removesBackground ? [{ id: 'remove-bg', label: 'Removing background' }] : []),
-    { id: 'resize', label: `Resizing to ${frame.width} × ${frame.height}px` },
-    { id: 'save', label: 'Saving to library' },
-  ]
   const [processing, setProcessing] = useState(false)
-  const [currentStep, setCurrentStep] = useState(null)
-  const [stepError, setStepError] = useState(null)
   const merchantName = mode === 'new' ? newName.trim() : existingChoice
-  const canSubmit = !!merchantName && !processing
+  const pendingItems = items.filter(i => i.status !== 'done')
+  const failedCount = items.filter(i => i.status === 'error').length
+  const doneCount = items.filter(i => i.status === 'done').length
+  const canSubmit = !!merchantName && !processing && pendingItems.length > 0
+  const toRemove = items.filter(i => !i.alreadyCutOut).length
+
+  const subject = label.replace(/^Upload (a|an) /i, '').toLowerCase()
+  const plural = items.length > 1
+
+  function updateItem(id, patch) {
+    setItems(prev => prev.map(i => (i.id === id ? { ...i, ...patch } : i)))
+  }
+
+  function removeItem(id) {
+    setItems(prev => {
+      const gone = prev.find(i => i.id === id)
+      if (gone) URL.revokeObjectURL(gone.previewUrl)
+      return prev.filter(i => i.id !== id)
+    })
+  }
+
+  function handleAddMore() {
+    pickImageFiles(async files => {
+      setAdding(true)
+      const more = await loadUploadItems(files, removesBackground)
+      setItems(prev => [...prev, ...more])
+      setAdding(false)
+    })
+  }
+
+  function handleSizeInput(dim, value) {
+    const n = clampDim(value)
+    setCustomSize(prev => {
+      const base = prev ?? shownSize ?? { width: n, height: n }
+      return { ...base, [dim]: n }
+    })
+  }
+
+  function frameFor(item) {
+    const size = preset ?? customSize ?? cappedSize(item.size)
+    return { ...size, centreContent: !!preset }
+  }
 
   async function handleUpload() {
     setProcessing(true)
-    setStepError(null)
-    try {
-      await onConfirm(merchantName, { ...frame, centreContent: !!preset }, setCurrentStep)
-    } catch (err) {
-      setStepError(err.message)
-      setProcessing(false)
+    const queue = items.filter(i => i.status !== 'done')
+    queue.forEach(i => updateItem(i.id, { status: 'waiting', error: null }))
+    const results = []
+    async function worker() {
+      while (queue.length) {
+        const item = queue.shift()
+        try {
+          await onUploadItem(item, merchantName, frameFor(item), status => updateItem(item.id, { status }))
+          updateItem(item.id, { status: 'done' })
+          results.push(true)
+        } catch (err) {
+          updateItem(item.id, { status: 'error', error: err.message })
+          results.push(false)
+        }
+      }
     }
+    await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, worker))
+    setProcessing(false)
+    // Everything through -> close. Any failure keeps the modal open with
+    // those items marked, so they can be retried (done ones aren't redone).
+    if (results.every(Boolean)) close(true)
   }
 
-  const subject = label.replace(/^Upload (a|an) /i, '')
+  function close(uploadedSomething = doneCount > 0) {
+    items.forEach(i => URL.revokeObjectURL(i.previewUrl))
+    onClose(uploadedSomething)
+  }
+
+  const inputStyle = locked => ({ width: '100%', padding: '9px 30px 9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box', background: locked ? '#F9FAFB' : '#fff', color: locked ? 'var(--light)' : 'var(--dark)', cursor: locked ? 'not-allowed' : 'text' })
 
   return (
     <div
-      onClick={processing ? undefined : onCancel}
+      onClick={processing ? undefined : () => close()}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
     >
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 32, width: 680, maxWidth: '100%', maxHeight: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--dark)', marginBottom: 4 }}>Who is this {subject.toLowerCase()} for?</div>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 32, width: 760, maxWidth: '100%', maxHeight: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--dark)', marginBottom: 4 }}>
+          Who {plural ? `are these ${subject}s` : `is this ${subject}`} for?
+        </div>
         <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: removesBackground ? 10 : 16 }}>Assets are organized by merchant so they don't get mixed up.</div>
         {removesBackground && (
           <div style={{ fontSize: 12, color: 'var(--dark)', background: 'var(--primary-glow)', borderRadius: 8, padding: '8px 10px', marginBottom: 16, lineHeight: 1.45 }}>
@@ -110,15 +216,67 @@ function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onCo
           </div>
         )}
 
-        {/* Preview of the chosen file as-is, before background removal and
-            framing run - so a wrong file can be cancelled without uploading. */}
-        <div style={{ marginBottom: 18 }}>
-          {/* Just the image itself, no frame or checkerboard behind it -
-              scaled down to fit (never cropped), centred. */}
-          <img src={previewUrl} alt={fileName} style={{ display: 'block', maxWidth: '100%', maxHeight: 300, width: 'auto', height: 'auto', margin: '0 auto' }} />
-          <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 8, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {fileName} · original {originalSize.width} × {originalSize.height}px
+        {/* Images - the originals as picked, before any processing. */}
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>
+            Images <span style={{ fontWeight: 500, color: 'var(--mid)' }}>({items.length})</span>
           </div>
+          {removesBackground && items.length > 0 && (
+            <div style={{ fontSize: 11, color: 'var(--mid)', textAlign: 'right' }}>
+              {toRemove === 0
+                ? 'All already transparent - no background removal needed'
+                : `${toRemove} will have the background removed${items.length - toRemove ? `, ${items.length - toRemove} already transparent` : ''}`}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 20 }}>
+          {items.map(item => (
+            <div key={item.id} title={item.error || item.file.name} style={{ minWidth: 0 }}>
+              <div style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 10, overflow: 'hidden', background: '#F3F4F6', border: `1.5px solid ${item.status === 'error' ? '#FCA5A5' : item.status === 'done' ? '#86EFAC' : 'var(--border)'}` }}>
+                <img src={item.previewUrl} alt={item.file.name} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: processing && item.status === 'waiting' ? 0.55 : 1 }} />
+                {item.alreadyCutOut && (
+                  <span style={{ position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)', fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: '#fff', background: '#14B8A6', borderRadius: 100, padding: '2px 7px' }}>NO BG</span>
+                )}
+                {!processing && item.status !== 'done' && (
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.id)}
+                    title="Remove"
+                    aria-label={`Remove ${item.file.name}`}
+                    style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >×</button>
+                )}
+                {['remove-bg', 'resize', 'save'].includes(item.status) && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Spinner size={22} color="var(--primary)" />
+                  </div>
+                )}
+                {(item.status === 'done' || item.status === 'error') && (
+                  <span style={{ position: 'absolute', top: 6, left: 6, width: 20, height: 20, borderRadius: '50%', background: item.status === 'done' ? '#16A34A' : '#DC2626', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {item.status === 'done' ? '✓' : '!'}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--dark)', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.file.name}</div>
+              <div style={{ fontSize: 10, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: item.status === 'error' ? '#B91C1C' : item.status === 'done' ? '#16A34A' : 'var(--mid)', fontWeight: item.status === 'error' || item.status === 'done' ? 600 : 400 }}>
+                {item.status === 'error' ? item.error
+                  : STATUS_LABEL[item.status] ?? `${item.size.width} × ${item.size.height}px`}
+              </div>
+            </div>
+          ))}
+          {!processing && (
+            <button
+              type="button"
+              onClick={handleAddMore}
+              disabled={adding}
+              style={{ aspectRatio: '1 / 1', borderRadius: 10, border: '1.5px dashed var(--border)', background: '#fff', cursor: adding ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--mid)', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+            >
+              {adding ? <Spinner size={18} /> : <span style={{ fontSize: 24, lineHeight: 1, fontWeight: 400 }}>+</span>}
+              Add images
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -194,9 +352,19 @@ function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onCo
           })}
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)' }}>Custom / Original size (e.g. for logos)</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)' }}>Custom / Original size (e.g. for logos)</div>
+          {!preset && customSize && (
+            <button type="button" onClick={() => setCustomSize(null)} style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+              Reset to original size{plural ? 's' : ''}
+            </button>
+          )}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--mid)', margin: '2px 0 8px' }}>
-          {preset ? 'Select Custom / Original above to edit.' : `Starts at the image's own size. Max ${LIBRARY_MAX_DIM}px per side.`}
+          {preset ? 'Select Custom / Original above to edit.'
+            : customSize ? `Every image is fitted into this size. Max ${LIBRARY_MAX_DIM}px per side.`
+            : plural ? `Each image keeps its own size. Type a size to use one size for all. Max ${LIBRARY_MAX_DIM}px per side.`
+            : `Starts at the image's own size. Max ${LIBRARY_MAX_DIM}px per side.`}
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
           {['width', 'height'].map((dim, i) => (
@@ -209,10 +377,11 @@ function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onCo
                     type="number"
                     min={1}
                     max={LIBRARY_MAX_DIM}
-                    value={frame[dim]}
-                    readOnly={!!preset}
-                    onChange={e => setCustomSize(s => ({ ...s, [dim]: clampDim(e.target.value) }))}
-                    style={{ width: '100%', padding: '9px 30px 9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box', background: preset ? '#F9FAFB' : '#fff', color: preset ? 'var(--light)' : 'var(--dark)', cursor: preset ? 'not-allowed' : 'text' }}
+                    value={shownSize ? shownSize[dim] : ''}
+                    placeholder="Original"
+                    readOnly={!!preset || processing}
+                    onChange={e => handleSizeInput(dim, e.target.value)}
+                    style={inputStyle(!!preset)}
                   />
                   <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--light)' }}>px</span>
                 </span>
@@ -221,35 +390,29 @@ function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onCo
           ))}
         </div>
 
-        {/* Progress - one row per step, shown once Upload is clicked */}
-        {(processing || stepError) && (
-          <div style={{ marginTop: 20, padding: '12px 14px', borderRadius: 10, background: '#FAFAF8', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {steps.map((step, i) => {
-              const activeIndex = steps.findIndex(s => s.id === currentStep)
-              const state = activeIndex === -1 ? 'waiting'
-                : i < activeIndex ? 'done'
-                : i === activeIndex ? (stepError ? 'error' : 'active')
-                : 'waiting'
-              return (
-                <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: state === 'active' ? 700 : 500, color: state === 'waiting' ? 'var(--light)' : state === 'error' ? '#B91C1C' : 'var(--dark)' }}>
-                  <StepIcon state={state} />
-                  {step.label}{state === 'active' ? '…' : ''}
-                </div>
-              )
-            })}
-            {stepError && (
-              <div style={{ fontSize: 12, color: '#B91C1C', lineHeight: 1.5, paddingLeft: 28 }}>{stepError}</div>
-            )}
+        {/* Overall progress while running, or a summary after a partial failure */}
+        {(processing || failedCount > 0) && (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: failedCount && !processing ? '#B91C1C' : 'var(--mid)', marginBottom: 6 }}>
+              <span>
+                {processing
+                  ? `Processing… ${doneCount} of ${items.length} done`
+                  : `${failedCount} image${failedCount === 1 ? '' : 's'} failed - ${doneCount} uploaded. Hover a failed image to see why.`}
+              </span>
+            </div>
+            <div style={{ height: 6, borderRadius: 3, background: '#F3F4F6', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${items.length ? (doneCount / items.length) * 100 : 0}%`, background: failedCount && !processing ? '#DC2626' : 'var(--primary)', transition: 'width 0.3s' }} />
+            </div>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
           <button
-            onClick={onCancel}
+            onClick={() => close()}
             disabled={processing}
             style={{ flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, background: '#fff', color: processing ? 'var(--light)' : 'var(--dark)', border: '1px solid var(--border)', borderRadius: 8, cursor: processing ? 'not-allowed' : 'pointer' }}
           >
-            Cancel
+            {doneCount > 0 && !processing ? 'Done' : 'Cancel'}
           </button>
           <button
             onClick={handleUpload}
@@ -257,14 +420,16 @@ function MerchantPickerModal({ label, merchants, defaultMerchant, onCancel, onCo
             style={{
               flex: 1, padding: '11px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: !merchantName ? '#E5E7EB' : 'var(--primary)',
-              color: !merchantName ? 'var(--mid)' : '#fff',
+              background: canSubmit || processing ? 'var(--primary)' : '#E5E7EB',
+              color: canSubmit || processing ? '#fff' : 'var(--mid)',
               opacity: processing ? 0.85 : 1,
-              cursor: processing ? 'progress' : !merchantName ? 'not-allowed' : 'pointer',
+              cursor: processing ? 'progress' : canSubmit ? 'pointer' : 'not-allowed',
             }}
           >
             {processing && <Spinner />}
-            {processing ? 'Uploading…' : stepError ? 'Try again' : 'Upload'}
+            {processing ? `Uploading ${doneCount + 1 > items.length ? items.length : doneCount + 1} of ${items.length}…`
+              : failedCount ? `Retry failed (${failedCount})`
+              : `Upload ${pendingItems.length} image${pendingItems.length === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>
@@ -283,85 +448,59 @@ function Spinner({ size = 14, color = 'currentColor' }) {
   )
 }
 
-function StepIcon({ state }) {
-  const box = { width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
-  if (state === 'active') return <span style={box}><Spinner size={14} color="var(--primary)" /></span>
-  if (state === 'done') {
-    return (
-      <span style={{ ...box, background: '#16A34A' }}>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </span>
-    )
-  }
-  if (state === 'error') return <span style={{ ...box, background: '#DC2626', color: '#fff', fontSize: 11, fontWeight: 800 }}>!</span>
-  return <span style={{ ...box, border: '1.5px solid var(--border)', boxSizing: 'border-box' }} />
-}
-
 function UploadCard({ folderKey, label, requireTransparent, merchants, defaultMerchant, onUploaded }) {
   const [error, setError] = useState(null)
-  // { file, size } once a file is chosen - the modal needs its real size to
-  // prefill Custom, so the file picker opens first now.
+  const [loadingFiles, setLoadingFiles] = useState(false)
+  // Grid items once files are chosen - the modal needs each image's real
+  // size (Custom / Original) and cut-out state, so the picker opens first.
   const [pending, setPending] = useState(null)
+  const removesBackground = shouldRemoveBackground(folderKey)
 
-  function chooseFile() {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.onchange = async e => {
-      const file = e.target.files[0]
-      if (!file) return
-      setError(null)
-      // Kept alive while the modal is open - it's the preview image there.
-      const url = URL.createObjectURL(file)
-      try {
-        setPending({ file, size: await imageSize(url), previewUrl: url })
-      } catch (err) {
-        URL.revokeObjectURL(url)
-        setError(err.message)
-      }
-    }
-    input.click()
+  function chooseFiles() {
+    setError(null)
+    pickImageFiles(async files => {
+      setLoadingFiles(true)
+      const items = await loadUploadItems(files, removesBackground)
+      setLoadingFiles(false)
+      if (items.length) setPending(items)
+      else setError('Could not read these images - please try different files.')
+    })
   }
 
-  function closePending() {
-    if (pending) URL.revokeObjectURL(pending.previewUrl)
-    setPending(null)
-  }
-
-  // Called by the modal, which stays open and shows each step via onStep.
-  // Throws on failure so the modal can show the error and offer a retry;
-  // only closes the modal once everything has succeeded.
-  async function runUpload(merchant, frame, onStep) {
-    const { file } = pending
-    if (shouldRemoveBackground(folderKey)) onStep('remove-bg')
-    const { url, name } = await removeBackgroundForUpload(file, { folder: folderKey, requireTransparent })
-    onStep('resize')
+  // One image's full pipeline, called by the modal for each item (several
+  // in parallel). onStatus drives that item's label in the grid; throwing
+  // marks just that item as failed.
+  async function uploadItem(item, merchant, frame, onStatus) {
+    if (removesBackground && !item.alreadyCutOut) onStatus('remove-bg')
+    const { url, name } = await removeBackgroundForUpload(item.file, { folder: folderKey, requireTransparent })
+    onStatus('resize')
     const framedUrl = await resizeToFrame(url, frame.width, frame.height, { centreContent: frame.centreContent })
     URL.revokeObjectURL(url)
-    onStep('save')
+    onStatus('save')
     // resizeToFrame always outputs PNG, so the name follows.
     const saved = await saveAssetToLibrary(folderKey, name.replace(/\.[^.]+$/, '') + '.png', framedUrl, merchant)
     URL.revokeObjectURL(framedUrl)
-    if (!saved) throw new Error('Could not save to the library - please try again.')
-    closePending()
-    onUploaded()
+    if (!saved) throw new Error('Could not save to the library')
   }
 
   return (
     <div style={{ marginBottom: 8 }}>
       <button
-        onClick={chooseFile}
+        onClick={chooseFiles}
+        disabled={loadingFiles}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '10px 16px', borderRadius: 10,
           border: '1.5px dashed var(--border)', background: '#fff',
-          cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--dark)',
+          cursor: loadingFiles ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--dark)',
         }}
       >
         <div style={{ width: 28, height: 28, background: 'var(--dark)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
+          {loadingFiles ? <Spinner size={14} color="#fff" /> : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          )}
         </div>
         {label}
       </button>
@@ -369,16 +508,17 @@ function UploadCard({ folderKey, label, requireTransparent, merchants, defaultMe
         <div style={{ marginTop: 6, fontSize: 11, color: '#B91C1C' }}>✕ {error}</div>
       )}
       {pending && (
-        <MerchantPickerModal
+        <UploadModal
           label={label}
-          removesBackground={shouldRemoveBackground(folderKey)}
-          fileName={pending.file.name}
-          originalSize={pending.size}
-          previewUrl={pending.previewUrl}
+          removesBackground={removesBackground}
+          initialItems={pending}
           merchants={merchants}
           defaultMerchant={defaultMerchant}
-          onCancel={closePending}
-          onConfirm={runUpload}
+          onUploadItem={uploadItem}
+          onClose={uploadedSomething => {
+            setPending(null)
+            if (uploadedSomething) onUploaded()
+          }}
         />
       )}
     </div>
@@ -614,7 +754,7 @@ export default function LibraryPage({ onBack }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
 
       {/* Page header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '28px 40px 24px', background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Assets</h1>
           {onBack && (
@@ -671,16 +811,18 @@ export default function LibraryPage({ onBack }) {
         </div>
       </div>
 
-      {!loading && assets.length === 0 ? (
+      {loading ? (
+        <PageSpinner label="Loading assets…" />
+      ) : assets.length === 0 ? (
         <EmptyState />
-      ) : !loading && viewAssets.length === 0 ? (
+      ) : viewAssets.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
           <div style={{ fontSize: 13, color: 'var(--mid)', textAlign: 'center' }}>
             No assets match {search.trim() ? `"${search.trim()}"` : 'these filters'}.
           </div>
         </div>
       ) : (
-        <div style={{ padding: '32px 40px' }}>
+        <div style={{ padding: `32px ${PAGE_PADDING_X}` }}>
           {Object.entries(FOLDERS).map(([folderKey, folderLabel]) => {
             const folderAssets = viewAssets.filter(a => a.folder === folderKey)
             if (folderAssets.length === 0) return null
