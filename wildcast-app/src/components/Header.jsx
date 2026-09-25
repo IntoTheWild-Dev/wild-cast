@@ -84,7 +84,7 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
 // indication why - see App.jsx's own note where this is imported).
 export const WORKFLOW_ROLES = ['Designer', 'Manager']
 
-export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange, onOpenNotificationProject }) {
+export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange, onOpenNotificationProject, notifications }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   function handleSignOut() {
@@ -101,7 +101,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
     window.location.reload()
   }
 
-  const navItem = (label, target, disabled) => {
+  const navItem = (label, target, disabled, dot) => {
     const active = !disabled && (
       screen === target ||
       (target === 'catalogue' && screen === 'editor') ||
@@ -123,7 +123,12 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         onMouseEnter={e => { if (!active && !disabled) e.currentTarget.style.color = 'var(--dark)' }}
         onMouseLeave={e => { if (!active && !disabled) e.currentTarget.style.color = 'var(--mid)' }}
       >
-        {label}
+        {dot ? (
+          <span style={{ position: 'relative', display: 'inline-block' }}>
+            {label}
+            <span title="New updates" role="img" aria-label="New updates" style={{ position: 'absolute', top: -2, right: -8, width: 7, height: 7, borderRadius: '50%', background: '#DC2626', boxShadow: '0 0 0 2px #fff' }} />
+          </span>
+        ) : label}
       </span>
     )
   }
@@ -164,7 +169,10 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
               button, not a content page. The header's already flex-wrap
               (see the comment on the row above), so one more item here
               just wraps instead of crowding anything. */}
-          {navItem('My Tasks', 'tasks')}
+          {/* Red dot = an unread Approved / Adjustment-needed notification
+              (boss's call, 2026-09-25: a dot here, the number stays on the
+              bell). Clears with the notification - see useNotifications. */}
+          {navItem('My Tasks', 'tasks', false, notifications?.hasUnreadTasks)}
           {navItem('Assets', 'library')}
           {/* role:'agency' (Wild Stack's own keys) gets a fully working Import;
               role:'designer' (client-facing test keys) sees it greyed out with
@@ -184,7 +192,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
             same spot. */}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {/* Same identity My Tasks uses for "mine" - see NotificationBell. */}
-          <NotificationBell ownerId={activation?.key} onOpenProject={onOpenNotificationProject} />
+          <NotificationBell notifications={notifications} onOpenProject={onOpenNotificationProject} />
           {/* Role toggle, AI credits and Sign out all live in here now. */}
           {activation && (
             <UserMenu

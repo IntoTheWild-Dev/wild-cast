@@ -1,31 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Notification01Icon, CheckmarkCircle02Icon, ArrowTurnBackwardIcon, Comment01Icon } from '@hugeicons/core-free-icons'
+import { Notification01Icon, CheckmarkCircle02Icon, PencilEdit02Icon, Comment01Icon } from '@hugeicons/core-free-icons'
 
 // Header bell (Notion card "Add notifications to the UI so a user knows when
 // an asset has been reviewed, commented, approved by Manager", 2026-09-25).
-// Lists what reviewers did to the signed-in user's designs - written
-// server-side by api/_lib/notifications.js. No push channel exists (same
-// JSON-in-Blob setup as comments), so it polls: every POLL_MS while the tab
-// is visible, plus straight away whenever the tab regains focus.
-const POLL_MS = 30000
+// Lists what reviewers did to the signed-in user's designs. State (list,
+// polling, read/unread) lives in lib/useNotifications.js, shared with the
+// My Tasks nav dot and per-card dots.
 
 const TYPES = {
   approved:          { icon: CheckmarkCircle02Icon, color: '#16A34A', verb: 'approved' },
-  changes_requested: { icon: ArrowTurnBackwardIcon, color: '#D97706', verb: 'requested changes on' },
+  changes_requested: { icon: PencilEdit02Icon,      color: '#D97706', verb: 'requested changes on' },
   comment:           { icon: Comment01Icon,         color: 'var(--primary)', verb: 'commented on' },
-}
-
-// null on any failure (offline, API down) - the caller keeps what's shown.
-async function fetchNotifications(ownerId) {
-  try {
-    const res = await fetch('/api/notifications', { headers: { 'x-wildcast-owner': ownerId }, cache: 'no-store' })
-    if (!res.ok) return null
-    const data = await res.json()
-    return data.notifications || []
-  } catch {
-    return null
-  }
 }
 
 function timeAgo(ts) {
@@ -40,26 +26,18 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-export default function NotificationBell({ ownerId, onOpenProject }) {
-  const [items, setItems] = useState([])
+export default function NotificationBell({ notifications, onOpenProject }) {
+  const { enabled, items, unreadCount, markAllRead } = notifications
   const [open, setOpen] = useState(false)
+  // Which ones were unread at the moment the dropdown opened. Opening it
+  // marks everything read straight away (boss's call, 2026-09-25: "badge
+  // should clear when a user opens the notification tab"), but these stay
+  // highlighted while it's open so it's still clear which ones are new.
+  const [newIds, setNewIds] = useState(() => new Set())
   const wrapRef = useRef(null)
 
-  const load = useCallback(() => {
-    if (!ownerId) return
-    fetchNotifications(ownerId).then(list => { if (list) setItems(list) })
-  }, [ownerId])
-
-  useEffect(() => {
-    if (!ownerId) return
-    fetchNotifications(ownerId).then(list => { if (list) setItems(list) })
-    const interval = setInterval(() => { if (document.visibilityState === 'visible') load() }, POLL_MS)
-    window.addEventListener('focus', load)
-    return () => { clearInterval(interval); window.removeEventListener('focus', load) }
-  }, [load, ownerId])
-
-  // Same outside-click close as the header's credits popover - a fixed
-  // backdrop doesn't work inside the header (see Header.jsx).
+  // Same outside-click close as UserMenu - a fixed backdrop doesn't work
+  // inside the header (see Header.jsx).
   useEffect(() => {
     if (!open) return
     function handleOutsideClick(e) {
@@ -69,30 +47,22 @@ export default function NotificationBell({ ownerId, onOpenProject }) {
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [open])
 
-  function markRead(body) {
-    fetch('/api/notifications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-wildcast-owner': ownerId },
-      body: JSON.stringify(body),
-    }).catch(() => {})
-  }
-
-  function handleMarkAll() {
-    setItems(prev => prev.map(n => ({ ...n, read: true })))
-    markRead({ all: true })
+  function handleToggle() {
+    if (open) { setOpen(false); return }
+    setNewIds(new Set(items.filter(n => !n.read).map(n => n.id)))
+    // No refetch here - a GET racing the mark-read PATCH could bring the
+    // just-cleared ones back as unread. The regular poll picks up new ones.
+    markAllRead()
+    setOpen(true)
   }
 
   function handleClick(n) {
-    if (!n.read) {
-      setItems(prev => prev.map(x => (x.id === n.id ? { ...x, read: true } : x)))
-      markRead({ ids: [n.id] })
-    }
     setOpen(false)
     onOpenProject?.(n.projectId)
   }
 
-  if (!ownerId) return null
-  const unread = items.filter(n => !n.read).length
+  if (!enabled) return null
+  const unread = unreadCount
 
   // No position:relative on this wrapper on purpose: the dropdown anchors
   // to the header's right-hand group (Header.jsx) instead of the bell
@@ -102,7 +72,7 @@ export default function NotificationBell({ ownerId, onOpenProject }) {
     <div ref={wrapRef}>
       <button
         type="button"
-        onClick={() => { setOpen(v => !v); if (!open) load() }}
+        onClick={handleToggle}
         title="Notifications"
         aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
         style={{ position: 'relative', width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: open ? '#F3F4F6' : '#fff', color: 'var(--dark)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -119,11 +89,6 @@ export default function NotificationBell({ ownerId, onOpenProject }) {
         <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: '1px solid var(--border)', borderRadius: 14, boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>Notifications</span>
-            {unread > 0 && (
-              <button type="button" onClick={handleMarkAll} style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-                Mark all as read
-              </button>
-            )}
           </div>
 
           <div style={{ maxHeight: 420, overflowY: 'auto' }}>
@@ -138,9 +103,9 @@ export default function NotificationBell({ ownerId, onOpenProject }) {
                   key={n.id}
                   type="button"
                   onClick={() => handleClick(n)}
-                  style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '12px 16px', border: 'none', borderBottom: '1px solid var(--border)', background: n.read ? '#fff' : 'var(--primary-glow)', cursor: 'pointer', fontFamily: 'inherit' }}
+                  style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '12px 16px', border: 'none', borderBottom: '1px solid var(--border)', background: newIds.has(n.id) ? 'var(--primary-glow)' : '#fff', cursor: 'pointer', fontFamily: 'inherit' }}
                   onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = n.read ? '#fff' : 'var(--primary-glow)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = newIds.has(n.id) ? 'var(--primary-glow)' : '#fff' }}
                 >
                   <span style={{ color: t.color, flexShrink: 0, marginTop: 1 }}><HugeiconsIcon icon={t.icon} size={18} /></span>
                   <span style={{ flex: 1, minWidth: 0 }}>
@@ -154,7 +119,7 @@ export default function NotificationBell({ ownerId, onOpenProject }) {
                     )}
                     <span style={{ display: 'block', fontSize: 11, color: 'var(--light)', marginTop: 4 }}>{timeAgo(n.createdAt)}</span>
                   </span>
-                  {!n.read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: 6 }} />}
+                  {newIds.has(n.id) && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: 6 }} />}
                 </button>
               )
             })}
