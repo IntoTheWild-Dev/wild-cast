@@ -780,7 +780,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // from templateZones.js. Only the two AI fields read them; a template
   // without settings gets no AI Suggest at all ("The feature must not run
   // without them" - spec §4.1), Choose preset keeps working regardless.
-  const aiSettings = aiFieldSettingsFor(templateConfig, template?.name)
+  const aiSettings = aiFieldSettingsFor(templateConfig, template?.name, template?.id)
   const hasAiSettings = key => !!(aiSettings?.[key])
 
   // Field provenance for the brief's kind flags (spec §4.5): 'user_draft'
@@ -807,8 +807,19 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
     offerShownInBadge: !!fields.offer && templateConfig?.zones?.some(z => z.id === 'offer'),
     logoPicked: !!fields.logoUrl,
     showLogoHint: templateConfig?.zones?.some(z => z.id === 'logo'),
-    staticText: aiSettings?.headline?.static_text ?? aiSettings?.sub_headline?.static_text ?? [],
-    otherFields: aiSettings?.headline?.other_fields ?? aiSettings?.sub_headline?.other_fields ?? [],
+    // asset-level context is a union of both fields' settings blocks —
+    // they're identical on today's templates, but a future template (e.g.
+    // Option B once its sub-headline zone ships) may declare different
+    // static text per field; dropping one side silently would un-anchor
+    // the no-repeat rule.
+    staticText: [...new Set([
+      ...(aiSettings?.headline?.static_text ?? []),
+      ...(aiSettings?.sub_headline?.static_text ?? []),
+    ])],
+    otherFields: [...new Set([
+      ...(aiSettings?.headline?.other_fields ?? []),
+      ...(aiSettings?.sub_headline?.other_fields ?? []),
+    ])],
     caps: aiSettings?.headline?.caps ?? aiSettings?.sub_headline?.caps ?? true,
     box: {
       headline: aiSettings?.headline
@@ -822,7 +833,10 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
     credits,
     onCreditUsed,
     getFieldText: key => fields[key] ?? '',
-    isUserEdited: key => provenanceRef.current[key] === 'user_draft',
+    // 'user_draft' (typed this session) | 'kept' (AI line applied this
+    // session) | undefined (unknown — e.g. restored from a saved design;
+    // the hook reads unknown as user_draft so rewrite mode works there).
+    fieldProvenance: key => provenanceRef.current[key],
     getShownLines: () => {
       const lines = new Set(shownLinesRef.current)
       for (const key of ['headline', 'sub_headline']) {
@@ -920,10 +934,12 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
             align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
             onResetPosition={() => onResetZone?.('headline')}
-            // Per-template box limits (§4.1): the char counter uses the
-            // default-size width; presets box-fit at the min-pt width
-            // (spec §5.1), falling back to the default width.
-            aiLimit={aiSettings?.headline?.max_chars}
+            // Per-template box limits (§4.1): the counter + input maxLength
+            // use the min-pt capacity (what the box really accepts once
+            // auto-shrunk, §8.1) so valid min-pt-sized AI lines don't show
+            // a false red over-limit; presets box-fit at the same width
+            // (spec §5.1).
+            aiLimit={aiSettings?.headline?.max_chars_min_pt ?? aiSettings?.headline?.max_chars}
             presetMaxChars={aiSettings?.headline?.max_chars_min_pt ?? aiSettings?.headline?.max_chars}
             presetRole={aiSettings?.headline?.role}
             ai={aiRowProps('headline')}
@@ -949,7 +965,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
             align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
             onResetPosition={() => onResetZone?.('sub_headline')}
-            aiLimit={aiSettings?.sub_headline?.max_chars}
+            aiLimit={aiSettings?.sub_headline?.max_chars_min_pt ?? aiSettings?.sub_headline?.max_chars}
             presetMaxChars={aiSettings?.sub_headline?.max_chars_min_pt ?? aiSettings?.sub_headline?.max_chars}
             presetRole={aiSettings?.sub_headline?.role}
             ai={aiRowProps('sub_headline')}

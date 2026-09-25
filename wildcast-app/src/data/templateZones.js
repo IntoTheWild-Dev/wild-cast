@@ -472,15 +472,20 @@ export const TEMPLATE_ZONES = {
 // Option C (and any future import) keeps its zones in Vercel Blob, so its
 // ai blocks can't be attached statically to a zones array here. They live
 // in this name-keyed map instead; aiFieldSettingsFor() merges it over the
-// zone-level blocks. Matched case-insensitively on the distinctive part of
-// the card label ("Restaurant Flyer · Option C"), so exact label punctuation
-// doesn't matter.
+// zone-level blocks.
+//
+// Matched on BOTH the card id (the record's slotKey — the stable slug the
+// import wrote, e.g. the custom-template id in templates.js shape) and the
+// display label, case-insensitive, so relabeling the template in Figma
+// doesn't silently detach its AI settings as long as the slotKey stays.
+// If BOTH get renamed, add the new slotKey here (one line).
 //
 // Numbers are Mark's §11 estimates exactly as given for Option C:
 // sub-headline 20 chars (24 at min pt), headline 9 chars (11 at min pt).
 const AI_SETTINGS_IMPORTED = [
   {
-    match: /option\s*c/i,
+    // covers "Option C", "option-c", "OptionC" in either the slotKey or the label
+    match: idOrName => /option\s*-?\s*c/i.test(idOrName ?? ''),
     settings: {
       sub_headline: {
         ...AI_SUB_HEADLINE_SETUP,
@@ -508,10 +513,13 @@ const AI_SETTINGS_IMPORTED = [
 // blocks (Options A/B). default_pt falls back to the zone's own fontSize
 // when the settings block omits it. Returns null for templates with no AI
 // settings at all - AI Suggest must not run there.
-export function aiFieldSettingsFor(templateConfig, templateName) {
+export function aiFieldSettingsFor(templateConfig, templateName, templateId) {
   const zones = templateConfig?.zones ?? []
   const zoneFor = id => zones.find(z => z.id === id)
-  const imported = AI_SETTINGS_IMPORTED.find(e => e.match.test(templateName || ''))?.settings
+  // Matched against the stable slotKey/id FIRST, then the display label —
+  // either hitting means this map entry governs the template.
+  const imported = AI_SETTINGS_IMPORTED.find(e =>
+    e.match(templateId) || e.match(templateName))?.settings
   const build = (id, importedSettings) => {
     const zone = zoneFor(id)
     const settings = importedSettings ?? zone?.ai ?? null

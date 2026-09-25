@@ -124,12 +124,15 @@ export function usePairQueue(options) {
   }
 
   // Spec §4.5 kinds: placeholder (empty), user_draft (typed), kept (an AI
-  // line the user kept by applying it). Provenance lives in FieldEditor.
+  // line the user kept by applying it). Provenance lives in FieldEditor and
+  // is session-local: text with NO known provenance (e.g. restored from a
+  // saved design) must read as user_draft, never as kept — we can't vouch
+  // it came from an AI line, and rewrite mode has to work on old designs.
   function kindFor(key) {
     const o = optRef.current
     const text = (o.getFieldText(key) || '').trim()
     if (!text) return 'placeholder'
-    return o.isUserEdited(key) ? 'user_draft' : 'kept'
+    return o.fieldProvenance(key) === 'kept' ? 'kept' : 'user_draft'
   }
 
   // ── The API call ─────────────────────────────────────────────────────────
@@ -211,9 +214,11 @@ export function usePairQueue(options) {
     if (o.credits != null && o.credits <= 0) return
 
     setRefilling(true)
-    recordBatch()
     try {
       const data = await fetchBatch({ clickedField: s.lastClickedField ?? 'headline', sessionBase: s.baseTexts })
+      // Record the spend only after success — a failed background refill
+      // must not consume a batch slot (same rule as the manual path, §7.2).
+      recordBatch()
       setSession(prev => (prev ? { ...prev, pairs: [...prev.pairs, ...data.pairs] } : prev))
       o.onCreditUsed?.()
     } catch {
@@ -226,97 +231,107 @@ export function usePairQueue(options) {
   }, [refilling])
 
   // ── The click (§8.2) ─────────────────────────────────────────────────────
+  // Synchronous re-entrancy guard: busyField is state and commits late, so
+  // two clicks in the same tick would both see it null and both build a
+  // batch (double credit). A ref updates immediately.
+  const inFlightRef = useRef(false)
+
   const click = useCallback(async clickedField => {
     const o = optRef.current
-    if (busyField) return
-    setError(null)
-    setCapped(false)
-
-    const stale = isStale(session)
-    let s = stale ? null : session
-    if (stale && session) setSession(null)
-
-    const otherKey = other(clickedField)
-    const otherText = (o.getFieldText(otherKey) || '').trim()
-    const otherIsLocked = !!otherText // any kept/typed text locks a NEW batch (§8.2.4)
-
-    // Next line for this field: the smallest pair index not yet applied to
-    // it (0 on the partner-line click — that's the whole point of pairs).
-    const nextIndex = s
-      ? (s.appliedIndex[clickedField] == null ? 0 : s.appliedIndex[clickedField] + 1)
-      : 0
-    const canServe = !!s && nextIndex < s.pairs.length && !!pairText(s, nextIndex, clickedField)
-    const willCost = !canServe
-
-    if (willCost) {
-      if (o.credits != null && o.credits <= 0) {
-        setShowOutOfCredits(true)
-        return
-      }
-      if (recentBatchCount() >= MAX_BATCHES_PER_HOUR) {
-        setCapped(true)
-        return
-      }
-      const message = otherIsLocked
-        ? 'Generate lines that match the other field\'s text? This uses 1 credit.'
-        : `Generate ${PAIRS_WANTED} AI suggestions? This uses 1 credit.`
-      if (!window.confirm(message)) return
-    }
-
-    setBusyField(clickedField)
+    if (busyField || inFlightRef.current) return
+    inFlightRef.current = true
     try {
-      if (canServe) {
-        // ── Queue serve (free): §8.2.2 / §8.2.3.
-        const text = pairText(s, nextIndex, clickedField)
-        // If the other field still holds the previous pair's partner line
-        // (AI-applied, not hand-edited), offer its new match as a link.
-        const prevPartnerLine = nextIndex > 0 ? pairText(s, nextIndex - 1, otherKey) : null
-        if (otherText && prevPartnerLine && otherText === prevPartnerLine && !o.isUserEdited(otherKey)) {
-          setPartnerLineLink({ fieldKey: otherKey, text: pairText(s, nextIndex, otherKey), pairIndex: nextIndex })
-        } else if (partnerLineLink?.fieldKey === clickedField || partnerLineLink?.fieldKey === otherKey) {
-          setPartnerLineLink(null)
+      setError(null)
+      setCapped(false)
+
+      const stale = isStale(session)
+      let s = stale ? null : session
+      if (stale && session) setSession(null)
+
+      const otherKey = other(clickedField)
+      const otherText = (o.getFieldText(otherKey) || '').trim()
+      const otherIsLocked = !!otherText // any kept/typed text locks a NEW batch (§8.2.4)
+
+      // Next line for this field: the smallest pair index not yet applied to
+      // it (0 on the partner-line click — that's the whole point of pairs).
+      const nextIndex = s
+        ? (s.appliedIndex[clickedField] == null ? 0 : s.appliedIndex[clickedField] + 1)
+        : 0
+      const canServe = !!s && nextIndex < s.pairs.length && !!pairText(s, nextIndex, clickedField)
+      const willCost = !canServe
+
+      if (willCost) {
+        if (o.credits != null && o.credits <= 0) {
+          setShowOutOfCredits(true)
+          return
         }
-        o.applyText(clickedField, text)
-        const next = {
-          ...s,
-          lastClickedField: clickedField,
-          appliedIndex: { ...s.appliedIndex, [clickedField]: nextIndex },
-          appliedTexts: { ...s.appliedTexts, [clickedField]: [...s.appliedTexts[clickedField], text] },
+        if (recentBatchCount() >= MAX_BATCHES_PER_HOUR) {
+          setCapped(true)
+          return
         }
-        setSession(next)
-        maybeRefill(next)
-      } else {
-        // ── New batch (1 credit). The other field's kept/typed text is
-        // locked (§8.2.4); the API derives generate-vs-rewrite from the
-        // clicked field's own kind.
-        const locked = otherIsLocked ? { fieldKey: otherKey, text: otherText } : null
-        const baseTexts = currentTexts()
-        const data = await fetchBatch({ clickedField, locked, sessionBase: baseTexts })
-        // Record the spend only after success (a failed call costs nothing,
-        // §7.2) — busyField guards against double-fires meanwhile.
-        recordBatch()
-        const batch = newSession(baseTexts, data.pairs)
-        batch.lastClickedField = clickedField
-        const text = pairText(batch, 0, clickedField)
-        if (text) {
-          o.applyText(clickedField, text)
-          batch.appliedIndex = { ...batch.appliedIndex, [clickedField]: 0 }
-          batch.appliedTexts = { ...batch.appliedTexts, [clickedField]: [text] }
-        }
-        if (partnerLineLink) setPartnerLineLink(null)
-        setSession(batch)
-        setLastFlags(data.flags ?? [])
-        o.onCreditUsed?.()
-        maybeRefill(batch)
+        const message = otherIsLocked
+          ? 'Generate lines that match the other field\'s text? This uses 1 credit.'
+          : `Generate ${PAIRS_WANTED} AI suggestions? This uses 1 credit.`
+        if (!window.confirm(message)) return
       }
-    } catch (err) {
-      // §7.2: on failure show the error and do NOT charge a credit —
-      // onCreditUsed is only called on success. The error is scoped to the
-      // field that triggered the batch so it stays visible after the busy
-      // flag clears.
-      setError({ field: clickedField, message: err.message })
+
+      setBusyField(clickedField)
+      try {
+        if (canServe) {
+          // ── Queue serve (free): §8.2.2 / §8.2.3.
+          const text = pairText(s, nextIndex, clickedField)
+          // If the other field still holds the previous pair's partner line
+          // (AI-applied, not hand-edited), offer its new match as a link.
+          const prevPartnerLine = nextIndex > 0 ? pairText(s, nextIndex - 1, otherKey) : null
+          if (otherText && prevPartnerLine && otherText === prevPartnerLine && o.fieldProvenance(otherKey) !== 'user_draft') {
+            setPartnerLineLink({ fieldKey: otherKey, text: pairText(s, nextIndex, otherKey), pairIndex: nextIndex })
+          } else if (partnerLineLink?.fieldKey === clickedField || partnerLineLink?.fieldKey === otherKey) {
+            setPartnerLineLink(null)
+          }
+          o.applyText(clickedField, text)
+          const next = {
+            ...s,
+            lastClickedField: clickedField,
+            appliedIndex: { ...s.appliedIndex, [clickedField]: nextIndex },
+            appliedTexts: { ...s.appliedTexts, [clickedField]: [...s.appliedTexts[clickedField], text] },
+          }
+          setSession(next)
+          maybeRefill(next)
+        } else {
+          // ── New batch (1 credit). The other field's kept/typed text is
+          // locked (§8.2.4); the API derives generate-vs-rewrite from the
+          // clicked field's own kind.
+          const locked = otherIsLocked ? { fieldKey: otherKey, text: otherText } : null
+          const baseTexts = currentTexts()
+          const data = await fetchBatch({ clickedField, locked, sessionBase: baseTexts })
+          // Record the spend only after success (a failed call costs nothing,
+          // §7.2) — the in-flight guard prevents double-fires meanwhile.
+          recordBatch()
+          const batch = newSession(baseTexts, data.pairs)
+          batch.lastClickedField = clickedField
+          const text = pairText(batch, 0, clickedField)
+          if (text) {
+            o.applyText(clickedField, text)
+            batch.appliedIndex = { ...batch.appliedIndex, [clickedField]: 0 }
+            batch.appliedTexts = { ...batch.appliedTexts, [clickedField]: [text] }
+          }
+          if (partnerLineLink) setPartnerLineLink(null)
+          setSession(batch)
+          setLastFlags(data.flags ?? [])
+          o.onCreditUsed?.()
+          maybeRefill(batch)
+        }
+      } catch (err) {
+        // §7.2: on failure show the error and do NOT charge a credit —
+        // onCreditUsed is only called on success. The error is scoped to the
+        // field that triggered the batch so it stays visible after the busy
+        // flag clears.
+        setError({ field: clickedField, message: err.message })
+      } finally {
+        setBusyField(null)
+      }
     } finally {
-      setBusyField(null)
+      inFlightRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, busyField, refilling, partnerLineLink])

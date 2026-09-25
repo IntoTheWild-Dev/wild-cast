@@ -21,6 +21,15 @@ export default async function handler(req, res) {
 
   try {
     const { field, partner, vertical } = req.query
+
+    // Presets exist only for the two AI fields (spec §1/§5.1). Every other
+    // field (offer, tc, restaurant_name, cta) renders a "Choose preset"
+    // button too — serving it marketing headlines would be nonsense (the
+    // old sheet mapping returned nothing for them; same behavior here).
+    if (!['headline', 'sub_headline', 'subline'].includes(field)) {
+      return res.status(200).json({ presets: [] })
+    }
+
     // Box fit at min pt + the sub-headline's role, sent by PresetPicker via
     // FieldEditor from the template's §4.1 settings. Old callers that omit
     // them get length-agnostic lists (better a long preset than none).

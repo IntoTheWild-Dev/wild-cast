@@ -301,13 +301,13 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     if (currentId !== step.id || aiBusy) return
     const seed = draft.trim()
     const shown = aiShown[step.id] ?? []
-    push({ from: 'ai', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
+    push({ from: 'user', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
     setAiBusy(true)
     setTyping(true)
     try {
       const category = entry.category ?? 'restaurant'
       const businessType = category.charAt(0).toUpperCase() + category.slice(1)
-      const settings = aiFieldSettingsFor(config, entry.label)
+      const settings = aiFieldSettingsFor(config, entry.label, entry.templateIdGuided)
       const fieldKey = step.aiField
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',

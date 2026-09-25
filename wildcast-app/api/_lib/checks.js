@@ -132,9 +132,12 @@ export function checkNumbers(pair, ctx) {
   for (const fieldKey of ['headline', 'subheadline']) {
     for (const token of offerTokens(pair[fieldKey])) {
       if (allowed.has(token)) continue
-      // "2" inside "2für1" etc. is covered by the symbol pass; a bare
-      // number that also appears inside any allowed token is fine.
-      const insideAllowed = [...allowed].some(a => a.includes(token.replace(/[x×]/g, '')))
+      // Escape hatch for unit-bearing tokens backed by a compound allowed
+      // token (e.g. "15€" inside an allowed "2x15€"). Must keep the
+      // symbol AND be more than a bare digit — otherwise a fabricated "5"
+      // would slip through as a substring of any allowed "15€".
+      const insideAllowed = token.length > 1 && /[€%x]/.test(token) &&
+        [...allowed].some(a => a.includes(token))
       if (!insideAllowed) forbidden.push(`${fieldKey} claims "${token}"`)
     }
   }
@@ -172,13 +175,17 @@ function containsWord(text, word) {
 
 export function checkBlockedWords(pair, ctx) { // eslint-disable-line no-unused-vars
   const texts = { headline: pair.headline, subheadline: pair.subheadline }
-  for (const [fieldKey, raw] of Object.entries(texts)) {
-    const text = (raw || '').toLowerCase()
-    // Formal address — "Sie"/"Ihnen"/"Ihr" mid-sentence (first word is
-    // ambiguous with neutral "ihr", so only flag position > 0).
-    if (/\b(sie|ihnen)\b/.test(text)) return `${fieldKey} uses formal "Sie/Ihnen"`
-    const ihrAt = text.search(/\bihr\b/)
-    if (ihrAt > 0) return `${fieldKey} uses formal "Ihr"`
+  for (const [fieldKey, value] of Object.entries(texts)) {
+    // Formal address is matched on the ORIGINAL case — capitalized
+    // Sie/Ihnen/Ihr(e|n|em|es) is the formal you anywhere in the line
+    // (including line start, where the declined forms are unambiguous),
+    // while lowercase "sie" (she/they) and "ihr" (informal plural you)
+    // are perfectly valid du-form words and must NOT be flagged. Wolt
+    // voice is always "du" (P1), so any capital-I form fails.
+    if (/\b(Sie|Ihnen|Ihr(e|n|em|es)?)\b/.test(value)) {
+      return `${fieldKey} uses formal "Sie/Ihr"`
+    }
+    const text = (value || '').toLowerCase()
     for (const w of [...BARGAIN_WORDS, ...FINEPRINT_WORDS, ...AD_SPEAK]) {
       // "Neukund" is a stem (Neukund*innen, Neukunden) — prefix match.
       const hit = w === 'neukund' ? new RegExp('\\bneukund', 'i').test(text) : containsWord(text, w)
