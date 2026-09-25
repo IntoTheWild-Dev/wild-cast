@@ -6,6 +6,7 @@ import { buildSteps, stepApplies, summarizeAnswers, assembleBrief, partnerNameFr
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { aiFieldSettingsFor } from '../data/templateZones'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
 // "Prompt Brief" screen (Julia's ask, 2026-09-19): replaces the old brief form
@@ -288,35 +289,66 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   }
 
   // Suggest / Improve with AI (Julia's ask, 2026-09-19) - reuses the editor's
-  // existing /api/ai-suggest route (Wolt copy knowledge base, per-field
-  // character limits). Empty draft = fresh suggestions from the brief; typed
-  // draft = polish/translate that line, same rule AISuggest.jsx uses. Credits
-  // are deliberately not deducted here yet (to be decided).
+  // existing /api/ai-suggest route, since the v1.2 rebuild (Mark's spec) in
+  // the pair/queue contract: one call returns sub-headline + headline PAIRS
+  // (the flyer lockup), and the chat shows the asked field's line from each
+  // pair. The other field's answer so far (if any) is sent as its current
+  // text, so pairs already fit around it. Empty draft = fresh lines from the
+  // brief; typed draft = a rewrite of that line (kind user_draft, the API
+  // derives the mode). Credits are deliberately not deducted here yet (to be
+  // decided).
   async function suggest(step, { more = false } = {}) {
     if (currentId !== step.id || aiBusy) return
     const seed = draft.trim()
     const shown = aiShown[step.id] ?? []
-    push({ from: 'user', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
+    push({ from: 'ai', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
     setAiBusy(true)
     setTyping(true)
     try {
       const category = entry.category ?? 'restaurant'
       const businessType = category.charAt(0).toUpperCase() + category.slice(1)
+      const settings = aiFieldSettingsFor(config, entry.label)
+      const fieldKey = step.aiField
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          field: step.aiField, lang: 'de',
-          context: { vertical: businessType, businessType, objective: answers.objective?.display, partnerName: partnerNameFrom(answers) },
-          ...(seed ? { seed } : {}),
-          ...(more ? { exclude: shown } : {}),
+          field: step.aiField,
+          lang: 'de',
+          brief: {
+            design_id: 'prompt-brief',
+            template_id: entry.templateIdGuided,
+            template_name: entry.label,
+            vertical: businessType,
+            partner: { name: partnerNameFrom(answers) ?? '' },
+            logo_picked: !!answers.logo?.imageUrl,
+            static_text: settings?.[fieldKey]?.static_text ?? [],
+            other_fields: settings?.[fieldKey]?.other_fields ?? [],
+            offer: { text: answers.offer?.display ?? '', shown_in_badge: false },
+            user_note: '',
+            fields: {
+              headline: { current: answers.headline?.display ?? '', kind: answers.headline?.display ? 'user_draft' : 'placeholder' },
+              sub_headline: {
+                current: answers.sub_headline?.display ?? '',
+                kind: answers.sub_headline?.display ? 'user_draft' : 'placeholder',
+                role: settings?.sub_headline?.role ?? 'setup',
+                position: settings?.sub_headline?.position ?? 'above',
+              },
+            },
+            box: settings ?? {},
+            exclude: more ? shown : [],
+          },
         }),
       })
       const data = await res.json()
-      if (!res.ok || !data.suggestions?.length) throw new Error(data.error || 'No suggestions')
-      setAiShown(prev => ({ ...prev, [step.id]: [...(more ? shown : []), ...data.suggestions] }))
+      if (!res.ok || !data.pairs?.length) throw new Error(data.error || 'No suggestions')
+      // The chat fills one field at a time - surface each pair's line for
+      // the field being asked (the partner line concept belongs to the
+      // editor's queue, not this Q&A flow).
+      const lines = data.pairs.map(p => (step.aiField === 'headline' ? p.headline : p.subheadline)).filter(Boolean)
+      setAiShown(prev => ({ ...prev, [step.id]: [...(more ? shown : []), ...lines] }))
       push({
-        from: 'ai', stepId: step.id, options: data.suggestions,
+        from: 'ai', stepId: step.id, options: lines,
         text: seed ? 'Here are some sharper versions, in German. Tap one to use it:' : 'Here are a few ideas, in German. Tap one to use it, or type your own:',
       })
     } catch {

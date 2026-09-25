@@ -15,6 +15,38 @@ const BG_FLYER1     = '/templates/A6 _ text_swap_wildcast.png'
 const BG_WEN_CHENG_V3 = '/templates/wen-cheng-v3.png'
 const BG_OPT_B = '/templates/opt-b-designer-v3.png'
 
+// ── AI field settings (Mark's v1.2 spec, section 4.1) ────────────────────────
+// Every template that offers AI Suggest on Headline / Sub-headline carries
+// these settings on its two AI zones — "The feature must not run without
+// them" (spec §4.1). They feed the generation brief, the server-side fit
+// checks (C1) and the per-template character limits in FieldEditor.jsx.
+//
+// ⚠️ The char numbers are Mark's ESTIMATES from screenshots (spec §11:
+// "Option C: 20 / 9 (11). Option B: 16 / 10 (12)" — written
+// sub-headline chars / headline chars (at min pt)), NOT measured values.
+// Julia owes the real measured box limits (type capital "M" into the box
+// until the line breaks, at the default size and at the minimum size) —
+// updating them later is a one-line change per number here.
+// Option A shares Option C's layout family (same lockup skeleton), so it
+// ships with C's estimates too.
+//
+// default_pt is the zone's own fontSize (the − pt + control's starting
+// value); min_pt is the smallest size the design allows — also an estimate
+// (~60% of default) until measured.
+const AI_CONTEXT_OPTION_A = {
+  static_text: ['♥ WOLT'],           // baked wordmark next to restaurant_name
+  other_fields: ['offer'],           // the Discount badge zone
+  caps: true,                        // template sets the text in caps
+}
+const AI_SUB_HEADLINE_SETUP = {
+  role: 'setup',                     // sits above the headline, leads into it
+  position: 'above',
+  max_lines: 1,
+}
+const AI_HEADLINE = {
+  max_lines: 1,
+}
+
 // Figma frame reference points (35.09% = WEN CHENG ♥ WOLT line, 70.38% = "Jetzt mit Wolt bestellen &")
 // Canvas height = 441px, so: 16.56% → y≈73, 35.09% → y≈155, 70.38% → y≈310
 const WEN_CHENG_ZONES = [
@@ -29,6 +61,16 @@ const WEN_CHENG_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // AI field settings (spec §4.1) - estimated values (Option C's, shared
+    // layout family), see the comment block above AI_CONTEXT_OPTION_A.
+    ai: {
+      ...AI_SUB_HEADLINE_SETUP,
+      max_chars: 20, max_chars_min_pt: 24,
+      default_pt: 20, min_pt: 14,
+      static_text: ['♥ WOLT', 'Jetzt mit Wolt bestellen &'], // baked in this art
+      other_fields: ['offer'],
+      caps: true,
+    },
   },
   {
     id: 'headline',
@@ -41,6 +83,16 @@ const WEN_CHENG_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // AI field settings (spec §4.1) - estimated values (Option C's, shared
+    // layout family), see the comment block above AI_CONTEXT_OPTION_A.
+    ai: {
+      ...AI_HEADLINE,
+      max_chars: 9, max_chars_min_pt: 11,
+      default_pt: 50, min_pt: 30,
+      static_text: ['♥ WOLT', 'Jetzt mit Wolt bestellen &'],
+      other_fields: ['offer'],
+      caps: true,
+    },
   },
   {
     id: 'offer',
@@ -110,6 +162,14 @@ const WEN_CHENG_V3_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // AI field settings (spec §4.1) - estimated values, see the comment
+    // block above AI_CONTEXT_OPTION_A.
+    ai: {
+      ...AI_SUB_HEADLINE_SETUP,
+      max_chars: 20, max_chars_min_pt: 24,
+      default_pt: 38.78, min_pt: 24,
+      ...AI_CONTEXT_OPTION_A,
+    },
   },
   {
     id: 'headline',
@@ -122,6 +182,14 @@ const WEN_CHENG_V3_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // AI field settings (spec §4.1) - estimated values, see the comment
+    // block above AI_CONTEXT_OPTION_A.
+    ai: {
+      ...AI_HEADLINE,
+      max_chars: 9, max_chars_min_pt: 11,
+      default_pt: 56.6, min_pt: 34,
+      ...AI_CONTEXT_OPTION_A,
+    },
   },
   {
     id: 'offer',
@@ -238,6 +306,25 @@ const OPT_B_ZONES = [
     color: '#FFFFFF',
     align: 'center',
     autoShrink: true,
+    // AI field settings (spec §4.1) - Mark's §11 Option B estimates
+    // (headline 10 chars, 12 at min pt), see AI_CONTEXT_OPTION_A above.
+    //
+    // NOTE: Option B has NO sub_headline zone yet - "WIE WÄR'S MIT" is
+    // baked into the background art and is not an editable field (spec §13
+    // open item, Julia to decide). When it becomes the editable Sub-headline
+    // field (like Option C), give the new zone an ai block mirroring the
+    // estimates: role 'setup', position 'above', max_chars 16,
+    // max_chars_min_pt 24 (§11: "Option B: sub-headline 16"), and add
+    // 'Jetzt Wolt App downloaden und' to its static_text. Until then AI
+    // Suggest simply never runs on B's sub-headline (no field, no click).
+    ai: {
+      ...AI_HEADLINE,
+      max_chars: 10, max_chars_min_pt: 12,
+      default_pt: 60.8, min_pt: 36,
+      static_text: ['Jetzt Wolt App downloaden und'], // baked line 1
+      other_fields: ['cta'],                           // app-download line shows a CTA
+      caps: true,
+    },
   },
   {
     id: 'logo',
@@ -379,4 +466,60 @@ export const TEMPLATE_ZONES = {
     trimGapBottom: [100, 214],
     zones: OPT_B_ZONES,
   },
+}
+
+// ── AI field settings for Figma-imported templates ───────────────────────────
+// Option C (and any future import) keeps its zones in Vercel Blob, so its
+// ai blocks can't be attached statically to a zones array here. They live
+// in this name-keyed map instead; aiFieldSettingsFor() merges it over the
+// zone-level blocks. Matched case-insensitively on the distinctive part of
+// the card label ("Restaurant Flyer · Option C"), so exact label punctuation
+// doesn't matter.
+//
+// Numbers are Mark's §11 estimates exactly as given for Option C:
+// sub-headline 20 chars (24 at min pt), headline 9 chars (11 at min pt).
+const AI_SETTINGS_IMPORTED = [
+  {
+    match: /option\s*c/i,
+    settings: {
+      sub_headline: {
+        ...AI_SUB_HEADLINE_SETUP,
+        max_chars: 20, max_chars_min_pt: 24,
+        // default_pt comes from the imported zone's own fontSize at lookup
+        // time; min_pt is unknown for the imported record (estimated fit
+        // comes from the canvas auto-shrink instead).
+        static_text: ['JETZT BESTELLEN. IN MINUTEN GELIEFERT.'], // printed under the offer
+        other_fields: ['offer'], // Discount badge field
+        caps: true,
+      },
+      headline: {
+        ...AI_HEADLINE,
+        max_chars: 9, max_chars_min_pt: 11,
+        static_text: ['JETZT BESTELLEN. IN MINUTEN GELIEFERT.'],
+        other_fields: ['offer'],
+        caps: true,
+      },
+    },
+  },
+]
+
+// Resolves the §4.1 settings for the two AI fields of a template.
+// Precedence: imported-name-keyed settings (Option C) over zone-level ai
+// blocks (Options A/B). default_pt falls back to the zone's own fontSize
+// when the settings block omits it. Returns null for templates with no AI
+// settings at all - AI Suggest must not run there.
+export function aiFieldSettingsFor(templateConfig, templateName) {
+  const zones = templateConfig?.zones ?? []
+  const zoneFor = id => zones.find(z => z.id === id)
+  const imported = AI_SETTINGS_IMPORTED.find(e => e.match.test(templateName || ''))?.settings
+  const build = (id, importedSettings) => {
+    const zone = zoneFor(id)
+    const settings = importedSettings ?? zone?.ai ?? null
+    if (!settings) return null
+    return { ...settings, default_pt: settings.default_pt ?? zone?.fontSize }
+  }
+  const headline = build('headline', imported?.headline)
+  const subHeadline = build('sub_headline', imported?.sub_headline)
+  if (!headline && !subHeadline) return null
+  return { headline, sub_headline: subHeadline }
 }

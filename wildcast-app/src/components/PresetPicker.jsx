@@ -8,14 +8,21 @@ import { useState } from 'react'
 // here (unlike AISuggest) - showing an empty "EN" tab would be misleading.
 //
 // partnerName - when set, results are scoped to that merchant's own past
-// campaigns (matched server-side against the sheet's "Tasks" column), so
+// campaigns (matched server-side against the sheet's "Merchant" column), so
 // picking "McD" doesn't surface an unrelated churro or bowl campaign line.
 // Falls back to the full library when nothing matches that partner yet.
+//
+// maxChars - the field's §4.1 box fit at min pt (max_chars_min_pt); presets
+// longer than it can't fill the box, so the server filters them out. When
+// absent (template without AI field settings) no length filter is applied.
+// role - the sub-headline's §4.1 role: 'setup' presets are the "Lockup:
+// Sub-headline" halves, 'support' presets are standalone subline rows.
+//
 // Shown collapsed to this many entries first - free/no-AI-cost, so "More
 // options" just reveals the rest of what's already fetched, no refetch.
 const VISIBLE_COUNT = 4
 
-export default function PresetPicker({ field, onApply, partnerName, vertical }) {
+export default function PresetPicker({ field, onApply, partnerName, vertical, maxChars, role }) {
   const [open, setOpen] = useState(false)
   const [presets, setPresets] = useState(null)
   const [fetchedFor, setFetchedFor] = useState(undefined)
@@ -30,11 +37,13 @@ export default function PresetPicker({ field, onApply, partnerName, vertical }) 
       const params = new URLSearchParams({ field })
       if (partnerName) params.set('partner', partnerName)
       if (vertical) params.set('vertical', vertical)
+      if (maxChars) params.set('max_chars_min_pt', String(maxChars))
+      if (role) params.set('role', role)
       const res = await fetch(`/api/presets?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not load presets')
       setPresets(data.presets ?? [])
-      setFetchedFor(`${vertical ?? ''}|${partnerName}`)
+      setFetchedFor(`${vertical ?? ''}|${partnerName}|${maxChars ?? ''}|${role ?? ''}`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -47,7 +56,7 @@ export default function PresetPicker({ field, onApply, partnerName, vertical }) 
     setOpen(willOpen)
     if (willOpen) {
       setShowAll(false)
-      if (presets === null || fetchedFor !== `${vertical ?? ''}|${partnerName}`) fetchPresets()
+      if (presets === null || fetchedFor !== `${vertical ?? ''}|${partnerName}|${maxChars ?? ''}|${role ?? ''}`) fetchPresets()
     }
   }
 

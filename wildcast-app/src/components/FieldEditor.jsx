@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Select from './Select'
 
 function formatDateTime(ts) {
@@ -7,7 +7,7 @@ function formatDateTime(ts) {
     hour: '2-digit', minute: '2-digit',
   })
 }
-import AISuggest from './AISuggest'
+import AISuggest, { AISuggestOutOfCreditsModal } from './AISuggest'
 import PresetPicker from './PresetPicker'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT, merchantForUpload } from '../lib/assetLibrary'
@@ -15,20 +15,18 @@ import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackgr
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
+import { aiFieldSettingsFor } from '../data/templateZones'
+import { usePairQueue } from '../lib/usePairQueue'
 import { IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
 import { ResetIcon } from './ActionIcons'
 
 const ALL_MERCHANTS = '__all__'
 
+// Global fallback char limits for fields WITHOUT per-template AI settings
+// (headline/sub_headline on Restaurant Flyer A/B/C read their §4.1 box
+// limits from templateZones.js instead — see aiFieldSettingsFor + limitFor
+// below). Other fields/templates keep these numbers.
 const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
-
-// Fields whose content is factual (the restaurant's real name, the real
-// promo, legal fine print, Option B's fixed app-download line) - AI-
-// generated copy would be invented, not helpful, so these get Choose preset
-// only, no AI Suggest. Julia's ask, 2026-09-24: only Headline and
-// Sub-headline should keep it - cta added here alongside the three Anang's
-// original pass already covered.
-const NO_AI_FIELDS = new Set(['restaurant_name', 'offer', 'tc', 'cta'])
 
 // Matches the label each case in renderTextStep's switch passes to
 // StepFieldRow - used by the accordion's collapsed row, which needs a
@@ -188,8 +186,18 @@ function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
 // showSize=true adds just the font-size control (guided mode)
 // readOnly=true (restricted review mode) locks the text value itself and hides
 // AI Suggest - only Scale (showSize) and onNudge, if passed, stay available.
-function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, credits, onCreditUsed, suggestFrom, onFocusField, vertical, partnerName, placeholderValue }) {
-  const limit = CHAR_LIMITS[fieldKey]
+//
+// aiLimit overrides the global CHAR_LIMITS for headline/sub_headline on
+// templates with §4.1 AI field settings (the per-template box limits).
+// ai = { onSuggest, busy, error, onRetry, matchesOtherField } - the pair/
+// queue AI Suggest engine (lib/usePairQueue.js), only on the two AI fields.
+// partnerLineLink = { text, label, onApply, onDismiss } - the "Matching
+// sub-headline →" offer from §8.2.3, shown under the field holding the
+// previous pair's partner line.
+// note = { value, onChange, open, onToggle } - the optional one-line user
+// note that steers generation (spec §1), shared by both AI fields.
+function StepFieldRow({ step, label, fieldKey, value, onChange, required, optional, multiline, showControls, showSize, fontSize, onFontSize, align, onAlign, onResetPosition, readOnly, onNudge, suggestFrom, onFocusField, vertical, partnerName, placeholderValue, aiLimit, ai, partnerLineLink, note, presetRole, presetMaxChars }) {
+  const limit = aiLimit ?? CHAR_LIMITS[fieldKey]
   // Pre-filled placeholder content (Notion card "Pre-filled Template
   // Placeholders", 2026-09-22): every text field shows generic greyed-out
   // example content instead of an empty box until the manager actually
@@ -308,27 +316,87 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, lang, required, 
         </div>
       )}
       {!readOnly && (
-        // position:relative here (not on AISuggest itself) so its dropdown
-        // anchors to this full-width row instead of whichever narrow button
-        // triggered it - keeps a 300px dropdown from starting left of the
-        // panel's own edge and getting clipped (see AISuggest.jsx).
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, position: 'relative', flexWrap: 'wrap' }}>
           {/* Choose preset - real past copy served verbatim, no AI call, no
               credit cost (Julia's ask, 2026-09-18: "that shouldn't use AI,
               it should just call the database and spit out exactly what it
-              has"). PresetPicker/api/presets.js already existed from the
-              copy-database work but had never actually been wired into the
-              editor - this is that wiring. Sits next to AI Suggest, not
-              merged into it, since "no AI at all" is the entire point. */}
-          <PresetPicker field={fieldKey} onApply={val => onChange(val)} partnerName={partnerName} vertical={vertical} />
-          {!NO_AI_FIELDS.has(fieldKey) && <>
-          {/* One button, not two (Julia's editor redesign, 2026-09-18) -
-              AISuggest itself decides generate-vs-improve from seedText.
-              vertical ("Restaurant"/"Retail" from the brief) strictly scopes
-              which KB examples and rules it retrieves - without it the
-              backend falls back to the unfiltered library. */}
-          <AISuggest field={fieldKey} lang={lang} onApply={val => onChange(val)} seedText={value} credits={credits} onCreditUsed={onCreditUsed} context={{ vertical }} />
-          </>}
+              has"). Reads the same Copy Library as AI Suggest; box-fit and
+              role come from this template's §4.1 settings so lockup halves
+              that can't fit the box never show. */}
+          <PresetPicker field={fieldKey} onApply={val => onChange(val)} partnerName={partnerName} vertical={vertical} maxChars={presetMaxChars} role={presetRole} />
+          {ai && (
+            <>
+              {/* Optional note that steers generation (spec §1: "The user
+                  can type one optional note. Most of the time they will
+                  not."). Shared by both AI fields - it is context for the
+                  whole lockup, and changing it resets the queue. */}
+              <button
+                type="button"
+                onClick={note?.onToggle}
+                title="Add an optional note for the AI (e.g. Neueröffnung in Kreuzberg)"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, fontWeight: 600,
+                  color: note?.value ? 'var(--primary)' : 'var(--mid)',
+                  background: 'transparent', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                ✎ {note?.value ? 'Note set' : 'Note'}
+              </button>
+              {/* One line per click (spec §8.2) - the queue engine in
+                  FieldEditor decides whether this click serves the queue
+                  (free) or builds a new batch (1 credit). */}
+              <AISuggest
+                onSuggest={ai.onSuggest}
+                busy={ai.busy}
+                error={ai.error}
+                onRetry={ai.onRetry}
+                matchesOtherField={ai.matchesOtherField}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* §8.3 hint - flag-driven guidance under the AI controls. */}
+      {!readOnly && ai?.hint && (
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--mid)', lineHeight: 1.4 }}>
+          {ai.hint}
+        </div>
+      )}
+
+      {/* The optional note input (spec §1), shared by both AI fields. */}
+      {!readOnly && ai && note?.open && (
+        <input
+          type="text"
+          value={note.value}
+          onChange={e => note.onChange(e.target.value)}
+          placeholder="e.g. Neueröffnung in Kreuzberg"
+          maxLength={120}
+          style={{ width: '100%', marginTop: 6, padding: '8px 12px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 8, outline: 'none', background: 'var(--surface)', color: 'var(--dark)', fontFamily: 'inherit' }}
+        />
+      )}
+
+      {/* §8.2.3 - after moving to the next pair, the other field may still
+          hold the previous partner line; this link swaps in the matching
+          one without touching anything by itself. */}
+      {!readOnly && partnerLineLink && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 12, color: 'var(--mid)' }}>
+          <button
+            type="button"
+            onClick={partnerLineLink.onApply}
+            style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+          >
+            {partnerLineLink.label} →
+          </button>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{partnerLineLink.text}</span>
+          <button
+            type="button"
+            onClick={partnerLineLink.onDismiss}
+            title="Dismiss"
+            style={{ fontSize: 12, color: 'var(--light)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+          >✕</button>
         </div>
       )}
     </div>
@@ -707,6 +775,117 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // so there's nothing to gain from forcing one here.
   const partnerName = (fields.restaurant_name || projectName || '').trim() || undefined
 
+  // ── AI Suggest pair/queue engine (Mark's v1.2 spec, section 8) ───────────
+  // Per-template §4.1 field settings (box limits, role, static text, caps)
+  // from templateZones.js. Only the two AI fields read them; a template
+  // without settings gets no AI Suggest at all ("The feature must not run
+  // without them" - spec §4.1), Choose preset keeps working regardless.
+  const aiSettings = aiFieldSettingsFor(templateConfig, template?.name)
+  const hasAiSettings = key => !!(aiSettings?.[key])
+
+  // Field provenance for the brief's kind flags (spec §4.5): 'user_draft'
+  // when the partner typed it, 'kept' when the text came from an AI line.
+  // A ref (not state) - the queue reads it at click time, it never renders.
+  const provenanceRef = useRef({})
+  // Every AI line ever shown on this design, feeding the batch's exclude
+  // list (§8.1 "Add every line already shown to exclude").
+  const shownLinesRef = useRef([])
+
+  const [userNote, setUserNote] = useState('')
+  const [noteOpen, setNoteOpen] = useState(false)
+
+  const queue = usePairQueue({
+    designId: currentProjectId,
+    templateId: template?.id,
+    templateName: template?.name,
+    lang,
+    partnerName,
+    vertical: vertical ?? '',
+    category: '',
+    city: '',
+    offerText: fields.offer ?? '',
+    offerShownInBadge: !!fields.offer && templateConfig?.zones?.some(z => z.id === 'offer'),
+    logoPicked: !!fields.logoUrl,
+    showLogoHint: templateConfig?.zones?.some(z => z.id === 'logo'),
+    staticText: aiSettings?.headline?.static_text ?? aiSettings?.sub_headline?.static_text ?? [],
+    otherFields: aiSettings?.headline?.other_fields ?? aiSettings?.sub_headline?.other_fields ?? [],
+    caps: aiSettings?.headline?.caps ?? aiSettings?.sub_headline?.caps ?? true,
+    box: {
+      headline: aiSettings?.headline
+        ? { max_chars: aiSettings.headline.max_chars, max_chars_min_pt: aiSettings.headline.max_chars_min_pt, max_lines: aiSettings.headline.max_lines, default_pt: aiSettings.headline.default_pt, min_pt: aiSettings.headline.min_pt }
+        : null,
+      sub_headline: aiSettings?.sub_headline
+        ? { max_chars: aiSettings.sub_headline.max_chars, max_chars_min_pt: aiSettings.sub_headline.max_chars_min_pt, max_lines: aiSettings.sub_headline.max_lines, default_pt: aiSettings.sub_headline.default_pt, min_pt: aiSettings.sub_headline.min_pt }
+        : null,
+    },
+    userNote,
+    credits,
+    onCreditUsed,
+    getFieldText: key => fields[key] ?? '',
+    isUserEdited: key => provenanceRef.current[key] === 'user_draft',
+    getShownLines: () => {
+      const lines = new Set(shownLinesRef.current)
+      for (const key of ['headline', 'sub_headline']) {
+        if (provenanceRef.current[key] === 'kept' && fields[key]) lines.add(fields[key])
+      }
+      return [...lines].filter(Boolean)
+    },
+    applyText: (key, text) => {
+      provenanceRef.current[key] = 'kept'
+      shownLinesRef.current = [...new Set([...shownLinesRef.current, text])]
+      onChange(key, text)
+    },
+  })
+
+  // Regular (human) edits mark the field user_draft - including clearing,
+  // which drops the provenance entirely (an empty field is a placeholder).
+  function changeField(key, val) {
+    provenanceRef.current[key] = (val ?? '').trim() ? 'user_draft' : undefined
+    onChange(key, val)
+  }
+
+  // §8.2.3 partner-line link: applies to its field as a kept AI line (the
+  // queue records it so the session continues from that pair).
+  const partnerLineLinkProps = (() => {
+    const link = queue.partnerLineLink
+    if (!link) return null
+    return {
+      fieldKey: link.fieldKey,
+      label: link.fieldKey === 'headline' ? 'Matching headline' : 'Matching sub-headline',
+      text: link.text,
+      onApply: queue.applyPartnerLine,
+      onDismiss: queue.dismissLink,
+    }
+  })()
+
+  // The per-row AI bundle for the two AI fields; every other field gets
+  // none (templates without §4.1 settings never show AI Suggest at all).
+  function aiRowProps(key) {
+    if (restricted || !hasAiSettings(key)) return null
+    const otherKey = key === 'headline' ? 'sub_headline' : 'headline'
+    return {
+      onSuggest: () => queue.click(key),
+      busy: queue.busyField === key || queue.refilling,
+      error: (!queue.busyField && queue.error?.field === key) ? queue.error.message : null,
+      onRetry: () => { queue.clearError(); queue.click(key) },
+      matchesOtherField: !!(fields[otherKey] ?? '').trim(),
+      hint: queue.hint,
+    }
+  }
+
+  function aiRowLink(key) {
+    return partnerLineLinkProps?.fieldKey === key
+      ? { text: partnerLineLinkProps.text, label: partnerLineLinkProps.label, onApply: partnerLineLinkProps.onApply, onDismiss: partnerLineLinkProps.onDismiss }
+      : null
+  }
+
+  const noteProps = {
+    value: userNote,
+    onChange: setUserNote,
+    open: noteOpen,
+    onToggle: () => setNoteOpen(o => !o),
+  }
+
   // Accordion: only one field expanded (full controls) at a time, every
   // other field collapses to a single summary line - Julia's editor
   // redesign, 2026-09-18, per Annika's mockup ("collapse finished fields to
@@ -735,13 +914,21 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
-            value={fields.headline} onChange={v => onChange('headline', v)} lang={lang} required
-            credits={credits} onCreditUsed={onCreditUsed}
+            value={fields.headline} onChange={v => changeField('headline', v)} lang={lang} required
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('headline', 50)} onFontSize={s => onFontSizeChange('headline', s)}
             align={effectiveAlign('headline', 'center')} onAlign={a => onAlignChange('headline', a)}
             onResetPosition={() => onResetZone?.('headline')}
+            // Per-template box limits (§4.1): the char counter uses the
+            // default-size width; presets box-fit at the min-pt width
+            // (spec §5.1), falling back to the default width.
+            aiLimit={aiSettings?.headline?.max_chars}
+            presetMaxChars={aiSettings?.headline?.max_chars_min_pt ?? aiSettings?.headline?.max_chars}
+            presetRole={aiSettings?.headline?.role}
+            ai={aiRowProps('headline')}
+            partnerLineLink={aiRowLink('headline')}
+            note={noteProps}
             // Guided mode's canvas is locked (no drag) same as restricted review -
             // Headline needs the same Position nudge Offer already got (2026-09-08)
             // or there's no way to fix overlap without switching to Designer mode
@@ -756,13 +943,18 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
-            value={fields.sub_headline} onChange={v => onChange('sub_headline', v)} lang={lang}
-            credits={credits} onCreditUsed={onCreditUsed}
+            value={fields.sub_headline} onChange={v => changeField('sub_headline', v)} lang={lang}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
             align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
             onResetPosition={() => onResetZone?.('sub_headline')}
+            aiLimit={aiSettings?.sub_headline?.max_chars}
+            presetMaxChars={aiSettings?.sub_headline?.max_chars_min_pt ?? aiSettings?.sub_headline?.max_chars}
+            presetRole={aiSettings?.sub_headline?.role}
+            ai={aiRowProps('sub_headline')}
+            partnerLineLink={aiRowLink('sub_headline')}
+            note={noteProps}
             onNudge={(isNonDesigner || restricted) ? (axis, delta) => onTextNudge?.('sub_headline', axis, delta) : undefined}
           />
         )
@@ -773,8 +965,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
-            value={fields.restaurant_name} onChange={v => onChange('restaurant_name', v)} lang={lang} required
-            credits={credits} onCreditUsed={onCreditUsed}
+            value={fields.restaurant_name} onChange={v => changeField('restaurant_name', v)} lang={lang} required
             readOnly={restricted}
             showControls={false} showSize={false}
             fontSize={20}
@@ -789,8 +980,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
-            value={fields.offer} onChange={v => onChange('offer', v)} lang={lang} optional
-            credits={credits} onCreditUsed={onCreditUsed}
+            value={fields.offer} onChange={v => changeField('offer', v)} lang={lang} optional
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner || restricted}
             fontSize={effectiveFontSize('offer', 36)} onFontSize={s => onFontSizeChange('offer', s)}
@@ -812,7 +1002,6 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             vertical={vertical}
             partnerName={partnerName}
             value={fields.tc} onChange={v => onChange('tc', v)} lang={lang} multiline optional
-            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted}
             fontSize={effectiveFontSize('tc', 5)} onFontSize={s => onFontSizeChange('tc', s)}
@@ -832,7 +1021,6 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             vertical={vertical}
             partnerName={partnerName}
             value={fields.cta} onChange={v => onChange('cta', v)} lang={lang} required
-            credits={credits} onCreditUsed={onCreditUsed}
             readOnly={restricted}
             showControls={showControls && !restricted} showSize={isNonDesigner && !restricted}
             fontSize={effectiveFontSize('cta', 11)} onFontSize={s => onFontSizeChange('cta', s)}
@@ -1069,6 +1257,12 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
           </>
         )}
       </div>
+
+      {/* Out of AI credits (shared by both AI fields - the queue is one
+          engine for the whole panel). */}
+      {queue.showOutOfCredits && (
+        <AISuggestOutOfCreditsModal onClose={queue.dismissOutOfCredits} />
+      )}
 
     </div>
   )
