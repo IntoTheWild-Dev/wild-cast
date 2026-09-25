@@ -123,3 +123,77 @@ export function hasTransparency(url) {
     img.src = url
   })
 }
+
+// Frame sizes offered when uploading on the Assets page - same presets as
+// wild-scale, minus its "Recommended" tag. The Custom option (the default)
+// is prefilled with the image's own size instead.
+export const FRAME_PRESETS = [
+  { label: 'XL Square', width: 1000, height: 1000 },
+  { label: 'Print', width: 2400, height: 2400 },
+]
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Could not read this image - please try a different file.'))
+    img.src = url
+  })
+}
+
+export async function imageSize(url) {
+  const img = await loadImage(url)
+  return { width: img.naturalWidth, height: img.naturalHeight }
+}
+
+// Draws an image into a width x height transparent PNG frame, centred.
+// centreContent (the presets): same framing as wild-scale's resizeImage -
+// the visible (alpha > 128) content is found, centred, and scaled to fit
+// inside 15% padding, so a cut-out product lands consistently in the frame.
+// Otherwise (Custom): the whole image is simply fitted (contain) with no
+// extra padding - at the image's own size that leaves it unchanged.
+// Returns a blob: URL.
+export async function resizeToFrame(url, width, height, { centreContent = false } = {}) {
+  const img = await loadImage(url)
+  const iw = img.naturalWidth, ih = img.naturalHeight
+
+  let box = { x: 0, y: 0, w: iw, h: ih }
+  let pad = 0
+  if (centreContent) {
+    pad = 0.15
+    const S = 600
+    const s = Math.min(1, S / Math.max(iw, ih))
+    const sw = Math.max(1, Math.round(iw * s)), sh = Math.max(1, Math.round(ih * s))
+    const scan = document.createElement('canvas')
+    scan.width = sw
+    scan.height = sh
+    const sctx = scan.getContext('2d')
+    sctx.drawImage(img, 0, 0, sw, sh)
+    const { data } = sctx.getImageData(0, 0, sw, sh)
+    let minX = sw, minY = sh, maxX = -1, maxY = -1
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        if (data[(y * sw + x) * 4 + 3] > 128) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    if (maxX >= 0) box = { x: minX / s, y: minY / s, w: (maxX - minX + 1) / s, h: (maxY - minY + 1) / s }
+  }
+
+  const scale = Math.min(width * (1 - 2 * pad) / box.w, height * (1 - 2 * pad) / box.h)
+  const dx = width / 2 - (box.x + box.w / 2) * scale
+  const dy = height / 2 - (box.y + box.h / 2) * scale
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, dx, dy, iw * scale, ih * scale)
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+  return URL.createObjectURL(blob)
+}

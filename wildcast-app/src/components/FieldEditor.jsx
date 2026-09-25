@@ -11,6 +11,7 @@ import AISuggest from './AISuggest'
 import PresetPicker from './PresetPicker'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT, merchantForUpload } from '../lib/assetLibrary'
+import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
@@ -355,6 +356,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
   const displaySrc = value || placeholderUrl
   const [resWarning, setResWarning] = useState(null)
   const [bgError, setBgError] = useState(null)
+  const [uploading, setUploading] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySearch, setLibrarySearch] = useState('')
   const [libraryMerchantFilter, setLibraryMerchantFilter] = useState(merchant)
@@ -411,12 +413,15 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
   // library-save pipeline either way, just a different entry point for the file.
   async function handleFile(file) {
     setBgError(null)
+    setUploading(true)
     try {
       const { url, name } = await uploadImageForZone(file, { requireTransparent, autoCropContent, folder: libraryFolder, merchant })
       refreshLibrary()
       applyImage(url, name)
     } catch (err) {
       setBgError(err.message)
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -478,13 +483,17 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
         </div>
       </div>
 
+      {!restricted && shouldRemoveBackground(libraryFolder) && (
+        <div style={{ fontSize: 11, color: 'var(--mid)', lineHeight: 1.4, marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE}</div>
+      )}
+
       {/* Upload and "choose from library" side by side as two equal buttons,
           not a big drop zone with a small text link stacked underneath it -
           Julia's ask, 2026-09-18. */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           type="button"
-          onClick={restricted ? undefined : handleClick}
+          onClick={restricted || uploading ? undefined : handleClick}
           onMouseEnter={() => onFocusField?.(zoneId)}
           onMouseLeave={() => onFocusField?.(null)}
           disabled={restricted}
@@ -500,7 +509,9 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
             </div>
           )}
           <span style={{ fontSize: 11, fontWeight: 600, color: value ? 'var(--primary)' : 'var(--dark)', lineHeight: 1.3 }}>
-            {value ? (restricted ? 'Uploaded ✓' : 'Click to replace') : (restricted ? 'No image' : 'Click to upload')}
+            {uploading
+              ? (shouldRemoveBackground(libraryFolder) ? 'Removing background…' : 'Uploading…')
+              : value ? (restricted ? 'Uploaded ✓' : 'Click to replace') : (restricted ? 'No image' : 'Click to upload')}
           </span>
         </button>
 
@@ -589,7 +600,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
         </div>
       )}
 
-      {/* Background rejection - shown when a transparent-PNG zone gets a flattened/promo image */}
+      {/* Upload error - e.g. background removal failed on a zone that must be transparent */}
       {bgError && (
         <div style={{ marginTop: 8, padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, fontSize: 11, color: '#B91C1C', lineHeight: 1.5 }}>
           ✕ {bgError}

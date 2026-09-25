@@ -1,9 +1,10 @@
-import { blobUrlToDataUrl, hasTransparency, cropToContent } from './image'
+import { blobUrlToDataUrl, cropToContent } from './image'
+import { removeBackgroundFromFile, shouldRemoveBackground } from './removeBackground'
 
 // Shared library, backed by Vercel Blob (not localStorage) - same asset is
 // reusable across designs AND across browsers/devices, and stored at real
 // print resolution instead of a small browsing-thumbnail size.
-const LIBRARY_MAX_DIM = 2400
+export const LIBRARY_MAX_DIM = 2400
 
 // Display names shown to partners - the object KEYS (folder routing,
 // zone-id matching in assetFolderForZone, Blob storage paths) stay "stickers"
@@ -98,32 +99,37 @@ export async function saveAssetToLibrary(folder, name, blobUrl, merchant) {
 
 // Shared by FieldEditor.jsx's ImageUpload (click-to-browse) and
 // TemplateCanvas.jsx's drag-and-drop directly onto a zone - both need the
-// exact same validation/processing pipeline before a raw File becomes a
-// usable zone URL, so it lives in one place rather than the canvas-drop path
-// silently skipping steps the click path has always done (the
-// transparent-PNG requirement, QR quiet-zone autocrop, saving into the
-// partner's asset Library). Throws (with a user-facing message) on the one
-// blocking case - a non-transparent upload into a zone that requires one.
+// exact same processing pipeline before a raw File becomes a usable zone
+// URL, so it lives in one place rather than the canvas-drop path silently
+// skipping steps the click path has always done (background removal, QR
+// quiet-zone autocrop, saving into the partner's asset Library).
 export async function uploadImageForZone(file, { requireTransparent, autoCropContent, folder, merchant } = {}) {
-  if (requireTransparent && file.type !== 'image/png') {
-    throw new Error('This image has a background - please upload a transparent PNG.')
-  }
-
-  let url = URL.createObjectURL(file)
-
-  if (requireTransparent) {
-    const transparent = await hasTransparency(url)
-    if (!transparent) {
-      URL.revokeObjectURL(url)
-      throw new Error('This image has a background - please upload a transparent PNG.')
-    }
-  }
+  const { url: cutUrl, name } = await removeBackgroundForUpload(file, { folder, requireTransparent })
+  let url = cutUrl
 
   if (autoCropContent) url = await cropToContent(url)
 
-  saveAssetToLibrary(folder ?? 'other', file.name, url, merchant)
+  saveAssetToLibrary(folder ?? 'other', name, url, merchant)
 
-  return { url, name: file.name }
+  return { url, name }
+}
+
+// The background-removal step on its own, for upload paths that don't go
+// through uploadImageForZone (Library page, briefing-form picker). Returns a
+// blob: URL plus the name to save it under (.png once it's been cut out).
+// If Photoroom fails: a zone that must be transparent can't use the original
+// photo, so that throws; anywhere else the original is kept so the upload
+// isn't blocked by an outage or an exhausted quota.
+export async function removeBackgroundForUpload(file, { folder, requireTransparent } = {}) {
+  if (!shouldRemoveBackground(folder)) return { url: URL.createObjectURL(file), name: file.name }
+  try {
+    const url = await removeBackgroundFromFile(file)
+    return { url, name: file.name.replace(/\.[^.]+$/, '') + '.png' }
+  } catch (err) {
+    if (requireTransparent) throw new Error(`${err.message}. Please try again, or upload a transparent PNG.`, { cause: err })
+    console.warn('Background removal failed, keeping the original image:', err)
+    return { url: URL.createObjectURL(file), name: file.name }
+  }
 }
 
 export async function deleteLibraryAsset(url) {
