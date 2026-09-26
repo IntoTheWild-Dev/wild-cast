@@ -1364,7 +1364,11 @@ const SHOW_MODE_CHOOSER = false
       const response = await fetch('/api/export-cmyk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ png, filename, profile: iccProfile }),
+        // brand: 'wolt' - hardcoded for now since every current WildCast
+        // template is a Wolt flyer (see api/_lib/brandColors.js, Phase 1 of
+        // the print-color fix, 2026-09-25 brief). Once templates for other
+        // brands exist, this should come from the template/partner instead.
+        body: JSON.stringify({ png, filename, profile: iccProfile, brand: 'wolt' }),
       })
 
       if (!response.ok) {
@@ -1379,6 +1383,19 @@ const SHOW_MODE_CHOOSER = false
       a.download = `${filename}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+
+      // Requirement 3 (brief §5): surface a warning when one or more colors
+      // fell back to the plain hex->CMYK conversion instead of a verified
+      // brand value, so nobody assumes an unflagged flyer is fully
+      // brand-accurate. See X-Unverified-Colors in api/export-cmyk.js.
+      const unverifiedCount = Number(response.headers.get('X-Unverified-Colors') || 0)
+      if (unverifiedCount > 0) {
+        alert(
+          `Heads up: ${unverifiedCount} color${unverifiedCount === 1 ? '' : 's'} in this export ` +
+          `${unverifiedCount === 1 ? 'was' : 'were'} not brand-verified and used the standard ` +
+          `screen-to-print conversion instead of an official brand print value.`
+        )
+      }
 
       // PDF export is free - only AI feature usage costs credits now, see
       // handleAiCreditUsed (Julia's ask, 2026-09-15: replace the old
