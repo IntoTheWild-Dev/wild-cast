@@ -562,16 +562,6 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   const composerShell = { borderTop: '1px solid var(--border)', padding: '14px 18px 16px', background: '#fff' }
   const inputBlock = (
     <div>
-      {step && !pasteMode && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <button
-            type="button" onClick={() => setPasteMode(true)}
-            style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
-          >
-            Have a full brief? Paste it instead
-          </button>
-        </div>
-      )}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         <textarea
           ref={inputRef}
@@ -700,8 +690,19 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                     </div>
                   </div>
                 )}
-                {step && (step.options?.length > 0 || step.optional || step.aiField) && (
+                {step && !pasteMode && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                    {/* Left-most and its own visual weight, not a small corner
+                        link (Julia's report, 2026-09-28: "shouldn't be in the
+                        right corner, it's too small... before you ask about
+                        everything else") - available on every step, same as
+                        before, just given the prominence the brief asked for. */}
+                    <button
+                      type="button" onClick={() => setPasteMode(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 700, borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)' }}
+                    >
+                      📋 Paste your whole brief instead
+                    </button>
                     {step.aiField && !aiBusy && (
                       <Chip primary onClick={() => suggest(step)}>{draft.trim() ? '✨ Improve with AI' : '✦ Suggest with AI'}</Chip>
                     )}
