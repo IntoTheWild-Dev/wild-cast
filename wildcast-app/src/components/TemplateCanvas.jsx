@@ -822,6 +822,17 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const displayText = isPlaceholder ? placeholderText : (value || '')
       if (obj.text !== displayText) {
         obj.set('text', displayText)
+        // Non-autoShrink zones (e.g. tc) never run applyFontSizeAndCheckFit,
+        // so nothing else re-asserts width after a text change - Fabric's
+        // Textbox can then render the new text as one unwrapped line instead
+        // of re-wrapping to the zone's configured width (Julia's report,
+        // 2026-09-28: T&Cs typed via the panel showed as a single long line).
+        // Same fix pattern as applyFontSizeAndCheckFit uses for autoShrink
+        // zones - pin width back and force a real re-layout.
+        if (!zone?.autoShrink) {
+          const textW = zone?.textWidth ?? zone?.width
+          if (textW != null) { obj.set('width', textW); obj.initDimensions() }
+        }
         changed = true
       }
       const targetOpacity = isPlaceholder ? PLACEHOLDER_OPACITY : 1
