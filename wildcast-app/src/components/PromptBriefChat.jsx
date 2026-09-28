@@ -194,6 +194,16 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   // Set when the assistant has nothing left to ask but the confirmed
   // template hasn't arrived in this component yet (see the mega-paste effect).
   const pendingFinishRef = useRef(false)
+  // Free text typed/pasted before a template existed. Template-specific
+  // fields (offer, T&Cs, restaurant name, CTA) aren't askable yet then, so
+  // the brief is re-read once the template is known instead of those facts
+  // being asked for again.
+  const preConfirmTextRef = useRef([])
+  // Set by the turn that confirms the template: its next question has to
+  // come from the confirmed template's steps, which only exist once App
+  // passes the new config down - so that turn hands off to a follow-up turn
+  // (see the post-confirm effect) instead of asking from the old list.
+  const pendingPostConfirmRef = useRef(false)
 
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)) }
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
@@ -266,6 +276,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     setPausedTurn(null); setPasteMode(false); setCheckingReuse(null); setShowTemplatePreview(false)
     shownConfirmRef.current = null
     pendingFinishRef.current = false
+    preConfirmTextRef.current = []
+    pendingPostConfirmRef.current = false
     setTyping(true)
     runScript()
   }
@@ -310,6 +322,14 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     if (steps.some(s => s.id === currentId)) return
     const nextStep = steps.find(s => stepApplies(s, answers) && !answers[s.id])
     later(() => {
+      // Template picked from the popup instead of the confirm card: same
+      // re-read of a pre-template brief as the post-confirm turn does.
+      if (config && preConfirmTextRef.current.length) {
+        const typed = preConfirmTextRef.current.join('\n')
+        preConfirmTextRef.current = []
+        respond({ answersNow: answers, fromStep: null, typed })
+        return
+      }
       if (nextStep) {
         push({ from: 'ai', text: `The new template changes the questions a little. ${nextStep.ask}`, hint: nextStep.hint })
         setCurrentId(nextStep.id)
@@ -341,6 +361,20 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     later(() => finish(), 100)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, entry])
+
+  // Post-confirm turn (see pendingPostConfirmRef): once App has passed the
+  // confirmed template down, run one turn against ITS steps - re-reading
+  // anything typed before it existed, so a pasted brief's offer / T&Cs /
+  // CTA land now rather than being asked for again. Keyed on answers too:
+  // the confirm turn's answers usually land after the config does.
+  useEffect(() => {
+    if (!pendingPostConfirmRef.current || !config || !entry) return
+    pendingPostConfirmRef.current = false
+    const typed = preConfirmTextRef.current.join('\n')
+    preConfirmTextRef.current = []
+    later(() => respond({ answersNow: answers, fromStep: null, typed }), 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, entry, answers])
 
   // Auto-grow the composer: one line until content (or paste mode) needs more.
   // Keyed on the step too, so switching questions resets the height.
@@ -402,22 +436,29 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
       if (r.stepId === 'templateConfirm' && r.value === CONFIRM_USE && matched) onConfirmTemplate(matched.id)
     }
     for (const id of ai.skipped) nextAnswers = { ...nextAnswers, [id]: { skipped: true, display: 'Skipped' } }
+    // This turn confirmed the template: the server picked "next" from the
+    // pre-template list, which knows nothing of logo/photo/CTA/offer - and
+    // with every pre-template question answered it returned none, which
+    // used to jump straight to the result. Hand off to the post-confirm turn
+    // (typing indicator stays on) so the next question, the brief re-read
+    // and the box-limit check all run against the confirmed template.
+    if (!config && matched && nextAnswers.templateConfirm?.value === CONFIRM_USE) {
+      setAnswers(nextAnswers)
+      pendingPostConfirmRef.current = true
+      return
+    }
     nextId = ai.nextStepId
     text = ai.reply
-    // Once the template is known (loaded, or confirmed in this very turn),
-    // hold pasted headline/sub-headline to its copy-database box - the same
-    // limit the canvas uses - and re-ask any that don't fit, instead of
-    // letting auto-resize shrink them to unreadable (Julia, 2026-09-28:
-    // "smaller headlines and shorter sub-lines, like the copy database").
-    const confirmingNow = !config && matched && nextAnswers.templateConfirm?.value === CONFIRM_USE
-    const limitsFrom = config
-      ? { cfg: config, name: entry?.label, id: entry?.templateIdGuided }
-      : (confirmingNow ? { cfg: { zones: matched.zones }, name: matched.label, id: matched.id } : null)
-    if (limitsFrom) {
-      const settings = aiFieldSettingsFor(limitsFrom.cfg, limitsFrom.name, limitsFrom.id)
+    // Once the template is known, hold pasted headline/sub-headline to its
+    // copy-database box - the same limit the canvas uses - and re-ask any
+    // that don't fit, instead of letting auto-resize shrink them to
+    // unreadable (Julia, 2026-09-28: "smaller headlines and shorter
+    // sub-lines, like the copy database").
+    if (config) {
+      const settings = aiFieldSettingsFor(config, entry?.label, entry?.templateIdGuided)
       const tooLong = answersOverTemplateLimit(nextAnswers, settings)
       if (tooLong.length) {
-        const order = buildSteps(limitsFrom.cfg.zones, settings).map(s => s.id)
+        const order = buildSteps(config.zones, settings).map(s => s.id)
         tooLong.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
         const kept = { ...nextAnswers }
         for (const t of tooLong) delete kept[t.id]
@@ -572,6 +613,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     push({ from: 'user', text: t })
     setDraft('')
     setPasteMode(false)
+    if (!config) preConfirmTextRef.current.push(t)
     respond({ answersNow: answers, fromStep: step, typed: t })
   }
 

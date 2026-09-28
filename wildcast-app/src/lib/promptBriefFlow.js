@@ -117,6 +117,11 @@ export function buildPreSteps(matched, formats = []) {
 //   -4 when the template LACKS a feature the partner asked for (a missing
 //      must-have is far worse than an unused extra zone),
 //   -1 for carrying a sticker/QR zone the partner said they don't need,
+//   +1 / -2 per piece of copy the partner already gave (e.g. a pasted
+//      sub-headline): the template has a zone for it / would silently drop
+//      it - so "headline + subline, no sticker/QR" lands on a template with
+//      a sub-headline, not the simplest one (Julia's test, 2026-09-28: a
+//      pasted subline was lost to Option B, which has no sub-headline zone),
 //   and a tiny bonus for fewer zones overall, so with no feature answers
 //   the simplest template wins ("only a headline -> simplest option").
 // Ties keep the catalogue's own order (BASE_TEMPLATES order). When the
@@ -132,10 +137,17 @@ export function matchTemplate(choices, answers = {}) {
   const wantQr = answers.needsQr?.value === 'yes'
   const askedSticker = answers.needsSticker?.value === 'yes' || answers.needsSticker?.value === 'no'
   const askedQr = answers.needsQr?.value === 'yes' || answers.needsQr?.value === 'no'
+  // Copy already given for a zone at least one candidate has (flow/form
+  // answers like partner or objective never match a zone id).
+  const givenCopy = Object.entries(answers)
+    .filter(([id, a]) => a && !a.skipped && String(a.value ?? '').trim()
+      && candidates.some(c => c.zones.some(z => z.id === id)))
+    .map(([id]) => id)
   let best = null
   let bestScore = -Infinity
   for (const c of candidates) {
     let score = -c.zones.length * 0.01
+    for (const id of givenCopy) score += c.zones.some(z => z.id === id) ? 1 : -2
     if (askedSticker) {
       if (hasSticker(c) === wantSticker) score += 2
       else if (wantSticker) score -= 4

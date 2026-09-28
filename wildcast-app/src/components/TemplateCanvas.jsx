@@ -111,6 +111,15 @@ async function loadFonts() {
 // unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
 // design, and a rotated zone's width axis is its visual height.
 const FIT_WIDTH_RATIO = 0.92
+
+// A CTA line finishes a sentence printed in the background art ("Jetzt Wolt
+// App downloaden und" -> "bei uns bestellen!"), so it must stay at that
+// printed line's size: shrink to fit, never grow to fill the box the way
+// headlines do (Julia's report, 2026-09-28: "cta is too big"). A zone config
+// can override either way with an explicit `autoGrow`.
+function zoneCanGrow(zone) {
+  return zone.autoGrow ?? zone.id !== 'cta'
+}
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
@@ -727,7 +736,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             // Then grow to fill - short text should be as large as the
             // bounding box allows. Keeps growing until the next step would
             // overflow, then steps back to the last fitting size.
-            while (size + 0.5 <= 120) {
+            while (zoneCanGrow(zone) && size + 0.5 <= 120) {
               const next = size + 0.5
               if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
                 applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
@@ -920,7 +929,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           // Then grow to fill the bounding box
-          while (size + 0.5 <= 120) {
+          while (zoneCanGrow(zone) && size + 0.5 <= 120) {
             const next = size + 0.5
             if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
               applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
