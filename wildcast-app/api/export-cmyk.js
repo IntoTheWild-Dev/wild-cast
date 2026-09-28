@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -205,6 +206,9 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
 }
 
 // ── PDF/X-4 builder ───────────────────────────────────────────────────────────
+// Objects 1–9 are fixed (see below); brand stencil masks follow from 10.
+const MASK_ID0 = 10
+
 function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
   const chunks  = []
   const offsets = {}
@@ -240,7 +244,15 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
   )
 
   // 4 — XMP Metadata (PDF/X-4 conformance declaration)
-  const now = new Date().toISOString()
+  // ISO 15930-7 (PDF/X-4) requires pdfxid:GTS_PDFXVersion, xmpMM
+  // DocumentID/VersionID/RenditionClass, pdf:Trapped, and dates that match
+  // the /Info dictionary (object 9) exactly - preflight (e.g. Acrobat's
+  // PDF/X-4 profile) rejects the file otherwise. Mirrors what InDesign's
+  // PDF/X-4 export writes. Dates are second-precision UTC so both forms agree.
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const pdfDate = `D:${now.replace(/[-:T]/g, '').replace('Z', '')}Z`
+  const documentId = `uuid:${randomUUID()}`
+  const instanceId = `uuid:${randomUUID()}`
   const xmp = Buffer.from(
     '<?xpacket begin="\xEF\xBB\xBF" id="W5M0MpCehiHzreSzNTczkc9d"?>\n' +
     '<x:xmpmeta xmlns:x="adobe:ns:meta/">\n' +
@@ -250,13 +262,21 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
     '      xmlns:xmp="http://ns.adobe.com/xap/1.0/"\n' +
     '      xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/"\n' +
     '      xmlns:pdfx="http://ns.adobe.com/pdfx/1.3/"\n' +
+    '      xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/"\n' +
     '      xmlns:dc="http://purl.org/dc/elements/1.1/">\n' +
     '      <pdf:Producer>WildCast</pdf:Producer>\n' +
+    '      <pdf:Trapped>False</pdf:Trapped>\n' +
     '      <xmp:CreatorTool>WildCast</xmp:CreatorTool>\n' +
     `      <xmp:CreateDate>${now}</xmp:CreateDate>\n` +
     `      <xmp:ModifyDate>${now}</xmp:ModifyDate>\n` +
+    `      <xmp:MetadataDate>${now}</xmp:MetadataDate>\n` +
+    `      <xmpMM:DocumentID>${documentId}</xmpMM:DocumentID>\n` +
+    `      <xmpMM:InstanceID>${instanceId}</xmpMM:InstanceID>\n` +
+    '      <xmpMM:VersionID>1</xmpMM:VersionID>\n' +
+    '      <xmpMM:RenditionClass>default</xmpMM:RenditionClass>\n' +
+    '      <pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion>\n' +
     '      <pdfx:GTS_PDFXVersion>PDF/X-4</pdfx:GTS_PDFXVersion>\n' +
-    '      <pdfx:GTS_PDFXConformance>PDF/X-4</pdfx:GTS_PDFXConformance>\n' +
+    '      <dc:format>application/pdf</dc:format>\n' +
     '      <dc:title>\n' +
     '        <rdf:Alt><rdf:li xml:lang="x-default">WildCast Flyer</rdf:li></rdf:Alt>\n' +
     '      </dc:title>\n' +
@@ -282,7 +302,7 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
     `   /MediaBox [0 0 ${PT_W} ${PT_H}]\n` +
     `   /TrimBox [${tx0} ${ty0} ${tx1} ${ty1}]\n` +
     `   /BleedBox [0 0 ${PT_W} ${PT_H}]\n` +
-    `   /Resources << /XObject << /Im1 7 0 R ${brandMasks.map((_, i) => `/Brand${i} ${9 + i} 0 R`).join(' ')} >> >>\n` +
+    `   /Resources << /XObject << /Im1 7 0 R ${brandMasks.map((_, i) => `/Brand${i} ${MASK_ID0 + i} 0 R`).join(' ')} >> >>\n` +
     '   /Contents 8 0 R\n' +
     '>>\nendobj\n',
   )
@@ -322,8 +342,17 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
   mark(8)
   push(`8 0 obj\n<< /Length ${cs.length} >>\nstream\n${cs}\nendstream\nendobj\n`)
 
+  // 9 — Document info (PDF/X-4 requires /Trapped; dates must match the XMP)
+  mark(9)
+  push(
+    '9 0 obj\n' +
+    `<< /Title (WildCast Flyer) /Creator (WildCast) /Producer (WildCast)\n` +
+    `   /CreationDate (${pdfDate}) /ModDate (${pdfDate})\n` +
+    '   /Trapped /False /GTS_PDFXVersion (PDF/X-4) >>\nendobj\n',
+  )
+
   brandMasks.forEach((color, i) => {
-    const id = 9 + i
+    const id = MASK_ID0 + i
     const maskZ = deflateSync(color.mask)
     mark(id)
     push(`${id} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${PX_W} /Height ${PX_H} /ImageMask true /BitsPerComponent 1 /Decode [1 0] /Interpolate false /Filter /FlateDecode /Length ${maskZ.length} >>\nstream\n`)
@@ -333,15 +362,16 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
 
   // ── Cross-reference table ─────────────────────────────────────────────────
   const xrefOffset = tell()
-  const N = 9 + brandMasks.length  // objects 0–8 plus brand stencils
+  const N = MASK_ID0 + brandMasks.length  // objects 0–9 plus brand stencils
   push(`xref\n0 ${N}\n`)
   push('0000000000 65535 f \n')
   for (let i = 1; i < N; i++) {
     push(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`)
   }
 
-  // Trailer
-  push(`trailer\n<< /Size ${N} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`)
+  // Trailer — /ID is mandatory for PDF/X-4
+  const fileId = documentId.slice(5).replace(/-/g, '')
+  push(`trailer\n<< /Size ${N} /Root 1 0 R /Info 9 0 R /ID [<${fileId}> <${fileId}>] >>\nstartxref\n${xrefOffset}\n%%EOF\n`)
 
   return Buffer.concat(chunks)
 }

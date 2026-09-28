@@ -44,6 +44,19 @@ async function exportPdf(png, brand) {
   const intent = pdf.catalog.lookup(name('OutputIntents')).lookup(0)
   assert.equal(intent.get(name('S')).toString(), '/GTS_PDFX')
   assert.equal(intent.get(name('OutputConditionIdentifier')).decodeText(), 'FOGRA51')
+  // PDF/X-4 (ISO 15930-7) structural requirements, matching InDesign's export
+  const raw = res.body.toString('latin1')
+  assert.match(raw, /trailer\s*<<[^>]*\/ID \[<[0-9a-f]{32}> <[0-9a-f]{32}>\]/)
+  const info = pdf.context.lookup(pdf.context.trailerInfo.Info)
+  assert.equal(info.get(name('Trapped')).toString(), '/False')
+  const xmp = Buffer.from(pdf.catalog.lookup(name('Metadata')).getContents()).toString('utf8')
+  for (const tag of ['pdfxid:GTS_PDFXVersion>PDF/X-4<', 'pdf:Trapped>False<', 'xmpMM:DocumentID>uuid:',
+    'xmpMM:VersionID>1<', 'xmpMM:RenditionClass>default<', 'xmp:MetadataDate>']) {
+    assert.ok(xmp.includes(`<${tag}`), `XMP missing ${tag}`)
+  }
+  assert.ok(!xmp.includes('GTS_PDFXConformance'))
+  const xmpDate = xmp.match(/<xmp:CreateDate>([^<]+)</)[1]
+  assert.equal(info.get(name('CreationDate')).decodeText(), `D:${xmpDate.replace(/[-:T]/g, '').replace('Z', '')}Z`)
   return {
     warning: Number(res.headers['X-Unverified-Colors']), commands, masks,
     samples: inflateSync(image.getContents()),
