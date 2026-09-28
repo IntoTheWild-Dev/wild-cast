@@ -443,6 +443,13 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   // brief; typed draft = a rewrite of that line (kind user_draft, the API
   // derives the mode). Credits are deliberately not deducted here yet (to be
   // decided).
+  // `entry` is null until a template is confirmed (chat-first rework) - today
+  // headline/sub_headline (the only pre-confirm aiField steps) always come
+  // after templateConfirm in the step order, so this is unreachable, but that
+  // ordering is an invariant spread across three files, not enforced here -
+  // every `entry` read below is optional-chained so a future reorder fails
+  // safe (empty template_id/name sent) instead of throwing into the catch
+  // block below and showing a misleading "couldn't reach the AI copywriter".
   async function suggest(step, { more = false } = {}) {
     if (currentId !== step.id || aiBusy) return
     const seed = draft.trim()
@@ -453,7 +460,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     try {
       const category = entry?.category ?? 'restaurant'
       const businessType = category.charAt(0).toUpperCase() + category.slice(1)
-      const settings = aiFieldSettingsFor(config, entry.label, entry.templateIdGuided)
+      const settings = aiFieldSettingsFor(config, entry?.label, entry?.templateIdGuided)
       const fieldKey = step.aiField
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',
@@ -463,8 +470,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
           lang: 'de',
           brief: {
             design_id: 'prompt-brief',
-            template_id: entry.templateIdGuided,
-            template_name: entry.label,
+            template_id: entry?.templateIdGuided,
+            template_name: entry?.label,
             vertical: businessType,
             partner: { name: partnerNameFrom(answers) ?? '' },
             logo_picked: !!answers.logo?.imageUrl,
@@ -514,7 +521,12 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
       if (opt.value === CONFIRM_USE && matched) {
         onConfirmTemplate(matched.id)
         submit(step, { value: CONFIRM_USE, display: `Use ${matched.label.split(' · ').pop()}` })
-      } else if (opt.value === CONFIRM_DIFFERENT) {
+      } else if (opt.value === CONFIRM_DIFFERENT || (opt.value === CONFIRM_USE && !matched)) {
+        // matched can only be null here if something upstream changed the
+        // candidate list between the card rendering and this click (e.g. a
+        // template going un-live) - same recovery as "Choose a different
+        // one" rather than a silent no-op with no way forward.
+        if (!matched) push({ from: 'ai', text: "That template isn't available anymore - pick another one:" })
         onChangeTemplate()
       }
       return
