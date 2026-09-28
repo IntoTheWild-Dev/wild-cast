@@ -111,19 +111,6 @@ async function loadFonts() {
 // unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
 // design, and a rotated zone's width axis is its visual height.
 const FIT_WIDTH_RATIO = 0.92
-
-// A CTA line finishes a sentence printed in the background art ("Jetzt Wolt
-// App downloaden und" -> "bei uns bestellen!") and the name on the design
-// sits beside printed "♥ WOLT", so both must stay at the printed text's size;
-// T&Cs are fine print. All three shrink to fit but never grow to fill the
-// box the way headlines do (Julia's reports, 2026-09-28: "cta is too big",
-// T&Cs "too big" on Option C - imported templates mark every text zone
-// autoShrink - and "restaurant name far too big"). A zone config can
-// override either way with an explicit `autoGrow`.
-const NEVER_GROW_ZONE_IDS = new Set(['cta', 'tc', 'restaurant_name'])
-function zoneCanGrow(zone) {
-  return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
-}
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
@@ -740,7 +727,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             // Then grow to fill - short text should be as large as the
             // bounding box allows. Keeps growing until the next step would
             // overflow, then steps back to the last fitting size.
-            while (zoneCanGrow(zone) && size + 0.5 <= 120) {
+            while (size + 0.5 <= 120) {
               const next = size + 0.5
               if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
                 applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
@@ -861,17 +848,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const displayText = zoneDisplayText(id, isPlaceholder ? placeholderText : (value || ''))
       if (obj.text !== displayText) {
         obj.set('text', displayText)
-        // Non-autoShrink zones (e.g. tc) never run applyFontSizeAndCheckFit,
-        // so nothing else re-asserts width after a text change - Fabric's
-        // Textbox can then render the new text as one unwrapped line instead
-        // of re-wrapping to the zone's configured width (Julia's report,
-        // 2026-09-28: T&Cs typed via the panel showed as a single long line).
-        // Same fix pattern as applyFontSizeAndCheckFit uses for autoShrink
-        // zones - pin width back and force a real re-layout.
-        if (!zone?.autoShrink) {
-          const textW = zone?.textWidth ?? zone?.width
-          if (textW != null) { obj.set('width', textW); obj.initDimensions() }
-        }
         changed = true
       }
       const targetOpacity = isPlaceholder ? PLACEHOLDER_OPACITY : 1
@@ -933,7 +909,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           // Then grow to fill the bounding box
-          while (zoneCanGrow(zone) && size + 0.5 <= 120) {
+          while (size + 0.5 <= 120) {
             const next = size + 0.5
             if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
               applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
