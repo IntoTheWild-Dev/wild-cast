@@ -59,7 +59,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
       }
       if (cancelled) return
       setBrief(built)
-      setFields(buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl }))
+      setFields(buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl, zones: config?.zones }))
     }
     resolveFields()
     return () => { cancelled = true; clearTimeout(captureTimer.current) }

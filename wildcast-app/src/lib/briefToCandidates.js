@@ -29,7 +29,23 @@ export function getMatchingTemplateIds(brief) {
 // renders zones that exist in that template's own `zones` array), so Option
 // B naturally ends up with a partial fill (no restaurant name/T&Cs zone
 // there) without any per-template branching here.
-export function buildCandidateFields(brief, { logoUrl, photoUrl } = {}) {
+// zones (optional): the target template's zones. When given, every text
+// field set in an Omnes Cond zone is uppercased - the exact rule App.jsx's
+// handleFieldChange applies to typed text. Without it, brief-built designs
+// kept offer and name-on-design in mixed case ("Wen Cheng", "2x5€ sparen"),
+// which the auto-resize then grew bigger than the canvas's own caps version
+// (Julia's report, 2026-09-28: "WEN CHENG ♥ WOLT far too big").
+export function buildCandidateFields(brief, { logoUrl, photoUrl, zones } = {}) {
+  const fields = baseCandidateFields(brief, { logoUrl, photoUrl })
+  for (const zone of zones ?? []) {
+    if (zone.fontFamily === 'omnes-cond' && typeof fields[zone.id] === 'string') {
+      fields[zone.id] = fields[zone.id].toUpperCase()
+    }
+  }
+  return fields
+}
+
+function baseCandidateFields(brief, { logoUrl, photoUrl } = {}) {
   const partnerName = resolvePartnerName(brief)
 
   return {

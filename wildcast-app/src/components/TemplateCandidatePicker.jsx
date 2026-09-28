@@ -70,11 +70,12 @@ export default function TemplateCandidatePicker({ brief, onEdit, onPick, onSendF
       // because a merchant like Wen Cheng may have several dishes, so "just grab
       // the first one" isn't always right) wins over the auto-pulled fallback.
       const photoUrl = brief.foodPhotoAsset?.src ?? autoPhotoUrl
-      const fields = buildCandidateFields(brief, { logoUrl, photoUrl })
       // Only build fields for what actually matched (Julia's fix request,
       // 2026-08-20 - picking just Option A in the preview popup shouldn't
-      // still generate both).
-      setCandidateFields(Object.fromEntries(matchingIds.map(id => [id, fields])))
+      // still generate both). Per template, so each gets its own zones' caps.
+      setCandidateFields(Object.fromEntries(matchingIds.map(id => [
+        id, buildCandidateFields(brief, { logoUrl, photoUrl, zones: TEMPLATE_ZONES[id]?.zones }),
+      ])))
     }
     run()
     return () => { cancelled = true }

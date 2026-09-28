@@ -1053,7 +1053,10 @@ const SHOW_MODE_CHOOSER = false
     const { logoUrl } = await fetchMerchantAssets(partnerName)
     // Prompt Brief carries its own uploaded images on the brief; the classic
     // brief never sets these, so it keeps the Library-logo-only behavior.
-    const prefilledFields = buildCandidateFields(brief, { logoUrl: brief.logoUrl ?? logoUrl, photoUrl: brief.photoUrl ?? null })
+    const prefilledFields = buildCandidateFields(brief, {
+      logoUrl: brief.logoUrl ?? logoUrl, photoUrl: brief.photoUrl ?? null,
+      zones: (TEMPLATE_ZONES[template?.id] ?? customTemplates.zonesById[template?.id])?.zones,
+    })
 
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
