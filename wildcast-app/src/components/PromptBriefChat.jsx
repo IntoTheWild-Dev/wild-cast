@@ -152,6 +152,10 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   const [typing, setTyping] = useState(true)
   const [finished, setFinished] = useState(false)
   const [showResult, setShowResult] = useState(false)
+  // The confirm card's thumbnail is only 52x74 - too small to actually judge
+  // the template by (Julia's report, 2026-09-28). Tapping it opens this
+  // full-size lightbox instead of making the card itself huge.
+  const [showTemplatePreview, setShowTemplatePreview] = useState(false)
   const [draft, setDraft] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   // Step id whose "Choose from Assets" popup is open (upload steps only).
@@ -256,7 +260,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     msgsRef.current = []
     blobUrls.current.forEach(u => URL.revokeObjectURL(u)); blobUrls.current = []
     setMessages([]); setAnswers({}); setCurrentId(null); setFinished(false); setShowResult(false); setDraft(''); setAiShown({}); setAiBusy(false)
-    setPausedTurn(null); setPasteMode(false); setCheckingReuse(null)
+    setPausedTurn(null); setPasteMode(false); setCheckingReuse(null); setShowTemplatePreview(false)
     shownConfirmRef.current = null
     pendingFinishRef.current = false
     setTyping(true)
@@ -676,12 +680,23 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
               <>
                 {step?.id === 'templateConfirm' && matched && (
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', border: '1.5px solid var(--primary)', borderRadius: 12, padding: 10, marginBottom: 12, background: 'var(--primary-glow)' }}>
-                    <img src={matched.thumb} alt={matched.label} style={{ width: 52, height: 74, objectFit: 'cover', borderRadius: 6, border: '1.5px solid var(--primary)', background: '#fff', flexShrink: 0 }} />
+                    <button
+                      type="button" onClick={() => setShowTemplatePreview(true)} aria-label="View template full-size"
+                      style={{ padding: 0, border: '1.5px solid var(--primary)', borderRadius: 6, cursor: 'zoom-in', flexShrink: 0, background: 'none' }}
+                    >
+                      <img src={matched.thumb} alt={matched.label} style={{ display: 'block', width: 52, height: 74, objectFit: 'cover', borderRadius: 4, background: '#fff' }} />
+                    </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--dark)' }}>{matched.label}</div>
                       <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 2 }}>
                         {matched.category ? matched.category.charAt(0).toUpperCase() + matched.category.slice(1) + ' · ' : ''}{matched.format}
                       </div>
+                      <button
+                        type="button" onClick={() => setShowTemplatePreview(true)}
+                        style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginTop: 4, textDecoration: 'underline', fontFamily: 'inherit' }}
+                      >
+                        View full size
+                      </button>
                     </div>
                   </div>
                 )}
@@ -765,6 +780,28 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
           onPick={asset => pickAsset(pickerStep, asset)}
           onClose={() => setPickerId(null)}
         />
+      )}
+
+      {showTemplatePreview && matched && (
+        <div
+          onClick={() => setShowTemplatePreview(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 270, background: 'rgba(17,17,17,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, maxHeight: '90vh' }}>
+            <img src={matched.thumb} alt={matched.label} style={{ maxWidth: '100%', maxHeight: '78vh', width: 'auto', borderRadius: 12, boxShadow: '0 24px 80px rgba(0,0,0,0.4)', background: '#fff' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>
+                {matched.label} · {matched.category ? matched.category.charAt(0).toUpperCase() + matched.category.slice(1) + ' · ' : ''}{matched.format}
+              </div>
+              <button
+                type="button" onClick={() => setShowTemplatePreview(false)}
+                style={{ padding: '8px 16px', fontSize: 13, fontWeight: 700, background: '#fff', color: 'var(--dark)', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showResult && (
