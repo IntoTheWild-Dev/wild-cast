@@ -23,7 +23,7 @@ export async function askAssistant({ entry, steps, answers, currentStepId, userM
         template: { label: entry?.label ?? '', category: entry?.category ?? '', format: entry?.format ?? '' },
         steps: steps.map(s => ({
           id: s.id, kind: s.kind, label: s.summaryLabel, ask: s.ask, hint: s.hint, optional: !!s.optional,
-          maxLength: s.maxLength ?? null, whenAnswer: s.whenAnswer ?? null,
+          maxLength: s.maxLength ?? null, whenAnswer: s.whenAnswer ?? null, unlessAnswered: s.unlessAnswered ?? null,
           options: (s.options ?? []).map(o => ({ label: o.label, value: o.value })),
         })),
         answers: Object.fromEntries(Object.entries(answers).map(([id, a]) => [id, { value: a.value ?? '', display: a.display ?? '', skipped: !!a.skipped }])),

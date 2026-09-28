@@ -1,5 +1,6 @@
 import { getLibraryAssets } from './assetLibrary'
 import { resolvePartnerName } from './briefConstants'
+import { isCloseMatch } from './fuzzyMatch'
 
 // The two live templates a brief can generate a candidate from today. Both
 // are Restaurant/Flyer only (src/data/templates.js) - there's no live
@@ -96,7 +97,8 @@ function baseCandidateFields(brief, { logoUrl, photoUrl } = {}) {
 export async function fetchMerchantAssets(merchantName) {
   if (!merchantName) return { logoUrl: null, photoUrl: null }
   const assets = await getLibraryAssets()
-  const belongsToMerchant = a => (a.merchant || 'General') === merchantName
+  // Close match, not exact - same typo tolerance as the chat's asset offer.
+  const belongsToMerchant = a => !!a.merchant && a.merchant !== 'General' && isCloseMatch(a.merchant, merchantName)
   const logo = assets.find(a => a.folder === 'logos' && belongsToMerchant(a))
   const photo = assets.find(a => a.folder === 'product-images' && belongsToMerchant(a))
   return { logoUrl: logo?.src ?? null, photoUrl: photo?.src ?? null }

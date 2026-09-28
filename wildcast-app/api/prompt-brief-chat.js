@@ -40,6 +40,7 @@ function sanitizeSteps(raw) {
       ? s.options.slice(0, MAX_OPTIONS).map(o => ({ label: clean(o?.label, 60), value: clean(o?.value, 60) }))
       : [],
     whenAnswer: s?.whenAnswer?.stepId ? { stepId: clean(s.whenAnswer.stepId, 40), value: clean(s.whenAnswer.value, 60) } : null,
+    unlessAnswered: clean(s?.unlessAnswered, 40) || null,
   })).filter(s => s.id)
 }
 
@@ -57,7 +58,11 @@ function sanitizeHistory(raw) {
   return raw.slice(-MAX_HISTORY).map(m => ({ from: m?.from === 'user' ? 'user' : 'assistant', text: clean(m?.text, 300) })).filter(m => m.text)
 }
 
-const applies = (step, answers) => !step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value
+// Mirrors stepApplies in src/lib/promptBriefFlow.js - keep the two in step.
+const isGiven = a => !!a && !a.skipped && String(a.value ?? '').trim() !== ''
+const applies = (step, answers) =>
+  (!step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value)
+  && (!step.unlessAnswered || !isGiven(answers[step.unlessAnswered]))
 
 const SYSTEM = `You are the Wild Stack design assistant inside WildCast. A restaurant partner is briefing a print flyer through a short chat. Be warm, brief and plain-spoken.
 

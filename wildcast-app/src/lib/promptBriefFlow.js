@@ -14,7 +14,8 @@ import { ADD_NEW, OBJECTIVES, PLACEHOLDER_PARTNERS, FORMAT_TEMPLATE_GROUP, DEFAU
 //      gets sensible questions automatically.
 // Each step: { id, kind: 'chips' | 'text' | 'upload', ask, hint?, options?,
 //   optional?, placeholder?, aiField? (gets Suggest/Improve with AI),
-//   whenAnswer? ({ stepId, value } - only asked once that answer is given) }.
+//   whenAnswer? ({ stepId, value } - only asked once that answer is given),
+//   unlessAnswered? (stepId - not asked once that step has a real answer) }.
 // whenAnswer is plain data (not a function) so api/prompt-brief-chat.js can
 // apply the same rule server-side.
 
@@ -81,7 +82,7 @@ export const CONFIRM_DIFFERENT = '__choose_different__'
 // Flow-control steps: never shown in the finished-design summary and never
 // mapped into the brief (see summarizeAnswers / assembleBrief) - they steer
 // the conversation, they are not design content.
-const FLOW_STEP_IDS = new Set(['format', 'needsSticker', 'needsQr', 'templateConfirm'])
+const FLOW_STEP_IDS = new Set(['format', 'needsSticker', 'needsQr', 'needsSubline', 'templateConfirm'])
 
 export function buildPreSteps(matched, formats = []) {
   const confirmAsk = matched
@@ -101,6 +102,14 @@ export function buildPreSteps(matched, formats = []) {
       id: 'needsQr', kind: 'chips', ask: 'Does it need a QR code?', summaryLabel: 'QR code',
       options: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
     },
+    // Asked before the template is picked so the pick isn't a guess (Julia's
+    // test, 2026-09-28: step by step it proposed Option B without asking) -
+    // skipped when a sub-line was already given, e.g. in a pasted brief.
+    {
+      id: 'needsSubline', kind: 'chips', ask: 'Do you want a sub-line above the headline, or just a headline?', summaryLabel: 'Sub-line',
+      options: [{ label: 'Headline + sub-line', value: 'yes' }, { label: 'Just a headline', value: 'no' }],
+      unlessAnswered: 'sub_headline',
+    },
     {
       id: 'templateConfirm', kind: 'chips', ask: confirmAsk, summaryLabel: 'Template',
       options: [
@@ -113,7 +122,7 @@ export function buildPreSteps(matched, formats = []) {
 
 // Deterministic template pick - no AI involved, so the offer is reproducible
 // and the model never chooses the product. Score each candidate:
-//   +2 when a sticker/QR answer matches what the template offers,
+//   +2 when a sticker/QR/sub-line answer matches what the template offers,
 //   -4 when the template LACKS a feature the partner asked for (a missing
 //      must-have is far worse than an unused extra zone),
 //   -1 for carrying a sticker/QR zone the partner said they don't need,
@@ -137,6 +146,9 @@ export function matchTemplate(choices, answers = {}) {
   const wantQr = answers.needsQr?.value === 'yes'
   const askedSticker = answers.needsSticker?.value === 'yes' || answers.needsSticker?.value === 'no'
   const askedQr = answers.needsQr?.value === 'yes' || answers.needsQr?.value === 'no'
+  const hasSub = c => c.zones.some(z => z.id === 'sub_headline')
+  const wantSub = answers.needsSubline?.value === 'yes'
+  const askedSub = answers.needsSubline?.value === 'yes' || answers.needsSubline?.value === 'no'
   // Copy already given for a zone at least one candidate has (flow/form
   // answers like partner or objective never match a zone id).
   const givenCopy = Object.entries(answers)
@@ -156,6 +168,11 @@ export function matchTemplate(choices, answers = {}) {
     if (askedQr) {
       if (hasQr(c) === wantQr) score += 2
       else if (wantQr) score -= 4
+      else score -= 1
+    }
+    if (askedSub) {
+      if (hasSub(c) === wantSub) score += 2
+      else if (wantSub) score -= 4
       else score -= 1
     }
     if (score > bestScore) { bestScore = score; best = c }
@@ -207,7 +224,12 @@ function zoneStep(zone, partnerLabel, aiSettings) {
   }
 }
 
-export const stepApplies = (step, answers) => !step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value
+const isGiven = a => !!a && !a.skipped && String(a.value ?? '').trim() !== ''
+
+// Mirrored in api/prompt-brief-chat.js's applies() - keep the two in step.
+export const stepApplies = (step, answers) =>
+  (!step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value)
+  && (!step.unlessAnswered || !isGiven(answers[step.unlessAnswered]))
 
 // The brief-form questions, exported separately so the chat can also ask
 // them before a template is confirmed (see module comment at the top).
@@ -298,7 +320,7 @@ const KNOWN_ANSWER_IDS = new Set([
   'headline', 'sub_headline', 'cta', 'tc', 'offer', 'logo', 'photo',
   // Flow-control steps (template choice) - answers exist but are not design
   // content, so they must never land in zoneTexts/zoneImageUrls below.
-  'format', 'needsSticker', 'needsQr', 'templateConfirm',
+  'format', 'needsSticker', 'needsQr', 'needsSubline', 'templateConfirm',
 ])
 
 export function assembleBrief(answers, entry) {

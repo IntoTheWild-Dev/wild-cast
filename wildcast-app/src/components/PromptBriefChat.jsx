@@ -10,6 +10,7 @@ import {
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { hasTransparency, cropToContent } from '../lib/image'
+import { isCloseMatch } from '../lib/fuzzyMatch'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { aiFieldSettingsFor } from '../data/templateZones'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
@@ -241,14 +242,18 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   // reuse offer. Zero or several -> no offer (the normal picker handles both;
   // never guess between multiple logos). "General" (shared, non-partner)
   // assets never count as a partner's own.
+  // Close match on the merchant tag, not exact: library tags drift from the
+  // partner name ("McDonalds", "McDonald’s" with a curly apostrophe) - the
+  // app's own typo tolerance (fuzzyMatch.js). "General" never counts.
   function partnerAssets(step, partner, list = libraryAssets) {
     if (!step || !partner) return []
     const folder = assetFolderForZone(step.id)
-    const p = partner.trim().toLowerCase()
-    if (!p || p === GENERAL_MERCHANT.toLowerCase()) return []
+    const p = partner.trim()
+    if (!p || p.toLowerCase() === GENERAL_MERCHANT.toLowerCase()) return []
     return list.filter(a =>
-      a.folder === folder &&
-      (a.merchant || '').trim().toLowerCase() === p
+      a.folder === folder && a.merchant &&
+      a.merchant.trim().toLowerCase() !== GENERAL_MERCHANT.toLowerCase() &&
+      isCloseMatch(a.merchant, p)
     )
   }
 
@@ -504,7 +509,15 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
       pendingFinishRef.current = true
       return
     }
-    if (nextId === 'templateConfirm') shownConfirmRef.current = matched?.id ?? null
+    // `matched` (and the confirm question the server phrased) predate THIS
+    // turn's answer, which can change the pick (e.g. "Headline + sub-line"
+    // moves B -> A) - that showed the stale name, then a second bubble with
+    // the right one. Name the pick from the fresh answers instead.
+    if (nextId === 'templateConfirm') {
+      const fresh = matchTemplate(templateChoices, nextAnswers)
+      text = buildPreSteps(fresh, formats).find(s => s.id === 'templateConfirm').ask
+      shownConfirmRef.current = fresh?.id ?? null
+    }
     push({ from: 'ai', text, hint: showHint ? nextStep?.hint : undefined })
     setCurrentId(nextId)
   }
@@ -904,7 +917,9 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                         </button>
                       </div>
                     )}
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                    {/* Buttons stay compact (not stretched to the upload box's
+                        height) - Julia: "right corner buttons a bit big". */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
                       <div style={{ flex: '1 1 260px', display: 'flex' }}>
                         <UploadDrop
                           label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`}
@@ -915,17 +930,17 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                       </div>
                       <button
                         type="button" onClick={() => setPickerId(step.id)}
-                        style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px 20px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 12, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', transition: 'all 0.15s' }}
+                        style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', borderRadius: 999, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', transition: 'all 0.15s' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = '#fff' }}
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         Choose from Assets
                       </button>
                       {step.optional && (
                         <button
                           type="button" onClick={() => submit(step, { skipped: true, display: 'Skipped' })}
-                          style={{ flex: '0 0 auto', padding: '16px 18px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 12, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--mid)', transition: 'all 0.15s' }}
+                          style={{ flex: '0 0 auto', padding: '8px 12px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', borderRadius: 999, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--mid)', transition: 'all 0.15s' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--dark)' }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
                         >

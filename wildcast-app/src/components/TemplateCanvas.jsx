@@ -113,13 +113,14 @@ async function loadFonts() {
 const FIT_WIDTH_RATIO = 0.92
 
 // A CTA line finishes a sentence printed in the background art ("Jetzt Wolt
-// App downloaden und" -> "bei uns bestellen!"), so it must stay at that
-// printed line's size; T&Cs are fine print. Both shrink to fit but never
-// grow to fill the box the way headlines do (Julia's reports, 2026-09-28:
-// "cta is too big", then T&Cs "too big" on Option C - imported templates mark
-// every text zone autoShrink, fine print included). A zone config can
+// App downloaden und" -> "bei uns bestellen!") and the name on the design
+// sits beside printed "♥ WOLT", so both must stay at the printed text's size;
+// T&Cs are fine print. All three shrink to fit but never grow to fill the
+// box the way headlines do (Julia's reports, 2026-09-28: "cta is too big",
+// T&Cs "too big" on Option C - imported templates mark every text zone
+// autoShrink - and "restaurant name far too big"). A zone config can
 // override either way with an explicit `autoGrow`.
-const NEVER_GROW_ZONE_IDS = new Set(['cta', 'tc'])
+const NEVER_GROW_ZONE_IDS = new Set(['cta', 'tc', 'restaurant_name'])
 function zoneCanGrow(zone) {
   return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
 }
