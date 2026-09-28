@@ -114,11 +114,14 @@ const FIT_WIDTH_RATIO = 0.92
 
 // A CTA line finishes a sentence printed in the background art ("Jetzt Wolt
 // App downloaden und" -> "bei uns bestellen!"), so it must stay at that
-// printed line's size: shrink to fit, never grow to fill the box the way
-// headlines do (Julia's report, 2026-09-28: "cta is too big"). A zone config
-// can override either way with an explicit `autoGrow`.
+// printed line's size; T&Cs are fine print. Both shrink to fit but never
+// grow to fill the box the way headlines do (Julia's reports, 2026-09-28:
+// "cta is too big", then T&Cs "too big" on Option C - imported templates mark
+// every text zone autoShrink, fine print included). A zone config can
+// override either way with an explicit `autoGrow`.
+const NEVER_GROW_ZONE_IDS = new Set(['cta', 'tc'])
 function zoneCanGrow(zone) {
-  return zone.autoGrow ?? zone.id !== 'cta'
+  return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
 }
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false

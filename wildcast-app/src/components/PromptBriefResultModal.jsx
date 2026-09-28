@@ -63,7 +63,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
     }
     resolveFields()
     return () => { cancelled = true; clearTimeout(captureTimer.current) }
-  }, [answers, entry])
+  }, [answers, entry, config])
 
   const canSend = !!png && !!fields && !!brief && !!onSendForReview && !sending
 

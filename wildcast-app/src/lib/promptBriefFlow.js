@@ -170,6 +170,13 @@ export function reuseAskText(step, partnerName) {
   return `This is ${partnerName}. We have the ${(step.summaryLabel || step.id).toLowerCase()}. Use it?`
 }
 
+// Same, when the partner has several matching assets (e.g. a few dishes) -
+// they're shown as thumbnails to tap instead of guessing one (Julia's ask,
+// 2026-09-28: "we want it to bring up the images" too, not only one logo).
+export function reuseManyAskText(step, partnerName, count) {
+  return `This is ${partnerName}. We have ${count} on file for the ${(step.summaryLabel || step.id).toLowerCase()} - tap one below, or upload a new one.`
+}
+
 function humanize(id) {
   const s = id.replace(/[_-]+/g, ' ').trim()
   return s.charAt(0).toUpperCase() + s.slice(1)

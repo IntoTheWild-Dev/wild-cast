@@ -5,11 +5,11 @@ import PromptBriefAssetPicker from './PromptBriefAssetPicker'
 import {
   buildSteps, buildPreSteps, buildGenericTextSteps, FORM_STEPS, matchTemplate,
   stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom,
-  reuseAskText, CONFIRM_USE, CONFIRM_DIFFERENT, answersOverTemplateLimit,
+  reuseAskText, reuseManyAskText, CONFIRM_USE, CONFIRM_DIFFERENT, answersOverTemplateLimit,
 } from '../lib/promptBriefFlow'
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
-import { hasTransparency } from '../lib/image'
+import { hasTransparency, cropToContent } from '../lib/image'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { aiFieldSettingsFor } from '../data/templateZones'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
@@ -27,6 +27,9 @@ import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 // since 2026-09-28 there is deliberately NO scripted fallback (Julia's call:
 // a half-scripted chat reads as broken, not graceful).
 const PAUSED_TEXT = 'The design assistant is offline right now — please try again in a moment.'
+// Partner's own assets shown inline on an upload step; the rest are one tap
+// away in Choose from Assets.
+const MAX_OWN_THUMBS = 6
 // Fits inside the viewport under the 58px sticky header, so the answer chips
 // are never pushed below the fold on a laptop-height window.
 const CHAT_HEIGHT = 'clamp(440px, calc(100vh - 150px), 640px)'
@@ -114,7 +117,7 @@ function Chip({ children, onClick, primary }) {
   )
 }
 
-function UploadDrop({ label, onFile, busyLabel }) {
+function UploadDrop({ label, onFile, busyLabel, note }) {
   const [over, setOver] = useState(false)
   if (busyLabel) {
     return (
@@ -135,7 +138,10 @@ function UploadDrop({ label, onFile, busyLabel }) {
       }}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <span>{label} <span style={{ color: 'var(--primary)' }}>Drop a file or browse</span></span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span>{label} <span style={{ color: 'var(--primary)' }}>Drop a file or browse</span></span>
+        {note && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--light)' }}>{note}</span>}
+      </span>
       <input
         type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }}
@@ -235,16 +241,27 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   // reuse offer. Zero or several -> no offer (the normal picker handles both;
   // never guess between multiple logos). "General" (shared, non-partner)
   // assets never count as a partner's own.
-  function findReuseAsset(step, partner) {
-    if (!step || !partner) return null
+  function partnerAssets(step, partner, list = libraryAssets) {
+    if (!step || !partner) return []
     const folder = assetFolderForZone(step.id)
     const p = partner.trim().toLowerCase()
-    if (!p || p === GENERAL_MERCHANT.toLowerCase()) return null
-    const matches = libraryAssets.filter(a =>
+    if (!p || p === GENERAL_MERCHANT.toLowerCase()) return []
+    return list.filter(a =>
       a.folder === folder &&
       (a.merchant || '').trim().toLowerCase() === p
     )
-    return matches.length === 1 ? matches[0] : null
+  }
+
+  // One shared-library fetch per chat. respond() awaits it before phrasing an
+  // upload question - otherwise the question could be written before the
+  // library arrived, so the "Use it" card appeared but the chat still asked
+  // generically (Julia's report, 2026-09-28).
+  const libraryPromiseRef = useRef(null)
+  function loadLibrary() {
+    if (!libraryPromiseRef.current) {
+      libraryPromiseRef.current = getLibraryAssets().then(all => { setLibraryAssets(all); return all })
+    }
+    return libraryPromiseRef.current
   }
 
   function ask(step, ack) {
@@ -302,13 +319,10 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   }, [currentId])
 
   // The partner is known -> pull the shared library once, for the reuse offer.
-  // (Cleared on reset only implicitly: findReuseAsset gates on the partner
+  // (Cleared on reset only implicitly: partnerAssets gates on the partner
   // name, so a stale list is unreachable while no partner is set.)
   useEffect(() => {
-    if (!partnerName) return
-    let cancelled = false
-    getLibraryAssets().then(all => { if (!cancelled) setLibraryAssets(all) })
-    return () => { cancelled = true }
+    if (partnerName) loadLibrary()
   }, [partnerName])
 
   // A template swap mid-chat (confirm card's "Choose a different one", or the
@@ -474,9 +488,14 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     // Upload step and this partner has exactly one asset on file for it: lead
     // with the plain-words reuse offer. The model never sees library data, so
     // this line is always scripted (Julia's wording, 2026-09-28).
+    // Several on file (e.g. a few dishes) -> offer them all as thumbnails.
     const nextPartner = partnerNameFrom(nextAnswers)
-    const reuse = nextStep?.kind === 'upload' ? findReuseAsset(nextStep, nextPartner) : null
-    if (reuse) text = reuseAskText(nextStep, nextPartner)
+    if (nextStep?.kind === 'upload' && nextPartner) {
+      const own = partnerAssets(nextStep, nextPartner, await loadLibrary())
+      if (runRef.current !== run) return
+      if (own.length === 1) text = reuseAskText(nextStep, nextPartner)
+      else if (own.length > 1) text = reuseManyAskText(nextStep, nextPartner, own.length)
+    }
 
     setAnswers(nextAnswers)
     setTyping(false)
@@ -627,6 +646,9 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     try {
       const { url, name } = await uploadImageForZone(file, {
         requireTransparent: zone?.hint?.toLowerCase().includes('transparent'),
+        // Same as the editor (App.jsx / FieldEditor): trim a QR code's quiet
+        // zone so it fills its box instead of rendering small.
+        autoCropContent: step.id === 'qr',
         folder: assetFolderForZone(step.id),
         merchant: partnerNameFrom(answers) || GENERAL_MERCHANT,
       })
@@ -641,9 +663,10 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
 
   // A pick from the Assets library is an image answer like an upload, minus the
   // validation upload needs - the picker already applied the transparent-PNG check.
-  function pickAsset(step, asset) {
+  async function pickAsset(step, asset) {
     setPickerId(null)
-    submit(step, { value: asset.name, display: asset.name, imageUrl: asset.src })
+    const src = step.id === 'qr' ? await cropToContent(asset.src) : asset.src
+    submit(step, { value: asset.name, display: asset.name, imageUrl: src })
   }
 
   // Reusing the partner's own asset behaves exactly like a pick from the
@@ -661,7 +684,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
         return
       }
     }
-    submit(step, { value: asset.name, display: asset.name, imageUrl: asset.src })
+    const src = step.id === 'qr' ? await cropToContent(asset.src) : asset.src
+    submit(step, { value: asset.name, display: asset.name, imageUrl: src })
   }
 
   const step = steps.find(s => s.id === currentId) ?? null
@@ -669,7 +693,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   const activeSteps = steps.filter(s => stepApplies(s, answers))
   const answered = activeSteps.filter(s => answers[s.id]).length
   const rows = summarizeAnswers(steps, answers)
-  const confirmReuse = step?.kind === 'upload' ? findReuseAsset(step, partnerName) : null
+  const ownAssets = step?.kind === 'upload' ? partnerAssets(step, partnerName) : []
+  const confirmReuse = ownAssets.length === 1 ? ownAssets[0] : null
   // The paste-a-brief button is an opening choice only: gone once the
   // partner has pasted a brief OR answered step by step (Julia's ask,
   // 2026-09-28). The composer still takes a pasted brief at any step.
@@ -687,11 +712,14 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
             ? "Paste your whole brief here - I'll pull out what I need…"
             : (step?.kind === 'chips'
               ? 'Or type your own answer…'
-              : (step?.placeholder ?? (step?.kind === 'upload' ? 'Or paste your full brief here…' : 'Type your answer…')))}
+              : (step?.placeholder ?? (step?.kind === 'upload' ? 'Or type a reply…' : 'Type your answer…')))}
           disabled={!step} rows={1}
-          style={{ flex: 1, resize: 'none', padding: '12px 14px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 10, outline: 'none', background: step ? '#fff' : '#F9FAFB', lineHeight: 1.45, overflowY: 'auto' }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
-          onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+          // Brand-coloured stroke whenever it can take input, so the chat box
+          // stands out from the controls above it (Julia, 2026-09-28); focus
+          // adds a soft ring on top.
+          style={{ flex: 1, resize: 'none', padding: '12px 14px', fontSize: 14, fontFamily: 'inherit', border: `1.5px solid ${step ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, outline: 'none', background: step ? '#fff' : '#F9FAFB', lineHeight: 1.45, overflowY: 'auto', transition: 'box-shadow 0.15s' }}
+          onFocus={e => { e.currentTarget.style.boxShadow = '0 0 0 3px var(--primary-glow)' }}
+          onBlur={e => { e.currentTarget.style.boxShadow = 'none' }}
         />
         <button
           type="button" onClick={() => step && sendText(step)} disabled={!step || !draft.trim()} aria-label="Send"
@@ -806,7 +834,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                     </div>
                   </div>
                 )}
-                {step && !pasteMode && (offerPaste || step.options?.length > 0 || step.optional || step.aiField) && (
+                {/* Upload steps carry their own Skip inside the upload row. */}
+                {step && !pasteMode && step.kind !== 'upload' && (offerPaste || step.options?.length > 0 || step.optional || step.aiField) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                     {/* Left-most and its own visual weight, not a small corner
                         link (Julia's report, 2026-09-28: "shouldn't be in the
@@ -830,10 +859,35 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                     {step.optional && <Chip onClick={() => submit(step, { skipped: true, display: 'Skipped' })}>Skip for now</Chip>}
                   </div>
                 )}
+                {/* Upload step, decluttered (Julia, 2026-09-28: "too much info
+                    ... too condensed"): the partner's own assets first, then
+                    ONE row of Upload / Choose from Assets / Skip - the
+                    background-removal note lives inside the upload box. */}
                 {step?.kind === 'upload' && (
                   <>
-                    {shouldRemoveBackground(assetFolderForZone(step.id)) && (
-                      <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE}</div>
+                    {ownAssets.length > 1 && (
+                      <div style={{ border: '1.5px solid var(--primary)', borderRadius: 12, padding: 10, marginBottom: 12, background: 'var(--primary-glow)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 8 }}>
+                          On file for {partnerName} - tap one to use it
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {ownAssets.slice(0, MAX_OWN_THUMBS).map(a => (
+                            <button
+                              key={a.url} type="button" title={a.name} onClick={() => pickReuse(step, a)} disabled={!!checkingReuse}
+                              style={{ width: 64, height: 64, padding: 4, borderRadius: 8, border: '1.5px solid var(--border)', background: '#fff', cursor: checkingReuse ? 'wait' : 'pointer', transition: 'border-color 0.15s' }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+                            >
+                              <img src={a.src} alt={a.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            </button>
+                          ))}
+                        </div>
+                        {ownAssets.length > MAX_OWN_THUMBS && (
+                          <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 6 }}>
+                            +{ownAssets.length - MAX_OWN_THUMBS} more in Choose from Assets
+                          </div>
+                        )}
+                      </div>
                     )}
                     {confirmReuse && (
                       <div style={{ display: 'flex', gap: 12, alignItems: 'center', border: '1.5px solid var(--primary)', borderRadius: 12, padding: 10, marginBottom: 12, background: 'var(--primary-glow)' }}>
@@ -856,6 +910,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                           label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`}
                           onFile={f => pickFile(step, f)}
                           busyLabel={uploadingId === step.id ? (shouldRemoveBackground(assetFolderForZone(step.id)) ? 'Removing background…' : 'Uploading…') : null}
+                          note={shouldRemoveBackground(assetFolderForZone(step.id)) ? AUTO_REMOVE_BG_NOTE : null}
                         />
                       </div>
                       <button
@@ -867,6 +922,16 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         Choose from Assets
                       </button>
+                      {step.optional && (
+                        <button
+                          type="button" onClick={() => submit(step, { skipped: true, display: 'Skipped' })}
+                          style={{ flex: '0 0 auto', padding: '16px 18px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 12, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--mid)', transition: 'all 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--dark)' }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
+                        >
+                          Skip for now
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
