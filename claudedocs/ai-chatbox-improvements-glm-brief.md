@@ -1,7 +1,7 @@
 # Prompt Brief Chat — "AI Chatbox Improvements" Developer Brief
 
 **Date:** 2026-09-28
-**Status:** Scope confirmed by Julia — ready to start.
+**Status:** ✅ Built (GLM `7f770c0`) and extended through Julia's live testing on 2026-09-28 — this brief is now historical. Current state, what changed beyond it (chat-first template choice, no scripted fallback — both Julia's calls), and what's still open live in `wildcast-app/STATUS.md` → "Prompt Brief chat rework + AI Suggest v1.2 combined".
 **Repository:** https://github.com/IntoTheWild-Dev/wild-cast
 **Branch:** `AI-Chatbox-Improvements` (already cut from latest `main` — work on this branch, do not create a new one, do not touch `main` directly)
 
