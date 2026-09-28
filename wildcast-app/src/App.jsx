@@ -2515,7 +2515,12 @@ const SHOW_MODE_CHOOSER = false
             currentProjectId={currentProjectId}
             projectName={projectName}
             vertical={designVertical}
-            reviewSent={reviewSent}
+            // An approved design also unlocks Export PDF, not just a send
+            // in this session - reviewSent resets on every reopen, so
+            // reopening an approved flyer used to lock Export again as if it
+            // had never been sent (Julia's report, 2026-09-28). Still
+            // Manager-only, via FieldEditor's own canExport.
+            reviewSent={reviewSent || reviewStatus === 'approved'}
           />
         </div>
       )}
