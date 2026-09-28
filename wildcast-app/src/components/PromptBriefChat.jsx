@@ -25,7 +25,7 @@ import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 // chat pauses with "Chat box not available right now." and a Try again chip -
 // since 2026-09-28 there is deliberately NO scripted fallback (Julia's call:
 // a half-scripted chat reads as broken, not graceful).
-const PAUSED_TEXT = 'Chat box not available right now. Please try again in a moment.'
+const PAUSED_TEXT = 'The design assistant is offline right now — please try again in a moment.'
 // Fits inside the viewport under the 58px sticky header, so the answer chips
 // are never pushed below the fold on a laptop-height window.
 const CHAT_HEIGHT = 'clamp(440px, calc(100vh - 150px), 640px)'
