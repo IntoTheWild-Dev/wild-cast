@@ -88,6 +88,82 @@ function baseCandidateFields(brief, { logoUrl, photoUrl } = {}) {
   }
 }
 
+// Starting Scale for the food photo / sticker of a design made in the Prompt
+// Brief chat (Julia, 2026-09-28: "product image is huge"). The editor fits a
+// photo zone by "cover", so a square cut-out dish is scaled to the box WIDTH
+// and spills over the lines above it. This returns an imageScales entry per
+// zone that fits the image's visible (non-transparent) content inside the
+// zone box instead. Chat-only by design: it's stored on the design exactly
+// like a hand-set Scale, so the editor's own rules are untouched and the
+// partner can still change it there. Photos WITH a background (no
+// transparent margin) are skipped - those are meant to fill the box.
+export async function fitContentScales(zones, fields) {
+  const out = {}
+  for (const zone of zones ?? []) {
+    if (zone.type !== 'image' || !(zone.id === 'photo' || zone.id.includes('sticker'))) continue
+    const url = fields?.[`${zone.id}Url`]
+    if (!url) continue
+    try {
+      const pct = await contentFitPct(zone, url)
+      if (pct) out[zone.id] = pct
+    } catch {
+      // Unreadable image - keep the editor's default fit.
+    }
+  }
+  return out
+}
+
+// Mirrors TemplateCanvas.jsx's image load: its base scale ("cover" = fill,
+// with a MIN_NUDGE_SLACK overscan margin; "contain" = fit) that the Scale
+// percentage multiplies. Keep in step if that formula changes.
+const CANVAS_MIN_NUDGE_SLACK = 24
+const CONTENT_FILL = 0.95 // leave a hair of air so the dish doesn't touch the box edge
+
+function canvasBaseScale(zone, w, h) {
+  if (zone.fit !== 'cover') return Math.min(zone.width / w, zone.height / h)
+  const base = Math.max(zone.width / w, zone.height / h)
+  const tightDim = (zone.width / w) >= (zone.height / h) ? zone.width : zone.height
+  return base * Math.max(1.15, 1 + (2 * CANVAS_MIN_NUDGE_SLACK) / tightDim)
+}
+
+async function contentFitPct(zone, url) {
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image()
+    i.crossOrigin = 'anonymous'
+    i.onload = () => resolve(i)
+    i.onerror = reject
+    i.src = url
+  })
+  const w = img.naturalWidth, h = img.naturalHeight
+  if (!w || !h) return null
+  // Alpha bounding box on a downscaled copy (fast; ~1% precision is plenty).
+  const k = Math.min(1, 400 / Math.max(w, h))
+  const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k))
+  const cv = document.createElement('canvas')
+  cv.width = cw; cv.height = ch
+  const ctx = cv.getContext('2d')
+  ctx.drawImage(img, 0, 0, cw, ch)
+  const data = ctx.getImageData(0, 0, cw, ch).data
+  let minX = cw, minY = ch, maxX = -1, maxY = -1
+  for (let y = 0; y < ch; y++) {
+    for (let x = 0; x < cw; x++) {
+      if (data[(y * cw + x) * 4 + 3] > 16) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+    }
+  }
+  if (maxX < 0) return null
+  const contentW = (maxX - minX + 1) / k
+  const contentH = (maxY - minY + 1) / k
+  if ((contentW * contentH) / (w * h) > 0.97) return null // no real transparent margin - not a cut-out
+  const target = Math.min(zone.width / contentW, zone.height / contentH) * CONTENT_FILL
+  const pct = Math.round((100 * target) / canvasBaseScale(zone, w, h))
+  return Math.max(20, Math.min(300, pct))
+}
+
 // Best-effort pull of this merchant's existing logo/product-image from the
 // shared Library, so picking an existing partner doesn't require a fresh
 // upload every time. Silent blank fallback on any failure or no match -

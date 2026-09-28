@@ -1008,7 +1008,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
           config={config}
           answers={answers}
           rows={rows}
-          onEdit={() => onEdit(assembleBrief(answers, entry))}
+          onEdit={b => onEdit(b ?? assembleBrief(answers, entry))}
           onSendForReview={onSendForReview}
           onOpenLibrary={onOpenLibrary}
           onNewBrief={onNewBrief}

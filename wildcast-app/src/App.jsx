@@ -1067,7 +1067,9 @@ const SHOW_MODE_CHOOSER = false
     setFontSizes({})
     setGeneratedFontSizes({})
     setAlignments({})
-    setImageScales({})
+    // Prompt Brief designs carry a starting Scale for a cut-out photo/sticker
+    // (fitContentScales) - same as its preview. Every other path starts at 100%.
+    setImageScales(brief.imageScales ?? {})
     setTextPositions({})
     setZonePositions({})
     // A name typed into the brief's own "Project name" field (Julia's ask,
@@ -1730,7 +1732,7 @@ const SHOW_MODE_CHOOSER = false
     const project = {
       id, templateId: template.id, templateName: template.name,
       projectName: opts.name ?? template.name,
-      fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: {}, imagePositions: {}, zonePositions: {},
+      fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: opts.imageScales ?? {}, imagePositions: {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview,
       ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
       // Candidate saves only happen via the brief flow, so the brief's
@@ -1764,7 +1766,7 @@ const SHOW_MODE_CHOOSER = false
     // Same naming rule as the Edit design hand-off (handleSelectTemplateFromBrief).
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
-    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null })
+    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales })
     return { url: `${window.location.origin}/?review=${id}` }
   }
 

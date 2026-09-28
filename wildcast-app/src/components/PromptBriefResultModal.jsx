@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import TemplateCanvas from './TemplateCanvas'
 import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
-import { buildCandidateFields, fetchMerchantAssets } from '../lib/briefToCandidates'
+import { buildCandidateFields, fetchMerchantAssets, fitContentScales } from '../lib/briefToCandidates'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
@@ -58,8 +58,14 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
         if (logoUrl && !cancelled) setAutoLogo(true)
       }
       if (cancelled) return
+      const nextFields = buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl, zones: config?.zones })
+      // Starting Scale so a cut-out dish / sticker fits its box (chat-made
+      // designs only - see fitContentScales). Rides on the brief so Edit
+      // design and Send for review open with the same scale as this preview.
+      built.imageScales = await fitContentScales(config?.zones, nextFields)
+      if (cancelled) return
       setBrief(built)
-      setFields(buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl, zones: config?.zones }))
+      setFields(nextFields)
     }
     resolveFields()
     return () => { cancelled = true; clearTimeout(captureTimer.current) }
@@ -203,7 +209,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 {!sent && !confirming && (
                   <>
                     <button
-                      type="button" onClick={onEdit}
+                      type="button" onClick={() => onEdit(brief)}
                       style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
                       Edit design
@@ -255,7 +261,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
               (Option C's zones carry no ai blocks of their own) - without it
               this preview - and the PNG saved via Send for review - would
               print Option C in normal case while the editor prints caps. */}
-          <TemplateCanvas config={config} fields={fields} templateId={entry.templateIdGuided} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
+          <TemplateCanvas config={config} fields={fields} imageScales={brief?.imageScales} templateId={entry.templateIdGuided} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
         </div>
       )}
     </div>
