@@ -670,6 +670,10 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   const answered = activeSteps.filter(s => answers[s.id]).length
   const rows = summarizeAnswers(steps, answers)
   const confirmReuse = step?.kind === 'upload' ? findReuseAsset(step, partnerName) : null
+  // The paste-a-brief button is an opening choice only: gone once the
+  // partner has pasted a brief OR answered step by step (Julia's ask,
+  // 2026-09-28). The composer still takes a pasted brief at any step.
+  const offerPaste = !messages.some(m => m.from === 'user')
 
   const composerShell = { borderTop: '1px solid var(--border)', padding: '14px 18px 16px', background: '#fff' }
   const inputBlock = (
@@ -802,19 +806,20 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                     </div>
                   </div>
                 )}
-                {step && !pasteMode && (
+                {step && !pasteMode && (offerPaste || step.options?.length > 0 || step.optional || step.aiField) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                     {/* Left-most and its own visual weight, not a small corner
                         link (Julia's report, 2026-09-28: "shouldn't be in the
                         right corner, it's too small... before you ask about
-                        everything else") - available on every step, same as
-                        before, just given the prominence the brief asked for. */}
-                    <button
-                      type="button" onClick={() => setPasteMode(true)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 700, borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)' }}
-                    >
-                      📋 Paste your whole brief instead
-                    </button>
+                        everything else"). */}
+                    {offerPaste && (
+                      <button
+                        type="button" onClick={() => setPasteMode(true)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13, fontWeight: 700, borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: '1.5px solid var(--primary)', background: '#fff', color: 'var(--primary)' }}
+                      >
+                        📋 Paste your whole brief instead
+                      </button>
+                    )}
                     {step.aiField && !aiBusy && (
                       <Chip primary onClick={() => suggest(step)}>{draft.trim() ? '✨ Improve with AI' : '✦ Suggest with AI'}</Chip>
                     )}
