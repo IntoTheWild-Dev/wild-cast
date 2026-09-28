@@ -12,7 +12,14 @@
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_STEPS = 30
 const MAX_OPTIONS = 12
-const MAX_MESSAGE = 600
+// 2000 (was 600, Julia's paste-and-extract ask 2026-09-28): a real pasted
+// brief is a few paragraphs. ~2000 chars is roughly 500-600 input tokens on
+// top of the step list - well within Haiku's context, and the OUTPUT stays
+// small (one ack + one question), so max_tokens: 500 is unchanged. A much
+// larger cap would start squeezing the 8s timeout; raise both together if
+// this ever needs to grow (verified live on the preview with a ~3 paragraph
+// paste - the request round-trips well inside the budget).
+const MAX_MESSAGE = 2000
 const MAX_HISTORY = 8
 const TIMEOUT_MS = 8000
 

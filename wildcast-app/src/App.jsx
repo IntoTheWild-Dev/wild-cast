@@ -3,7 +3,7 @@ import Header, { WORKFLOW_ROLES } from './components/Header'
 import { patchCachedProject } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
-import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
+import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId, BASE_TEMPLATES, overlayCustomCards } from './components/TemplatePicker'
 import BriefingForm from './components/BriefingForm'
 import PromptBriefChat from './components/PromptBriefChat'
 import TemplatePreviewModal from './components/TemplatePreviewModal'
@@ -1104,7 +1104,17 @@ const SHOW_MODE_CHOOSER = false
     // away so it can't end up floating over whatever screen comes next.
     setBriefModeEntry(null)
     setPromptPickerOpen(false)
-    if (target === 'prompt-brief') setPromptPickerOpen(true)
+    if (target === 'prompt-brief') {
+      // The chat now opens straight away and picks the template itself
+      // (Julia's ask, 2026-09-28 - the picker popup only appears later, from
+      // the chat's "Choose a different one" / "Change template"). Entering
+      // from the landing page always starts a fresh chat: a stale
+      // promptTemplateId would otherwise drop the partner into the middle of
+      // a template's questions with no conversation behind it.
+      setPromptTemplateId(null)
+      setPromptChatKey(k => k + 1)
+      setScreen('prompt-brief')
+    }
     else if (target === 'brief') setScreen('brief')
     else if (target === 'landing') setScreen('landing')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
@@ -1911,6 +1921,22 @@ const SHOW_MODE_CHOOSER = false
   }
 
   const promptEntry = entryForGuidedId(promptTemplateId, customTemplates.cards, customTemplates.records)
+  // Live templates offered inside the Prompt Brief chat (Julia's ask,
+  // 2026-09-28): the chat matches the partner's format/sticker/QR answers
+  // against these and asks for a one-tap confirm. Same overlay the pickers
+  // use, so a fresh Figma import joins the chat's choices automatically.
+  const templateChoices = overlayCustomCards(BASE_TEMPLATES, customTemplates.cards, customTemplates.records)
+    .filter(e => e.live && e.templateIdGuided)
+    .map(e => ({
+      id: e.templateIdGuided,
+      label: e.label,
+      thumb: e.thumb,
+      category: e.category,
+      format: e.format,
+      // The step builders want the zone ARRAY, not the whole canvas config.
+      zones: (TEMPLATE_ZONES[e.templateIdGuided] ?? customTemplates.zonesById[e.templateIdGuided] ?? null)?.zones ?? null,
+    }))
+    .filter(c => c.zones?.length)
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
   // Restricted review keeps its own fixed lock behavior regardless of the
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
@@ -1983,14 +2009,16 @@ const SHOW_MODE_CHOOSER = false
         <LandingPage onNavigate={handleNavigate} />
       )}
 
-      {screen === 'prompt-brief' && promptEntry && (
+      {screen === 'prompt-brief' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <PromptBriefChat
             key={promptChatKey}
             entry={promptEntry}
             config={TEMPLATE_ZONES[promptTemplateId] ?? customTemplates.zonesById[promptTemplateId] ?? null}
-            onBack={() => setScreen('landing')}
+            templateChoices={templateChoices}
+            onConfirmTemplate={id => setPromptTemplateId(id)}
             onChangeTemplate={() => setPromptPickerOpen(true)}
+            onBack={() => setScreen('landing')}
             onSendForReview={handleSendPromptBriefForReview}
             onOpenLibrary={() => handleNavigate('designs')}
             onNewBrief={() => handleNavigate('new-brief')}
@@ -2016,14 +2044,14 @@ const SHOW_MODE_CHOOSER = false
           customRecords={customTemplates.records}
           onClose={() => setPromptPickerOpen(false)}
           onPick={id => {
-            // Re-picking the same template keeps the chat going; a different
-            // one restarts it, since the questions come from the template's zones.
-            if (id !== promptTemplateId || screen !== 'prompt-brief') {
-              setPromptTemplateId(id)
-              setPromptChatKey(k => k + 1)
-            }
+            // The chat reacts to a template change through its entry/config
+            // props WITHOUT remounting (no promptChatKey bump): pre-template
+            // answers (format, sticker/QR needs) survive a swap, and zone
+            // answers for zones the new template also has stay answered -
+            // the chat just re-asks what's still open. prompt-brief is the
+            // only screen that opens this popup (2026-09-28 chat-first rework).
+            if (id !== promptTemplateId) setPromptTemplateId(id)
             setPromptPickerOpen(false)
-            setScreen('prompt-brief')
           }}
         />
       )}

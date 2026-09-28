@@ -54,6 +54,106 @@ const ZONE_QUESTIONS = {
   },
 }
 
+// ── Chat-first template choice (Julia's ask, 2026-09-28) ────────────────────
+// The chat now opens before any template is picked. It asks what the partner
+// is making (flyer / poster / wild poster - buttons AND typeable) and whether
+// the design needs a sticker or QR code, then matches those needs against the
+// live templates and asks the partner to confirm the pick (Julia picked
+// option B: show a preview, one tap to use it or choose a different one).
+// The template-independent questions (partner, objective, project name,
+// headline, sub-headline) are askable BEFORE the template exists, so a
+// pasted whole-brief first message gets everything it can out of one turn -
+// the confirmed template's own step list re-includes those same step ids
+// and simply finds them already answered.
+
+// Special templateConfirm option values. The step looks like a normal chips
+// step to the AI (which may record it from typed text like "yes, use it"),
+// but the chat intercepts both values itself: __use_template__ resolves the
+// matched template (App then loads its zones), __choose_different__ opens
+// the template picker popup. Neither value is ever brief content.
+export const CONFIRM_USE = '__use_template__'
+export const CONFIRM_DIFFERENT = '__choose_different__'
+
+// Flow-control steps: never shown in the finished-design summary and never
+// mapped into the brief (see summarizeAnswers / assembleBrief) - they steer
+// the conversation, they are not design content.
+const FLOW_STEP_IDS = new Set(['format', 'needsSticker', 'needsQr', 'templateConfirm'])
+
+export function buildPreSteps(matched, formats = []) {
+  const confirmAsk = matched
+    ? `I've picked the ${matched.label.split(' · ').pop()} template (${matched.format}) for you. Shall I use it?`
+    : 'Shall I use this template?'
+  return [
+    {
+      id: 'format', kind: 'chips', ask: 'What are you making - a flyer, poster or wild poster?', summaryLabel: 'Format',
+      options: formats.map(f => ({ label: f, value: f })),
+      hint: 'Pick one, or just type it.',
+    },
+    {
+      id: 'needsSticker', kind: 'chips', ask: 'Does the design need a discount sticker or badge?', summaryLabel: 'Sticker',
+      options: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+    },
+    {
+      id: 'needsQr', kind: 'chips', ask: 'Does it need a QR code?', summaryLabel: 'QR code',
+      options: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+    },
+    {
+      id: 'templateConfirm', kind: 'chips', ask: confirmAsk, summaryLabel: 'Template',
+      options: [
+        { label: 'Use this template', value: CONFIRM_USE },
+        { label: 'Choose a different one', value: CONFIRM_DIFFERENT },
+      ],
+    },
+  ]
+}
+
+// Deterministic template pick - no AI involved, so the offer is reproducible
+// and the model never chooses the product. Score each candidate:
+//   +2 when a sticker/QR answer matches what the template offers,
+//   -4 when the template LACKS a feature the partner asked for (a missing
+//      must-have is far worse than an unused extra zone),
+//   -1 for carrying a sticker/QR zone the partner said they don't need,
+//   and a tiny bonus for fewer zones overall, so with no feature answers
+//   the simplest template wins ("only a headline -> simplest option").
+// Ties keep the catalogue's own order (BASE_TEMPLATES order). When the
+// answers name a format, only that format's candidates are considered at
+// all - the format chips only ever offer formats that have live templates.
+export function matchTemplate(choices, answers = {}) {
+  const format = answers.format?.value
+  const candidates = (choices ?? []).filter(c => c.zones?.length && (!format || c.format === format))
+  if (!candidates.length) return null
+  const hasSticker = c => c.zones.some(z => z.id === 'sticker' || String(z.id).includes('sticker'))
+  const hasQr = c => c.zones.some(z => z.id === 'qr')
+  const wantSticker = answers.needsSticker?.value === 'yes'
+  const wantQr = answers.needsQr?.value === 'yes'
+  const askedSticker = answers.needsSticker?.value === 'yes' || answers.needsSticker?.value === 'no'
+  const askedQr = answers.needsQr?.value === 'yes' || answers.needsQr?.value === 'no'
+  let best = null
+  let bestScore = -Infinity
+  for (const c of candidates) {
+    let score = -c.zones.length * 0.01
+    if (askedSticker) {
+      if (hasSticker(c) === wantSticker) score += 2
+      else if (wantSticker) score -= 4
+      else score -= 1
+    }
+    if (askedQr) {
+      if (hasQr(c) === wantQr) score += 2
+      else if (wantQr) score -= 4
+      else score -= 1
+    }
+    if (score > bestScore) { bestScore = score; best = c }
+  }
+  return best
+}
+
+// Scripted lead-in for an upload step where the partner has exactly one
+// matching asset on file (Julia's own example wording, 2026-09-28). The AI
+// never sees library data, so this line is always scripted, never generated.
+export function reuseAskText(step, partnerName) {
+  return `This is ${partnerName}. We have the ${(step.summaryLabel || step.id).toLowerCase()}. Use it?`
+}
+
 function humanize(id) {
   const s = id.replace(/[_-]+/g, ' ').trim()
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -86,33 +186,46 @@ function zoneStep(zone, partnerLabel) {
 
 export const stepApplies = (step, answers) => !step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value
 
-export function buildSteps(zones = []) {
-  const formSteps = [
-    {
-      id: 'partner', kind: 'chips', ask: 'Which partner is this design for?', summaryLabel: 'Partner',
-      options: [
-        ...PLACEHOLDER_PARTNERS.map(p => ({ label: p, value: p })),
-        { label: '+ Add new partner', value: ADD_NEW },
-      ],
-    },
-    {
-      id: 'partnerNew', kind: 'text', ask: "What's the new partner's name?", summaryLabel: 'New partner',
-      placeholder: 'New partner name', whenAnswer: { stepId: 'partner', value: ADD_NEW },
-    },
-    {
-      id: 'objective', kind: 'chips', ask: 'What is the objective?', summaryLabel: 'Objective',
-      options: OBJECTIVES.map(o => ({ label: o.label, value: o.value })),
-    },
-    {
-      id: 'projectName', kind: 'text', optional: true, ask: 'Want to give the project a name?', summaryLabel: 'Project name',
-      hint: 'It labels the saved design and the PDF filename. Skip it and we will name it for you.',
-      placeholder: 'e.g. Wen Cheng – Wolt Promo June',
-    },
-  ]
+// The brief-form questions, exported separately so the chat can also ask
+// them before a template is confirmed (see module comment at the top).
+export const FORM_STEPS = [
+  {
+    id: 'partner', kind: 'chips', ask: 'Which partner is this design for?', summaryLabel: 'Partner',
+    options: [
+      ...PLACEHOLDER_PARTNERS.map(p => ({ label: p, value: p })),
+      { label: '+ Add new partner', value: ADD_NEW },
+    ],
+  },
+  {
+    id: 'partnerNew', kind: 'text', ask: "What's the new partner's name?", summaryLabel: 'New partner',
+    placeholder: 'New partner name', whenAnswer: { stepId: 'partner', value: ADD_NEW },
+  },
+  {
+    id: 'objective', kind: 'chips', ask: 'What is the objective?', summaryLabel: 'Objective',
+    options: OBJECTIVES.map(o => ({ label: o.label, value: o.value })),
+  },
+  {
+    id: 'projectName', kind: 'text', optional: true, ask: 'Want to give the project a name?', summaryLabel: 'Project name',
+    hint: 'It labels the saved design and the PDF filename. Skip it and we will name it for you.',
+    placeholder: 'e.g. Wen Cheng – Wolt Promo June',
+  },
+]
 
+// Text zones every template defines, so their questions are askable before
+// the template is confirmed - this is what lets one pasted brief fill them
+// in a single turn (the confirmed template's step list re-includes these
+// ids and finds them answered). Zones that only SOME templates have (offer
+// vs cta, T&Cs, sticker, QR, photos) stay post-confirm.
+const GENERIC_TEXT_ZONE_IDS = ['headline', 'sub_headline']
+
+export function buildGenericTextSteps() {
+  return GENERIC_TEXT_ZONE_IDS.map(id => zoneStep({ id, type: 'text' }))
+}
+
+export function buildSteps(zones = []) {
   const zoneIds = sortIdsByFieldOrder(zones.map(z => z.id))
   const zoneSteps = zoneIds.map(id => zoneStep(zones.find(z => z.id === id)))
-  return [...formSteps, ...zoneSteps]
+  return [...FORM_STEPS, ...zoneSteps]
 }
 
 // Answers are stored per step as { value, display, imageUrl?, skipped? }.
@@ -129,7 +242,7 @@ export function partnerNameFrom(answers) {
 export function summarizeAnswers(steps, answers) {
   return steps
     .filter(s => stepApplies(s, answers))
-    .filter(s => s.id !== 'partnerNew')
+    .filter(s => s.id !== 'partnerNew' && !FLOW_STEP_IDS.has(s.id))
     .map(s => {
       const a = answers[s.id]
       if (!a) return null
@@ -149,6 +262,9 @@ export function summarizeAnswers(steps, answers) {
 const KNOWN_ANSWER_IDS = new Set([
   'partner', 'partnerNew', 'objective', 'projectName', 'about', 'restaurant_name',
   'headline', 'sub_headline', 'cta', 'tc', 'offer', 'logo', 'photo',
+  // Flow-control steps (template choice) - answers exist but are not design
+  // content, so they must never land in zoneTexts/zoneImageUrls below.
+  'format', 'needsSticker', 'needsQr', 'templateConfirm',
 ])
 
 export function assembleBrief(answers, entry) {

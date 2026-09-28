@@ -2,20 +2,30 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { FeatureGrid, WildScaleTip } from './BriefingForm'
 import PromptBriefResultModal from './PromptBriefResultModal'
 import PromptBriefAssetPicker from './PromptBriefAssetPicker'
-import { buildSteps, stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
+import {
+  buildSteps, buildPreSteps, buildGenericTextSteps, FORM_STEPS, matchTemplate,
+  stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom,
+  reuseAskText, CONFIRM_USE, CONFIRM_DIFFERENT,
+} from '../lib/promptBriefFlow'
 import { askAssistant } from '../lib/promptBriefAI'
-import { uploadImageForZone, assetFolderForZone, GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
+import { hasTransparency } from '../lib/image'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
-// "Prompt Brief" screen (Julia's ask, 2026-09-19): replaces the old brief form
-// with a chat. Same page shell as the landing page (hero copy, tip box,
-// feature grid), with the chat card in the middle. UI-first pass: the
-// assistant's turns are scripted from the template's own questions
-// (lib/promptBriefFlow.js) - no AI backend yet. The chat side is deliberately
-// the only part that changes when the backend arrives: it produces the same
-// `answers` shape either way.
-const ACKS = ['Got it.', 'Thanks.', 'Perfect.', 'Noted.']
+// "Prompt Brief" screen (Julia's ask, 2026-09-19; chat-first rework 2026-09-28).
+// Same page shell as the landing page (hero copy, tip box, feature grid), with
+// the chat card in the middle. Since 2026-09-28 the chat opens WITHOUT a
+// pre-picked template: it asks the format and sticker/QR needs, matches those
+// against the live templates itself (lib/promptBriefFlow.js's matchTemplate),
+// and asks the partner to confirm the pick with a preview. The AI assistant
+// phrases the conversation, but never decides what is asked - the step list
+// is built here from plain data, and every recorded answer is validated
+// server-side (api/prompt-brief-chat.js). If the assistant is unreachable the
+// chat pauses with "Chat box not available right now." and a Try again chip -
+// since 2026-09-28 there is deliberately NO scripted fallback (Julia's call:
+// a half-scripted chat reads as broken, not graceful).
+const PAUSED_TEXT = 'Chat box not available right now. Please try again in a moment.'
 // Fits inside the viewport under the 58px sticky header, so the answer chips
 // are never pushed below the fold on a laptop-height window.
 const CHAT_HEIGHT = 'clamp(440px, calc(100vh - 150px), 640px)'
@@ -133,8 +143,7 @@ function UploadDrop({ label, onFile, busyLabel }) {
   )
 }
 
-export default function PromptBriefChat({ entry, config, onBack, onChangeTemplate, onEdit, onSendForReview, onOpenLibrary, onNewBrief }) {
-  const steps = useMemo(() => buildSteps(config?.zones ?? []), [config])
+export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onOpenLibrary, onNewBrief }) {
   const [messages, setMessages] = useState([])
   const [answers, setAnswers] = useState({})
   const [currentId, setCurrentId] = useState(null)
@@ -152,6 +161,17 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   const [uploadingId, setUploadingId] = useState(null)
   // Suggestions already shown per step, sent back as `exclude` on "Suggest more".
   const [aiShown, setAiShown] = useState({})
+  // The turn the assistant could not process (service down) - kept so
+  // "Try again" replays exactly what the partner did, without double-posting
+  // their message bubble.
+  const [pausedTurn, setPausedTurn] = useState(null)
+  // Paste mode: the composer is always a growing textarea, this just opens it
+  // up tall enough for a whole pasted brief to be comfortable to review.
+  const [pasteMode, setPasteMode] = useState(false)
+  // The shared asset library, fetched once the partner is known - powers the
+  // "we have the logo on file" reuse offer on upload steps.
+  const [libraryAssets, setLibraryAssets] = useState([])
+  const [checkingReuse, setCheckingReuse] = useState(null)
   const timers = useRef([])
   const blobUrls = useRef([])
   const msgId = useRef(0)
@@ -161,12 +181,53 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   const runRef = useRef(0)
   const scrollRef = useRef(null)
   const cardRef = useRef(null)
+  const inputRef = useRef(null)
+  // The template id the confirm card last showed, so picking a different one
+  // from the picker popup re-asks the question with the new pick instead of
+  // leaving a stale bubble over a changed preview.
+  const shownConfirmRef = useRef(null)
+  // Set when the assistant has nothing left to ask but the confirmed
+  // template hasn't arrived in this component yet (see the mega-paste effect).
+  const pendingFinishRef = useRef(false)
 
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)) }
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
   const push = msg => {
     msgsRef.current = [...msgsRef.current, { id: ++msgId.current, ...msg }]
     setMessages(msgsRef.current)
+  }
+
+  // Live formats only - the template list arrives pre-filtered from App.jsx.
+  const formats = useMemo(
+    () => [...new Set(templateChoices.map(c => c.format).filter(Boolean))],
+    [templateChoices]
+  )
+  const matched = useMemo(() => matchTemplate(templateChoices, answers), [templateChoices, answers])
+  // After the template is confirmed, its own step list takes over (the
+  // template-independent questions re-appear as already-answered). Before
+  // that, the pre steps run alongside the template-independent questions so
+  // a first-turn paste can fill them without a template existing yet.
+  const steps = useMemo(
+    () => (config ? buildSteps(config.zones) : [...buildPreSteps(matched, formats), ...FORM_STEPS, ...buildGenericTextSteps()]),
+    [config, matched, formats]
+  )
+
+  const partnerName = partnerNameFrom(answers)
+
+  // Exactly one asset on file for this partner in the step's folder -> the
+  // reuse offer. Zero or several -> no offer (the normal picker handles both;
+  // never guess between multiple logos). "General" (shared, non-partner)
+  // assets never count as a partner's own.
+  function findReuseAsset(step, partner) {
+    if (!step || !partner) return null
+    const folder = assetFolderForZone(step.id)
+    const p = partner.trim().toLowerCase()
+    if (!p || p === GENERAL_MERCHANT.toLowerCase()) return null
+    const matches = libraryAssets.filter(a =>
+      a.folder === folder &&
+      (a.merchant || '').trim().toLowerCase() === p
+    )
+    return matches.length === 1 ? matches[0] : null
   }
 
   function ask(step, ack) {
@@ -184,14 +245,9 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   function runScript() {
     later(() => {
       setTyping(false)
-      push({ from: 'ai', text: `Hi! I'm your Wild Stack design assistant. Let's brief your ${entry.label} together. I'll ask a few questions, you answer or upload, and I'll fill the template in for you.` })
-      setTyping(true)
-    }, 800)
-    later(() => {
-      setTyping(false)
-      push({ from: 'ai', text: `The business type and format are already set from your template (${entry.category ? entry.category.charAt(0).toUpperCase() + entry.category.slice(1) : 'Restaurant'} · ${entry.format}), so we can jump straight in.` })
+      push({ from: 'ai', text: "Hi! I'm your Wild Stack design assistant. Tell me what you need - answer as we go, or paste your whole brief in one go and I'll fill in everything I can." })
       ask(steps[0])
-    }, 2000)
+    }, 800)
   }
 
   function start() {
@@ -200,6 +256,9 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     msgsRef.current = []
     blobUrls.current.forEach(u => URL.revokeObjectURL(u)); blobUrls.current = []
     setMessages([]); setAnswers({}); setCurrentId(null); setFinished(false); setShowResult(false); setDraft(''); setAiShown({}); setAiBusy(false)
+    setPausedTurn(null); setPasteMode(false); setCheckingReuse(null)
+    shownConfirmRef.current = null
+    pendingFinishRef.current = false
     setTyping(true)
     runScript()
   }
@@ -210,7 +269,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     // hands them to the editor, which owns them from there (start() revokes
     // them when the chat is reset instead).
     return () => { clearTimers() }
-    // Runs once per mount; App remounts this component (key) on a template change.
+    // Runs once per mount; App remounts this component (key) on a fresh brief.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -222,6 +281,69 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   useEffect(() => {
     if (currentId) cardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [currentId])
+
+  // The partner is known -> pull the shared library once, for the reuse offer.
+  // (Cleared on reset only implicitly: findReuseAsset gates on the partner
+  // name, so a stale list is unreachable while no partner is set.)
+  useEffect(() => {
+    if (!partnerName) return
+    let cancelled = false
+    getLibraryAssets().then(all => { if (!cancelled) setLibraryAssets(all) })
+    return () => { cancelled = true }
+  }, [partnerName])
+
+  // A template swap mid-chat (confirm card's "Choose a different one", or the
+  // header's Change template) can remove the step that was just being asked -
+  // pick up from the new template's first open question instead of stalling.
+  // Answers carry over: a zone that exists in both templates stays answered.
+  // The state updates run on a timer so the effect body itself stays free of
+  // synchronous setState (same pattern as ask()).
+  useEffect(() => {
+    if (!currentId) return
+    if (steps.some(s => s.id === currentId)) return
+    const nextStep = steps.find(s => stepApplies(s, answers) && !answers[s.id])
+    later(() => {
+      if (nextStep) {
+        push({ from: 'ai', text: `The new template changes the questions a little. ${nextStep.ask}`, hint: nextStep.hint })
+        setCurrentId(nextStep.id)
+      } else if (config) {
+        finish()
+      }
+    }, 50)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [steps])
+
+  // Partner swapped the template while the confirm card is open - re-ask it
+  // with the new pick's name and preview.
+  useEffect(() => {
+    if (currentId !== 'templateConfirm' || answers.templateConfirm || !matched) return
+    if (shownConfirmRef.current === matched.id) return
+    shownConfirmRef.current = matched.id
+    const confirmStep = steps.find(s => s.id === 'templateConfirm')
+    if (confirmStep) later(() => ask(confirmStep, 'How about this one?'), 50)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matched?.id, currentId])
+
+  // A single pasted brief can answer everything - including the template
+  // confirm - in one turn. The confirmed template's steps (and entry) only
+  // exist after App processes onConfirmTemplate, so hold the finish until
+  // they land instead of showing the result modal for a null template.
+  useEffect(() => {
+    if (!pendingFinishRef.current || !config || !entry) return
+    pendingFinishRef.current = false
+    later(() => finish(), 100)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, entry])
+
+  // Auto-grow the composer: one line until content (or paste mode) needs more.
+  // Keyed on the step too, so switching questions resets the height.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const min = pasteMode ? 120 : 46
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, min), 160)}px`
+  }, [draft, pasteMode, currentId])
 
   function finish() {
     setTyping(true)
@@ -237,8 +359,8 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   // they wrote (already shown as a chat bubble): the assistant reads it and may
   // record answers for this and other steps, or answer a side question. With no
   // `typed` (a button, an upload, a skip) the answer is already in `answersNow`
-  // and the assistant only phrases the next question. If it is unreachable we
-  // fall back to the scripted wording and take typed text literally.
+  // and the assistant only phrases the next question. If the assistant is
+  // unreachable the turn is parked in `pausedTurn` and nothing advances.
   async function respond({ answersNow, fromStep, typed = '', skipped = false }) {
     const run = runRef.current
     setCurrentId(null)
@@ -251,28 +373,48 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     ])
     if (runRef.current !== run) return
 
+    if (!ai) {
+      setTyping(false)
+      setPausedTurn({ answersNow, fromStep, typed, skipped })
+      push({ from: 'ai', text: PAUSED_TEXT })
+      return
+    }
+
     let nextAnswers = answersNow
     let nextId
     let text
-    let showHint = true
-    if (ai) {
-      for (const r of ai.recorded) nextAnswers = { ...nextAnswers, [r.stepId]: { value: r.value, display: r.display } }
-      for (const id of ai.skipped) nextAnswers = { ...nextAnswers, [id]: { skipped: true, display: 'Skipped' } }
-      nextId = ai.nextStepId
-      text = ai.reply
-      showHint = steps.find(s => s.id === nextId)?.kind === 'upload'
-    } else {
-      if (typed && fromStep) nextAnswers = { ...nextAnswers, [fromStep.id]: { value: typed, display: typed } }
-      const nextStep = steps.find(s => stepApplies(s, nextAnswers) && !nextAnswers[s.id])
-      nextId = nextStep?.id ?? null
-      const ack = skipped ? 'No problem.' : ACKS[Object.keys(nextAnswers).length % ACKS.length]
-      text = nextStep ? `${ack} ${nextStep.ask}` : ''
+    let showHint
+    for (const r of ai.recorded) {
+      // "Choose a different one" must never settle the confirm step (the
+      // button path doesn't either) - it opens the picker and the step stays
+      // open to be re-asked with whatever gets picked.
+      if (r.stepId === 'templateConfirm' && r.value === CONFIRM_DIFFERENT) { onChangeTemplate(); continue }
+      nextAnswers = { ...nextAnswers, [r.stepId]: { value: r.value, display: r.display } }
+      // The confirm step can also be recorded from typed text ("yes, use it")
+      // - resolve the template exactly like the button path does.
+      if (r.stepId === 'templateConfirm' && r.value === CONFIRM_USE && matched) onConfirmTemplate(matched.id)
     }
+    for (const id of ai.skipped) nextAnswers = { ...nextAnswers, [id]: { skipped: true, display: 'Skipped' } }
+    nextId = ai.nextStepId
+    text = ai.reply
+    const nextStep = steps.find(s => s.id === nextId)
+    showHint = nextStep?.kind === 'upload'
+    // Upload step and this partner has exactly one asset on file for it: lead
+    // with the plain-words reuse offer. The model never sees library data, so
+    // this line is always scripted (Julia's wording, 2026-09-28).
+    const nextPartner = partnerNameFrom(nextAnswers)
+    const reuse = nextStep?.kind === 'upload' ? findReuseAsset(nextStep, nextPartner) : null
+    if (reuse) text = reuseAskText(nextStep, nextPartner)
 
     setAnswers(nextAnswers)
     setTyping(false)
-    if (!nextId) { finish(); return }
-    push({ from: 'ai', text, hint: showHint ? steps.find(s => s.id === nextId)?.hint : undefined })
+    if (!nextId) {
+      if (config) { finish(); return }
+      pendingFinishRef.current = true
+      return
+    }
+    if (nextId === 'templateConfirm') shownConfirmRef.current = matched?.id ?? null
+    push({ from: 'ai', text, hint: showHint ? nextStep?.hint : undefined })
     setCurrentId(nextId)
   }
 
@@ -300,7 +442,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     setAiBusy(true)
     setTyping(true)
     try {
-      const category = entry.category ?? 'restaurant'
+      const category = entry?.category ?? 'restaurant'
       const businessType = category.charAt(0).toUpperCase() + category.slice(1)
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',
@@ -328,6 +470,19 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
   }
 
   function pickOption(step, opt) {
+    // The template-confirm chips are flow control, not answers: "use" commits
+    // the matched template (App then loads its zones) and records the pick
+    // for the transcript; "different" opens the picker popup and keeps the
+    // step open so the card re-asks with whichever template gets picked.
+    if (step.id === 'templateConfirm') {
+      if (opt.value === CONFIRM_USE && matched) {
+        onConfirmTemplate(matched.id)
+        submit(step, { value: CONFIRM_USE, display: `Use ${matched.label.split(' · ').pop()}` })
+      } else if (opt.value === CONFIRM_DIFFERENT) {
+        onChangeTemplate()
+      }
+      return
+    }
     const display = opt.value === '__partner__' ? (partnerNameFrom(answers) || opt.label) : opt.label
     submit(step, { value: opt.value, display })
   }
@@ -342,6 +497,7 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     if (!t || currentId !== step.id) return
     push({ from: 'user', text: t })
     setDraft('')
+    setPasteMode(false)
     respond({ answersNow: answers, fromStep: step, typed: t })
   }
 
@@ -374,30 +530,66 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
     submit(step, { value: asset.name, display: asset.name, imageUrl: asset.src })
   }
 
+  // Reusing the partner's own asset behaves exactly like a pick from the
+  // Assets picker (same submit shape), plus the same transparent-PNG check
+  // the picker applies when the zone needs it.
+  async function pickReuse(step, asset) {
+    if (checkingReuse) return
+    const requireTransparent = config?.zones?.find(z => z.id === step.id)?.hint?.toLowerCase().includes('transparent')
+    if (requireTransparent) {
+      setCheckingReuse(step.id)
+      const ok = await hasTransparency(asset.src)
+      setCheckingReuse(null)
+      if (!ok) {
+        push({ from: 'ai', text: "That one has a background, so it can't go in this spot. Please upload a transparent PNG instead." })
+        return
+      }
+    }
+    submit(step, { value: asset.name, display: asset.name, imageUrl: asset.src })
+  }
+
   const step = steps.find(s => s.id === currentId) ?? null
   const pickerStep = steps.find(s => s.id === pickerId) ?? null
   const activeSteps = steps.filter(s => stepApplies(s, answers))
   const answered = activeSteps.filter(s => answers[s.id]).length
   const rows = summarizeAnswers(steps, answers)
+  const confirmReuse = step?.kind === 'upload' ? findReuseAsset(step, partnerName) : null
 
   const composerShell = { borderTop: '1px solid var(--border)', padding: '14px 18px 16px', background: '#fff' }
-  const inputRow = (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <input
-        value={draft} onChange={e => setDraft(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && step) { e.preventDefault(); sendText(step) } }}
-        placeholder={step?.kind === 'chips' ? 'Or type your own answer…' : (step?.placeholder ?? 'Type your answer…')}
-        disabled={!step} maxLength={step?.maxLength}
-        style={{ flex: 1, padding: '12px 14px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 10, outline: 'none', background: step ? '#fff' : '#F9FAFB' }}
-        onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
-        onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
-      />
-      <button
-        type="button" onClick={() => step && sendText(step)} disabled={!step || !draft.trim()} aria-label="Send"
-        style={{ width: 46, borderRadius: 10, border: 'none', cursor: step && draft.trim() ? 'pointer' : 'not-allowed', background: step && draft.trim() ? 'var(--primary)' : '#E5E7EB', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </button>
+  const inputBlock = (
+    <div>
+      {step && !pasteMode && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            type="button" onClick={() => setPasteMode(true)}
+            style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
+          >
+            Have a full brief? Paste it instead
+          </button>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <textarea
+          ref={inputRef}
+          value={draft} onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && step) { e.preventDefault(); sendText(step) } }}
+          placeholder={pasteMode
+            ? "Paste your whole brief here - I'll pull out what I need…"
+            : (step?.kind === 'chips'
+              ? 'Or type your own answer…'
+              : (step?.placeholder ?? (step?.kind === 'upload' ? 'Or paste your full brief here…' : 'Type your answer…')))}
+          disabled={!step} rows={1}
+          style={{ flex: 1, resize: 'none', padding: '12px 14px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 10, outline: 'none', background: step ? '#fff' : '#F9FAFB', lineHeight: 1.45, overflowY: 'auto' }}
+          onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
+          onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+        />
+        <button
+          type="button" onClick={() => step && sendText(step)} disabled={!step || !draft.trim()} aria-label="Send"
+          style={{ width: 46, height: 46, flexShrink: 0, borderRadius: 10, border: 'none', cursor: step && draft.trim() ? 'pointer' : 'not-allowed', background: step && draft.trim() ? 'var(--primary)' : '#E5E7EB', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
     </div>
   )
 
@@ -415,24 +607,30 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
               Brief your design <span style={{ color: 'var(--primary)' }}>in a chat</span>
             </h1>
             <p style={{ fontSize: 15, color: 'var(--mid)', lineHeight: 1.6, maxWidth: 460 }}>
-              Answer a few questions, the same ones a designer would ask. We'll fill in your template, ready to edit or send for review.
+              Answer a few questions - or paste the whole brief at once. We'll pick the right template, fill it in, and get it ready to edit or send for review.
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 16px' }}>
-            <img src={entry.thumb} alt={entry.label} style={{ width: 44, height: 62, objectFit: 'cover', borderRadius: 6, border: '1.5px solid var(--primary)', flexShrink: 0 }} />
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{entry.label.split(' · ').pop()} selected</div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-                <button type="button" onClick={onChangeTemplate} style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit' }}>
-                  Change template
-                </button>
-                <button type="button" onClick={onBack} style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-                  ← Back
-                </button>
+          {entry ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 16px' }}>
+              <img src={entry.thumb} alt={entry.label} style={{ width: 44, height: 62, objectFit: 'cover', borderRadius: 6, border: '1.5px solid var(--primary)', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>{entry.label.split(' · ').pop()} selected</div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                  <button type="button" onClick={onChangeTemplate} style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit' }}>
+                    Change template
+                  </button>
+                  <button type="button" onClick={onBack} style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                    ← Back
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <button type="button" onClick={onBack} style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 16px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              ← Back
+            </button>
+          )}
         </div>
 
         {/* Full page width (was 760), so the card lines up with the page's
@@ -476,6 +674,17 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
               </div>
             ) : (
               <>
+                {step?.id === 'templateConfirm' && matched && (
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', border: '1.5px solid var(--primary)', borderRadius: 12, padding: 10, marginBottom: 12, background: 'var(--primary-glow)' }}>
+                    <img src={matched.thumb} alt={matched.label} style={{ width: 52, height: 74, objectFit: 'cover', borderRadius: 6, border: '1.5px solid var(--primary)', background: '#fff', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--dark)' }}>{matched.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 2 }}>
+                        {matched.category ? matched.category.charAt(0).toUpperCase() + matched.category.slice(1) + ' · ' : ''}{matched.format}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {step && (step.options?.length > 0 || step.optional || step.aiField) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                     {step.aiField && !aiBusy && (
@@ -488,31 +697,52 @@ export default function PromptBriefChat({ entry, config, onBack, onChangeTemplat
                     {step.optional && <Chip onClick={() => submit(step, { skipped: true, display: 'Skipped' })}>Skip for now</Chip>}
                   </div>
                 )}
-                {step?.kind === 'upload' ? (
+                {step?.kind === 'upload' && (
                   <>
-                  {shouldRemoveBackground(assetFolderForZone(step.id)) && (
-                    <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE}</div>
-                  )}
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 260px', display: 'flex' }}>
-                      <UploadDrop
-                        label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`}
-                        onFile={f => pickFile(step, f)}
-                        busyLabel={uploadingId === step.id ? (shouldRemoveBackground(assetFolderForZone(step.id)) ? 'Removing background…' : 'Uploading…') : null}
-                      />
+                    {shouldRemoveBackground(assetFolderForZone(step.id)) && (
+                      <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE}</div>
+                    )}
+                    {confirmReuse && (
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', border: '1.5px solid var(--primary)', borderRadius: 12, padding: 10, marginBottom: 12, background: 'var(--primary-glow)' }}>
+                        <img src={confirmReuse.src} alt={confirmReuse.name} style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 6, border: '1px solid var(--border)', background: '#fff', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{confirmReuse.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--mid)' }}>On file for this partner</div>
+                        </div>
+                        <button
+                          type="button" onClick={() => pickReuse(step, confirmReuse)} disabled={checkingReuse === step.id}
+                          style={{ flexShrink: 0, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff', opacity: checkingReuse === step.id ? 0.7 : 1 }}
+                        >
+                          {checkingReuse === step.id ? 'Checking…' : 'Use it'}
+                        </button>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 260px', display: 'flex' }}>
+                        <UploadDrop
+                          label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`}
+                          onFile={f => pickFile(step, f)}
+                          busyLabel={uploadingId === step.id ? (shouldRemoveBackground(assetFolderForZone(step.id)) ? 'Removing background…' : 'Uploading…') : null}
+                        />
+                      </div>
+                      <button
+                        type="button" onClick={() => setPickerId(step.id)}
+                        style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px 20px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 12, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', transition: 'all 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = '#fff' }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        Choose from Assets
+                      </button>
                     </div>
-                    <button
-                      type="button" onClick={() => setPickerId(step.id)}
-                      style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px 20px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', borderRadius: 12, cursor: 'pointer', border: '1.5px solid var(--border)', background: '#fff', color: 'var(--dark)', transition: 'all 0.15s' }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-glow)' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = '#fff' }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                      Choose from Assets
-                    </button>
-                  </div>
                   </>
-                ) : inputRow}
+                )}
+                {pausedTurn && !typing && (
+                  <div style={{ marginBottom: 10 }}>
+                    <Chip primary onClick={() => { const t = pausedTurn; setPausedTurn(null); respond(t) }}>Try again</Chip>
+                  </div>
+                )}
+                {inputBlock}
               </>
             )}
           </div>
