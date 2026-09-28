@@ -848,6 +848,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const displayText = zoneDisplayText(id, isPlaceholder ? placeholderText : (value || ''))
       if (obj.text !== displayText) {
         obj.set('text', displayText)
+        // Non-autoShrink zones (only T&Cs today - confirmed by scanning every
+        // built-in template) never run applyFontSizeAndCheckFit, so nothing
+        // else re-asserts width after a text change - Fabric's Textbox can
+        // then render the new text as one unwrapped line instead of
+        // re-wrapping to the zone's configured width (Julia's report,
+        // 2026-09-28/29: T&Cs typed via the panel showed as a single long
+        // line - confirmed in the live editor, not just the chat). Same fix
+        // pattern applyFontSizeAndCheckFit uses for autoShrink zones - pin
+        // width back and force a real re-layout. Scoped to non-autoShrink
+        // zones only, so it cannot touch headline/sub-headline/offer/
+        // restaurant_name/cta - none of which Julia asked to change.
+        if (!zone?.autoShrink) {
+          const textW = zone?.textWidth ?? zone?.width
+          if (textW != null) { obj.set('width', textW); obj.initDimensions() }
+        }
         changed = true
       }
       const targetOpacity = isPlaceholder ? PLACEHOLDER_OPACITY : 1
