@@ -5,7 +5,7 @@ import PromptBriefAssetPicker from './PromptBriefAssetPicker'
 import {
   buildSteps, buildPreSteps, buildGenericTextSteps, FORM_STEPS, matchTemplate,
   stepApplies, summarizeAnswers, assembleBrief, partnerNameFrom,
-  reuseAskText, CONFIRM_USE, CONFIRM_DIFFERENT,
+  reuseAskText, CONFIRM_USE, CONFIRM_DIFFERENT, answersOverTemplateLimit,
 } from '../lib/promptBriefFlow'
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
@@ -213,8 +213,10 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   // that, the pre steps run alongside the template-independent questions so
   // a first-turn paste can fill them without a template existing yet.
   const steps = useMemo(
-    () => (config ? buildSteps(config.zones) : [...buildPreSteps(matched, formats), ...FORM_STEPS, ...buildGenericTextSteps()]),
-    [config, matched, formats]
+    () => (config
+      ? buildSteps(config.zones, aiFieldSettingsFor(config, entry?.label, entry?.templateIdGuided))
+      : [...buildPreSteps(matched, formats), ...FORM_STEPS, ...buildGenericTextSteps()]),
+    [config, entry, matched, formats]
   )
 
   const partnerName = partnerNameFrom(answers)
@@ -402,6 +404,30 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     for (const id of ai.skipped) nextAnswers = { ...nextAnswers, [id]: { skipped: true, display: 'Skipped' } }
     nextId = ai.nextStepId
     text = ai.reply
+    // Once the template is known (loaded, or confirmed in this very turn),
+    // hold pasted headline/sub-headline to its copy-database box - the same
+    // limit the canvas uses - and re-ask any that don't fit, instead of
+    // letting auto-resize shrink them to unreadable (Julia, 2026-09-28:
+    // "smaller headlines and shorter sub-lines, like the copy database").
+    const confirmingNow = !config && matched && nextAnswers.templateConfirm?.value === CONFIRM_USE
+    const limitsFrom = config
+      ? { cfg: config, name: entry?.label, id: entry?.templateIdGuided }
+      : (confirmingNow ? { cfg: { zones: matched.zones }, name: matched.label, id: matched.id } : null)
+    if (limitsFrom) {
+      const settings = aiFieldSettingsFor(limitsFrom.cfg, limitsFrom.name, limitsFrom.id)
+      const tooLong = answersOverTemplateLimit(nextAnswers, settings)
+      if (tooLong.length) {
+        const order = buildSteps(limitsFrom.cfg.zones, settings).map(s => s.id)
+        tooLong.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+        const kept = { ...nextAnswers }
+        for (const t of tooLong) delete kept[t.id]
+        nextAnswers = kept
+        const first = tooLong[0]
+        const label = (steps.find(s => s.id === first.id)?.summaryLabel ?? first.id).toLowerCase()
+        nextId = first.id
+        text = `"${first.text}" is too long for this template's ${label} - it fits up to ${first.limit} characters. Try a shorter one, or tap Suggest with AI.`
+      }
+    }
     const nextStep = steps.find(s => s.id === nextId)
     showHint = nextStep?.kind === 'upload'
     // Upload step and this partner has exactly one asset on file for it: lead

@@ -21,6 +21,10 @@ import { ADD_NEW, OBJECTIVES, PLACEHOLDER_PARTNERS, FORMAT_TEMPLATE_GROUP, DEFAU
 // Same limits FieldEditor.jsx enforces (its CHAR_LIMITS) - duplicated rather
 // than imported for the same reason api/ai-suggest.js duplicates it: the
 // editor's copy isn't exported, and text past these won't fit the zone.
+// Headline/sub-headline are only a fallback here: once the template is known
+// they come from its copy-database box (aiFieldSettingsFor's
+// max_chars_min_pt - the same capacity FieldEditor's counter and AI
+// Suggest's C1 check use), which is far tighter (headline ~11, not 20).
 const CHAR_LIMITS = { headline: 20, sub_headline: 25, offer: 20, tc: 120, restaurant_name: 30, cta: 60 }
 
 const ZONE_QUESTIONS = {
@@ -159,7 +163,7 @@ function humanize(id) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function zoneStep(zone, partnerLabel) {
+function zoneStep(zone, partnerLabel, aiSettings) {
   if (zone.id === 'restaurant_name') {
     return {
       id: zone.id, kind: 'text', maxLength: CHAR_LIMITS.restaurant_name, ask: 'What name should appear on the design?', summaryLabel: 'Name on design',
@@ -169,7 +173,7 @@ function zoneStep(zone, partnerLabel) {
     }
   }
   const known = ZONE_QUESTIONS[zone.id]
-  if (known) return { id: zone.id, maxLength: CHAR_LIMITS[zone.id], ...known }
+  if (known) return { id: zone.id, maxLength: aiSettings?.[zone.id]?.max_chars_min_pt ?? CHAR_LIMITS[zone.id], ...known }
   const isSticker = zone.id.includes('sticker')
   if (zone.type === 'image') {
     return {
@@ -222,10 +226,21 @@ export function buildGenericTextSteps() {
   return GENERIC_TEXT_ZONE_IDS.map(id => zoneStep({ id, type: 'text' }))
 }
 
-export function buildSteps(zones = []) {
+// aiSettings: aiFieldSettingsFor(...) for the template, or null.
+export function buildSteps(zones = [], aiSettings = null) {
   const zoneIds = sortIdsByFieldOrder(zones.map(z => z.id))
-  const zoneSteps = zoneIds.map(id => zoneStep(zones.find(z => z.id === id)))
+  const zoneSteps = zoneIds.map(id => zoneStep(zones.find(z => z.id === id), undefined, aiSettings))
   return [...FORM_STEPS, ...zoneSteps]
+}
+
+// Headline/sub-headline answers that don't fit the template's box. A pasted
+// brief records them before any template exists, so they were only checked
+// against the generic fallback limits - this re-checks them once it's known.
+export function answersOverTemplateLimit(answers, aiSettings) {
+  return GENERIC_TEXT_ZONE_IDS
+    .map(id => ({ id, limit: aiSettings?.[id]?.max_chars_min_pt, a: answers[id] }))
+    .filter(({ limit, a }) => limit && a && !a.skipped && String(a.value ?? '').trim().length > limit)
+    .map(({ id, limit, a }) => ({ id, limit, text: String(a.display ?? a.value) }))
 }
 
 // Answers are stored per step as { value, display, imageUrl?, skipped? }.
