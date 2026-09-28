@@ -277,6 +277,8 @@ When a partner clicks "Suggest copy":
 
 > **Update (2026-09-19):** the above was the original plan. As built: `/api/ai-suggest` (Suggest / Improve with AI, per field) and `/api/prompt-brief-chat` (the Prompt Brief chat, claude-haiku-4-5) both use the `WILDCAST_COPY` Anthropic key server-side. See STATUS.md → Prompt Brief.
 
+> **Update (2026-09-25, AI Suggest v1.2):** `/api/ai-suggest` was rebuilt to Mark's v1.2 spec — no more per-field single lines. It now writes Headline + Sub-headline as PAIRS (the flyer lockup), grounded in the `wolt-copy-kb-clean` Google Sheet (Copy Library / Skeletons / Patterns / Verticals — 8–15 scored examples per call, never the whole sheet), with the §9 code checks and a one-line-per-click client queue (5 lines per credit, 4 batches/hour cap). The system prompt is Mark's §6 verbatim — do not patch it. Full state, decisions and deferred scope (partner history §4.4, learning loop §10): STATUS.md → "AI Suggest v1.2 rebuild".
+
 ---
 
 ## Build Phases
