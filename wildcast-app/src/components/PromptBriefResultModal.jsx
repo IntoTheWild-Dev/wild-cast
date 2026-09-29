@@ -26,7 +26,7 @@ function SummaryRow({ row }) {
   )
 }
 
-export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onOpenLibrary, onNewBrief }) {
+export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief }) {
   // Send for review: onSendForReview({ brief, fields, png }) saves the design
   // (without opening the editor) and resolves { url } - the shareable review
   // link. sentUrl is kept so going Back and pressing Send again shows the same
@@ -37,6 +37,13 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   const [sendError, setSendError] = useState(null)
   const [sentUrl, setSentUrl] = useState(null)
   const [copied, setCopied] = useState(false)
+  // Save for later (Julia's ask, 2026-09-29): a lower-friction save to the
+  // Design library for a design that isn't ready to send yet, in case
+  // whoever's briefing it gets called away. savedDraft is kept the same way
+  // sentUrl is - so it doesn't save a second copy if pressed again.
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [savedDraft, setSavedDraft] = useState(false)
+  const [saveDraftError, setSaveDraftError] = useState(null)
   const [brief, setBrief] = useState(null)
   const sent = view === 'sent'
   const [fields, setFields] = useState(null)
@@ -72,6 +79,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   }, [answers, entry, config])
 
   const canSend = !!png && !!fields && !!brief && !!onSendForReview && !sending
+  const canSaveDraft = !!png && !!fields && !!brief && !!onSaveDraft && !savingDraft
 
   async function send() {
     if (sentUrl) { setView('sent'); return }
@@ -86,6 +94,20 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
       setSendError(err?.message || 'Something went wrong.')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function saveDraft() {
+    if (savedDraft) return
+    setSaveDraftError(null)
+    setSavingDraft(true)
+    try {
+      await onSaveDraft({ brief, fields, png })
+      setSavedDraft(true)
+    } catch (err) {
+      setSaveDraftError(err?.message || 'Something went wrong.')
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -189,6 +211,11 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                   Couldn't send for review: {sendError}
                 </div>
               )}
+              {saveDraftError && !sent && (
+                <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10, lineHeight: 1.5 }}>
+                  Couldn't save: {saveDraftError}
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: sent ? 16 : 0 }}>
                 {sent && (
                   <>
@@ -220,6 +247,14 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                     >
                       {sentUrl ? 'View review link' : (!png && config ? 'Preparing preview…' : 'Send for review')}
                     </button>
+                    {onSaveDraft && (
+                      <button
+                        type="button" disabled={!savedDraft && !canSaveDraft} onClick={saveDraft}
+                        style={{ width: '100%', padding: '11px', fontSize: 13, fontWeight: 600, background: '#fff', color: savedDraft ? '#16a34a' : (!canSaveDraft ? 'var(--light)' : 'var(--mid)'), border: `1px solid ${savedDraft ? '#16a34a' : 'var(--border)'}`, borderRadius: 10, cursor: !savedDraft && !canSaveDraft ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {savedDraft ? '✓ Saved to Design library' : (savingDraft ? 'Saving…' : 'Save for later')}
+                      </button>
+                    )}
                   </>
                 )}
                 {!sent && confirming && (

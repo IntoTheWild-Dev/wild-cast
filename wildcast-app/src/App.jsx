@@ -1811,6 +1811,26 @@ const SHOW_MODE_CHOOSER = false
     return { url: `${window.location.origin}/?review=${id}` }
   }
 
+  // Prompt Brief's "Save for later" (Julia's ask, 2026-09-29): saves the
+  // finished design to the Design library exactly like Send for review does
+  // (same saveCandidateForReview call), but without a review link or leaving
+  // the chat - so a partner who gets called away mid-brief doesn't lose the
+  // finished design, and can pick it back up from the Design library.
+  async function handleSaveBriefDraft({ brief, fields: briefFields, png }) {
+    const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
+    if (!template) throw new Error('Template not found.')
+    if (!png) throw new Error('The preview is not ready yet.')
+    const savedFields = { ...DEFAULT_FIELDS, ...briefFields }
+    for (const key of Object.keys(savedFields)) {
+      if (key.endsWith('Url') && typeof savedFields[key] === 'string' && savedFields[key].startsWith('blob:')) {
+        savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+      }
+    }
+    const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
+    const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
+    await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales })
+  }
+
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
   // Ticking both Option A and B produces two independent saved designs and two
   // review links, shown together in the same ReviewModal.
@@ -2066,6 +2086,7 @@ const SHOW_MODE_CHOOSER = false
             onChangeTemplate={() => setPromptPickerOpen(true)}
             onBack={() => setScreen('landing')}
             onSendForReview={handleSendPromptBriefForReview}
+            onSaveDraft={handleSaveBriefDraft}
             onOpenLibrary={() => handleNavigate('designs')}
             onNewBrief={() => handleNavigate('new-brief')}
             onEdit={brief => {
