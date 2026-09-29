@@ -111,6 +111,26 @@ async function loadFonts() {
 // unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
 // design, and a rotated zone's width axis is its visual height.
 const FIT_WIDTH_RATIO = 0.92
+
+// The CTA ("App download line" on Option B) finishes a sentence printed in
+// the background art ("Jetzt Wolt App downloaden und" -> "bei uns
+// bestellen!"), so it must stay close to that printed line's weight -
+// shrink to fit if too long, never grow to fill its box like a headline
+// (Julia's report, first 2026-09-28 "cta is too big", same report again
+// 2026-09-29 on this branch's own test design once she saw it rendered).
+// Built once already (eacb501, as part of a broader zoneCanGrow change
+// covering cta/tc/restaurant_name) then reverted with everything else in
+// b491aba when several chat-driven changes leaked into the shared editor
+// canvas - only T&Cs came back on its own after that (59dd090). This is
+// that same fix, rebuilt from scratch and scoped to ONLY the cta zone this
+// time - restaurant_name's "too big" report was never confirmed as wanted
+// (see STATUS.md), and T&Cs already has its own separate wrap fix, so
+// neither should be touched by this.
+const NEVER_GROW_ZONE_IDS = new Set(['cta'])
+function zoneCanGrow(zone) {
+  return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
+}
+
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
@@ -764,7 +784,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             // Then grow to fill - short text should be as large as the
             // bounding box allows. Keeps growing until the next step would
             // overflow, then steps back to the last fitting size.
-            while (size + 0.5 <= 120) {
+            while (zoneCanGrow(zone) && size + 0.5 <= 120) {
               const next = size + 0.5
               if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
                 applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
@@ -961,7 +981,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           // Then grow to fill the bounding box
-          while (size + 0.5 <= 120) {
+          while (zoneCanGrow(zone) && size + 0.5 <= 120) {
             const next = size + 0.5
             if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
               applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
