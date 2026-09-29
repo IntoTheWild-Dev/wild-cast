@@ -2512,11 +2512,6 @@ const SHOW_MODE_CHOOSER = false
               )}
               topRight={commentsOnCanvas && (
                 <>
-                  {commentMode && (
-                    <span style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: 600, padding: '6px 12px', borderRadius: 20, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
-                      Click anywhere on the design to comment
-                    </span>
-                  )}
                   <button
                     type="button"
                     onClick={() => setCommentMode(v => !v)}
@@ -2530,6 +2525,13 @@ const SHOW_MODE_CHOOSER = false
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     {commentMode ? 'Done commenting' : 'Comment'}
                   </button>
+                  {/* In the margin under the button, not beside it - beside it
+                      the pill ran over the design (Anang, 2026-09-29). */}
+                  {commentMode && (
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, maxWidth: 140, textAlign: 'right', lineHeight: 1.4, pointerEvents: 'none' }}>
+                      Click anywhere on the design to comment
+                    </span>
+                  )}
                 </>
               )}
             />
