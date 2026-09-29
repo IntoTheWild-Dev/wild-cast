@@ -7,9 +7,13 @@
 
 ## What's working right now
 
-### Prompt Brief chat rework + AI Suggest v1.2 combined (branch `AI-Chatbox-Improvements`, 2026-09-28, **in live testing by Julia on the branch preview — NOT merged, production untouched**)
+### Prompt Brief chat rework + AI Suggest v1.2 combined (branch `AI-Chatbox-Improvements`, 2026-09-28 → 2026-09-29, **SHIPPED to `main`, PR #44, merge commit `fbf2c802`, live on cast.wildstack.studio — verified by pulling the actual production JS bundle, not just the deploy status**)
 
-**Where we stand (2026-09-29) — read this first:**
+**Merged 2026-09-29, Julia's explicit call: no real partners are using the tool yet, so this went to production for Mark/Annika/Julia to test directly rather than on a separate preview link.** Still genuinely open at merge time (not blockers to shipping internally, but real before any partner sees it): Mark's sign-off on the AI Suggest v1.2 copy database itself; four things verified in code but not yet clicked through live (McDonald's logo offer, several-photos thumbnails, the sub-line question, photo fit with a real non-synthetic image); AI credit pricing for the chat; Phase 2 (keep chatting after the design is shown) is deferred, not built. `feat/ai-suggest-v1.2` (the source branch AI Suggest v1.2 was merged in from) is now fully superseded — everything in it is on `main` — but left un-deleted on origin per this repo's convention of not deleting merged branches.
+
+**Going forward: new work starts on a fresh branch off `main`, not by reopening `AI-Chatbox-Improvements`.** That branch's own history stays below as the record of how this shipped.
+
+**Where we stand while this was in flight (2026-09-29, kept for history) — the branch state before merge:**
 - **Julia's rule: the editor canvas must not change — only the chat.** On 2026-09-29 she saw the name ("REWE ♥ WOLT") shifted on the branch preview and flagged it. Every chat-driven change to `TemplateCanvas.jsx` was removed (`b491aba`): the file is byte-identical to `feat/ai-suggest-v1.2`'s, i.e. live `main` + only v1.2's tested caps rendering. Verified: Option A with the same headline/sub-line/name renders **pixel-identical to live main** (0 of 568,800 pixels differ). Production was never affected — it's `main` (`0c71be2`), untouched by this branch.
 - **Latest preview:** newest deployment under Vercel → Deployments → branch `AI-Chatbox-Improvements` (every push gets a new URL; Vercel login required). `main` hasn't moved since the branch was cut.
 - **Working in Julia's tests:** chat-first flow, paste-a-brief, template confirm card + full-size preview, offer/T&Cs picked up from a pasted brief, partner logo offer (Wen Cheng), right template for headline+subline, pause message, orange chat-box stroke, tidier upload step.
