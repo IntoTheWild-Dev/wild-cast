@@ -1,12 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ApproveIcon, RequestChangesIcon } from './ActionIcons'
-
-function formatDateTime(ts) {
-  return new Date(ts).toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
+import { CommentPinLayer, CommentThreadCard } from './CanvasComments'
+import { buildThreads, hasOpenThread } from '../lib/commentThreads'
 
 export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   const [project, setProject]       = useState(null)
@@ -33,6 +28,8 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   // clickable; with no comment yet it points at the comment box instead.
   const commentBoxRef = useRef(null)
   const [needsCommentHint, setNeedsCommentHint] = useState(false)
+  // Pinned thread whose popover is open on the preview (CanvasComments.jsx).
+  const [selectedThreadId, setSelectedThreadId] = useState(null)
 
   // App.jsx's own activation state resolves asynchronously (a re-validation
   // fetch, not something available on the very first paint - see its own
@@ -160,6 +157,21 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     }
   }
 
+  // A pinned comment or a thread reply from the preview's pin layer. Same
+  // reviewer identity (the name field) as the general comment form below;
+  // returns the new id so the layer can open the new pin's thread.
+  async function postComment(extra, text) {
+    const res = await fetch('/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, name: name.trim(), text, ...extra }),
+    })
+    if (!res.ok) throw new Error('Failed to submit comment')
+    const { id } = await res.json()
+    await loadComments()
+    return id
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim() || !text.trim() || submitting) return
@@ -180,7 +192,8 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     }
   }
 
-  const hasOpenFeedback = comments.some(c => !c.resolved)
+  const hasOpenFeedback = hasOpenThread(comments)
+  const threads = buildThreads(comments)
 
   if (loading) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mid)', fontSize: 14 }}>
@@ -253,20 +266,41 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
 
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-      {/* Canvas / preview area */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a', overflow: 'auto', padding: 40 }}>
-        {project?.preview ? (
-          <img
-            src={project.preview}
-            alt={project.templateName}
-            style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', borderRadius: 4, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
-          />
-        ) : project?.thumbnail ? (
-          <img
-            src={project.thumbnail}
-            alt={project.templateName}
-            style={{ height: 441, width: 316, objectFit: 'contain', borderRadius: 4, imageRendering: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
-          />
+      {/* Canvas / preview area. Clicking anywhere on the design drops a
+          pinned comment (Anang's ask, 2026-09-28) - the preview has no
+          other click behaviour here, so unlike the editor there's no
+          separate comment mode to switch on. The wrapper takes the preview's
+          own aspect ratio (632x882, see App.jsx's makePreview) so the pin
+          layer covers exactly the image - sized with container query units
+          so it's the largest box of that ratio that fits the area. */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a', overflow: 'hidden', padding: 40, gap: 14, minWidth: 0 }}>
+        {(project?.preview || project?.thumbnail) ? (
+          <>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', flexShrink: 0 }}>
+              Click anywhere on the design to leave a comment
+            </div>
+            <div style={{ flex: 1, minHeight: 0, width: '100%', containerType: 'size', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: 'min(100cqw, calc(100cqh * 632 / 882))', aspectRatio: '632 / 882' }}>
+              <img
+                src={project.preview || project.thumbnail}
+                alt={project.templateName}
+                style={{ display: 'block', width: '100%', height: '100%', objectFit: 'fill', borderRadius: 4, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
+              />
+              <CommentPinLayer
+                threads={threads}
+                active
+                selectedId={selectedThreadId}
+                onSelect={setSelectedThreadId}
+                onCreate={(pin, text) => postComment({ pin }, text)}
+                onReply={(rootId, text) => postComment({ parentId: rootId }, text)}
+                onToggleResolved={handleToggleResolved}
+                needName
+                name={name}
+                onNameChange={setName}
+              />
+            </div>
+            </div>
+          </>
         ) : (
           <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No preview available</div>
         )}
@@ -288,23 +322,18 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {comments.length === 0 ? (
             <div style={{ color: 'var(--mid)', fontSize: 13, textAlign: 'center', paddingTop: 24 }}>
-              No comments yet - leave the first one below.
+              No comments yet - click the design to pin one, or leave a general comment below.
             </div>
           ) : (
-            comments.map(c => (
-              <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#F9FAFB', borderRadius: 10, padding: '10px 14px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : 'var(--border)'}`, opacity: c.resolved ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5, gap: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dark)' }}>
-                    {c.name}{c.from === 'designer' && <span style={{ fontWeight: 600, color: 'var(--primary)' }}> · designer</span>}
-                  </span>
-                  <span style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap' }}>{formatDateTime(c.createdAt)}</span>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--dark)', lineHeight: 1.55, textDecoration: c.resolved ? 'line-through' : 'none', marginBottom: 8 }}>{c.text}</div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--mid)', cursor: 'pointer', width: 'fit-content' }}>
-                  <input type="checkbox" checked={!!c.resolved} onChange={e => handleToggleResolved(c.id, e.target.checked)} style={{ cursor: 'pointer' }} />
-                  Done
-                </label>
-              </div>
+            threads.map(t => (
+              <CommentThreadCard
+                key={t.root.id}
+                thread={t}
+                selected={t.root.id === selectedThreadId}
+                onSelect={setSelectedThreadId}
+                onToggleResolved={handleToggleResolved}
+                background="#F9FAFB"
+              />
             ))
           )}
         </div>

@@ -145,7 +145,7 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId, overlay, topRight }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -1314,6 +1314,13 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           Guided mode · canvas locked
         </div>
       )}
+      {/* Top-right corner controls (the Comment tool toggle, App.jsx) - same
+          corner treatment as the Guided-mode badge opposite it. */}
+      {topRight && !loading && (
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 25, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {topRight}
+        </div>
+      )}
       {/* Space-holder: takes up the zoomed canvas size (plus the bleed margin
           drawn around it below) so the container scrolls correctly */}
       <div style={{
@@ -1367,6 +1374,24 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             }} />
           )}
         </div>
+        {/* Pinned comments (CanvasComments.jsx) - laid over exactly the trim
+            area, outside the scale() wrapper so pins and their popovers stay
+            a readable size at any zoom. Positions inside are fractions of
+            this box, so they track zoom on their own. Plain DOM on top of
+            the canvas, never part of the fabric scene, so never exported. */}
+        {overlay && !loading && (
+          <div style={{
+            position: 'absolute',
+            left: BLEED_MARGIN * scale,
+            top: BLEED_MARGIN * scale,
+            width: canvasW * scale,
+            height: canvasH * scale,
+            pointerEvents: 'none',
+            zIndex: 20,
+          }}>
+            {overlay}
+          </div>
+        )}
         {dropBusy && !dropError && (
           <div style={{
             position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
