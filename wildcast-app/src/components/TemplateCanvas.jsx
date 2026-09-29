@@ -111,6 +111,28 @@ async function loadFonts() {
 // unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
 // design, and a rotated zone's width axis is its visual height.
 const FIT_WIDTH_RATIO = 0.92
+
+// The CTA ("App download line" on Option B) finishes a sentence printed in
+// the background art ("Jetzt Wolt App downloaden und" -> "bei uns
+// bestellen!"), so it must stay close to that printed line's weight -
+// shrink to fit if too long, never grow to fill its box like a headline
+// (Julia's report, first 2026-09-28 "cta is too big", same report again
+// 2026-09-29 on this branch's own test design once she saw it rendered).
+// Built once already (eacb501, as part of a broader zoneCanGrow change
+// covering cta/tc/restaurant_name) then reverted with everything else in
+// b491aba when several chat-driven changes leaked into the shared editor
+// canvas - only T&Cs came back on its own after that (59dd090). This is
+// that same fix, rebuilt from scratch, added back zone by zone as each one
+// gets confirmed rather than all at once (which is most of why the
+// original went wrong): cta first, T&Cs already had its own separate wrap
+// fix. restaurant_name is the same story - it sits right next to a printed
+// "♥ WOLT" glyph baked into Option A's art (Julia, 2026-09-29: "should be
+// the same as 'heart wolt'"), same reasoning as the CTA, now confirmed.
+const NEVER_GROW_ZONE_IDS = new Set(['cta', 'restaurant_name'])
+function zoneCanGrow(zone) {
+  return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
+}
+
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
@@ -134,6 +156,36 @@ function overflowsFitWidth(obj, zone) {
 // overflow signal the resize loops already check - a too-wide word
 // should mean "still doesn't fit, keep shrinking," not "silently expand
 // the box instead."
+// Headline "middle ground" (Julia's ask, 2026-09-29): the fit check below
+// compares Fabric's own obj.height, which is a lineHeight(1.05)*fontSize
+// estimate sized for the font's FULL ascent+descent - space this all-caps,
+// single-line text (headline/sub-headline are forced .toUpperCase()) never
+// actually uses, since Omnes Cond's caps have no descenders. That's why the
+// headline used to stop growing at 37.1pt in a box designed for 56.6pt - it
+// still had real room left. The straight fix (checking the real rendered
+// ink height instead) was tried once before as a blanket change to every
+// autoShrink zone (2026-09-24, 09e9492) and came out "far too big" -
+// reverted the same day (2b455c1). This is narrower on purpose: real ink
+// height, measured via canvas measureText's actual glyph bounds (accounts
+// for accents like Ü, which sit above cap height), but ONLY for the
+// headline zone specifically (see CAP_FIT_ZONE_IDS) - sub-headline,
+// restaurant_name, offer and cta keep the old, more conservative check, so
+// this can't repeat the "grew everything" outcome that got reverted.
+// Measured against a real Option A headline before shipping: the old check
+// stopped at 37.1pt (real ink 33.3 of a 40.46 limit - 7 units left unused);
+// this lands at 47.1pt (real ink 42.2) - bigger, not maxed out to the raw
+// 56.6pt Figma value, which is what "far too big" actually was.
+const CAP_FIT_ZONE_IDS = new Set(['headline'])
+let capMeasureCtx = null
+function inkHeightOf(text, fontSize, fontFamily, fontWeight) {
+  if (!capMeasureCtx) capMeasureCtx = document.createElement('canvas').getContext('2d')
+  capMeasureCtx.font = `${fontWeight || 400} ${fontSize}px ${fontFamily}`
+  const m = capMeasureCtx.measureText(text || 'M')
+  const asc = m.actualBoundingBoxAscent
+  const desc = m.actualBoundingBoxDescent
+  return asc != null && desc != null ? asc + desc : null
+}
+
 function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   const textW = zone.textWidth ?? zone.width
   obj.set('fontSize', fontSize)
@@ -142,6 +194,13 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   if (obj.width > textW) {
     obj.set('width', textW)
     obj.initDimensions()
+  }
+  // Only meaningful for a single line - a wrapped multi-line block's real
+  // height is dominated by line count/spacing, not one line's cap height,
+  // so that case falls through to the same check every other zone uses.
+  if (CAP_FIT_ZONE_IDS.has(zone.id) && !zone.rotate && (obj.textLines?.length ?? 1) === 1) {
+    const ink = inkHeightOf(obj.text, fontSize, obj.fontFamily, obj.fontWeight)
+    if (ink != null) return ink > fitLimit + 2 || overflowsFitWidth(obj, zone)
   }
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
@@ -727,7 +786,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             // Then grow to fill - short text should be as large as the
             // bounding box allows. Keeps growing until the next step would
             // overflow, then steps back to the last fitting size.
-            while (size + 0.5 <= 120) {
+            while (zoneCanGrow(zone) && size + 0.5 <= 120) {
               const next = size + 0.5
               if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
                 applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
@@ -924,7 +983,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           // Then grow to fill the bounding box
-          while (size + 0.5 <= 120) {
+          while (zoneCanGrow(zone) && size + 0.5 <= 120) {
             const next = size + 0.5
             if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
               applyFontSizeAndCheckFit(obj, size, zone, fitLimit)

@@ -26,7 +26,9 @@ const ALL_MERCHANTS = '__all__'
 // (headline/sub_headline on Restaurant Flyer A/B/C read their §4.1 box
 // limits from templateZones.js instead — see aiFieldSettingsFor + limitFor
 // below). Other fields/templates keep these numbers.
-const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 120, restaurant_name: 30, cta: 60 }
+// tc raised 120 -> 140 - see the matching constant in promptBriefFlow.js
+// for the measurement behind this number.
+const CHAR_LIMITS = { headline: 20, offer: 20, sub_headline: 25, tc: 140, restaurant_name: 30, cta: 60 }
 
 // Matches the label each case in renderTextStep's switch passes to
 // StepFieldRow - used by the accordion's collapsed row, which needs a

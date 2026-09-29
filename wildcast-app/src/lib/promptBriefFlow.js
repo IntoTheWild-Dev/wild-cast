@@ -26,7 +26,17 @@ import { ADD_NEW, OBJECTIVES, PLACEHOLDER_PARTNERS, FORMAT_TEMPLATE_GROUP, DEFAU
 // they come from its copy-database box (aiFieldSettingsFor's
 // max_chars_min_pt - the same capacity FieldEditor's counter and AI
 // Suggest's C1 check use), which is far tighter (headline ~11, not 20).
-const CHAR_LIMITS = { headline: 20, sub_headline: 25, offer: 20, tc: 120, restaurant_name: 30, cta: 60 }
+// tc raised 120 -> 140 (Julia's ask, 2026-09-29: a real German T&Cs is
+// often longer than 120 chars) - measured against Option A's real T&Cs
+// zone (rotated, 124.73 units long, 18.87 thick, fixed 4.72pt - it never
+// auto-shrinks, so nothing catches an overflow): 120 chars wraps to only 2
+// of the 3 lines the zone can physically hold before spilling past its
+// print area, so there was real headroom; 150 is the exact ceiling before
+// a 4th line overflows, 140 keeps a small margin. This is NOT verified
+// against Option C's T&Cs zone (different geometry, unreachable locally) -
+// if it's noticeably smaller there, this may need a per-template value
+// like headline/sub-headline instead of one global number.
+const CHAR_LIMITS = { headline: 20, sub_headline: 25, offer: 20, tc: 140, restaurant_name: 30, cta: 60 }
 
 const ZONE_QUESTIONS = {
   logo: {
