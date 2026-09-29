@@ -6,6 +6,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { deflateSync } from 'zlib'
 import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
+import { loadLut, applyLut } from './_lib/cmykLut.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -44,27 +45,45 @@ export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 // the only user-choosable profile (Julia's ask, 2026-09-18); the fogra39
 // entry stays here so a project saved before this change with
 // iccProfile:'fogra39' still exports correctly, it's just not offered.
+// `lut` is the Relative Colorimetric + BPC table for the CMYK-only mode (see
+// scripts/build-cmyk-lut.py).
 const ICC_PROFILES = {
   fogra39: {
     file: 'ISOcoated_v2_eci.icc',
+    lut: 'ISOcoated_v2_eci.relcol-bpc.lut',
     identifier: 'FOGRA39',
     info: 'Coated FOGRA39 \\(ISO 12647-2:2004\\)',
   },
   fogra51: {
     file: 'PSOcoated_v3.icc',
+    lut: 'PSOcoated_v3.relcol-bpc.lut',
     identifier: 'FOGRA51',
     info: 'PSO Coated v3 FOGRA51 \\(ISO 12647-2:2013\\)',
   },
 }
 
+// Export modes (2026-09-29, after cross-checking the Wolt x McDonald's
+// InDesign reference):
+//  - 'print' (default): the flyer image stays sRGB (ICC-tagged), exactly as
+//    InDesign's PDF/X-4 export leaves placed RGB photos, so the print shop's
+//    RIP converts WildCast and InDesign files identically. Brand colors are
+//    still painted as exact CMYK on top.
+//  - 'cmyk': everything converted to CMYK here, for printers that require
+//    CMYK-only files - Relative Colorimetric + BPC (what a RIP / InDesign's
+//    Convert to Destination does), not sharp's Perceptual-only conversion,
+//    which measured dE ~2.5-3.2 off on the reference's food photos.
+const EXPORT_MODES = new Set(['print', 'cmyk'])
+const SRGB_ICC = 'sRGB_IEC61966-2-1.icc'  // same profile InDesign embeds
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null } = req.body
+  const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print' } = req.body
   if (!png) return res.status(400).json({ error: 'Missing png' })
 
   const profileMeta = ICC_PROFILES[profile]
   if (!profileMeta) return res.status(400).json({ error: `Unknown profile "${profile}"` })
+  if (!EXPORT_MODES.has(mode)) return res.status(400).json({ error: `Unknown mode "${mode}"` })
 
   try {
     const pngBuffer = Buffer.from(
@@ -73,24 +92,27 @@ export default async function handler(req, res) {
     )
 
     // Load the selected output ICC profile (bundled alongside this function)
-    const iccPath = join(__dirname, 'icc', profileMeta.file)
-    const iccProfile = readFileSync(iccPath)
+    const iccProfile = readFileSync(join(__dirname, 'icc', profileMeta.file))
 
-    // ── sRGB → CMYK, with brand color library override ───────────────────────
-    // CMYK JPEG carries an APP14 "Adobe" marker that inverts byte values
-    // (0=full ink instead of 0=no ink), causing PDF viewers to render near-black.
-    // Using raw bytes + FlateDecode (below) sidesteps that convention entirely.
-    // See convertToBrandAwareCmyk for the resize/bleed/ICC/brand-lookup details.
-    const { rawCmyk, brandMasks, unverifiedColorCount } = await convertToBrandAwareCmyk({ pngBuffer, iccPath, brand })
-
-    const cmykZ = deflateSync(rawCmyk)  // FlateDecode for PDF
+    // ── Flyer image (sRGB or CMYK), with brand color library override ────────
+    // Raw bytes + FlateDecode (below), never JPEG: CMYK JPEG's APP14 "Adobe"
+    // marker inverts byte values, causing PDF viewers to render near-black.
+    // See renderFlyerImage for the resize/bleed/conversion/brand-lookup details.
+    const { pixels, brandMasks, unverifiedColorCount } = await renderFlyerImage({
+      pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut),
+    })
 
     // ── Build PDF/X-4 ────────────────────────────────────────────────────────
-    const pdfBuffer = buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta })
+    const pdfBuffer = buildPdfX4({
+      imageZ: deflateSync(pixels),
+      imageIcc: mode === 'print' ? readFileSync(join(__dirname, 'icc', SRGB_ICC)) : null,
+      brandMasks, iccProfile, profileMeta,
+    })
 
-    const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()
+    const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`)
+    res.setHeader('X-Export-Mode', mode)
     res.setHeader('Content-Length', pdfBuffer.length)
     // Requirement 3 (brief §5): flag any export that used the fallback
     // conversion for one or more colors, so nobody assumes an unflagged
@@ -98,7 +120,7 @@ export default async function handler(req, res) {
     // than baked into the PDF itself) so the UI can show "N colors not
     // brand-verified" without touching the print file.
     res.setHeader('X-Unverified-Colors', String(unverifiedColorCount))
-    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors')
+    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode')
     return res.status(200).send(pdfBuffer)
   } catch (err) {
     console.error('export-cmyk error:', err)
@@ -106,12 +128,10 @@ export default async function handler(req, res) {
   }
 }
 
-// ── sRGB → brand-aware CMYK conversion ──────────────────────────────────────
-// Pulled out of the handler so it can be exercised directly (see
-// scripts/verify-brand-color-fix.mjs) without going through an HTTP request -
-// the verification script imports and calls this exact function, so what it
-// checks is provably the same code path production uses, not a re-implementation.
-export async function convertToBrandAwareCmyk({ pngBuffer, iccPath, brand }) {
+// ── Flyer image: resize/bleed, then sRGB ('print') or CMYK ('cmyk') ─────────
+// Returns the raw image samples (3 bytes/px sRGB, or 4 bytes/px CMYK), the
+// exact-CMYK brand stencils and the unverified-color count.
+export async function renderFlyerImage({ pngBuffer, brand, mode, lutPath }) {
   // 'cover' (not 'fill') — the editor canvas is 316×441px, which is ~1% off
   // true A6's 105:148 ratio (canvasH was rounded to 441 rather than the more
   // precise 445 when these constants were first chosen), so a naive
@@ -120,11 +140,7 @@ export async function convertToBrandAwareCmyk({ pngBuffer, iccPath, brand }) {
   // ~1% overflow off one edge instead — invisible here since the
   // background art fills edge-to-edge — guaranteeing nothing in the design
   // gets stretched out of proportion.
-  // Shared pipeline up to (but not including) the ICC conversion — reused
-  // below to get both the pre-conversion RGB pixels (needed to find brand
-  // colors) and the converted CMYK pixels, on the identical pixel grid.
-  const buildPipeline = () =>
-    sharp(pngBuffer)
+  const rgbBuffer = await sharp(pngBuffer)
       .resize(TRIM_PX_W, TRIM_PX_H, { fit: 'cover' })
       .flatten({ background: { r: 255, g: 255, b: 255 } }) // composite any alpha on white
       // Real bleed: mirror the trim-edge pixels outward by BLEED_PX rather than
@@ -136,22 +152,20 @@ export async function convertToBrandAwareCmyk({ pngBuffer, iccPath, brand }) {
         background: { r: 255, g: 255, b: 255 },
         extendWith: 'mirror',
       })
+      .removeAlpha()
+      .raw()
+      .toBuffer()
 
-  // ── sRGB → CMYK (raw bytes, no JPEG APP14 inversion risk) ────────────────
-  // withIccProfile with a CMYK profile does the ICC-accurate sRGB→CMYK
-  // conversion; raw() extracts 4 bytes/px (C, M, Y, K) in standard order.
-  const rawCmyk = await buildPipeline()
-    .withIccProfile(iccPath)   // sRGB → CMYK via the selected profile (4 channels, 0=no ink)
-    .raw()
-    .toBuffer()
+  // 'cmyk': Relative Colorimetric + BPC via the profile's lookup table (0=no
+  // ink, 4 bytes/px). 'print': the sRGB samples go into the PDF untouched.
+  const cmykBuffer = mode === 'cmyk' ? applyLut(rgbBuffer, loadLut(lutPath)) : null
 
   // Unmatched colors are counted for the warning, including exports without
   // a library (see applyBrandColorLibrary for the visible-area threshold).
-  const rgbBuffer = await buildPipeline().removeAlpha().raw().toBuffer()
   const { brandMasks, unverifiedColorCount } = applyBrandColorLibrary(
-    rgbBuffer, rawCmyk, getBrandLibrary(brand),
+    rgbBuffer, cmykBuffer, getBrandLibrary(brand),
   )
-  return { rawCmyk, brandMasks, unverifiedColorCount }
+  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, unverifiedColorCount }
 }
 
 // Warning count (requirement 3): distinct unmatched RGB values that cover at
@@ -186,13 +200,16 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
       unmatched.set(key, (unmatched.get(key) || 0) + 1)
       continue
     }
-    // Retain the approximate brand color underneath the stencil. The final
-    // ink values come from its exact PDF CMYK operands, not these bytes.
-    const ci = px * 4
-    cmykBuffer[ci] = color.bytes.c
-    cmykBuffer[ci + 1] = color.bytes.m
-    cmykBuffer[ci + 2] = color.bytes.y
-    cmykBuffer[ci + 3] = color.bytes.k
+    // Retain the approximate brand color underneath the stencil ('cmyk' mode;
+    // in 'print' mode the sRGB brand pixel stays). The final ink values come
+    // from the stencil's exact PDF CMYK operands, not these bytes.
+    if (cmykBuffer) {
+      const ci = px * 4
+      cmykBuffer[ci] = color.bytes.c
+      cmykBuffer[ci + 1] = color.bytes.m
+      cmykBuffer[ci + 2] = color.bytes.y
+      cmykBuffer[ci + 3] = color.bytes.k
+    }
     color.mask ??= Buffer.alloc(rowBytes * PX_H)
     const x = px % PX_W
     const y = Math.floor(px / PX_W)
@@ -206,10 +223,11 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
 }
 
 // ── PDF/X-4 builder ───────────────────────────────────────────────────────────
-// Objects 1–9 are fixed (see below); brand stencil masks follow from 10.
-const MASK_ID0 = 10
-
-function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
+// Objects 1–9 are fixed (see below); in 'print' mode object 10 is the sRGB
+// ICC profile the image is tagged with; brand stencil masks follow.
+function buildPdfX4({ imageZ, imageIcc, brandMasks, iccProfile, profileMeta }) {
+  const IMAGE_ICC_ID = 10
+  const MASK_ID0 = imageIcc ? 11 : 10
   const chunks  = []
   const offsets = {}
 
@@ -314,7 +332,8 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
   push(iccZ)
   push('\nendstream\nendobj\n')
 
-  // 7 — Image XObject (raw CMYK, FlateDecode — avoids JPEG APP14 inversion bug)
+  // 7 — Image XObject (raw samples, FlateDecode — avoids JPEG APP14 inversion
+  // bug). 'print': sRGB-tagged (object 10), 'cmyk': output-profile CMYK.
   mark(7)
   push(
     '7 0 obj\n' +
@@ -322,13 +341,13 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
     '   /Subtype /Image\n' +
     `   /Width ${PX_W}\n` +
     `   /Height ${PX_H}\n` +
-    '   /ColorSpace [/ICCBased 6 0 R]\n' +
+    `   /ColorSpace [/ICCBased ${imageIcc ? IMAGE_ICC_ID : 6} 0 R]\n` +
     '   /BitsPerComponent 8\n' +
     '   /Filter /FlateDecode\n' +
-    `   /Length ${cmykZ.length}\n` +
+    `   /Length ${imageZ.length}\n` +
     '>>\nstream\n',
   )
-  push(cmykZ)
+  push(imageZ)
   push('\nendstream\nendobj\n')
 
   // 8 — Content stream: scale-to-page cm matrix, then paint image
@@ -351,6 +370,15 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
     '   /Trapped /False /GTS_PDFXVersion (PDF/X-4) >>\nendobj\n',
   )
 
+  // 10 — sRGB ICC profile for the 'print' mode image
+  if (imageIcc) {
+    const imageIccZ = deflateSync(imageIcc)
+    mark(IMAGE_ICC_ID)
+    push(`${IMAGE_ICC_ID} 0 obj\n<< /N 3 /Length ${imageIccZ.length} /Filter /FlateDecode >>\nstream\n`)
+    push(imageIccZ)
+    push('\nendstream\nendobj\n')
+  }
+
   brandMasks.forEach((color, i) => {
     const id = MASK_ID0 + i
     const maskZ = deflateSync(color.mask)
@@ -362,7 +390,7 @@ function buildPdfX4({ cmykZ, brandMasks, iccProfile, profileMeta }) {
 
   // ── Cross-reference table ─────────────────────────────────────────────────
   const xrefOffset = tell()
-  const N = MASK_ID0 + brandMasks.length  // objects 0–9 plus brand stencils
+  const N = MASK_ID0 + brandMasks.length  // fixed objects plus brand stencils
   push(`xref\n0 ${N}\n`)
   push('0000000000 65535 f \n')
   for (let i = 1; i < N; i++) {

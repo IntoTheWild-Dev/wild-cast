@@ -1344,7 +1344,10 @@ const SHOW_MODE_CHOOSER = false
     handleFieldChange(`${zoneId}Url`, url)
   }
 
-  async function handleExport() {
+  // mode: 'print' (default - photos stay RGB like InDesign's PDF/X-4, the
+  // print shop converts them) or 'cmyk' (CMYK-only file, for printers that
+  // require it). Wolt Blue is exact 75/0/10/0 in both - see api/export-cmyk.js.
+  async function handleExport(mode = 'print') {
     // Belt-and-suspenders alongside FieldEditor's own Export PDF button being
     // disabled/hidden for non-Managers - shouldn't normally be reachable, but
     // keeps this correct even if the button state is ever stale.
@@ -1368,7 +1371,7 @@ const SHOW_MODE_CHOOSER = false
         // template is a Wolt flyer (see api/_lib/brandColors.js, Phase 1 of
         // the print-color fix, 2026-09-25 brief). Once templates for other
         // brands exist, this should come from the template/partner instead.
-        body: JSON.stringify({ png, filename, profile: iccProfile, brand: 'wolt' }),
+        body: JSON.stringify({ png, filename, profile: iccProfile, brand: 'wolt', mode }),
       })
 
       if (!response.ok) {
@@ -1380,20 +1383,22 @@ const SHOW_MODE_CHOOSER = false
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${filename}.pdf`
+      a.download = `${filename}${mode === 'cmyk' ? '-cmyk' : ''}.pdf`
       a.click()
       URL.revokeObjectURL(url)
 
       // Requirement 3 (brief §5): surface a warning when one or more colors
-      // fell back to the plain hex->CMYK conversion instead of a verified
-      // brand value, so nobody assumes an unflagged flyer is fully
-      // brand-accurate. See X-Unverified-Colors in api/export-cmyk.js.
+      // have no official brand print value, so nobody assumes an unflagged
+      // flyer is fully brand-accurate. See X-Unverified-Colors in
+      // api/export-cmyk.js. Who converts them depends on the mode.
       const unverifiedCount = Number(response.headers.get('X-Unverified-Colors') || 0)
       if (unverifiedCount > 0) {
         alert(
           `Heads up: ${unverifiedCount} color${unverifiedCount === 1 ? '' : 's'} in this export ` +
-          `${unverifiedCount === 1 ? 'was' : 'were'} not brand-verified and used the standard ` +
-          `screen-to-print conversion instead of an official brand print value.`
+          `${unverifiedCount === 1 ? 'has' : 'have'} no official brand print value` +
+          (mode === 'cmyk'
+            ? ' and were converted to CMYK with the standard screen-to-print conversion.'
+            : ' and will be converted by the print shop, like photos in an InDesign export.')
         )
       }
 
