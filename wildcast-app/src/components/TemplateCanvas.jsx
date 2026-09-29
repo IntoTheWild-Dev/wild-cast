@@ -1315,9 +1315,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         </div>
       )}
       {/* Top-right corner controls (the Comment tool toggle, App.jsx) - same
-          corner treatment as the Guided-mode badge opposite it. */}
+          corner treatment as the Guided-mode badge opposite it. Stacked as a
+          column so anything after the button (the comment-mode hint) sits in
+          the margin below it rather than stretching left over the design. */}
       {topRight && !loading && (
-        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 25, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 25, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
           {topRight}
         </div>
       )}
