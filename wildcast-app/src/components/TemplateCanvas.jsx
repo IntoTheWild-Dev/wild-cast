@@ -134,6 +134,36 @@ function overflowsFitWidth(obj, zone) {
 // overflow signal the resize loops already check - a too-wide word
 // should mean "still doesn't fit, keep shrinking," not "silently expand
 // the box instead."
+// Headline "middle ground" (Julia's ask, 2026-09-29): the fit check below
+// compares Fabric's own obj.height, which is a lineHeight(1.05)*fontSize
+// estimate sized for the font's FULL ascent+descent - space this all-caps,
+// single-line text (headline/sub-headline are forced .toUpperCase()) never
+// actually uses, since Omnes Cond's caps have no descenders. That's why the
+// headline used to stop growing at 37.1pt in a box designed for 56.6pt - it
+// still had real room left. The straight fix (checking the real rendered
+// ink height instead) was tried once before as a blanket change to every
+// autoShrink zone (2026-09-24, 09e9492) and came out "far too big" -
+// reverted the same day (2b455c1). This is narrower on purpose: real ink
+// height, measured via canvas measureText's actual glyph bounds (accounts
+// for accents like Ü, which sit above cap height), but ONLY for the
+// headline zone specifically (see CAP_FIT_ZONE_IDS) - sub-headline,
+// restaurant_name, offer and cta keep the old, more conservative check, so
+// this can't repeat the "grew everything" outcome that got reverted.
+// Measured against a real Option A headline before shipping: the old check
+// stopped at 37.1pt (real ink 33.3 of a 40.46 limit - 7 units left unused);
+// this lands at 47.1pt (real ink 42.2) - bigger, not maxed out to the raw
+// 56.6pt Figma value, which is what "far too big" actually was.
+const CAP_FIT_ZONE_IDS = new Set(['headline'])
+let capMeasureCtx = null
+function inkHeightOf(text, fontSize, fontFamily, fontWeight) {
+  if (!capMeasureCtx) capMeasureCtx = document.createElement('canvas').getContext('2d')
+  capMeasureCtx.font = `${fontWeight || 400} ${fontSize}px ${fontFamily}`
+  const m = capMeasureCtx.measureText(text || 'M')
+  const asc = m.actualBoundingBoxAscent
+  const desc = m.actualBoundingBoxDescent
+  return asc != null && desc != null ? asc + desc : null
+}
+
 function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   const textW = zone.textWidth ?? zone.width
   obj.set('fontSize', fontSize)
@@ -142,6 +172,13 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   if (obj.width > textW) {
     obj.set('width', textW)
     obj.initDimensions()
+  }
+  // Only meaningful for a single line - a wrapped multi-line block's real
+  // height is dominated by line count/spacing, not one line's cap height,
+  // so that case falls through to the same check every other zone uses.
+  if (CAP_FIT_ZONE_IDS.has(zone.id) && !zone.rotate && (obj.textLines?.length ?? 1) === 1) {
+    const ink = inkHeightOf(obj.text, fontSize, obj.fontFamily, obj.fontWeight)
+    if (ink != null) return ink > fitLimit + 2 || overflowsFitWidth(obj, zone)
   }
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
