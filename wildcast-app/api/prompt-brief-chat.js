@@ -12,7 +12,14 @@
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_STEPS = 30
 const MAX_OPTIONS = 12
-const MAX_MESSAGE = 600
+// 2000 (was 600, Julia's paste-and-extract ask 2026-09-28): a real pasted
+// brief is a few paragraphs. ~2000 chars is roughly 500-600 input tokens on
+// top of the step list - well within Haiku's context, and the OUTPUT stays
+// small (one ack + one question), so max_tokens: 500 is unchanged. A much
+// larger cap would start squeezing the 8s timeout; raise both together if
+// this ever needs to grow (verified live on the preview with a ~3 paragraph
+// paste - the request round-trips well inside the budget).
+const MAX_MESSAGE = 2000
 const MAX_HISTORY = 8
 const TIMEOUT_MS = 8000
 
@@ -33,6 +40,7 @@ function sanitizeSteps(raw) {
       ? s.options.slice(0, MAX_OPTIONS).map(o => ({ label: clean(o?.label, 60), value: clean(o?.value, 60) }))
       : [],
     whenAnswer: s?.whenAnswer?.stepId ? { stepId: clean(s.whenAnswer.stepId, 40), value: clean(s.whenAnswer.value, 60) } : null,
+    unlessAnswered: clean(s?.unlessAnswered, 40) || null,
   })).filter(s => s.id)
 }
 
@@ -50,7 +58,11 @@ function sanitizeHistory(raw) {
   return raw.slice(-MAX_HISTORY).map(m => ({ from: m?.from === 'user' ? 'user' : 'assistant', text: clean(m?.text, 300) })).filter(m => m.text)
 }
 
-const applies = (step, answers) => !step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value
+// Mirrors stepApplies in src/lib/promptBriefFlow.js - keep the two in step.
+const isGiven = a => !!a && !a.skipped && String(a.value ?? '').trim() !== ''
+const applies = (step, answers) =>
+  (!step.whenAnswer || answers[step.whenAnswer.stepId]?.value === step.whenAnswer.value)
+  && (!step.unlessAnswered || !isGiven(answers[step.unlessAnswered]))
 
 const SYSTEM = `You are the Wild Stack design assistant inside WildCast. A restaurant partner is briefing a print flyer through a short chat. Be warm, brief and plain-spoken.
 
