@@ -128,7 +128,14 @@ const FIT_WIDTH_RATIO = 0.92
 // fix. restaurant_name is the same story - it sits right next to a printed
 // "♥ WOLT" glyph baked into Option A's art (Julia, 2026-09-29: "should be
 // the same as 'heart wolt'"), same reasoning as the CTA, now confirmed.
-const NEVER_GROW_ZONE_IDS = new Set(['cta', 'restaurant_name'])
+// tc added last, same day: on any template where 'tc' has autoShrink: true
+// (Option C - Option A's tc has no autoShrink at all, so it's unaffected;
+// see 59dd090's own wrap fix for that separate case), this same grow loop
+// was pushing legal fine print up to fill its box instead of staying small
+// - Julia found it on an old saved design rendering T&Cs at 9pt. Fine print
+// should only ever shrink for long text, never grow for short text, same
+// reasoning as cta/restaurant_name above.
+const NEVER_GROW_ZONE_IDS = new Set(['cta', 'restaurant_name', 'tc'])
 function zoneCanGrow(zone) {
   return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
 }
