@@ -50,8 +50,20 @@ async function handleGet(req, res) {
   }
 }
 
+// Figma-style pinned comments (Anang's ask, 2026-09-28): a comment can carry
+// `pin` - where on the design it was dropped, as 0-1 fractions of the trim
+// area (the same area the saved preview image shows), so it lands in the
+// same spot in the editor at any zoom and on the review link. Returns null
+// for anything that isn't a real in-bounds point.
+function parsePin(pin) {
+  if (!pin || typeof pin !== 'object') return null
+  const x = Number(pin.x), y = Number(pin.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }
+}
+
 async function handlePost(req, res) {
-  const { projectId, name, text, from } = req.body
+  const { projectId, name, text, from, pin, parentId } = req.body
   if (!projectId || !name?.trim() || !text?.trim()) {
     return res.status(400).json({ error: 'Missing required fields' })
   }
@@ -60,22 +72,35 @@ async function handlePost(req, res) {
 
   try {
     const comments = await loadComments(projectId, token)
+    // A reply (`parentId`) always hangs off a thread's root comment, never
+    // off another reply, and never carries its own pin - the thread's root
+    // owns the pin. Comments without either stay plain, unpinned top-level
+    // comments, exactly like every comment saved before this.
+    const parent = parentId ? comments.find(c => c.id === parentId) : null
+    if (parentId && !parent) return res.status(404).json({ error: 'Thread not found' })
+    const rootId = parent ? (parent.parentId || parent.id) : null
+    const parsedPin = rootId ? null : parsePin(pin)
+    const newId = crypto.randomUUID()
     comments.push({
-      id: crypto.randomUUID(),
+      id: newId,
       name: name.trim(),
       text: text.trim(),
       // Defaults to 'reviewer' - ReviewPage.jsx (the external share-link
-      // page) never sends this, only App.jsx's editor sidebar does when the
-      // signed-in designer replies.
-      from: from === 'designer' ? 'designer' : 'reviewer',
+      // page) never sends this. App.jsx's editor sends 'designer' or
+      // 'manager' from the "View as" role (was always 'designer', so a
+      // Manager's editor comments were mislabelled and never notified the
+      // owner - Anang, 2026-09-29).
+      from: from === 'designer' || from === 'manager' ? from : 'reviewer',
       resolved: false,
       createdAt: Date.now(),
+      ...(rootId ? { parentId: rootId } : {}),
+      ...(parsedPin ? { pin: parsedPin } : {}),
     })
     await saveComments(projectId, comments, token)
 
-    // A reviewer's comment notifies the design's owner. The designer's own
-    // replies (from: 'designer', posted from the editor) don't - they'd only
-    // be notifying themselves.
+    // A reviewer's or Manager's comment notifies the design's owner. The
+    // designer's own replies (from: 'designer', posted from the editor)
+    // don't - they'd only be notifying themselves.
     if (from !== 'designer') {
       try {
         const result = await get(`projects/${projectId}.json`, { access: 'private', useCache: false, token })
@@ -94,7 +119,7 @@ async function handlePost(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, count: comments.length })
+    return res.status(200).json({ ok: true, id: newId, count: comments.length })
   } catch (err) {
     console.error('add-comment error:', err)
     return res.status(500).json({ error: err.message })

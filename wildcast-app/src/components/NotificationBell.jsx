@@ -56,6 +56,11 @@ export default function NotificationBell({ notifications, onOpenProject }) {
     setOpen(true)
   }
 
+  function handleMarkAllRead() {
+    markAllRead()
+    setNewIds(new Set())
+  }
+
   function handleClick(n) {
     setOpen(false)
     onOpenProject?.(n.projectId)
@@ -89,6 +94,18 @@ export default function NotificationBell({ notifications, onOpenProject }) {
         <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: '1px solid var(--border)', borderRadius: 14, boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)' }}>Notifications</span>
+            {/* Opening already marks everything read server-side (see
+                handleToggle), so this clears the "new" highlight too - plus
+                anything a poll brought in while the dropdown was open. */}
+            {(newIds.size > 0 || unread > 0) && (
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                style={{ border: 'none', background: 'none', padding: 0, fontSize: 12, fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Mark all as read
+              </button>
+            )}
           </div>
 
           <div style={{ maxHeight: 420, overflowY: 'auto' }}>
