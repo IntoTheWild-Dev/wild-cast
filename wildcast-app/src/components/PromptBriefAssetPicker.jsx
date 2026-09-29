@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getLibraryAssets, uniqueMerchants, FOLDERS, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { hasTransparency } from '../lib/image'
+import { isCloseMatch } from '../lib/fuzzyMatch'
 
 // "Choose from Assets" for the Prompt Brief chat (Julia's ask, 2026-09-19).
 // Opens the same shared Assets library the Assets tab and the editor's
@@ -25,7 +26,12 @@ export default function PromptBriefAssetPicker({ folder, merchant, requireTransp
       setAssets(inFolder)
       // Only default to the partner when they really have assets tagged that
       // way - an unmatched value would silently show an empty list.
-      if (uniqueMerchants(inFolder).includes(merchant)) setFilter(merchant)
+      // Close match, not exact: library tags drift ("McDonalds", curly
+      // apostrophes) - same typo tolerance as the rest of the app (fuzzyMatch).
+      const own = merchant && merchant !== GENERAL_MERCHANT
+        ? uniqueMerchants(inFolder).find(m => m !== GENERAL_MERCHANT && isCloseMatch(m, merchant))
+        : null
+      if (own) setFilter(own)
     })
     return () => { cancelled = true }
   }, [folder, merchant])

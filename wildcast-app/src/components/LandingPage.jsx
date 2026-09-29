@@ -15,7 +15,7 @@ const CHOICES = [
   {
     key: 'prompt-brief',
     title: 'Prompt Brief',
-    desc: 'Pick a template, then chat with our assistant. It asks what a designer would ask and fills the template in for you.',
+    desc: 'Chat with our assistant or paste your whole brief. It picks the right template and fills it in for you.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

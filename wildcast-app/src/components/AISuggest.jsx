@@ -1,269 +1,72 @@
-import { useState } from 'react'
-
-// variant="pill" (default) - small colored pill, used inline next to a field
-// (FieldEditor.jsx). variant="button-group" - matches BriefingForm.jsx's
-// plain-outlined ChoiceButton style, for sitting alongside "Write my own" /
-// "Choose preset" as one consistent row of mode buttons.
+// AI Suggest button — pair/queue model (Mark's v1.2 spec, §8.2).
 //
-// context - optional brief details (businessType, about, objective,
-// partnerName) passed through to the backend so suggestions are grounded in
-// the actual brief, not just the field type. Omitted by FieldEditor.jsx,
-// which doesn't have easy access to the full brief.
+// The old dropdown-with-six-options UI is gone: clicking now applies ONE
+// line to the field directly ("one field, one click, one line"). The
+// matching sub-headline/headline partner line travels with it (stored in
+// the session queue in FieldEditor via lib/usePairQueue.js), so the next
+// click on the other field shows the matching line with no new API call.
+// Clicking again walks the queue; a new batch (empty queue, changed
+// context, locked rewrite) is the only thing that costs a credit.
 //
-// credits/onCreditUsed - each generation is a real Claude API call we pay
-// for, so it costs the activation key one credit (mirrors the export credit
-// deduction in App.jsx). Both are undefined when no activation is in scope,
-// which leaves generation ungated rather than blocking on a false 0.
-//
-// One icon per field, not two - Julia's editor redesign, 2026-09-18, per
-// Annika's mockup ("merge AI Suggest + Improve with AI into one icon per
-// field"). Which behavior it performs is decided live at click/open time
-// from whatever's currently in the field (seedText), not a fixed prop:
-// empty field -> generate fresh copy from the brief (old default "Generate"
-// mode); field already has text -> polish/translate it (old "Improve with
-// AI" mode, seeding the request with that text). A field's own text can
-// change between opens (someone types, clears, AI-applies, then reopens),
-// so this is recomputed every render rather than cached - same reasoning
-// the old improve-mode-never-caches comment already had, just now covering
-// the empty<->filled transition too, not only cache staleness.
-export default function AISuggest({ field, lang, onApply, variant = 'pill', context = {}, credits, onCreditUsed, seedText = '' }) {
-  const [open, setOpen] = useState(false)
-  const [dropLang, setDropLang] = useState(lang)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  // Cache per language so toggling DE/EN back and forth doesn't refetch.
-  const [byLang, setByLang] = useState({})
-  // Tracks whether "Suggest more" has already been used for a given
-  // language - capped at one extra round per open, so at most 2 credits
-  // (initial + one more) can be spent per language per generation.
-  const [moreUsed, setMoreUsed] = useState({})
-  // A real notification box instead of a plain alert() - matching
-  // WildScale's own out-of-credits notice (Julia's ask, 2026-09-16).
-  const [showOutOfCredits, setShowOutOfCredits] = useState(false)
+// The generation engine lives in FieldEditor.jsx (the queue is shared
+// between the Headline and Sub-headline rows), so this component is the
+// button + its inline error, plus the shared out-of-credits modal.
 
-  const activeLang = dropLang
-  const suggestions = byLang[activeLang] ?? []
-
-  const trimmedSeed = seedText.trim()
-  const isImprove = trimmedSeed.length > 0
-
-  async function fetchSuggestions(l, { more = false } = {}) {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/ai-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          field, lang: l, context,
-          ...(isImprove ? { seed: trimmedSeed } : {}),
-          ...(more ? { exclude: byLang[l] ?? [] } : {}),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'AI suggest failed')
-      // "Suggest more" appends to what's already shown rather than
-      // replacing it, so earlier options stay pickable.
-      setByLang(prev => ({ ...prev, [l]: more ? [...(prev[l] ?? []), ...(data.suggestions ?? [])] : (data.suggestions ?? []) }))
-      if (more) setMoreUsed(prev => ({ ...prev, [l]: true }))
-      onCreditUsed?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function handleSuggestMore() {
-    if (moreUsed[activeLang] || !canGenerate('more')) return
-    fetchSuggestions(activeLang, { more: true })
-  }
-
-  // Improve mode never trusts the cache - seedText can change between
-  // opens, so a stale byLang entry would silently show suggestions for
-  // whatever was typed last time.
-  function needsFetch(l) {
-    return isImprove || !byLang[l]
-  }
-
-  // Gate before any actual API call (a cache hit in byLang is free - no
-  // fetch happens, so no confirmation needed to reopen it).
-  function canGenerate(kind = 'initial') {
-    if (credits != null && credits <= 0) {
-      setShowOutOfCredits(true)
-      return false
-    }
-    const message = kind === 'more'
-      ? 'Get one more round of suggestions? This uses 1 credit.'
-      : isImprove ? 'Improve/translate this line? This uses 1 credit.' : 'Generate 6 AI suggestions? This uses 1 credit.'
-    return window.confirm(message)
-  }
-
-  function handleToggle() {
-    const willOpen = !open
-    if (willOpen && needsFetch(lang) && !canGenerate()) return
-    setOpen(willOpen)
-    if (willOpen) {
-      setDropLang(lang)
-      if (needsFetch(lang)) fetchSuggestions(lang)
-    }
-  }
-
-  function handleLangSwitch(e, l) {
-    e.stopPropagation()
-    if (needsFetch(l) && !canGenerate()) return
-    setDropLang(l)
-    if (needsFetch(l)) fetchSuggestions(l)
-  }
-
-  const buttonStyle = variant === 'button-group'
-    ? {
-        display: 'flex', alignItems: 'center', gap: 6,
-        fontSize: 13, fontWeight: 600, color: 'var(--dark)',
-        background: '#fff', border: '1.5px solid var(--border)',
-        borderRadius: 8, padding: '8px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
-      }
-    : {
-        display: 'flex', alignItems: 'center', gap: 5,
-        fontSize: 11, fontWeight: 600, color: 'var(--primary)',
-        background: 'var(--primary-glow)', border: '1px solid rgba(223,111,109,0.25)',
-        borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
-      }
-
-  // No own position:relative wrapper - the dropdown (position:absolute,
-  // right:0 below) is meant to resolve against the shared button-row
-  // wrapper in FieldEditor.jsx (which IS position:relative and spans the
-  // panel's full content width), not against this one button's own narrow
-  // bounding box - anchoring it to this button's own narrow bounding box
-  // let a 300px-wide dropdown start well left of the panel's own left edge
-  // and get clipped by the panel's overflow:hidden (Julia's report,
-  // 2026-09-09: "AI Suggestions are off page we can't see it" - the
-  // dropdown WAS generating suggestions fine, just invisible).
+export default function AISuggest({ onSuggest, busy, error, onRetry, matchesOtherField }) {
   return (
     <>
       <button
         type="button"
-        onClick={handleToggle}
-        style={buttonStyle}
-        title="Uses 1 credit per generation"
+        onClick={onSuggest}
+        disabled={busy}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          fontSize: 11, fontWeight: 600, color: 'var(--primary)',
+          background: 'var(--primary-glow)', border: '1px solid rgba(223,111,109,0.25)',
+          borderRadius: 6, padding: '4px 10px', cursor: busy ? 'default' : 'pointer', whiteSpace: 'nowrap',
+          opacity: busy ? 0.7 : 1,
+        }}
+        title={matchesOtherField
+          ? 'Writes lines that match the other field. Uses 1 credit for a new batch.'
+          : 'One AI line per click. Uses 1 credit per new batch.'}
       >
-        <span>{isImprove ? '✨' : '✦'}</span> {isImprove ? 'Improve with AI' : 'AI Suggest'}
+        <span>{busy ? '…' : '✦'}</span> {busy ? 'Writing…' : 'AI Suggest'}
       </button>
 
-      {open && (
-        <>
-          {/* Backdrop to close */}
-          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
-
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            minWidth: 300, overflow: 'hidden',
-          }}>
-            {/* Header with language toggle */}
-            <div style={{ padding: '10px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {isImprove ? 'Improve & Translate' : 'Suggestions'}
-              </span>
-              <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 6, padding: 2, gap: 1 }}>
-                {['de', 'en'].map(l => (
-                  <button
-                    key={l}
-                    onClick={e => handleLangSwitch(e, l)}
-                    style={{
-                      fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
-                      border: 'none', cursor: 'pointer',
-                      background: activeLang === l ? 'var(--primary)' : 'transparent',
-                      color: activeLang === l ? '#fff' : 'var(--mid)',
-                      transition: 'all 0.12s',
-                    }}
-                  >
-                    {l.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {loading && (
-              <div style={{ padding: '16px 14px', fontSize: 13, color: 'var(--mid)', textAlign: 'center' }}>
-                Generating…
-              </div>
-            )}
-
-            {!loading && error && (
-              <div style={{ padding: '12px 14px', fontSize: 12, color: '#B91C1C' }}>
-                {error}
-                <button
-                  type="button"
-                  onClick={() => fetchSuggestions(activeLang)}
-                  style={{ display: 'block', marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--primary)', padding: 0 }}
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {!loading && !error && suggestions.map((s, i) => (
-              <div
-                key={i}
-                onClick={() => { onApply(s); setOpen(false) }}
-                style={{
-                  padding: '10px 14px', fontSize: 13, color: 'var(--dark)',
-                  cursor: 'pointer', borderTop: '1px solid var(--border)',
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F9F8F5'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                {s}
-              </div>
-            ))}
-
-            {!loading && !error && suggestions.length === 0 && (
-              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--light)' }}>
-                No suggestions came back - try again.
-              </div>
-            )}
-
-            {!loading && !error && !isImprove && suggestions.length > 0 && !moreUsed[activeLang] && (
-              <button
-                type="button"
-                onClick={handleSuggestMore}
-                title="Uses 1 credit"
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left',
-                  padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--primary)',
-                  background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', cursor: 'pointer',
-                }}
-              >
-                + Suggest more (1 credit)
-              </button>
-            )}
-
-            <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--light)', borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
-              AI copy - review before publishing
-            </div>
-          </div>
-        </>
-      )}
-
-      {showOutOfCredits && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setShowOutOfCredits(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', textAlign: 'center' }}>
-            <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Out of AI credits</div>
-            <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
-              Contact Wild Stack to top up.
-            </div>
-            <button
-              onClick={() => setShowOutOfCredits(false)}
-              style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
-            >
-              Got it
-            </button>
-          </div>
+      {error && (
+        <div style={{ width: '100%', fontSize: 12, color: '#B91C1C', textAlign: 'right' }}>
+          {error}{' '}
+          <button
+            type="button"
+            onClick={onRetry}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--primary)', padding: 0, textDecoration: 'underline' }}
+          >
+            Retry
+          </button>
         </div>
       )}
     </>
+  )
+}
+
+// A real notification box instead of a plain alert() - matching WildScale's
+// own out-of-credits notice (Julia's ask, 2026-09-16). Rendered once by
+// FieldEditor (the queue is shared by both AI fields).
+export function AISuggestOutOfCreditsModal({ onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--dark)', marginBottom: 6 }}>Out of AI credits</div>
+        <div style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20, lineHeight: 1.5 }}>
+          Contact Wild Stack to top up.
+        </div>
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff' }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
   )
 }

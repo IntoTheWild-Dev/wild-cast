@@ -13,3 +13,7 @@ files/*.pdf
 wildcast-app/.claude/
 .vercel
 .env*
+
+# Local reference copy of the activation keys (real source of truth is
+# WILDCAST_KEYS on Vercel) - never commit it
+ACTIVATION_KEYS.txt

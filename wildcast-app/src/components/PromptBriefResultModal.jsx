@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import TemplateCanvas from './TemplateCanvas'
 import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
-import { buildCandidateFields, fetchMerchantAssets } from '../lib/briefToCandidates'
+import { buildCandidateFields, fetchMerchantAssets, fitContentScales } from '../lib/briefToCandidates'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
@@ -26,7 +26,7 @@ function SummaryRow({ row }) {
   )
 }
 
-export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onOpenLibrary, onNewBrief }) {
+export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief }) {
   // Send for review: onSendForReview({ brief, fields, png }) saves the design
   // (without opening the editor) and resolves { url } - the shareable review
   // link. sentUrl is kept so going Back and pressing Send again shows the same
@@ -37,6 +37,13 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   const [sendError, setSendError] = useState(null)
   const [sentUrl, setSentUrl] = useState(null)
   const [copied, setCopied] = useState(false)
+  // Save for later (Julia's ask, 2026-09-29): a lower-friction save to the
+  // Design library for a design that isn't ready to send yet, in case
+  // whoever's briefing it gets called away. savedDraft is kept the same way
+  // sentUrl is - so it doesn't save a second copy if pressed again.
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [savedDraft, setSavedDraft] = useState(false)
+  const [saveDraftError, setSaveDraftError] = useState(null)
   const [brief, setBrief] = useState(null)
   const sent = view === 'sent'
   const [fields, setFields] = useState(null)
@@ -58,14 +65,21 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
         if (logoUrl && !cancelled) setAutoLogo(true)
       }
       if (cancelled) return
+      const nextFields = buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl, zones: config?.zones })
+      // Starting Scale so a cut-out dish / sticker fits its box (chat-made
+      // designs only - see fitContentScales). Rides on the brief so Edit
+      // design and Send for review open with the same scale as this preview.
+      built.imageScales = await fitContentScales(config?.zones, nextFields)
+      if (cancelled) return
       setBrief(built)
-      setFields(buildCandidateFields(built, { logoUrl, photoUrl: built.photoUrl }))
+      setFields(nextFields)
     }
     resolveFields()
     return () => { cancelled = true; clearTimeout(captureTimer.current) }
-  }, [answers, entry])
+  }, [answers, entry, config])
 
   const canSend = !!png && !!fields && !!brief && !!onSendForReview && !sending
+  const canSaveDraft = !!png && !!fields && !!brief && !!onSaveDraft && !savingDraft
 
   async function send() {
     if (sentUrl) { setView('sent'); return }
@@ -80,6 +94,20 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
       setSendError(err?.message || 'Something went wrong.')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function saveDraft() {
+    if (savedDraft) return
+    setSaveDraftError(null)
+    setSavingDraft(true)
+    try {
+      await onSaveDraft({ brief, fields, png })
+      setSavedDraft(true)
+    } catch (err) {
+      setSaveDraftError(err?.message || 'Something went wrong.')
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -183,6 +211,11 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                   Couldn't send for review: {sendError}
                 </div>
               )}
+              {saveDraftError && !sent && (
+                <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10, lineHeight: 1.5 }}>
+                  Couldn't save: {saveDraftError}
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: sent ? 16 : 0 }}>
                 {sent && (
                   <>
@@ -203,7 +236,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 {!sent && !confirming && (
                   <>
                     <button
-                      type="button" onClick={onEdit}
+                      type="button" onClick={() => onEdit(brief)}
                       style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
                       Edit design
@@ -214,6 +247,14 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                     >
                       {sentUrl ? 'View review link' : (!png && config ? 'Preparing preview…' : 'Send for review')}
                     </button>
+                    {onSaveDraft && (
+                      <button
+                        type="button" disabled={!savedDraft && !canSaveDraft} onClick={saveDraft}
+                        style={{ width: '100%', padding: '11px', fontSize: 13, fontWeight: 700, background: '#fff', color: savedDraft ? '#16a34a' : (!canSaveDraft ? 'var(--light)' : 'var(--dark)'), border: `1.5px solid ${savedDraft ? '#16a34a' : (!canSaveDraft ? 'var(--border)' : 'var(--dark)')}`, borderRadius: 10, cursor: !savedDraft && !canSaveDraft ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {savedDraft ? '✓ Saved to Design library' : (savingDraft ? 'Saving…' : 'Save for later')}
+                      </button>
+                    )}
                   </>
                 )}
                 {!sent && confirming && (
@@ -251,7 +292,11 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
 
       {fields && config && (
         <div style={{ position: 'absolute', left: -9999, top: 0, width: 1, height: 1, overflow: 'hidden' }}>
-          <TemplateCanvas config={config} fields={fields} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
+          {/* templateId drives the caps-zone lookup for imported templates
+              (Option C's zones carry no ai blocks of their own) - without it
+              this preview - and the PNG saved via Send for review - would
+              print Option C in normal case while the editor prints caps. */}
+          <TemplateCanvas config={config} fields={fields} imageScales={brief?.imageScales} templateId={entry.templateIdGuided} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
         </div>
       )}
     </div>

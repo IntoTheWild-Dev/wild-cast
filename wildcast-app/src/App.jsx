@@ -3,7 +3,7 @@ import Header, { WORKFLOW_ROLES } from './components/Header'
 import { patchCachedProject } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
-import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId } from './components/TemplatePicker'
+import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId, BASE_TEMPLATES, overlayCustomCards } from './components/TemplatePicker'
 import BriefingForm from './components/BriefingForm'
 import PromptBriefChat from './components/PromptBriefChat'
 import TemplatePreviewModal from './components/TemplatePreviewModal'
@@ -26,6 +26,8 @@ import { sortIdsByFieldOrder } from './lib/fieldOrder'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from './lib/layout'
 import useNotifications from './lib/useNotifications'
 import { ApproveIcon, RequestChangesIcon } from './components/ActionIcons'
+import { CommentPinLayer, CommentThreadCard } from './components/CanvasComments'
+import { buildThreads, hasOpenThread } from './lib/commentThreads'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -432,6 +434,11 @@ const SHOW_MODE_CHOOSER = false
   const replyBoxRef = useRef(null)
   const [needsReplyHint, setNeedsReplyHint]   = useState(false)
   const [postingReply, setPostingReply]       = useState(false)
+  // Figma-style pinned comments on the canvas (CanvasComments.jsx). Comment
+  // mode makes a click on the design drop a pin instead of selecting a
+  // field; selectedThreadId is the pinned thread whose popover is open.
+  const [commentMode, setCommentMode]         = useState(false)
+  const [selectedThreadId, setSelectedThreadId] = useState(null)
   // activation: null = not logged in, object = { key, clientName, credits, role }.
   // Seeded synchronously from localStorage (not just in the useEffect below) so
   // an already-logged-in user's refresh renders straight into the app instead
@@ -795,11 +802,27 @@ const SHOW_MODE_CHOOSER = false
     return () => clearInterval(interval)
   }, [currentProjectId])
 
+  // Canvas pins follow the same rule as the Review panel itself (only once
+  // the design has been sent - Julia, 2026-09-23), and need a saved project
+  // to hang comments off. A different design never inherits comment mode or
+  // an open thread from the last one.
+  const commentsOnCanvas = screen === 'editor' && !restrictedReview && reviewStatus !== 'design' && !!currentProjectId
+  const [commentsProjectId, setCommentsProjectId] = useState(currentProjectId)
+  if (commentsProjectId !== currentProjectId) {
+    setCommentsProjectId(currentProjectId)
+    setCommentMode(false)
+    setSelectedThreadId(null)
+  }
+
   // Lets the signed-in designer reply right from the editor's Feedback
   // sidebar instead of that panel being read-only (Julia's ask, 2026-09-16:
   // "back and forth communication"). Posts as from:'designer' with whatever
   // name the current activation carries - no separate name field needed,
   // unlike the external reviewer's own form on ReviewPage.jsx.
+  // Editor comments are tagged with the "View as" role - a Manager's show
+  // as "· manager" and notify the design's owner (see api/comments.js).
+  const commentFrom = workflowRole === 'Manager' ? 'manager' : 'designer'
+
   async function handlePostReply() {
     const text = replyText.trim()
     if (!text || !currentProjectId || postingReply) return
@@ -808,7 +831,7 @@ const SHOW_MODE_CHOOSER = false
       const res = await fetch('/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: currentProjectId, name: activation?.clientName || 'Wild Stack', text, from: 'designer' }),
+        body: JSON.stringify({ projectId: currentProjectId, name: activation?.clientName || 'Wild Stack', text, from: commentFrom }),
       })
       if (!res.ok) throw new Error('Failed to post reply')
       setReplyText('')
@@ -819,6 +842,22 @@ const SHOW_MODE_CHOOSER = false
     } finally {
       setPostingReply(false)
     }
+  }
+
+  // Pinned comment / thread reply from the editor canvas - same designer
+  // identity as handlePostReply above. Returns the new comment's id so the
+  // layer can open the new pin's thread straight away.
+  async function postDesignerComment(extra, text) {
+    const res = await fetch('/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: currentProjectId, name: activation?.clientName || 'Wild Stack', text, from: commentFrom, ...extra }),
+    })
+    if (!res.ok) throw new Error('Failed to post comment')
+    const { id } = await res.json()
+    const data = await fetch(`/api/comments?id=${currentProjectId}`).then(r => r.json())
+    setComments(data.comments || [])
+    return id
   }
 
   // Optimistic - flips the checkbox immediately, same pattern used
@@ -905,7 +944,7 @@ const SHOW_MODE_CHOOSER = false
   }
 
   async function handleRequestChangesInEditor() {
-    const hasOpenFeedback = comments.some(c => !c.resolved)
+    const hasOpenFeedback = hasOpenThread(comments)
     if (editorRequestingChanges || !currentProjectId || reviewStatus === 'changes_requested') return
     if (!hasOpenFeedback) {
       setNeedsReplyHint(true)
@@ -1053,7 +1092,10 @@ const SHOW_MODE_CHOOSER = false
     const { logoUrl } = await fetchMerchantAssets(partnerName)
     // Prompt Brief carries its own uploaded images on the brief; the classic
     // brief never sets these, so it keeps the Library-logo-only behavior.
-    const prefilledFields = buildCandidateFields(brief, { logoUrl: brief.logoUrl ?? logoUrl, photoUrl: brief.photoUrl ?? null })
+    const prefilledFields = buildCandidateFields(brief, {
+      logoUrl: brief.logoUrl ?? logoUrl, photoUrl: brief.photoUrl ?? null,
+      zones: (TEMPLATE_ZONES[template?.id] ?? customTemplates.zonesById[template?.id])?.zones,
+    })
 
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
@@ -1064,7 +1106,9 @@ const SHOW_MODE_CHOOSER = false
     setFontSizes({})
     setGeneratedFontSizes({})
     setAlignments({})
-    setImageScales({})
+    // Prompt Brief designs carry a starting Scale for a cut-out photo/sticker
+    // (fitContentScales) - same as its preview. Every other path starts at 100%.
+    setImageScales(brief.imageScales ?? {})
     setTextPositions({})
     setZonePositions({})
     // A name typed into the brief's own "Project name" field (Julia's ask,
@@ -1104,7 +1148,17 @@ const SHOW_MODE_CHOOSER = false
     // away so it can't end up floating over whatever screen comes next.
     setBriefModeEntry(null)
     setPromptPickerOpen(false)
-    if (target === 'prompt-brief') setPromptPickerOpen(true)
+    if (target === 'prompt-brief') {
+      // The chat now opens straight away and picks the template itself
+      // (Julia's ask, 2026-09-28 - the picker popup only appears later, from
+      // the chat's "Choose a different one" / "Change template"). Entering
+      // from the landing page always starts a fresh chat: a stale
+      // promptTemplateId would otherwise drop the partner into the middle of
+      // a template's questions with no conversation behind it.
+      setPromptTemplateId(null)
+      setPromptChatKey(k => k + 1)
+      setScreen('prompt-brief')
+    }
     else if (target === 'brief') setScreen('brief')
     else if (target === 'landing') setScreen('landing')
     // Distinct from plain 'brief' (the logo, which resumes whatever brief/
@@ -1685,7 +1739,9 @@ const SHOW_MODE_CHOOSER = false
       if (isResubmit && currentReviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
 
       if (isResubmit) {
-        const unresolved = comments.filter(c => !c.resolved)
+        // Thread roots only - Done is per thread, and each PATCH is its own
+        // read-modify-write of the same blob, so fewer is safer too.
+        const unresolved = comments.filter(c => !c.resolved && !c.parentId)
         if (unresolved.length > 0) {
           await Promise.all(unresolved.map(c => fetch('/api/comments', {
             method: 'PATCH',
@@ -1739,7 +1795,7 @@ const SHOW_MODE_CHOOSER = false
     const project = {
       id, templateId: template.id, templateName: template.name,
       projectName: opts.name ?? template.name,
-      fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: {}, imagePositions: {}, zonePositions: {},
+      fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: opts.imageScales ?? {}, imagePositions: {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview,
       ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
       // Candidate saves only happen via the brief flow, so the brief's
@@ -1773,8 +1829,28 @@ const SHOW_MODE_CHOOSER = false
     // Same naming rule as the Edit design hand-off (handleSelectTemplateFromBrief).
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
-    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null })
+    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales })
     return { url: `${window.location.origin}/?review=${id}` }
+  }
+
+  // Prompt Brief's "Save for later" (Julia's ask, 2026-09-29): saves the
+  // finished design to the Design library exactly like Send for review does
+  // (same saveCandidateForReview call), but without a review link or leaving
+  // the chat - so a partner who gets called away mid-brief doesn't lose the
+  // finished design, and can pick it back up from the Design library.
+  async function handleSaveBriefDraft({ brief, fields: briefFields, png }) {
+    const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
+    if (!template) throw new Error('Template not found.')
+    if (!png) throw new Error('The preview is not ready yet.')
+    const savedFields = { ...DEFAULT_FIELDS, ...briefFields }
+    for (const key of Object.keys(savedFields)) {
+      if (key.endsWith('Url') && typeof savedFields[key] === 'string' && savedFields[key].startsWith('blob:')) {
+        savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+      }
+    }
+    const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
+    const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
+    await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales })
   }
 
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
@@ -1933,6 +2009,22 @@ const SHOW_MODE_CHOOSER = false
   }
 
   const promptEntry = entryForGuidedId(promptTemplateId, customTemplates.cards, customTemplates.records)
+  // Live templates offered inside the Prompt Brief chat (Julia's ask,
+  // 2026-09-28): the chat matches the partner's format/sticker/QR answers
+  // against these and asks for a one-tap confirm. Same overlay the pickers
+  // use, so a fresh Figma import joins the chat's choices automatically.
+  const templateChoices = overlayCustomCards(BASE_TEMPLATES, customTemplates.cards, customTemplates.records)
+    .filter(e => e.live && e.templateIdGuided)
+    .map(e => ({
+      id: e.templateIdGuided,
+      label: e.label,
+      thumb: e.thumb,
+      category: e.category,
+      format: e.format,
+      // The step builders want the zone ARRAY, not the whole canvas config.
+      zones: (TEMPLATE_ZONES[e.templateIdGuided] ?? customTemplates.zonesById[e.templateIdGuided] ?? null)?.zones ?? null,
+    }))
+    .filter(c => c.zones?.length)
   const templateConfig = TEMPLATE_ZONES[selectedTemplate?.id] ?? customTemplates.zonesById[selectedTemplate?.id] ?? null
   // Restricted review keeps its own fixed lock behavior regardless of the
   // Guided/Advanced toggle (that flow has no "Advanced" concept - nothing
@@ -2005,15 +2097,18 @@ const SHOW_MODE_CHOOSER = false
         <LandingPage onNavigate={handleNavigate} />
       )}
 
-      {screen === 'prompt-brief' && promptEntry && (
+      {screen === 'prompt-brief' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <PromptBriefChat
             key={promptChatKey}
             entry={promptEntry}
             config={TEMPLATE_ZONES[promptTemplateId] ?? customTemplates.zonesById[promptTemplateId] ?? null}
-            onBack={() => setScreen('landing')}
+            templateChoices={templateChoices}
+            onConfirmTemplate={id => setPromptTemplateId(id)}
             onChangeTemplate={() => setPromptPickerOpen(true)}
+            onBack={() => setScreen('landing')}
             onSendForReview={handleSendPromptBriefForReview}
+            onSaveDraft={handleSaveBriefDraft}
             onOpenLibrary={() => handleNavigate('designs')}
             onNewBrief={() => handleNavigate('new-brief')}
             onEdit={brief => {
@@ -2038,14 +2133,14 @@ const SHOW_MODE_CHOOSER = false
           customRecords={customTemplates.records}
           onClose={() => setPromptPickerOpen(false)}
           onPick={id => {
-            // Re-picking the same template keeps the chat going; a different
-            // one restarts it, since the questions come from the template's zones.
-            if (id !== promptTemplateId || screen !== 'prompt-brief') {
-              setPromptTemplateId(id)
-              setPromptChatKey(k => k + 1)
-            }
+            // The chat reacts to a template change through its entry/config
+            // props WITHOUT remounting (no promptChatKey bump): pre-template
+            // answers (format, sticker/QR needs) survive a swap, and zone
+            // answers for zones the new template also has stay answered -
+            // the chat just re-asks what's still open. prompt-brief is the
+            // only screen that opens this popup (2026-09-28 chat-first rework).
+            if (id !== promptTemplateId) setPromptTemplateId(id)
             setPromptPickerOpen(false)
-            setScreen('prompt-brief')
           }}
         />
       )}
@@ -2198,30 +2293,25 @@ const SHOW_MODE_CHOOSER = false
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {comments.length === 0 && (
                   <div style={{ color: '#92400E', fontSize: 12, textAlign: 'center', paddingTop: 16, opacity: 0.7 }}>
-                    No comments yet
+                    No comments yet - use <strong>Comment</strong> above the design to pin one to a spot.
                   </div>
                 )}
-                {comments.map(c => (
-                  <div key={c.id} style={{ background: c.from === 'designer' ? 'var(--primary-glow)' : '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${c.from === 'designer' ? 'rgba(223,111,109,0.3)' : '#FDE68A'}`, opacity: c.resolved ? 0.6 : 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
-                      <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--dark)' }}>{c.name}</div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--mid)', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        <input type="checkbox" checked={!!c.resolved} onChange={e => handleToggleResolved(c.id, e.target.checked)} style={{ cursor: 'pointer' }} />
-                        Done
-                      </label>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--mid)', marginBottom: 6 }}>
-                      {new Date(c.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--dark)', lineHeight: 1.6, textDecoration: c.resolved ? 'line-through' : 'none' }}>{c.text}</div>
-                  </div>
+                {buildThreads(comments).map(t => (
+                  <CommentThreadCard
+                    key={t.root.id}
+                    thread={t}
+                    selected={t.root.id === selectedThreadId}
+                    onSelect={setSelectedThreadId}
+                    onToggleResolved={handleToggleResolved}
+                    borderColor="#FDE68A"
+                  />
                 ))}
               </div>
 
               {/* Reply box - the panel used to be read-only; Julia's ask,
                   2026-09-16, was real back-and-forth from inside the editor. */}
               <div style={{ padding: '12px 14px', borderTop: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {needsReplyHint && !comments.some(c => !c.resolved) && (
+                {needsReplyHint && !hasOpenThread(comments) && (
                   <div role="alert" style={{ fontSize: 11, lineHeight: 1.45, color: '#92400E', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: '7px 9px' }}>
                     Tell the designer what to change first - send a comment here, then click <strong>Request changes</strong> again.
                   </div>
@@ -2230,9 +2320,9 @@ const SHOW_MODE_CHOOSER = false
                   ref={replyBoxRef}
                   value={replyText}
                   onChange={e => setReplyText(e.target.value)}
-                  placeholder={needsReplyHint && !comments.some(c => !c.resolved) ? 'What should the designer change?' : 'Reply to feedback…'}
+                  placeholder={needsReplyHint && !hasOpenThread(comments) ? 'What should the designer change?' : 'Reply to feedback…'}
                   rows={2}
-                  style={{ padding: '8px 10px', fontSize: 12, border: `1px solid ${needsReplyHint && !comments.some(c => !c.resolved) ? '#F59E0B' : 'var(--border)'}`, borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5, background: '#fff' }}
+                  style={{ padding: '8px 10px', fontSize: 12, border: `1px solid ${needsReplyHint && !hasOpenThread(comments) ? '#F59E0B' : 'var(--border)'}`, borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5, background: '#fff' }}
                 />
                 <button
                   type="button"
@@ -2273,7 +2363,7 @@ const SHOW_MODE_CHOOSER = false
                       type="button"
                       onClick={handleRequestChangesInEditor}
                       disabled={editorRequestingChanges}
-                      title={comments.some(c => !c.resolved) ? 'Sends this back with the open feedback above' : 'Tell the designer what to change - add a comment first'}
+                      title={hasOpenThread(comments) ? 'Sends this back with the open feedback above' : 'Tell the designer what to change - add a comment first'}
                       style={{
                         flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 8px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid #D97706',
                         background: '#fff', color: editorRequestingChanges ? 'var(--light)' : '#B45309',
@@ -2485,6 +2575,41 @@ const SHOW_MODE_CHOOSER = false
               restricted={restrictedReview}
               onImageDrop={handleCanvasImageDrop}
               activeZoneId={activeZoneId}
+              overlay={commentsOnCanvas && (
+                <CommentPinLayer
+                  threads={buildThreads(comments)}
+                  active={commentMode}
+                  selectedId={selectedThreadId}
+                  onSelect={setSelectedThreadId}
+                  onCreate={(pin, text) => postDesignerComment({ pin }, text)}
+                  onReply={(rootId, text) => postDesignerComment({ parentId: rootId }, text)}
+                  onToggleResolved={handleToggleResolved}
+                />
+              )}
+              topRight={commentsOnCanvas && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCommentMode(v => !v)}
+                    title={commentMode ? 'Back to editing' : 'Comment on the design'}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: 'none',
+                      background: commentMode ? 'var(--primary)' : 'rgba(0,0,0,0.55)', color: '#fff',
+                      fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    {commentMode ? 'Done commenting' : 'Comment'}
+                  </button>
+                  {/* In the margin under the button, not beside it - beside it
+                      the pill ran over the design (Anang, 2026-09-29). */}
+                  {commentMode && (
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, maxWidth: 140, textAlign: 'right', lineHeight: 1.4, pointerEvents: 'none' }}>
+                      Click anywhere on the design to comment
+                    </span>
+                  )}
+                </>
+              )}
             />
           </div>
 

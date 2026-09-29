@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
+import { aiFieldSettingsFor } from '../data/templateZones'
 
 // Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
 // zone is dimmed to while it's still showing generic placeholder content
@@ -110,6 +111,35 @@ async function loadFonts() {
 // unrotated, single-line text: wrapped paragraphs (T&Cs) fill their width by
 // design, and a rotated zone's width axis is its visual height.
 const FIT_WIDTH_RATIO = 0.92
+
+// The CTA ("App download line" on Option B) finishes a sentence printed in
+// the background art ("Jetzt Wolt App downloaden und" -> "bei uns
+// bestellen!"), so it must stay close to that printed line's weight -
+// shrink to fit if too long, never grow to fill its box like a headline
+// (Julia's report, first 2026-09-28 "cta is too big", same report again
+// 2026-09-29 on this branch's own test design once she saw it rendered).
+// Built once already (eacb501, as part of a broader zoneCanGrow change
+// covering cta/tc/restaurant_name) then reverted with everything else in
+// b491aba when several chat-driven changes leaked into the shared editor
+// canvas - only T&Cs came back on its own after that (59dd090). This is
+// that same fix, rebuilt from scratch, added back zone by zone as each one
+// gets confirmed rather than all at once (which is most of why the
+// original went wrong): cta first, T&Cs already had its own separate wrap
+// fix. restaurant_name is the same story - it sits right next to a printed
+// "♥ WOLT" glyph baked into Option A's art (Julia, 2026-09-29: "should be
+// the same as 'heart wolt'"), same reasoning as the CTA, now confirmed.
+// tc added last, same day: on any template where 'tc' has autoShrink: true
+// (Option C - Option A's tc has no autoShrink at all, so it's unaffected;
+// see 59dd090's own wrap fix for that separate case), this same grow loop
+// was pushing legal fine print up to fill its box instead of staying small
+// - Julia found it on an old saved design rendering T&Cs at 9pt. Fine print
+// should only ever shrink for long text, never grow for short text, same
+// reasoning as cta/restaurant_name above.
+const NEVER_GROW_ZONE_IDS = new Set(['cta', 'restaurant_name', 'tc'])
+function zoneCanGrow(zone) {
+  return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
+}
+
 function overflowsFitWidth(obj, zone) {
   if (zone.rotate || (obj.textLines?.length ?? 1) > 1) return false
   return obj.calcTextWidth() > zone.width * FIT_WIDTH_RATIO
@@ -133,6 +163,36 @@ function overflowsFitWidth(obj, zone) {
 // overflow signal the resize loops already check - a too-wide word
 // should mean "still doesn't fit, keep shrinking," not "silently expand
 // the box instead."
+// Headline "middle ground" (Julia's ask, 2026-09-29): the fit check below
+// compares Fabric's own obj.height, which is a lineHeight(1.05)*fontSize
+// estimate sized for the font's FULL ascent+descent - space this all-caps,
+// single-line text (headline/sub-headline are forced .toUpperCase()) never
+// actually uses, since Omnes Cond's caps have no descenders. That's why the
+// headline used to stop growing at 37.1pt in a box designed for 56.6pt - it
+// still had real room left. The straight fix (checking the real rendered
+// ink height instead) was tried once before as a blanket change to every
+// autoShrink zone (2026-09-24, 09e9492) and came out "far too big" -
+// reverted the same day (2b455c1). This is narrower on purpose: real ink
+// height, measured via canvas measureText's actual glyph bounds (accounts
+// for accents like Ü, which sit above cap height), but ONLY for the
+// headline zone specifically (see CAP_FIT_ZONE_IDS) - sub-headline,
+// restaurant_name, offer and cta keep the old, more conservative check, so
+// this can't repeat the "grew everything" outcome that got reverted.
+// Measured against a real Option A headline before shipping: the old check
+// stopped at 37.1pt (real ink 33.3 of a 40.46 limit - 7 units left unused);
+// this lands at 47.1pt (real ink 42.2) - bigger, not maxed out to the raw
+// 56.6pt Figma value, which is what "far too big" actually was.
+const CAP_FIT_ZONE_IDS = new Set(['headline'])
+let capMeasureCtx = null
+function inkHeightOf(text, fontSize, fontFamily, fontWeight) {
+  if (!capMeasureCtx) capMeasureCtx = document.createElement('canvas').getContext('2d')
+  capMeasureCtx.font = `${fontWeight || 400} ${fontSize}px ${fontFamily}`
+  const m = capMeasureCtx.measureText(text || 'M')
+  const asc = m.actualBoundingBoxAscent
+  const desc = m.actualBoundingBoxDescent
+  return asc != null && desc != null ? asc + desc : null
+}
+
 function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   const textW = zone.textWidth ?? zone.width
   obj.set('fontSize', fontSize)
@@ -142,10 +202,17 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
     obj.set('width', textW)
     obj.initDimensions()
   }
+  // Only meaningful for a single line - a wrapped multi-line block's real
+  // height is dominated by line count/spacing, not one line's cap height,
+  // so that case falls through to the same check every other zone uses.
+  if (CAP_FIT_ZONE_IDS.has(zone.id) && !zone.rotate && (obj.textLines?.length ?? 1) === 1) {
+    const ink = inkHeightOf(obj.text, fontSize, obj.fontFamily, obj.fontWeight)
+    if (ink != null) return ink > fitLimit + 2 || overflowsFitWidth(obj, zone)
+  }
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId, overlay, topRight }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -177,6 +244,28 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const [dropError, setDropError] = useState(null)   // transient message when a dropped file gets rejected
   const dropErrorTimerRef = useRef(null)
   const [dropBusy, setDropBusy] = useState(false)   // dropped file still being processed (background removal)
+
+  // ── Caps rendering (spec §4.1: "caps = true when the template sets the
+  // text in caps") ──────────────────────────────────────────────────────────
+  // The Copy Library stores lockups in normal case ("Potsdams neues" /
+  // "Dreamteam") and the printed flyer sets them in caps ("POTSDAMS NEUES" /
+  // "DREAMTEAM"). Zones whose §4.1 AI settings declare caps: true render
+  // uppercased on the canvas — exports (getPng) inherit it automatically,
+  // and the stored field value keeps normal case, exactly like the library.
+  // Option A/B carry caps on their zones in templateZones.js; imported
+  // templates (Option C) get it from the aiFieldSettingsFor name/id map.
+  const capsZoneIds = useMemo(() => {
+    const ids = new Set()
+    const settings = aiFieldSettingsFor(config, undefined, templateId) ?? {}
+    for (const [key, s] of Object.entries(settings)) {
+      if (s?.caps) ids.add(key)
+    }
+    return ids
+  }, [config, templateId])
+  const zoneDisplayText = useCallback((zoneId, text) => {
+    const raw = text ?? ''
+    return capsZoneIds.has(zoneId) ? raw.toUpperCase() : raw
+  }, [capsZoneIds])
 
   // Clamps a user nudge offset to how far the image can move without breaking
   // its fit contract, so a nudge can never reveal zone background behind it
@@ -563,7 +652,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             const placeholderText = placeholderTextFor(zone, templateId)
             const isPlaceholder = !fields[zone.id] && placeholderText != null
 
-            const tb = new fabric.Textbox(isPlaceholder ? placeholderText : (fields[zone.id] || ''), {
+            const tb = new fabric.Textbox(zoneDisplayText(zone.id, isPlaceholder ? placeholderText : (fields[zone.id] || '')), {
               left:    isRotated ? cx : zone.x,
               top:     isRotated ? cy : zone.y,
               originX: isRotated ? 'center' : 'left',
@@ -704,7 +793,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             // Then grow to fill - short text should be as large as the
             // bounding box allows. Keeps growing until the next step would
             // overflow, then steps back to the last fitting size.
-            while (size + 0.5 <= 120) {
+            while (zoneCanGrow(zone) && size + 0.5 <= 120) {
               const next = size + 0.5
               if (applyFontSizeAndCheckFit(tb, next, zone, fitLimit)) {
                 applyFontSizeAndCheckFit(tb, size, zone, fitLimit)
@@ -819,9 +908,27 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const zone = zoneCfgRef.current[id]
       const placeholderText = placeholderTextFor(zone, templateId)
       const isPlaceholder = !value && placeholderText != null
-      const displayText = isPlaceholder ? placeholderText : (value || '')
+      // Caps zones render uppercased (see capsZoneIds above); the comparison
+      // uses the transformed text so sync stays stable round-trip
+      // (toUpperCase is idempotent — canvas edits already store caps).
+      const displayText = zoneDisplayText(id, isPlaceholder ? placeholderText : (value || ''))
       if (obj.text !== displayText) {
         obj.set('text', displayText)
+        // Non-autoShrink zones (only T&Cs today - confirmed by scanning every
+        // built-in template) never run applyFontSizeAndCheckFit, so nothing
+        // else re-asserts width after a text change - Fabric's Textbox can
+        // then render the new text as one unwrapped line instead of
+        // re-wrapping to the zone's configured width (Julia's report,
+        // 2026-09-28/29: T&Cs typed via the panel showed as a single long
+        // line - confirmed in the live editor, not just the chat). Same fix
+        // pattern applyFontSizeAndCheckFit uses for autoShrink zones - pin
+        // width back and force a real re-layout. Scoped to non-autoShrink
+        // zones only, so it cannot touch headline/sub-headline/offer/
+        // restaurant_name/cta - none of which Julia asked to change.
+        if (!zone?.autoShrink) {
+          const textW = zone?.textWidth ?? zone?.width
+          if (textW != null) { obj.set('width', textW); obj.initDimensions() }
+        }
         changed = true
       }
       const targetOpacity = isPlaceholder ? PLACEHOLDER_OPACITY : 1
@@ -883,7 +990,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             overflows = applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
           }
           // Then grow to fill the bounding box
-          while (size + 0.5 <= 120) {
+          while (zoneCanGrow(zone) && size + 0.5 <= 120) {
             const next = size + 0.5
             if (applyFontSizeAndCheckFit(obj, next, zone, fitLimit)) {
               applyFontSizeAndCheckFit(obj, size, zone, fitLimit)
@@ -901,7 +1008,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     })
     prevFieldsRef.current = { ...fields }
     if (changed) canvas.renderAll()
-  }, [fields])
+  }, [fields, templateId, zoneDisplayText])
 
   // ── Sync font size overrides → canvas ──────────────────────────────────────
   // Real bug found 2026-08-03 (Julia: "sizing the headline also resizes the
@@ -1314,6 +1421,15 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           Guided mode · canvas locked
         </div>
       )}
+      {/* Top-right corner controls (the Comment tool toggle, App.jsx) - same
+          corner treatment as the Guided-mode badge opposite it. Stacked as a
+          column so anything after the button (the comment-mode hint) sits in
+          the margin below it rather than stretching left over the design. */}
+      {topRight && !loading && (
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 25, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          {topRight}
+        </div>
+      )}
       {/* Space-holder: takes up the zoomed canvas size (plus the bleed margin
           drawn around it below) so the container scrolls correctly */}
       <div style={{
@@ -1367,6 +1483,24 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             }} />
           )}
         </div>
+        {/* Pinned comments (CanvasComments.jsx) - laid over exactly the trim
+            area, outside the scale() wrapper so pins and their popovers stay
+            a readable size at any zoom. Positions inside are fractions of
+            this box, so they track zoom on their own. Plain DOM on top of
+            the canvas, never part of the fabric scene, so never exported. */}
+        {overlay && !loading && (
+          <div style={{
+            position: 'absolute',
+            left: BLEED_MARGIN * scale,
+            top: BLEED_MARGIN * scale,
+            width: canvasW * scale,
+            height: canvasH * scale,
+            pointerEvents: 'none',
+            zIndex: 20,
+          }}>
+            {overlay}
+          </div>
+        )}
         {dropBusy && !dropError && (
           <div style={{
             position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
