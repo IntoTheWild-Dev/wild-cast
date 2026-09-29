@@ -122,11 +122,13 @@ const FIT_WIDTH_RATIO = 0.92
 // covering cta/tc/restaurant_name) then reverted with everything else in
 // b491aba when several chat-driven changes leaked into the shared editor
 // canvas - only T&Cs came back on its own after that (59dd090). This is
-// that same fix, rebuilt from scratch and scoped to ONLY the cta zone this
-// time - restaurant_name's "too big" report was never confirmed as wanted
-// (see STATUS.md), and T&Cs already has its own separate wrap fix, so
-// neither should be touched by this.
-const NEVER_GROW_ZONE_IDS = new Set(['cta'])
+// that same fix, rebuilt from scratch, added back zone by zone as each one
+// gets confirmed rather than all at once (which is most of why the
+// original went wrong): cta first, T&Cs already had its own separate wrap
+// fix. restaurant_name is the same story - it sits right next to a printed
+// "♥ WOLT" glyph baked into Option A's art (Julia, 2026-09-29: "should be
+// the same as 'heart wolt'"), same reasoning as the CTA, now confirmed.
+const NEVER_GROW_ZONE_IDS = new Set(['cta', 'restaurant_name'])
 function zoneCanGrow(zone) {
   return zone.autoGrow ?? !NEVER_GROW_ZONE_IDS.has(zone.id)
 }
