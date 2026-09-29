@@ -250,7 +250,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                     {onSaveDraft && (
                       <button
                         type="button" disabled={!savedDraft && !canSaveDraft} onClick={saveDraft}
-                        style={{ width: '100%', padding: '11px', fontSize: 13, fontWeight: 600, background: '#fff', color: savedDraft ? '#16a34a' : (!canSaveDraft ? 'var(--light)' : 'var(--mid)'), border: `1px solid ${savedDraft ? '#16a34a' : 'var(--border)'}`, borderRadius: 10, cursor: !savedDraft && !canSaveDraft ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                        style={{ width: '100%', padding: '11px', fontSize: 13, fontWeight: 700, background: '#fff', color: savedDraft ? '#16a34a' : (!canSaveDraft ? 'var(--light)' : 'var(--dark)'), border: `1.5px solid ${savedDraft ? '#16a34a' : (!canSaveDraft ? 'var(--border)' : 'var(--dark)')}`, borderRadius: 10, cursor: !savedDraft && !canSaveDraft ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
                       >
                         {savedDraft ? '✓ Saved to Design library' : (savingDraft ? 'Saving…' : 'Save for later')}
                       </button>
