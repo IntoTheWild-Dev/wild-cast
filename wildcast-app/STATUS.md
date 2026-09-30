@@ -5,6 +5,26 @@
 
 ---
 
+## ⏰ Reminders for Julia — read first
+
+**Accounts & sign-in rework (branch `claude/signup-login-status-check-3rxbs0`, NOT merged yet).** Do these, in order:
+
+1. **Test the branch preview.** Vercel → the `wildcast` project → **Deployments** → newest one for that branch → open its link. Try: team-email sign-up asks for the invite code; client email needs none; team account can publish/archive a template; 5 wrong passwords lock the email; an AI feature works while signed in.
+2. **Preview needs the variables too.** `AGENCY_APPROVED_EMAILS` and `AGENCY_INVITE_CODE` must be ticked for **Preview**, not just Production, or the invite code won't work on the preview link.
+3. **Merge** (after a review from Anang or whoever reviews) once the preview test passes.
+4. **Then, and only then, turn off the shared activation keys.** In Vercel → Settings → Environment Variables add:
+   - **Key:** `ACTIVATION_KEYS_END`
+   - **Value:** `2026-10-05T00:00:00+02:00`
+
+   Redeploy afterwards. From that moment every shared key stops working everywhere. Do it after the merge and a day or two of testing, so key users can still get in if something goes wrong. Tell key users to create an account **before 5 October** (the key tab on the sign-in screen already says so).
+5. **Keep the invite code safe** in Apple Passwords (not in this repo). If it's lost, set a new `AGENCY_INVITE_CODE` in Vercel and redeploy; existing accounts are unaffected.
+
+Full write-up of what changed and how it was tested: `claudedocs/accounts-change-log.md`. Executive summary draft: `claudedocs/executive-summary-accounts.md`. Plan and decisions: `claudedocs/accounts-signin-hardening-plan.md`.
+
+**Still open on accounts:** email confirmation + "forgot password" (needs an email service, ~1 day plus domain setup); no lock yet against guessing across many different emails; AI credits deliberately uncapped, usage visible at `/api/usage` for team accounts.
+
+---
+
 ## What's working right now
 
 ### Prompt Brief chat rework + AI Suggest v1.2 combined (branch `AI-Chatbox-Improvements`, 2026-09-28 → 2026-09-29, **SHIPPED to `main`, PR #44, merge commit `fbf2c802`, live on cast.wildstack.studio — verified by pulling the actual production JS bundle, not just the deploy status**)
