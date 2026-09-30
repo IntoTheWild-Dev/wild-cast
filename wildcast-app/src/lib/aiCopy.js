@@ -18,7 +18,7 @@ const GERMAN_HINTS = new Set([
 const ENGLISH_HINTS = new Set([
   'the', 'and', 'is', 'we', 'you', 'your', 'our', 'with', 'for', 'not', 'a', 'an', 'on', 'now', 'at', 'of', 'to',
   'in', 'all', 'love', 'each', 'other', 'new', 'today', 'order', 'save', 'are', 'how', 'what', 'up', 'only',
-  'get', 'it', 'this', 'that', 'from', 'off', 'free', 'delivered',
+  'get', 'it', 'this', 'that', 'from', 'off', 'free', 'delivered', 'lets', 'go', 'yes', 'eat', 'good', 'fresh', 'hot',
 ])
 
 // 'en' | 'de' for a piece of user text; `fallback` (the language the user is

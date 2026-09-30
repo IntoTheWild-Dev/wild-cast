@@ -562,7 +562,11 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     const seed = draft.trim()
     const shown = aiShown[step.id] ?? []
     const fieldKey = step.aiField
-    const lang = seed ? detectLang(seed, 'de') : 'de'
+    // Language: a typed draft wins; otherwise follow the brief the partner
+    // already gave (headline / sub-headline / offer answers, incl. a pasted
+    // brief), so an English brief gets English suggestions. German default.
+    const briefText = ['headline', 'sub_headline', 'offer'].map(k => answers[k]?.display).filter(Boolean).join(' ')
+    const lang = detectLang(seed || briefText, 'de')
     if (credits != null && credits <= 0) { setShowOutOfCredits(true); return }
     const confirmMsg = seed
       ? `Improve "${seed}" with AI, writing in ${langName(lang)}? This uses 1 credit.`
