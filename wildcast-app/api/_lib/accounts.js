@@ -49,6 +49,37 @@ export function isAgencyApproved(email, inviteCode) {
 // either way.
 export const SEAT_CAP = Infinity
 
+function accountBlobPath(email) {
+  const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
+  return `accounts/${safe}.json`
+}
+
+// Returns the stored account record for an email, or null. Read-only; the
+// sign-in route (api/account-auth.js) keeps its own copy for writes.
+export async function loadAccount(email) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN
+  const path = accountBlobPath(email)
+  const { blobs } = await list({ prefix: path, token })
+  const match = blobs.find(b => b.pathname === path)
+  if (!match) return null
+  const cacheBustUrl = match.url + (match.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+  const r = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
+  if (!r.ok) return null
+  return r.json()
+}
+
+// Checks an { email, sessionToken } pair the same way api/account-session.js
+// does, but for server-side route guards. Returns the account when the token
+// matches the one issued at the person's latest sign-in, otherwise null.
+export async function verifySession(email, sessionToken) {
+  if (!email || !sessionToken) return null
+  const account = await loadAccount(email)
+  if (!account || !account.sessionToken) return null
+  const a = Buffer.from(String(sessionToken))
+  const b = Buffer.from(account.sessionToken)
+  return a.length === b.length && timingSafeEqual(a, b) ? account : null
+}
+
 export function folderPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
   return `folders/${safe}.json`

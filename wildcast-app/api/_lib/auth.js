@@ -1,3 +1,5 @@
+import { verifySession } from './accounts.js'
+
 // Server-side gate for designer-only API routes. The app's own role check
 // (activation?.role === 'designer' in Header.jsx/App.jsx) only hides the UI —
 // it was never enforced by the routes themselves, so anyone with the URL
@@ -23,15 +25,30 @@ function resolveKeyRole(key) {
 // itself. See api/validate-key.js for the WILDCAST_KEYS format.
 const DESIGNER_TIER_ROLES = ['designer', 'agency']
 
-// Call at the top of a designer-tier handler: `if (!requireDesignerKey(req, res)) return`.
+// Call at the top of a designer-tier handler:
+// `if (!(await requireDesignerKey(req, res))) return`.
 // Sends the 403 itself on failure so callers don't need their own error branch.
-export function requireDesignerKey(req, res) {
+// Two ways in: a shared activation key with a designer-tier role (old path,
+// until keys are switched off), or a personal account whose role is
+// designer-tier - i.e. the Wild Stack team (@wildstack.studio,
+// @intothewild.hamburg). Clients ('partner') are refused either way.
+export async function requireDesignerKey(req, res) {
   const key = req.headers['x-activation-key']
-  if (!DESIGNER_TIER_ROLES.includes(resolveKeyRole(key))) {
-    res.status(403).json({ error: 'A designer activation key is required for this endpoint.' })
-    return false
+  if (DESIGNER_TIER_ROLES.includes(resolveKeyRole(key))) return true
+
+  const email = req.headers['x-account-email']
+  const sessionToken = req.headers['x-account-token']
+  if (email && sessionToken) {
+    try {
+      const account = await verifySession(email, sessionToken)
+      if (account && DESIGNER_TIER_ROLES.includes(account.role)) return true
+    } catch (err) {
+      console.error('requireDesignerKey session check failed:', err)
+    }
   }
-  return true
+
+  res.status(403).json({ error: 'A Wild Stack team account or designer key is required for this endpoint.' })
+  return false
 }
 
 // Gate for the Figma plugin's own upload endpoint (api/import-figma-plugin.js)
