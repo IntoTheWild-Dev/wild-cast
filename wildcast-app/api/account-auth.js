@@ -15,11 +15,17 @@
 // Role is assigned automatically from the email's domain, not asked at
 // signup: @wildstack.studio -> 'agency' (full internal-team access, same
 // role Wild Stack's own shared key already grants), everything else ->
-// 'partner'. Matches Julia's "more global for our team" - anyone on the
-// Wild Stack domain self-provisions full access, no manual step needed.
+// 'partner'. Matches Julia's "more global for our team". Team domains are
+// @wildstack.studio and @intothewild.hamburg, but since nothing verifies
+// email ownership yet a NEW team-domain sign-up must also be approved
+// (approved-email list or invite code, api/_lib/accounts.js) - otherwise
+// anyone could type a team address and self-grant full access + import.
 import { list, put } from '@vercel/blob'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
-import { WILD_STACK_DOMAIN, SEAT_CAP, countPartnerSeats, ensurePersonFolder } from './_lib/accounts.js'
+import {
+  SEAT_CAP, countPartnerSeats, ensurePersonFolder,
+  isAgencyDomain, isApprovedAgencyEmail, isAgencyApproved,
+} from './_lib/accounts.js'
 
 function accountPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
@@ -68,7 +74,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    const { email, password, displayName } = req.body ?? {}
+    const { email, password, displayName, inviteCode } = req.body ?? {}
     const trimmedEmail = (email || '').trim().toLowerCase()
     if (!trimmedEmail || !trimmedEmail.includes('@')) {
       return res.status(400).json({ error: 'A real email address is required' })
@@ -86,13 +92,31 @@ export default async function handler(req, res) {
       // has a real name from the start (used as the personal folder's own
       // label later) rather than needing a separate "set your name" step.
       const name = (displayName || '').trim()
+      // A team-domain address is only trusted once approved (email list or
+      // invite code, see isAgencyApproved) - without email verification,
+      // anyone can type any address. Tell the client up front whether an
+      // invite code will be needed so it can show that field with the name.
+      const isTeamAddress = isAgencyDomain(trimmedEmail)
+      const approved = isTeamAddress && isAgencyApproved(trimmedEmail, inviteCode)
       if (!name) {
-        return res.status(400).json({ error: 'Your name is required the first time you sign in', isNewAccount: true })
+        return res.status(400).json({
+          error: 'Your name is required the first time you sign in',
+          isNewAccount: true,
+          needsInviteCode: isTeamAddress && !isApprovedAgencyEmail(trimmedEmail),
+        })
       }
-      const domain = trimmedEmail.split('@')[1] || ''
-      const role = domain === WILD_STACK_DOMAIN ? 'agency' : 'partner'
+      if (isTeamAddress && !approved) {
+        return res.status(403).json({
+          error: (inviteCode || '').trim()
+            ? 'That invite code is not valid. Ask Wild Stack for a new one.'
+            : 'Wild Stack team addresses need an invite code. Ask Wild Stack to approve you.',
+          isNewAccount: true,
+          needsInviteCode: true,
+        })
+      }
+      const role = isTeamAddress ? 'agency' : 'partner'
 
-      // Wolt test group is hard-capped at 5 seats - wildstack.studio is
+      // Wolt test group is hard-capped at 5 seats - team addresses are
       // exempt (global/uncapped, per Julia's "more global for our team").
       // Checked only for a brand-new partner signup, never on login, so the
       // 5 people who already signed up keep working after the cap is hit.
@@ -128,6 +152,13 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Wrong password' })
     }
     existing.sessionToken = sessionToken
+    // Someone who signed up on a team address before it was recognised (e.g.
+    // @intothewild.hamburg, 2026-09-30) is a 'partner' on file - promote them
+    // at login, but only if their exact email is on the approved list. An
+    // invite code is never enough here, and existing agency roles never demote.
+    if (existing.role !== 'agency' && isAgencyDomain(existing.email) && isApprovedAgencyEmail(existing.email)) {
+      existing.role = 'agency'
+    }
     await saveAccount(existing)
     // Backfills a folder space for anyone who signed up before this existed
     // - no-ops once it's there, see ensurePersonFolder.

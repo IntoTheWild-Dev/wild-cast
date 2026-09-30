@@ -2,8 +2,44 @@
 // (api/account-auth.js, api/account-seats.js, api/folders.js) - not a route
 // itself, see the api/_lib/ convention (auth.js etc).
 import { list, put } from '@vercel/blob'
+import { timingSafeEqual } from 'crypto'
 
-export const WILD_STACK_DOMAIN = 'wildstack.studio'
+// Email domains that belong to the Wild Stack team (Julia's ask, 2026-09-30:
+// both count as 'agency', full access incl. publish + import). A domain match
+// alone is NOT enough to become agency - anyone can type an address they
+// don't own, and there is no email verification yet - so a new sign-up must
+// also be approved (see isAgencyApproved below).
+export const AGENCY_DOMAINS = ['wildstack.studio', 'intothewild.hamburg']
+
+export function isAgencyDomain(email) {
+  const domain = (email || '').trim().toLowerCase().split('@')[1] || ''
+  return AGENCY_DOMAINS.includes(domain)
+}
+
+// Approval for a team-domain sign-up, stop-gap until email verification
+// exists. Two ways in, both configured as Vercel env vars so Julia can change
+// them without a code change:
+//   AGENCY_APPROVED_EMAILS - comma-separated list of exact addresses
+//   AGENCY_INVITE_CODE     - one shared code handed to a new team member
+// Fails closed: with neither set, no new team-domain sign-up is approved.
+export function isApprovedAgencyEmail(email) {
+  const raw = process.env.AGENCY_APPROVED_EMAILS || ''
+  const approved = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+  return approved.includes((email || '').trim().toLowerCase())
+}
+
+export function isValidInviteCode(code) {
+  const expected = process.env.AGENCY_INVITE_CODE || ''
+  const given = (code || '').trim()
+  if (!expected || !given) return false
+  const a = Buffer.from(given)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+export function isAgencyApproved(email, inviteCode) {
+  return isApprovedAgencyEmail(email) || isValidInviteCode(inviteCode)
+}
 // Uncapped during the pilot (Julia's ask, 2026-09-22: "remove the seat limit,
 // this is just during the pilot") - was a hard 5-seat cap for the Wolt test
 // group (see countPartnerSeats below). Restore a real number here once the
