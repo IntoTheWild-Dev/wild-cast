@@ -8,6 +8,8 @@
 // and silently dropped the text typed in its input box.
 import { activationHeaders } from './activationKey'
 
+const REQUEST_TIMEOUT_MS = 45_000
+
 const GERMAN_HINTS = new Set([
   'der', 'die', 'das', 'und', 'ist', 'wir', 'ihr', 'du', 'ich', 'mit', 'für', 'fur', 'nicht', 'ein', 'eine', 'auf',
   'jetzt', 'bei', 'von', 'zu', 'im', 'dem', 'den', 'auch', 'alle', 'liebe', 'lieben', 'neu', 'neues', 'heute',
@@ -51,16 +53,28 @@ export function draftFieldBlock({ current, kind }) {
 // Throws Error(message) on any failure - callers only charge a credit after
 // this resolves (a failed call costs nothing).
 export async function requestAiPairs({ field, lang, brief }) {
-  const res = await fetch('/api/ai-suggest', {
-    method: 'POST',
-    // activationHeaders() identifies the caller to the API (key and/or
-    // account session) - the AI route checks it and records usage.
-    headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-    body: JSON.stringify({ field, lang, brief }),
-  })
+  // Never spin forever: the route can make two Claude calls, so allow a
+  // generous but finite wait and then say so.
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
+  let res
+  try {
+    res = await fetch('/api/ai-suggest', {
+      method: 'POST',
+      // activationHeaders() identifies the caller to the API (key and/or
+      // account session) - the AI route checks it and records usage.
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
+      signal: ctrl.signal,
+      body: JSON.stringify({ field, lang, brief }),
+    })
+  } catch (err) {
+    throw new Error(err?.name === 'AbortError' ? 'The AI took too long. Try again.' : 'Could not reach the AI. Check your connection and try again.', { cause: err })
+  } finally {
+    clearTimeout(timer)
+  }
   let data = null
-  try { data = await res.json() } catch { /* non-JSON error body */ }
-  if (!res.ok) throw new Error(data?.error || 'Could not write a line. Try again.')
+  try { data = await res.json() } catch { /* non-JSON error body (e.g. a platform timeout page) */ }
+  if (!res.ok) throw new Error(data?.error || (res.status === 504 ? 'The AI took too long. Try again.' : 'Could not write a line. Try again.'))
   if (!data?.pairs?.length) throw new Error('Could not write a line. Try again.')
   return data
 }

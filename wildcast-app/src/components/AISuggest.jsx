@@ -32,7 +32,7 @@ export default function AISuggest({ onSuggest, busy, error, onRetry, matchesOthe
             ? 'Writes lines that match the other field. Uses 1 credit for a new batch.'
             : 'One AI line per click. Uses 1 credit per new batch.'}
       >
-        <span>{busy ? '…' : '✦'}</span> {busy ? 'Writing…' : (hasText ? 'Improve with AI' : 'AI Suggest')}
+        <span>{busy ? '…' : '✦'}</span> {busy ? 'Writing…' : (hasText ? 'Improve with AI' : 'Suggest with AI')}
       </button>
 
       {error && (
