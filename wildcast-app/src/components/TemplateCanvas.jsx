@@ -3,6 +3,7 @@ import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
 import { aiFieldSettingsFor } from '../data/templateZones'
+import useIsMobile from '../lib/useIsMobile'
 
 // Pre-filled Template Placeholders (Notion card, 2026-09-22): the opacity a
 // zone is dimmed to while it's still showing generic placeholder content
@@ -15,6 +16,38 @@ const PLACEHOLDER_OPACITY = 0.45
 // 9px at this same scale. Purely a CSS wrapper outside the actual canvas;
 // does not change canvasW/canvasH or any zone coordinate.
 const BLEED_MARGIN = 9
+
+// Sharpness (Anang, 2026-09-30: "preview seems blurry"). fabric's object
+// caching draws each text/image into its own offscreen canvas and then
+// pastes that bitmap onto the main canvas at a fractional-pixel position,
+// which resamples it - headline edges measured ~30% softer than drawing
+// directly. This canvas only ever holds a dozen objects, so drawing them
+// straight each frame costs nothing noticeable. And photos/logos are far
+// bigger than their zone, so ask the browser for its high-quality
+// downscale instead of the default ('low', which aliases). This is the
+// app's only fabric canvas, so the global switches only affect it.
+fabric.Object.prototype.objectCaching = false
+const renderImageFill = fabric.Image.prototype._renderFill
+fabric.Image.prototype._renderFill = function (ctx) {
+  ctx.imageSmoothingQuality = 'high'
+  return renderImageFill.call(this, ctx)
+}
+
+// Editor zoom scales the canvas element with CSS, so the canvas's backing
+// store has to carry zoom × screen density or zoomed-in text looks blurry.
+// Capped by total pixels (per canvas layer) so 400% on a retina screen
+// stays well under Safari's ~16.7M-pixel canvas limit - past the cap it
+// just gets slightly soft again instead of failing to draw.
+const MAX_BACKSTORE_PIXELS = 12_000_000
+function screenPixelRatio() {
+  return Math.max(1, window.devicePixelRatio || 1)
+}
+function editorPixelRatio(zoom, w, h) {
+  const base = screenPixelRatio()
+  const wanted = base * Math.max(1, zoom / 100)
+  const cap = Math.sqrt(MAX_BACKSTORE_PIXELS / (w * h))
+  return Math.max(base, Math.min(wanted, cap))
+}
 
 // Figma-imported zone coordinates land on arbitrary fractional pixels
 // (e.g. x: 15.9, y: 77.8), so two guide rects with the same strokeWidth
@@ -240,6 +273,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState(100)
+  const isMobile = useIsMobile()
   const [dropZoneId, setDropZoneId] = useState(null) // image zone highlighted while a file is dragged over it
   const [dropError, setDropError] = useState(null)   // transient message when a dropped file gets rejected
   const dropErrorTimerRef = useRef(null)
@@ -318,6 +352,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     // pixel height grows. getPng() crops back to canvasH before export, so
     // nothing about the print output changes.
     const renderH = canvasH + (bleedExtraBottom || 0)
+
+    // Zoom resets to 100% for every new canvas (see cleanup below), so the
+    // backing store starts at plain device resolution - the zoom effect
+    // raises it again if the user zooms in.
+    fabric.devicePixelRatio = screenPixelRatio()
 
     const canvas = new fabric.Canvas(canvasElRef.current, {
       width: canvasW,
@@ -1137,8 +1176,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const handleZoomOut = useCallback(() => setZoom(z => Math.max(40,  Math.round(z / 10) * 10 - 10)), [])
   const handleZoomReset = useCallback(() => setZoom(100), [])
 
-  // After zoom re-renders, recalculate canvas offset so pointer events map correctly
+  // Zoom is a CSS transform on the canvas element, which on its own just
+  // stretches the bitmap - at 200%+ everything went soft. So the backing
+  // store is redrawn at devicePixelRatio × zoom (fabric's retina scaling
+  // does the rest: pointer math and object caches both read the same
+  // ratio). getPng() doesn't pass enableRetinaScaling, so export is
+  // unaffected. Then recalculate the offset so pointer events map correctly.
   useEffect(() => {
+    const canvas = fabricRef.current
+    if (canvas) {
+      const w = canvas.getWidth(), h = canvas.getHeight()
+      const ratio = editorPixelRatio(zoom, w, h)
+      if (ratio !== fabric.devicePixelRatio) {
+        fabric.devicePixelRatio = ratio
+        canvas.setDimensions({ width: w, height: h }) // re-applies retina scaling to both canvas layers + re-renders
+      }
+    }
     requestAnimationFrame(() => { fabricRef.current?.calcOffset() })
   }, [zoom])
 
@@ -1376,7 +1429,21 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{
+      // Phone width: as tall as the design itself (the page scrolls, not a
+      // fixed-height box that clipped the bottom of the flyer), with a strip
+      // above the canvas for the Guided-mode badge - there's no dark margin
+      // beside the canvas on a phone, so its usual corner sat on the logo.
+      // 'safe center' keeps a zoomed-in canvas scrollable back to its left edge.
+      style={isMobile ? {
+        flex: 'none',
+        background: '#2a2a2a',
+        overflow: 'auto',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'safe center',
+        padding: '52px 12px 12px',
+        position: 'relative',
+      } : {
         flex: 1,
         minHeight: 0,
         background: '#2a2a2a',

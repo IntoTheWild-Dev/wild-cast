@@ -129,7 +129,7 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
         {!activation?.key ? (
           <div style={{ color: 'var(--mid)', fontSize: 13 }}>Sign in to see your tasks.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 28 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: 28 }}>
             {STATUS_COLUMNS.map(col => {
               const items = mine.filter(p => (p.reviewStatus || 'design') === col.key)
               return (

@@ -9,6 +9,7 @@ function formatDateTime(ts) {
 }
 import AISuggest, { AISuggestOutOfCreditsModal } from './AISuggest'
 import PresetPicker from './PresetPicker'
+import useIsMobile from '../lib/useIsMobile'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT, merchantForUpload } from '../lib/assetLibrary'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
@@ -735,6 +736,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 // ── Main export ──────────────────────────────────────────────────────────────
 export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole }) {
   const canExport = workflowRole === 'Manager'
+  const isMobile = useIsMobile()
   const [expanded, setExpanded] = useState(false)
   const imageZones = templateConfig?.zones?.filter(z => z.type === 'image') ?? []
   const isNonDesigner = mode === 'non-designer'
@@ -1054,7 +1056,11 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   const width = expanded ? 520 : 360
 
   return (
-    <div style={{ width, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', transition: 'width 0.2s ease' }}>
+    // Phone width: full-width block under the canvas that grows with its
+    // content (the page scrolls), instead of a fixed-width scrolling side panel.
+    <div style={isMobile
+      ? { width: '100%', background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }
+      : { width, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', transition: 'width 0.2s ease' }}>
 
       {/* Panel header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
@@ -1094,7 +1100,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       </div>
 
       {/* Scrollable fields */}
-      <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }}>
+      <div style={isMobile ? { padding: '16px' } : { flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }}>
 
         {/* Project name now lives centered in the header above the canvas,
             not here (Julia's ask, 2026-09-18) - see App.jsx's breadcrumb

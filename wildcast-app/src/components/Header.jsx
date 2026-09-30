@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import NotificationBell from './NotificationBell'
 import UserMenu from './UserMenu'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 
 // Shown instead of navigating for any nav item passed disabled=true below -
 // small and local rather than its own file since it's a single temporary
@@ -87,6 +88,22 @@ export const WORKFLOW_ROLES = ['Designer', 'Manager']
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange, onOpenNotificationProject, notifications }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const isMobile = useIsMobile()
+  // Phone width: the nav lives behind a hamburger button (Anang, 2026-09-30)
+  // - a sideways-scrolling row hid half the items off the right edge.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const headerRef = useRef(null)
+  useEffect(() => {
+    if (!menuOpen) return
+    // Outside tap closes it - same approach as UserMenu (a fixed backdrop
+    // is contained by the header's backdropFilter, so it can't cover the page).
+    function handleOutside(e) {
+      if (headerRef.current && !headerRef.current.contains(e.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [menuOpen])
+  const showNav = !isMobile || menuOpen
   function handleSignOut() {
     // Clears both possible sign-in paths unconditionally rather than
     // checking wildcast_auth_type first - removing a key that was never set
@@ -112,10 +129,11 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
     )
     return (
       <span
-        onClick={() => disabled ? setShowComingSoon(true) : onNavigate?.(target)}
+        onClick={() => { setMenuOpen(false); if (disabled) setShowComingSoon(true); else onNavigate?.(target) }}
         title={disabled ? 'Coming soon' : undefined}
         style={{
-          fontSize: 13, fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+          fontSize: isMobile ? 15 : 13, fontWeight: 500, padding: isMobile ? '12px 14px' : '6px 12px', borderRadius: isMobile ? 8 : 6, cursor: 'pointer',
+          whiteSpace: 'nowrap', flexShrink: 0,
           color: disabled ? 'var(--light)' : (active ? 'var(--dark)' : 'var(--mid)'),
           background: active ? 'rgba(2,6,24,0.06)' : 'transparent',
           transition: 'all 0.15s',
@@ -149,11 +167,15 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
       {/* PAGE_MAX_WIDTH (lib/layout.js) - the same width every page's content
           uses, so the header's edges line up with the page below. Widened
           from 1100 when the notification bell was added (2026-09-25). */}
-      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `10px ${PAGE_GUTTER}px`, minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8, columnGap: 16 }}>
+      {/* Phone width: logo on the left, bell + avatar + hamburger on the
+          right, all on one row; the nav opens as a list under that row. */}
+      <div ref={headerRef} style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: isMobile ? '10px 16px' : `10px ${PAGE_GUTTER}px`, minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8, columnGap: isMobile ? 10 : 16 }}>
         <div onClick={onLogoClick} style={{ cursor: 'pointer', flexShrink: 0 }}>
           <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
-        <nav style={{ display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 4, flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }}>
+        {showNav && <nav style={isMobile
+          ? { order: 2, flex: '1 0 100%', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 8, borderTop: '1px solid var(--border)' }
+          : { display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 4, flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }}>
           {navItem(
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <HugeiconsIcon icon={PlusSignIcon} size={14} />
@@ -181,16 +203,16 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           {activation?.role === 'agency' && navItem('Import', 'import')}
           {activation?.role === 'designer' && navItem('Import', 'import', true)}
           <span
-            onClick={onHelp}
-            style={{ fontSize: 13, fontWeight: 500, color: 'var(--mid)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
+            onClick={() => { setMenuOpen(false); onHelp?.() }}
+            style={{ fontSize: isMobile ? 15 : 13, fontWeight: 500, color: 'var(--mid)', padding: isMobile ? '12px 14px' : '6px 12px', borderRadius: isMobile ? 8 : 6, cursor: 'pointer', transition: 'color 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
           >Help</span>
-        </nav>
+        </nav>}
         {/* position:relative - both the bell's and UserMenu's dropdowns
             anchor to this group's right edge, so they open in exactly the
             same spot. */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: isMobile ? 'auto' : undefined }}>
           {/* Same identity My Tasks uses for "mine" - see NotificationBell. */}
           <NotificationBell notifications={notifications} onOpenProject={onOpenNotificationProject} />
           {/* Role toggle, AI credits and Sign out all live in here now. */}
@@ -201,7 +223,27 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
               workflowRole={workflowRole}
               onWorkflowRoleChange={onWorkflowRoleChange}
               onSignOut={() => setShowSignOutConfirm(true)}
+              compact={isMobile}
             />
+          )}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setMenuOpen(v => !v)}
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              style={{ position: 'relative', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${menuOpen ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, background: '#fff', color: 'var(--dark)', cursor: 'pointer', padding: 0 }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                {menuOpen
+                  ? <><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>
+                  : <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>}
+              </svg>
+              {/* My Tasks' unread dot, surfaced on the button while the list is closed. */}
+              {!menuOpen && notifications?.hasUnreadTasks && (
+                <span style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: '#DC2626', boxShadow: '0 0 0 2px #fff' }} />
+              )}
+            </button>
           )}
         </div>
       </div>

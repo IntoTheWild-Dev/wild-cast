@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { ApproveIcon, RequestChangesIcon } from './ActionIcons'
 import { CommentPinLayer, CommentThreadCard } from './CanvasComments'
 import { buildThreads, hasOpenThread } from '../lib/commentThreads'
+import useIsMobile from '../lib/useIsMobile'
 
 export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
+  const isMobile = useIsMobile()
   const [project, setProject]       = useState(null)
   const [comments, setComments]     = useState([])
   // Prefilled for a signed-in visitor (Notion card "Partner review link",
@@ -211,7 +213,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   )
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden' }}>
 
       {/* Approve / Request changes - a full-width bar at the top of the page
           (Julia's ask, 2026-09-23: these used to be small pill buttons
@@ -264,7 +266,9 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
         </div>
       )}
 
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+    {/* Phone width: design on top, comments underneath (full width) - side
+        by side, the 360px comment panel alone overflowed a 390px screen. */}
+    <div style={isMobile ? { display: 'flex', flexDirection: 'column' } : { flex: 1, display: 'flex', overflow: 'hidden' }}>
 
       {/* Canvas / preview area. Clicking anywhere on the design drops a
           pinned comment (Anang's ask, 2026-09-28) - the preview has no
@@ -273,8 +277,8 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
           own aspect ratio (632x882, see App.jsx's makePreview) so the pin
           layer covers exactly the image - sized with container query units
           so it's the largest box of that ratio that fits the area. */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a', overflow: 'hidden', padding: 40, gap: 14, minWidth: 0 }}>
-        {(project?.preview || project?.thumbnail) ? (
+      <div style={{ flex: isMobile ? 'none' : 1, height: isMobile ? '72vh' : undefined, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a', overflow: 'hidden', padding: isMobile ? 16 : 40, gap: 14, minWidth: 0 }}>
+        {(project?.previewHd || project?.preview || project?.thumbnail) ? (
           <>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', flexShrink: 0 }}>
               Click anywhere on the design to leave a comment
@@ -282,7 +286,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
             <div style={{ flex: 1, minHeight: 0, width: '100%', containerType: 'size', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ position: 'relative', width: 'min(100cqw, calc(100cqh * 632 / 882))', aspectRatio: '632 / 882' }}>
               <img
-                src={project.preview || project.thumbnail}
+                src={project.previewHd || project.preview || project.thumbnail}
                 alt={project.templateName}
                 style={{ display: 'block', width: '100%', height: '100%', objectFit: 'fill', borderRadius: 4, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
               />
@@ -307,7 +311,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
       </div>
 
       {/* Comment panel */}
-      <div style={{ width: 360, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: '#fff', flexShrink: 0 }}>
+      <div style={{ width: isMobile ? '100%' : 360, borderLeft: isMobile ? 'none' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: '#fff', flexShrink: 0 }}>
 
         {/* Panel header - just the title now; Approve/Request changes moved
             to the prominent bar at the top of the page (see above). */}

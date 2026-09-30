@@ -21,7 +21,8 @@ import { blobUrlToDataUrl } from './lib/image'
 import { uploadImageForZone, assetFolderForZone, merchantForUpload } from './lib/assetLibrary'
 import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
-import { fetchMerchantAssets, buildCandidateFields } from './lib/briefToCandidates'
+import { fetchMerchantAssets, buildCandidateFields, fitContent } from './lib/briefToCandidates'
+import useIsMobile from './lib/useIsMobile'
 import { sortIdsByFieldOrder } from './lib/fieldOrder'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from './lib/layout'
 import useNotifications from './lib/useNotifications'
@@ -41,20 +42,30 @@ const DEFAULT_FIELDS = {
   qrUrl:           null,
 }
 
-// Generate a medium-res preview image (2× canvas) for the review page
-async function makePreview(fullPng) {
+// Generate a medium-res preview image (2× canvas) - the Designs / My Tasks
+// card image (?thumb= in api/save-project.js). w/h/quality overridable for
+// previewHd below.
+async function makePreview(fullPng, w = 632, h = 882, quality = 0.88) {
   return new Promise(resolve => {
     const img = new Image()
     img.onload = () => {
-      const w = 632, h = 882
       const canvas = document.createElement('canvas')
       canvas.width = w; canvas.height = h
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      resolve(canvas.toDataURL('image/jpeg', 0.88))
+      const ctx = canvas.getContext('2d')
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', quality))
     }
     img.src = fullPng
   })
 }
+
+// Full export resolution (4× canvas) for the Review page, which shows the
+// design as big as the window allows - the 632px preview was stretched
+// ~1.4-2× there on a retina screen and looked blurry (Anang, 2026-09-30).
+// Only get-review reads it; the Designs list never includes it, so the
+// list response stays small.
+const makePreviewHd = fullPng => makePreview(fullPng, 1264, 1764, 0.9)
 
 // Resize the full-res canvas PNG to a small JPEG thumbnail for the Designs grid
 async function makeThumbnail(fullPng) {
@@ -544,6 +555,8 @@ const SHOW_MODE_CHOOSER = false
   const historyRef         = useRef([])           // snapshots of { fields, fontSizes, alignments, imageScales }
   const [canUndo, setCanUndo] = useState(false)
   const lastTextSnapRef    = useRef({ key: null, time: 0 }) // debounce text-field snaps
+  const isMobile = useIsMobile()
+  const latestImageUrlRef  = useRef({})           // zoneId -> newest url, so a slow auto-fit for a replaced photo is dropped
   // Live refs so snapshot captures current values regardless of closure age
   const fieldsRef      = useRef(fields);      fieldsRef.current      = fields
   const fontSizesRef2  = useRef(fontSizes);   fontSizesRef2.current  = fontSizes
@@ -1376,6 +1389,25 @@ const SHOW_MODE_CHOOSER = false
     setFields(prev => ({ ...prev, [key]: nextValue }))
     setSaveStatus(null) // unsaved changes
     setHasUnsavedChanges(true)
+    if (key.endsWith('Url')) autoFitImage(key.slice(0, -3), nextValue)
+  }
+
+  // A cut-out food photo / sticker gets the Scale + Position that make its
+  // visible (non-transparent) pixels as big as the zone allows, centred
+  // (Anang's ask, 2026-09-30: the default cover-fit cut dishes off at the
+  // zone edges) - same fit the Prompt Brief chat uses for its Scale. Runs on
+  // a photo change, and on opening a design whose photo Scale was never set
+  // (openLoadedProject) - a Scale the partner set by hand is never touched.
+  // Photos with a background are left at cover-fit. Part of the same undo
+  // step as the photo change.
+  async function autoFitImage(zoneId, url, zones = templateConfig?.zones) {
+    latestImageUrlRef.current[zoneId] = url
+    const zone = zones?.find(z => z.id === zoneId)
+    if (!zone || !url) return
+    const { scales, positions } = await fitContent([zone], { [`${zoneId}Url`]: url })
+    if (latestImageUrlRef.current[zoneId] !== url || !(zoneId in scales)) return
+    setImageScales(prev => ({ ...prev, [zoneId]: scales[zoneId] }))
+    setImagePositions(prev => ({ ...prev, [zoneId]: positions[zoneId] }))
   }
 
   // Drag-and-drop straight onto a photo/logo zone on the canvas itself
@@ -1466,7 +1498,7 @@ const SHOW_MODE_CHOOSER = false
     if (!exportRef.current?.getPng) throw new Error('Canvas not ready - please wait a moment and try again.')
 
     const fullPng = exportRef.current.getPng()
-    const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
+    const [thumbnail, preview, previewHd] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng), makePreviewHd(fullPng)])
 
     const savedFields = { ...fields }
     // Every image field, not a fixed list - a sticker (or any other image
@@ -1496,7 +1528,7 @@ const SHOW_MODE_CHOOSER = false
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
       fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, imagePositions, zonePositions: currentZonePositions,
-      mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview,
+      mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview, previewHd,
       ownerEmail, ownerName, folder: projectFolder,
       // Persisted so re-opening this design (from any device/account) keeps
       // AI Suggest strictly scoped to the brief's vertical.
@@ -1768,13 +1800,13 @@ const SHOW_MODE_CHOOSER = false
   // name and business type; the old candidate flow passes neither and keeps
   // its template-name / briefSubmission fallbacks.
   async function saveCandidateForReview(template, prefilledFields, fullPng, opts = {}) {
-    const [thumbnail, preview] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng)])
+    const [thumbnail, preview, previewHd] = await Promise.all([makeThumbnail(fullPng), makePreview(fullPng), makePreviewHd(fullPng)])
     const id = crypto.randomUUID()
     const project = {
       id, templateId: template.id, templateName: template.name,
       projectName: opts.name ?? template.name,
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: opts.imageScales ?? {}, imagePositions: {}, zonePositions: {},
-      mode: template.mode, savedAt: Date.now(), thumbnail, preview,
+      mode: template.mode, savedAt: Date.now(), thumbnail, preview, previewHd,
       ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
       // Candidate saves only happen via the brief flow, so the brief's
       // business type is the design's vertical.
@@ -1918,6 +1950,11 @@ const SHOW_MODE_CHOOSER = false
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
+    const zones = TEMPLATE_ZONES[template.id]?.zones ?? templatesSource.zonesById?.[template.id]?.zones
+    for (const zone of zones ?? []) {
+      const url = project.fields?.[`${zone.id}Url`]
+      if (url && !(zone.id in (project.imageScales ?? {}))) autoFitImage(zone.id, url, zones)
+    }
   }
 
   async function handleOpenProject(projectMeta) {
@@ -2040,7 +2077,7 @@ const SHOW_MODE_CHOOSER = false
   }
 
   return (
-    <div style={screen === 'editor' || screen === 'import'
+    <div style={(screen === 'editor' && !isMobile) || screen === 'import'
       // Bounded viewport height + overflow:hidden here is what lets a
       // screen have its OWN internal scroll region(s) instead of the whole
       // page/body scrolling - 'editor' already needed this for its
@@ -2243,7 +2280,13 @@ const SHOW_MODE_CHOOSER = false
       )}
 
       {screen === 'editor' && (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
+        // Phone width: one scrolling column (toolbar, canvas, then the edit
+        // panel full width) instead of three side-by-side columns - the
+        // 360px panel alone was wider than the screen and squeezed the
+        // canvas to a ~60px strip. Desktop layout unchanged.
+        <div style={isMobile
+          ? { display: 'flex', flexDirection: 'column' }
+          : { flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px)' }}>
 
           {/* Review panel - left, shown once this design has actually been
               sent for review at least once (reviewStatus !== 'design').
@@ -2258,7 +2301,7 @@ const SHOW_MODE_CHOOSER = false
               (brief-generated candidates) keeps its own simpler footer in
               FieldEditor.jsx untouched - this is the normal editor only. */}
           {!restrictedReview && reviewStatus !== 'design' && (
-            <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ width: isMobile ? '100%' : 260, maxHeight: isMobile ? 360 : undefined, flexShrink: 0, borderRight: isMobile ? 'none' : '1px solid #FDE68A', borderBottom: isMobile ? '1px solid #FDE68A' : undefined, background: '#FFFBEB', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -2372,7 +2415,9 @@ const SHOW_MODE_CHOOSER = false
             </div>
           )}
 
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={isMobile
+            ? { flexShrink: 0, display: 'flex', flexDirection: 'column' }
+            : { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Breadcrumb - a grid (not flex) so the project name can sit
                 truly centered in its own column regardless of how wide the
                 left (breadcrumb) or right (credits/undo/reset) groups are.
@@ -2380,7 +2425,7 @@ const SHOW_MODE_CHOOSER = false
                 panel (Julia's ask, 2026-09-18) - same projectName/
                 onProjectNameChange state, just rendered above the canvas
                 instead of buried in the scrollable field list. */}
-            <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 24px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: isMobile ? '10px 16px' : '12px 24px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 {/* Plain Back button (was a "← Designs → template name"
                     breadcrumb) - returns to whichever screen opened the
@@ -2416,7 +2461,7 @@ const SHOW_MODE_CHOOSER = false
                 placeholder="e.g. Wen Cheng – Wolt Promo June"
                 title="Project name - used as the PDF filename and label in your Designs tab"
                 style={{
-                  width: 320, maxWidth: '40vw', boxSizing: 'border-box', textAlign: 'center',
+                  width: isMobile ? '100%' : 320, maxWidth: isMobile ? 'none' : '40vw', boxSizing: 'border-box', textAlign: isMobile ? 'left' : 'center',
                   padding: '7px 12px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                   border: '1px solid transparent', borderRadius: 8,
                   background: 'transparent', color: 'var(--dark)', outline: 'none',
@@ -2434,7 +2479,7 @@ const SHOW_MODE_CHOOSER = false
                   pills/buttons drop to a second line as intact units instead
                   - paired with whiteSpace:'nowrap' on each one below, so a
                   single pill's own text never breaks mid-word first. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap', rowGap: 6, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: isMobile ? 'flex-start' : 'flex-end', flexWrap: 'wrap', rowGap: 6, minWidth: 0 }}>
               {activation && (
                 <div ref={creditsInfoRef} style={{ position: 'relative' }}>
                   <span

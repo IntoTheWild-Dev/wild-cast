@@ -1,5 +1,6 @@
 import { HeroColumn, FeatureGrid, WildScaleTip } from './BriefingForm'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 
 // New home screen (Julia's ask, 2026-09-11): the brief form used to be the
 // very first thing anyone saw. Now the landing page is just a choice between
@@ -79,9 +80,10 @@ function ChoiceCard({ title, desc, icon, onClick }) {
 }
 
 export default function LandingPage({ onNavigate }) {
+  const isMobile = useIsMobile()
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
-      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: isMobile ? `32px ${PAGE_GUTTER}px` : `64px ${PAGE_GUTTER}px` }}>
         {/* Reworked from the old left-hero/right-cards 2-column split into a
             single stacked column - the 3 choice cards sit side by side below
             the hero copy, the WildScale tip box comes after that (moved out
@@ -89,7 +91,8 @@ export default function LandingPage({ onNavigate }) {
             grid runs full-width beneath that in 4 columns of its own. */}
         <HeroColumn showTemplateStep={false} showFeatures={false} showWildScaleTip={false} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+        {/* Stacked on a phone - three side by side pushed the third card off-screen. */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 12 : 16, marginTop: 8 }}>
           {CHOICES.map(c => (
             <ChoiceCard key={c.key} title={c.title} desc={c.desc} icon={c.icon} onClick={() => onNavigate(c.key)} />
           ))}

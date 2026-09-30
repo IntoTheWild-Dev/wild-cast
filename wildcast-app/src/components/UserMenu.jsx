@@ -14,7 +14,9 @@ function initialsOf(name) {
 
 const rowStyle = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', fontSize: 13, color: 'var(--dark)' }
 
-export default function UserMenu({ activation, roles, workflowRole, onWorkflowRoleChange, onSignOut }) {
+// compact (phone width, Header.jsx): the button shows only the initials
+// avatar - name and role are still in the dropdown.
+export default function UserMenu({ activation, roles, workflowRole, onWorkflowRoleChange, onSignOut, compact }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -47,13 +49,14 @@ export default function UserMenu({ activation, roles, workflowRole, onWorkflowRo
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
         style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px 4px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 8, padding: compact ? 5 : '4px 10px 4px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
           border: `1px solid ${open ? 'var(--primary)' : 'var(--border)'}`, background: '#fff',
         }}
       >
         <span style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--primary-glow)', color: 'var(--primary)', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           {initialsOf(displayName)}
         </span>
+        {!compact && <>
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
           {workflowRole && <span style={{ fontSize: 11, color: 'var(--mid)' }}>{workflowRole}</span>}
@@ -61,6 +64,7 @@ export default function UserMenu({ activation, roles, workflowRole, onWorkflowRo
         <span style={{ color: 'var(--mid)', display: 'flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
           <HugeiconsIcon icon={ArrowDown01Icon} size={16} />
         </span>
+        </>}
       </button>
 
       {open && (

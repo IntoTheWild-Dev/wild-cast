@@ -5,6 +5,7 @@ import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GRO
 import { liveFormatsFor, entryForGuidedId } from './TemplatePicker'
 import TemplatePreviewModal from './TemplatePreviewModal'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 
 const inputStyle = { width: '100%', padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', border: '1.5px solid var(--border)', borderRadius: 8, outline: 'none', boxSizing: 'border-box' }
 
@@ -37,7 +38,9 @@ const FEATURES = [
 // Shared by HeroColumn (single column, as always) and LandingPage.jsx, which
 // pulls it out to its own full-width, 4-column section below the choice
 // cards instead (Julia's ask, 2026-09-18).
-export function FeatureGrid({ columns = 1 }) {
+export function FeatureGrid({ columns: wanted = 1 }) {
+  // One column on a phone - 4 (or 3) columns of ~80px each broke every word onto its own line.
+  const columns = useIsMobile() ? 1 : wanted
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: columns > 1 ? '28px 24px' : 20 }}>
       {FEATURES.map(f => (
@@ -329,7 +332,7 @@ export default function BriefingForm({ submitted, onSubmitted, customCards, cust
   return (
     <div style={{ flex: 1, background: 'var(--bg)', overflow: 'auto' }}>
       <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))', gap: 56, alignItems: 'start' }}>
 
           <HeroColumn pickedOption={pickedOption} onOpenTemplateModal={() => setShowTemplateModal(true)} showFeatures={false} />
 
