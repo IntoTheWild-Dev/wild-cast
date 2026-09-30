@@ -176,6 +176,12 @@ const WEN_CHENG_V3_ZONES = [
     type: 'text',
     x: 7.89, y: 108.18,
     width: 300.54, height: 40.46,
+    // Faded guide text only (TemplateCanvas.jsx): the placeholder "DREAMTEAM"
+    // at the zone's default size runs ~6.4 past this box's bottom (ink
+    // 120.5-155.0 vs box ending 148.64), crowding the restaurant-name line
+    // (2.25 clear) while 18 sat clear above. Nudged up so its ink bottom
+    // meets the box bottom (Julia, 2026-09-30). Real typed text is untouched.
+    placeholderDy: -6.3,
     fontSize: 56.6,
     fontFamily: 'omnes-cond',
     fontWeight: 900,

@@ -694,7 +694,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
             const tb = new fabric.Textbox(zoneDisplayText(zone.id, isPlaceholder ? placeholderText : (fields[zone.id] || '')), {
               left:    isRotated ? cx : zone.x,
-              top:     isRotated ? cy : zone.y,
+              top:     isRotated ? cy : zone.y + (isPlaceholder ? (zone.placeholderDy ?? 0) : 0),
               originX: isRotated ? 'center' : 'left',
               originY: isRotated ? 'center' : 'top',
               width:   textW,
@@ -976,6 +976,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         obj.set('opacity', targetOpacity)
         changed = true
       }
+      // A placeholder can sit at a nudged guide position (zone.placeholderDy);
+      // real typed text always starts from the zone's own position, so undo
+      // the nudge the moment the placeholder turns into typed content.
+      if (!isPlaceholder && obj._wcPlaceholder && zone?.placeholderDy) {
+        obj.set('top', obj.top - zone.placeholderDy)
+        obj.setCoords()
+        changed = true
+      }
       obj._wcPlaceholder = isPlaceholder
       // Placeholder guide text is always STATIC - snap it back to the zone's
       // designed position/size on every sync (Julia's ask, 2026-09-24: guide
@@ -988,7 +996,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         const cy = zone.y + zone.height / 2
         const staticGeo = isRotated
           ? { left: cx, top: cy }
-          : { left: zone.x, top: zone.y, width: zone.textWidth ?? zone.width }
+          : { left: zone.x, top: zone.y + (zone.placeholderDy ?? 0), width: zone.textWidth ?? zone.width }
         if (obj.left !== staticGeo.left || obj.top !== staticGeo.top ||
             (staticGeo.width != null && obj.width !== staticGeo.width)) {
           obj.set(staticGeo)
