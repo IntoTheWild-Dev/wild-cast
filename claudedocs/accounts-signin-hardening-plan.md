@@ -63,7 +63,39 @@ Each step is its own small commit; verify each one for real before moving on.
 6. **Parked, needs a decision:** password reset + email verification (needs an email provider),
    multi-device sessions, accounts management screen.
 
-## Open questions for Julia
+## Decisions from Julia (2026-09-30) — planning only, nothing built yet
+
+1. **Agency access = email domain.** Anyone with a `@wildstack.studio` **or `@intothewild.hamburg`** address is
+   `agency`: full access, including publish templates and Figma import. (Today only `wildstack.studio` is
+   recognised — `WILD_STACK_DOMAIN` in `api/_lib/accounts.js` becomes a list of two domains.)
+2. **Client access = every other email** (mostly DoorDash / Wolt). Role `partner`: **no import**, no template
+   publishing. For now they get both the **Manager and Designer** workflow toggle in the header.
+   (Assumption to confirm: "Designer access" means the Manager/Designer toggle, not template management.)
+3. **AI credits stay uncapped for now** until Julia understands usage better. So the server-side credits step
+   is parked; we should still *log* AI usage per account so real numbers exist when the decision comes.
+4. **Activation keys stay active this week only**, then account sign-in only. Needs: an exact cutoff date,
+   a heads-up to key users so they create accounts first, and a switch (flag/date) rather than deleting the
+   key code. Note projects saved under a key are owned by the key string, not a person.
+5. **Executive write-up required at the end**: what we did and how it works, in plain language.
+   Keep a running log of every change (what, why, how it was tested) so the write-up is easy to produce.
+
+### New risk raised by decision 1
+Roles are handed out purely by typing an email address, and there is **no email verification**. Anyone who
+types `anyone@wildstack.studio` (or `@intothewild.hamburg`) at sign-up gets full agency access, including
+import. This must be fixed before keys are switched off: either email verification (see below) or, as a
+stop-gap, an allow-list / invite code for agency sign-ups.
+
+### Email service (planning notes)
+- **What it does:** sends two kinds of email: (a) a "confirm your email" link at sign-up, agency role only
+  granted once confirmed; (b) a "reset your password" link.
+- **Pieces:** an email provider account (e.g. Resend or Postmark); DNS records on the sending domain so mail
+  isn't marked as spam; an API key stored as a Vercel env var; a small send helper; token + verified flag on
+  the account; two new screens (check-your-inbox, set-new-password).
+- **Effort (estimate):** ~1 day of build and testing, plus ~1–2 hours of setup and DNS access from whoever
+  manages the domain (DNS can take up to a day to take effect). Free tiers should cover this volume; check
+  current pricing before choosing.
+
+## Original open questions (answered above where noted)
 
 - Should `@wildstack.studio` accounts be allowed to publish/delete templates like the shared Wild Stack key can?
 - Server-side credits: per-seat 100 total, or monthly? Do Wild Stack (`agency`) accounts get a cap at all?
