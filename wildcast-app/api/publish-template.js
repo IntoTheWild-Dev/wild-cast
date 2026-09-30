@@ -40,7 +40,7 @@ async function writeRecord(slotKey, record, token) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
-  if (!requireDesignerKey(req, res)) return
+  if (!(await requireDesignerKey(req, res))) return
 
   const { slotKey, action, label, zones } = req.body ?? {}
 

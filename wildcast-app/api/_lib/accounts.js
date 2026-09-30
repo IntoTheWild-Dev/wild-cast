@@ -2,8 +2,44 @@
 // (api/account-auth.js, api/account-seats.js, api/folders.js) - not a route
 // itself, see the api/_lib/ convention (auth.js etc).
 import { list, put } from '@vercel/blob'
+import { timingSafeEqual } from 'crypto'
 
-export const WILD_STACK_DOMAIN = 'wildstack.studio'
+// Email domains that belong to the Wild Stack team (Julia's ask, 2026-09-30:
+// both count as 'agency', full access incl. publish + import). A domain match
+// alone is NOT enough to become agency - anyone can type an address they
+// don't own, and there is no email verification yet - so a new sign-up must
+// also be approved (see isAgencyApproved below).
+export const AGENCY_DOMAINS = ['wildstack.studio', 'intothewild.hamburg']
+
+export function isAgencyDomain(email) {
+  const domain = (email || '').trim().toLowerCase().split('@')[1] || ''
+  return AGENCY_DOMAINS.includes(domain)
+}
+
+// Approval for a team-domain sign-up, stop-gap until email verification
+// exists. Two ways in, both configured as Vercel env vars so Julia can change
+// them without a code change:
+//   AGENCY_APPROVED_EMAILS - comma-separated list of exact addresses
+//   AGENCY_INVITE_CODE     - one shared code handed to a new team member
+// Fails closed: with neither set, no new team-domain sign-up is approved.
+export function isApprovedAgencyEmail(email) {
+  const raw = process.env.AGENCY_APPROVED_EMAILS || ''
+  const approved = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+  return approved.includes((email || '').trim().toLowerCase())
+}
+
+export function isValidInviteCode(code) {
+  const expected = process.env.AGENCY_INVITE_CODE || ''
+  const given = (code || '').trim()
+  if (!expected || !given) return false
+  const a = Buffer.from(given)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+export function isAgencyApproved(email, inviteCode) {
+  return isApprovedAgencyEmail(email) || isValidInviteCode(inviteCode)
+}
 // Uncapped during the pilot (Julia's ask, 2026-09-22: "remove the seat limit,
 // this is just during the pilot") - was a hard 5-seat cap for the Wolt test
 // group (see countPartnerSeats below). Restore a real number here once the
@@ -12,6 +48,37 @@ export const WILD_STACK_DOMAIN = 'wildstack.studio'
 // single source of truth, so this is the only line that needs to change
 // either way.
 export const SEAT_CAP = Infinity
+
+function accountBlobPath(email) {
+  const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
+  return `accounts/${safe}.json`
+}
+
+// Returns the stored account record for an email, or null. Read-only; the
+// sign-in route (api/account-auth.js) keeps its own copy for writes.
+export async function loadAccount(email) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN
+  const path = accountBlobPath(email)
+  const { blobs } = await list({ prefix: path, token })
+  const match = blobs.find(b => b.pathname === path)
+  if (!match) return null
+  const cacheBustUrl = match.url + (match.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+  const r = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
+  if (!r.ok) return null
+  return r.json()
+}
+
+// Checks an { email, sessionToken } pair the same way api/account-session.js
+// does, but for server-side route guards. Returns the account when the token
+// matches the one issued at the person's latest sign-in, otherwise null.
+export async function verifySession(email, sessionToken) {
+  if (!email || !sessionToken) return null
+  const account = await loadAccount(email)
+  if (!account || !account.sessionToken) return null
+  const a = Buffer.from(String(sessionToken))
+  const b = Buffer.from(account.sessionToken)
+  return a.length === b.length && timingSafeEqual(a, b) ? account : null
+}
 
 export function folderPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
