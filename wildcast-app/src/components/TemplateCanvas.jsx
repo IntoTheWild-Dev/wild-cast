@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
+import { contentFitForImage } from '../lib/briefToCandidates'
 import { aiFieldSettingsFor } from '../data/templateZones'
 import useIsMobile from '../lib/useIsMobile'
 
@@ -1155,11 +1156,14 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     config.zones.filter(z => z.type === 'image').forEach(zone => {
       const img = zoneObjsRef.current[`${zone.id}-image`]
       if (!img || img._wcBaseScale == null) return
-      const userPct = imageScales?.[zone.id] ?? 100
+      // A placeholder photo keeps the fit it was given on load (see the image
+      // load above) until a real Scale is set for the zone.
+      const phFit = img._wcPlaceholder && !(zone.id in (imageScales ?? {})) ? img._wcPlaceholderFit : null
+      const userPct = phFit ? phFit.pct : (imageScales?.[zone.id] ?? 100)
       const finalScale = img._wcBaseScale * (userPct / 100)
       const scaledW = img.width  * finalScale
       const scaledH = img.height * finalScale
-      const offset = clampOffset(zone, scaledW, scaledH, imagePositions?.[zone.id])
+      const offset = clampOffset(zone, scaledW, scaledH, phFit ? phFit.offset : imagePositions?.[zone.id])
       img.set({
         scaleX: finalScale,
         scaleY: finalScale,
@@ -1393,6 +1397,32 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             top:  zone.y + (zone.height - scaledH) / 2 + offset1.y,
           })
           img.setCoords()
+        }
+
+        // The faded placeholder photo of an empty photo zone gets the same
+        // fit a real cut-out upload gets (size + centring, App.jsx
+        // autoFitImage), otherwise the guide picture fills the whole box and
+        // looks bigger than the photo that replaces it (Julia, 2026-09-30).
+        if (isPlaceholder && zone.id === 'photo' && userPct === 100) {
+          try {
+            const fit = contentFitForImage(zone, img.getElement())
+            if (fit) {
+              img._wcPlaceholderFit = fit // the scale/position sync effect below honours it
+              const phScale = scale * (fit.pct / 100)
+              const phW = img.width * phScale
+              const phH = img.height * phScale
+              const phOffset = clampOffset(zone, phW, phH, fit.offset)
+              img.set({
+                scaleX: phScale,
+                scaleY: phScale,
+                left: zone.x + (zone.width - phW) / 2 + phOffset.x,
+                top:  zone.y + (zone.height - phH) / 2 + phOffset.y,
+              })
+              img.setCoords()
+            }
+          } catch {
+            // Unreadable placeholder - keep the plain cover fit.
+          }
         }
 
         canvas.add(img)

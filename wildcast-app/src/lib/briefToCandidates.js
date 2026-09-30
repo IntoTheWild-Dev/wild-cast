@@ -153,7 +153,14 @@ async function contentFit(zone, url) {
     i.onerror = reject
     i.src = url
   })
-  const w = img.naturalWidth, h = img.naturalHeight
+  return contentFitForImage(zone, img)
+}
+
+// The fit itself, for an already-loaded image element. TemplateCanvas uses it
+// directly for the faded placeholder photo of an empty photo zone, so the
+// guide picture sits at the same size/position a real upload would get.
+export function contentFitForImage(zone, img) {
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height
   if (!w || !h) return null
   // Alpha bounding box on a downscaled copy (fast; ~1% precision is plenty).
   const k = Math.min(1, 400 / Math.max(w, h))

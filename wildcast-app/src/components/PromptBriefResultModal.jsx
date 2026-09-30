@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import TemplateCanvas from './TemplateCanvas'
 import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
-import { buildCandidateFields, fetchMerchantAssets, fitContentScales } from '../lib/briefToCandidates'
+import { buildCandidateFields, fetchMerchantAssets, fitContent } from '../lib/briefToCandidates'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
@@ -69,7 +69,9 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
       // Starting Scale so a cut-out dish / sticker fits its box (chat-made
       // designs only - see fitContentScales). Rides on the brief so Edit
       // design and Send for review open with the same scale as this preview.
-      built.imageScales = await fitContentScales(config?.zones, nextFields)
+      const fit = await fitContent(config?.zones, nextFields)
+      built.imageScales = fit.scales
+      built.imagePositions = fit.positions
       if (cancelled) return
       setBrief(built)
       setFields(nextFields)
@@ -296,7 +298,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
               (Option C's zones carry no ai blocks of their own) - without it
               this preview - and the PNG saved via Send for review - would
               print Option C in normal case while the editor prints caps. */}
-          <TemplateCanvas config={config} fields={fields} imageScales={brief?.imageScales} templateId={entry.templateIdGuided} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
+          <TemplateCanvas config={config} fields={fields} imageScales={brief?.imageScales} imagePositions={brief?.imagePositions} templateId={entry.templateIdGuided} mode="non-designer" exportRef={exportRef} onReady={scheduleCapture} />
         </div>
       )}
     </div>
