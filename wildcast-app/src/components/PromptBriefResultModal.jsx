@@ -158,7 +158,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 28, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 28, alignItems: 'start' }}>
             <div>
               <div style={{ position: 'relative', background: '#F3F4F6', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', maxWidth: 320, margin: '0 auto', boxShadow: '0 8px 28px rgba(0,0,0,0.10)', ...(png ? {} : { aspectRatio: '1191 / 1679' }) }}>
                 {png

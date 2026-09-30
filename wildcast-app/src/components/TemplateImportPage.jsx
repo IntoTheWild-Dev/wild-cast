@@ -3,6 +3,7 @@ import Select from './Select'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 
 // Matches every live template config's canvasW/canvasH (src/data/templateZones.js)
 // and the record api/import-figma-plugin.js builds - no single shared
@@ -212,6 +213,7 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange, onMoveForward,
 }
 
 export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch, onTestDraft, onDirtyChange }) {
+  const isMobile = useIsMobile()
   const [error, setError] = useState('')
   // A slotKey, not a snapshotted record - the actual record is looked up
   // fresh from `reviewable` on every render (see `result` below). Storing a
@@ -475,7 +477,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
         )}
 
         {result && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 380px) 1fr', gap: 28 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(280px, 380px) 1fr', gap: 28 }}>
             {/* Left: preview, sticky so it stays in view while scrolling the zone list on the right.
                 Deliberately NOT `position:sticky` directly on the grid item itself - a
                 grid item that's ALSO the sticky element runs into real, hard-to-predict

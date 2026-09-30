@@ -4,6 +4,7 @@ import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import NotificationBell from './NotificationBell'
 import UserMenu from './UserMenu'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 
 // Shown instead of navigating for any nav item passed disabled=true below -
 // small and local rather than its own file since it's a single temporary
@@ -87,6 +88,7 @@ export const WORKFLOW_ROLES = ['Designer', 'Manager']
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange, onOpenNotificationProject, notifications }) {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const isMobile = useIsMobile()
   function handleSignOut() {
     // Clears both possible sign-in paths unconditionally rather than
     // checking wildcast_auth_type first - removing a key that was never set
@@ -116,6 +118,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         title={disabled ? 'Coming soon' : undefined}
         style={{
           fontSize: 13, fontWeight: 500, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+          whiteSpace: 'nowrap', flexShrink: 0,
           color: disabled ? 'var(--light)' : (active ? 'var(--dark)' : 'var(--mid)'),
           background: active ? 'rgba(2,6,24,0.06)' : 'transparent',
           transition: 'all 0.15s',
@@ -149,11 +152,16 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
       {/* PAGE_MAX_WIDTH (lib/layout.js) - the same width every page's content
           uses, so the header's edges line up with the page below. Widened
           from 1100 when the notification bell was added (2026-09-25). */}
-      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `10px ${PAGE_GUTTER}px`, minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8, columnGap: 16 }}>
+      {/* Phone width: logo + bell/user menu share the first row, and the nav
+          gets its own single row that scrolls sideways instead of wrapping
+          into three rows (~170px of header on a 390px screen). */}
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: isMobile ? '10px 16px 6px' : `10px ${PAGE_GUTTER}px`, minHeight: 58, display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: isMobile ? 6 : 8, columnGap: 16 }}>
         <div onClick={onLogoClick} style={{ cursor: 'pointer', flexShrink: 0 }}>
           <img src="/assets/Logo (Only Font) Dark.png" alt="Wild Stack" style={{ height: 28 }} />
         </div>
-        <nav style={{ display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 4, flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }}>
+        <nav className={isMobile ? 'wc-nav-scroll' : undefined} style={isMobile
+          ? { order: 2, flex: '1 0 100%', display: 'flex', flexWrap: 'nowrap', columnGap: 2, overflowX: 'auto', margin: '0 -16px', padding: '0 12px 2px', minWidth: 0 }
+          : { display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 4, flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }}>
           {navItem(
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <HugeiconsIcon icon={PlusSignIcon} size={14} />
@@ -182,7 +190,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
           {activation?.role === 'designer' && navItem('Import', 'import', true)}
           <span
             onClick={onHelp}
-            style={{ fontSize: 13, fontWeight: 500, color: 'var(--mid)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s' }}
+            style={{ fontSize: 13, fontWeight: 500, color: 'var(--mid)', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', transition: 'color 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--dark)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--mid)'}
           >Help</span>
@@ -190,7 +198,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
         {/* position:relative - both the bell's and UserMenu's dropdowns
             anchor to this group's right edge, so they open in exactly the
             same spot. */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: isMobile ? 'auto' : undefined }}>
           {/* Same identity My Tasks uses for "mine" - see NotificationBell. */}
           <NotificationBell notifications={notifications} onOpenProject={onOpenNotificationProject} />
           {/* Role toggle, AI credits and Sign out all live in here now. */}

@@ -93,31 +93,44 @@ function baseCandidateFields(brief, { logoUrl, photoUrl } = {}) {
 // photo zone by "cover", so a square cut-out dish is scaled to the box WIDTH
 // and spills over the lines above it. This returns an imageScales entry per
 // zone that fits the image's visible (non-transparent) content inside the
-// zone box instead. Chat-only by design: it's stored on the design exactly
-// like a hand-set Scale, so the editor's own rules are untouched and the
-// partner can still change it there. Photos WITH a background (no
-// transparent margin) are skipped - those are meant to fill the box.
+// zone box instead. Stored on the design exactly like a hand-set Scale, so
+// TemplateCanvas.jsx's own rules are untouched and the partner can still
+// change it. Photos WITH a background (no transparent pixels) are skipped -
+// those are meant to fill the box.
 export async function fitContentScales(zones, fields) {
-  const out = {}
+  const { scales } = await fitContent(zones, fields)
+  return scales
+}
+
+// Same fit, plus an imagePositions offset that centres the visible content
+// in the zone - a dish sitting off-centre in its PNG would otherwise still
+// be clipped on one side even at the right Scale. Used by the editor when a
+// new photo/sticker is set (App.jsx autoFitImage).
+export async function fitContent(zones, fields) {
+  const scales = {}, positions = {}
   for (const zone of zones ?? []) {
     if (zone.type !== 'image' || !(zone.id === 'photo' || zone.id.includes('sticker'))) continue
     const url = fields?.[`${zone.id}Url`]
     if (!url) continue
     try {
-      const pct = await contentFitPct(zone, url)
-      if (pct) out[zone.id] = pct
+      const fit = await contentFit(zone, url)
+      if (fit) { scales[zone.id] = fit.pct; positions[zone.id] = fit.offset }
     } catch {
       // Unreadable image - keep the editor's default fit.
     }
   }
-  return out
+  return { scales, positions }
 }
 
 // Mirrors TemplateCanvas.jsx's image load: its base scale ("cover" = fill,
 // with a MIN_NUDGE_SLACK overscan margin; "contain" = fit) that the Scale
-// percentage multiplies. Keep in step if that formula changes.
+// percentage multiplies, and its placement (image centred in the zone, then
+// shifted by the Position offset). Keep in step if that formula changes.
 const CANVAS_MIN_NUDGE_SLACK = 24
-const CONTENT_FILL = 0.95 // leave a hair of air so the dish doesn't touch the box edge
+// As big as the zone allows (Anang, 2026-09-30: "sampai mentok") - the
+// visible content touches the zone on its tighter side. pct rounds DOWN so
+// rounding can never push it a fraction past the edge.
+const CONTENT_FILL = 1
 
 function canvasBaseScale(zone, w, h) {
   if (zone.fit !== 'cover') return Math.min(zone.width / w, zone.height / h)
@@ -126,7 +139,7 @@ function canvasBaseScale(zone, w, h) {
   return base * Math.max(1.15, 1 + (2 * CANVAS_MIN_NUDGE_SLACK) / tightDim)
 }
 
-async function contentFitPct(zone, url) {
+async function contentFit(zone, url) {
   const img = await new Promise((resolve, reject) => {
     const i = new Image()
     i.crossOrigin = 'anonymous'
@@ -144,7 +157,7 @@ async function contentFitPct(zone, url) {
   const ctx = cv.getContext('2d')
   ctx.drawImage(img, 0, 0, cw, ch)
   const data = ctx.getImageData(0, 0, cw, ch).data
-  let minX = cw, minY = ch, maxX = -1, maxY = -1
+  let minX = cw, minY = ch, maxX = -1, maxY = -1, clear = 0
   for (let y = 0; y < ch; y++) {
     for (let x = 0; x < cw; x++) {
       if (data[(y * cw + x) * 4 + 3] > 16) {
@@ -152,16 +165,27 @@ async function contentFitPct(zone, url) {
         if (x > maxX) maxX = x
         if (y < minY) minY = y
         if (y > maxY) maxY = y
+      } else {
+        clear++
       }
     }
   }
   if (maxX < 0) return null
+  // Not a cut-out: (almost) no transparent pixels. Counted over the whole
+  // image, not just the margin - a bowl cropped tight to its rim still has
+  // clear corners and still gets cut off by cover-fit.
+  if (clear / (cw * ch) < 0.03) return null
   const contentW = (maxX - minX + 1) / k
   const contentH = (maxY - minY + 1) / k
-  if ((contentW * contentH) / (w * h) > 0.97) return null // no real transparent margin - not a cut-out
   const target = Math.min(zone.width / contentW, zone.height / contentH) * CONTENT_FILL
-  const pct = Math.round((100 * target) / canvasBaseScale(zone, w, h))
-  return Math.max(20, Math.min(300, pct))
+  const pct = Math.max(20, Math.min(300, Math.floor((100 * target) / canvasBaseScale(zone, w, h))))
+  const s = canvasBaseScale(zone, w, h) * pct / 100
+  // Shift from "image centred" to "content centred" (canvas units).
+  const offset = {
+    x: s * (w / 2 - (minX + maxX + 1) / 2 / k),
+    y: s * (h / 2 - (minY + maxY + 1) / 2 / k),
+  }
+  return { pct, offset }
 }
 
 // Best-effort pull of this merchant's existing logo/product-image from the

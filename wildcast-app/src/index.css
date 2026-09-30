@@ -115,3 +115,7 @@ input::placeholder, textarea::placeholder {
   color: var(--light);
   font-style: italic;
 }
+
+/* Header nav on phone width scrolls sideways (Header.jsx) - no visible scrollbar. */
+.wc-nav-scroll { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.wc-nav-scroll::-webkit-scrollbar { display: none; }

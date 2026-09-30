@@ -294,7 +294,7 @@ function CatalogueView({ groups, onViewGroup, onBack, loading }) {
           )}
         </div>
         {loading ? <PageSpinner label="Loading templates…" /> : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))', gap: 20 }}>
             {groups.map(g => (
               <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
             ))}
@@ -557,7 +557,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
           />
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))', gap: 20 }}>
           {members.map((t, i) => {
             // An archived record is treated as if the slot were empty on this
             // catalogue page - no "Archived" label, no manage menu here. Julia's
@@ -862,7 +862,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
       <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `64px ${PAGE_GUTTER}px` }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 56, alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))', gap: 56, alignItems: 'center' }}>
 
           {/* Left: hero copy */}
           <div>
