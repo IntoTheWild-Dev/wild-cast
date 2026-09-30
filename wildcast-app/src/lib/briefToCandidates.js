@@ -131,6 +131,12 @@ const CANVAS_MIN_NUDGE_SLACK = 24
 // visible content touches the zone on its tighter side. pct rounds DOWN so
 // rounding can never push it a fraction past the edge.
 const CONTENT_FILL = 1
+// The food photo specifically sits a touch smaller than "as big as the zone
+// allows" (Julia, 2026-09-30: "food photo is a bit large") - ~10% smaller,
+// still centred and never cut. One knob for every template and every route
+// (upload, Library pick, reopened design, Prompt Brief previews); stickers
+// keep CONTENT_FILL. Raise toward 1 for bigger, lower for smaller.
+const PHOTO_FILL = 0.9
 
 function canvasBaseScale(zone, w, h) {
   if (zone.fit !== 'cover') return Math.min(zone.width / w, zone.height / h)
@@ -147,7 +153,14 @@ async function contentFit(zone, url) {
     i.onerror = reject
     i.src = url
   })
-  const w = img.naturalWidth, h = img.naturalHeight
+  return contentFitForImage(zone, img)
+}
+
+// The fit itself, for an already-loaded image element. TemplateCanvas uses it
+// directly for the faded placeholder photo of an empty photo zone, so the
+// guide picture sits at the same size/position a real upload would get.
+export function contentFitForImage(zone, img) {
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height
   if (!w || !h) return null
   // Alpha bounding box on a downscaled copy (fast; ~1% precision is plenty).
   const k = Math.min(1, 400 / Math.max(w, h))
@@ -177,7 +190,7 @@ async function contentFit(zone, url) {
   if (clear / (cw * ch) < 0.03) return null
   const contentW = (maxX - minX + 1) / k
   const contentH = (maxY - minY + 1) / k
-  const target = Math.min(zone.width / contentW, zone.height / contentH) * CONTENT_FILL
+  const target = Math.min(zone.width / contentW, zone.height / contentH) * (zone.id === 'photo' ? PHOTO_FILL : CONTENT_FILL)
   const pct = Math.max(20, Math.min(300, Math.floor((100 * target) / canvasBaseScale(zone, w, h))))
   const s = canvasBaseScale(zone, w, h) * pct / 100
   // Shift from "image centred" to "content centred" (canvas units).
