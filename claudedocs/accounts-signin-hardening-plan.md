@@ -70,12 +70,16 @@ Each step is its own small commit; verify each one for real before moving on.
    recognised — `WILD_STACK_DOMAIN` in `api/_lib/accounts.js` becomes a list of two domains.)
 2. **Client access = every other email** (mostly DoorDash / Wolt). Role `partner`: **no import**, no template
    publishing. For now they get both the **Manager and Designer** workflow toggle in the header.
-   (Assumption to confirm: "Designer access" means the Manager/Designer toggle, not template management.)
+   (Confirmed: "Designer access" means the Manager/Designer toggle, not template management.)
 3. **AI credits stay uncapped for now** until Julia understands usage better. So the server-side credits step
    is parked; we should still *log* AI usage per account so real numbers exist when the decision comes.
-4. **Activation keys stay active this week only**, then account sign-in only. Needs: an exact cutoff date,
+4. **Activation keys stop working on Monday 5 October 2026** (confirmed), then account sign-in only. Needs:
    a heads-up to key users so they create accounts first, and a switch (flag/date) rather than deleting the
    key code. Note projects saved under a key are owned by the key string, not a person.
+   Confirmed: "Designer access" for clients = the Manager/Designer dropdown in the header only (decision 2).
+6. **Stop-gap for agency sign-ups (Julia likes this): an approved-email list and/or an invite code.**
+   Only approved people can become `agency` until email verification exists. Exact mechanism (list, code, or
+   both) to be settled at build time; the list is the simpler and safer default.
 5. **Executive write-up required at the end**: what we did and how it works, in plain language.
    Keep a running log of every change (what, why, how it was tested) so the write-up is easy to produce.
 
