@@ -9,6 +9,9 @@
 // options, character limits, verbatim text) before the client sees it, and
 // the "next step" is computed deterministically - the model's own pick is
 // only used for wording, and only if it matches.
+import { requireCaller } from './_lib/auth.js'
+import { recordUsage } from './_lib/usage.js'
+
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_STEPS = 30
 const MAX_OPTIONS = 12
@@ -127,8 +130,14 @@ function describeSteps(steps, answers) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
+  // Only signed-in people (account or live activation key) may spend
+  // Anthropic credit; usage is recorded per person (api/_lib/usage.js).
+  const caller = await requireCaller(req, res)
+  if (!caller) return
+
   const apiKey = process.env.WILDCAST_COPY
   if (!apiKey) return res.status(500).json({ error: 'WILDCAST_COPY (Anthropic API key) is not configured' })
+  await recordUsage(caller, 'prompt-brief-chat')
 
   try {
     const body = req.body ?? {}

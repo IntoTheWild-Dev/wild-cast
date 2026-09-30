@@ -5,7 +5,52 @@
 
 ---
 
+## ⏰ Reminders for Julia — read first
+
+**Accounts & sign-in rework (branch `claude/signup-login-status-check-3rxbs0`, NOT merged yet).** Do these, in order:
+
+1. **Test the branch preview.** Vercel → the `wildcast` project → **Deployments** → newest one for that branch → open its link. Try: team-email sign-up asks for the invite code; client email needs none; team account can publish/archive a template; 5 wrong passwords lock the email; an AI feature works while signed in.
+2. **Preview needs the variables too.** `AGENCY_APPROVED_EMAILS` and `AGENCY_INVITE_CODE` must be ticked for **Preview**, not just Production, or the invite code won't work on the preview link.
+3. **Merge** (after a review from Anang or whoever reviews) once the preview test passes.
+4. **Then, and only then, turn off the shared activation keys.** In Vercel → Settings → Environment Variables add:
+   - **Key:** `ACTIVATION_KEYS_END`
+   - **Value:** `2026-10-05T00:00:00+02:00`
+
+   Redeploy afterwards. From that moment every shared key stops working everywhere. Do it after the merge and a day or two of testing, so key users can still get in if something goes wrong. Tell key users to create an account **before 5 October** (the key tab on the sign-in screen already says so).
+5. **Keep the invite code safe** in Apple Passwords (not in this repo). If it's lost, set a new `AGENCY_INVITE_CODE` in Vercel and redeploy; existing accounts are unaffected.
+
+Full write-up of what changed and how it was tested: `claudedocs/accounts-change-log.md`. Executive summary draft: `claudedocs/executive-summary-accounts.md`. Plan and decisions: `claudedocs/accounts-signin-hardening-plan.md`.
+
+**Still open on accounts:** email confirmation + "forgot password" (needs an email service, ~1 day plus domain setup); no lock yet against guessing across many different emails; AI credits deliberately uncapped, usage visible at `/api/usage` for team accounts.
+
+---
+
 ## What's working right now
+
+### Accounts & sign-in rework (branch `claude/signup-login-status-check-3rxbs0`, 2026-09-30 — **BUILT and unit-tested, NOT merged, NOT yet tested on a Vercel preview**)
+
+Julia's decisions (2026-09-30): `@wildstack.studio` and `@intothewild.hamburg` = **agency** (full access incl. publish + Figma import); every other email = **client/partner** (no import, no template publishing; both Manager and Designer view-toggle values allowed); unlimited client seats, no client code; **AI credits uncapped** for now; shared activation keys end **Monday 5 October 2026**. Branch is `main` (as of `5774b7a` + PR #51) plus these changes; `main` had not moved at last push.
+
+| Step | What it does | Where |
+|---|---|---|
+| 1. Team domains + approval | Both domains recognised as team. A NEW team-address sign-up must be on the approved-email list **or** enter the invite code (fails closed if neither is configured). Earlier team-domain accounts stored as partner are promoted at login only if on the approved list. Sign-in screen shows an "Invite code" box only when needed. | `api/_lib/accounts.js`, `api/account-auth.js`, `src/components/ActivationGate.jsx` |
+| 2. Team can publish | `requireDesignerKey` (now async) also accepts a personal account via `X-Account-Email` + `X-Account-Token` with a team role. This was a real bug: account sign-ins never sent a key, so team members saw the manage buttons and got 403. Reproduced with a failing test first. | `api/_lib/auth.js`, `api/_lib/accounts.js` (`verifySession`), `api/publish-template.js`, `api/delete-template.js`, `src/lib/activationKey.js` |
+| 3. AI checks + usage | `ai-suggest` and `prompt-brief-chat` return 401 unless signed in (account or live key); each call is counted per person per day (no cap). Team-only report: `GET /api/usage`. Usage writes are best-effort and never block a feature. | `api/_lib/auth.js` (`requireCaller`), `api/_lib/usage.js`, `api/usage.js`, the 3 client fetches send `activationHeaders()` |
+| 4. Key switch-off | `ACTIVATION_KEYS_END` (date-time with offset) retires every shared key everywhere once passed; `validate-key` returns 410. **OFF until the variable is set.** Unset or unreadable date = keys keep working. Key tab shows a "stop working on 5 October" notice (fixed text, keep in step with the variable). | `api/_lib/auth.js` (`activationKeysEnabled`), `api/validate-key.js`, `ActivationGate.jsx` |
+| 5. Wrong-password lock | 5 wrong passwords for one email within 15 min locks that email for 15 min (429); correct password clears the count. Not covered: guessing across many emails (no per-IP limit). | `api/_lib/loginLimit.js`, `api/account-auth.js` |
+
+**Vercel environment variables this branch reads** (set for Production, and Preview to test on the branch link):
+
+| Variable | Purpose | State |
+|---|---|---|
+| `AGENCY_APPROVED_EMAILS` | comma-separated team emails allowed to sign up as agency | set by Julia 2026-09-30 |
+| `AGENCY_INVITE_CODE` | shared code for new team members (keep in Apple Passwords, not in the repo) | set by Julia 2026-09-30 |
+| `ACTIVATION_KEYS_END` | `2026-10-05T00:00:00+02:00` retires all shared keys | **NOT set yet — set after merge + a day or two of testing** |
+| `WILDCAST_KEYS`, `BLOB_READ_WRITE_TOKEN`, `WILDCAST_COPY` | existing | unchanged |
+
+**Tests:** `npm test` (added this branch; Node's built-in runner, no new dependency) — 26 tests, all pass: sign-up rules, team publishing access, AI caller checks + usage, key cutoff, lock. Breaking the AI check / lock / approval on purpose made the matching tests fail, so they do bite. Sign-in screen also checked in a real browser with faked API replies. `npm run build` passes. **Not yet done:** anything against live Blob storage or the real AI service (needs the Vercel preview). `package-lock.json` was already out of sync with `package.json` before this branch (`npm ci` fails); tests were run after `npm install --no-package-lock`, lockfile untouched. Lint: the `api/` files trip `no-undef` for `process`/`Buffer` exactly as the older API files already did.
+
+**Still open:** email confirmation + "forgot password" (needs an email service; ~1 day + domain setup) — until then the approved-list/invite code is the stop-gap that stops anyone typing a team address and self-granting full access; per-IP login limiting; accounts management screen; projects saved under a shared key are owned by the key string, not a person (matters at the 5 Oct cutoff). Docs: `claudedocs/accounts-signin-hardening-plan.md` (plan + decisions), `claudedocs/accounts-change-log.md` (what/why/how tested), `claudedocs/executive-summary-accounts.md` (for Julia's executives).
 
 ### Prompt Brief chat rework + AI Suggest v1.2 combined (branch `AI-Chatbox-Improvements`, 2026-09-28 → 2026-09-29, **SHIPPED to `main`, PR #44, merge commit `fbf2c802`, live on cast.wildstack.studio — verified by pulling the actual production JS bundle, not just the deploy status**)
 

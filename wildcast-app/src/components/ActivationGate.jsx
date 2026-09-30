@@ -19,6 +19,8 @@ export default function ActivationGate({ onActivated }) {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [needsName, setNeedsName] = useState(false) // first-ever sign-in for this email - ask for a name too
+  const [inviteCode, setInviteCode] = useState('')
+  const [needsInviteCode, setNeedsInviteCode] = useState(false) // team-domain address that isn't pre-approved - ask for an invite code too
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   // Wolt test group's 5-seat cap - fetched fresh whenever the "Team sign in"
@@ -81,7 +83,7 @@ export default function ActivationGate({ onActivated }) {
       const res = await fetch('/api/account-auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmedEmail, password, displayName: displayName.trim() || undefined }),
+        body: JSON.stringify({ email: trimmedEmail, password, displayName: displayName.trim() || undefined, inviteCode: inviteCode.trim() || undefined }),
       })
       const data = await res.json()
 
@@ -89,7 +91,14 @@ export default function ActivationGate({ onActivated }) {
         // First-ever sign-in for this email needs a name before it can
         // actually create the account - reveal that field instead of just
         // showing a generic error, so it reads as "one more step," not a failure.
-        if (data.isNewAccount) { setNeedsName(true); setError(''); return }
+        // Only the first response (no name yet) is a quiet "one more step";
+        // a later refusal (bad/missing invite code) needs its real message.
+        if (data.isNewAccount) {
+          setNeedsName(true)
+          if (data.needsInviteCode) setNeedsInviteCode(true)
+          setError(displayName.trim() ? (data.error || 'Could not sign in') : '')
+          return
+        }
         setError(data.error || 'Could not sign in')
         return
       }
@@ -148,7 +157,7 @@ export default function ActivationGate({ onActivated }) {
               <button
                 key={m}
                 type="button"
-                onClick={() => { setMode(m); setError(''); setNeedsName(false) }}
+                onClick={() => { setMode(m); setError(''); setNeedsName(false); setNeedsInviteCode(false) }}
                 style={{
                   flex: 1, padding: '9px 0', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer',
                   background: mode === m ? '#fff' : 'transparent',
@@ -164,6 +173,17 @@ export default function ActivationGate({ onActivated }) {
 
           {mode === 'key' ? (
             <>
+              {/* Heads-up for shared-key users: keys are being retired in favour
+                  of personal accounts (Julia, 2026-09-30). The real cutoff is
+                  the ACTIVATION_KEYS_END env var (api/_lib/auth.js) - this
+                  date is only the text shown here, keep the two in step. */}
+              <div style={{
+                marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
+              }}>
+                <strong>Activation keys stop working on 5 October.</strong> Open the <em>Sign in</em> tab and create your own account before then - it takes a minute.
+              </div>
+
               {/* Activation key form - unchanged */}
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
@@ -303,6 +323,31 @@ export default function ActivationGate({ onActivated }) {
                     />
                     <p style={{ marginTop: 6, fontSize: 11, color: 'var(--mid)' }}>
                       New here - this email hasn't signed in before. Your name is used to label your own folder in Designs.
+                    </p>
+                  </div>
+                )}
+
+                {needsInviteCode && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dark)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Invite code
+                    </label>
+                    <input
+                      type="text"
+                      value={inviteCode}
+                      onChange={e => setInviteCode(e.target.value)}
+                      placeholder="From Wild Stack"
+                      autoComplete="off"
+                      style={{
+                        width: '100%', padding: '12px 14px',
+                        fontSize: 14, fontFamily: 'inherit',
+                        border: '1.5px solid var(--primary)',
+                        borderRadius: 10, background: '#fff', color: 'var(--dark)',
+                        outline: 'none',
+                      }}
+                    />
+                    <p style={{ marginTop: 6, fontSize: 11, color: 'var(--mid)' }}>
+                      Wild Stack team addresses need an invite code the first time. Ask Wild Stack if you don't have one.
                     </p>
                   </div>
                 )}

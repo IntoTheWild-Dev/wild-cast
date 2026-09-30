@@ -20,6 +20,8 @@ import {
   verticalWordRules,
 } from './_lib/campaignSheet.js'
 import { runChecks, offerTokens } from './_lib/checks.js'
+import { requireCaller } from './_lib/auth.js'
+import { recordUsage } from './_lib/usage.js'
 
 // Current Claude Sonnet model (spec §7.2: take the latest model ID, do not
 // hard-code an old one — keep in sync when Anthropic ships a new one).
@@ -289,10 +291,16 @@ async function callClaude(apiKey, systemPrompt, userContent) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
+  // Only signed-in people (account or live activation key) may spend
+  // Anthropic credit; usage is recorded per person (api/_lib/usage.js).
+  const caller = await requireCaller(req, res)
+  if (!caller) return
+
   const apiKey = process.env.WILDCAST_COPY
   if (!apiKey) {
     return res.status(500).json({ error: 'WILDCAST_COPY (Anthropic API key) is not configured' })
   }
+  await recordUsage(caller, 'ai-suggest')
 
   try {
     const { field, lang = 'de', brief = {} } = req.body ?? {}
