@@ -356,6 +356,7 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, required, option
                 error={ai.error}
                 onRetry={ai.onRetry}
                 matchesOtherField={ai.matchesOtherField}
+                hasText={ai.hasText}
               />
             </>
           )}
@@ -794,6 +795,9 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // Every AI line ever shown on this design, feeding the batch's exclude
   // list (§8.1 "Add every line already shown to exclude").
   const shownLinesRef = useRef([])
+  // Render-safe mirror of 'this field holds an AI line' (the ref above can't
+  // be read while rendering) - drives the Improve-vs-Suggest button label.
+  const [aiAppliedKeys, setAiAppliedKeys] = useState({})
 
   const [userNote, setUserNote] = useState('')
   const [noteOpen, setNoteOpen] = useState(false)
@@ -850,6 +854,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
     },
     applyText: (key, text) => {
       provenanceRef.current[key] = 'kept'
+      setAiAppliedKeys(prev => ({ ...prev, [key]: true }))
       shownLinesRef.current = [...new Set([...shownLinesRef.current, text])]
       onChange(key, text)
     },
@@ -859,6 +864,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // which drops the provenance entirely (an empty field is a placeholder).
   function changeField(key, val) {
     provenanceRef.current[key] = (val ?? '').trim() ? 'user_draft' : undefined
+    setAiAppliedKeys(prev => (prev[key] ? { ...prev, [key]: false } : prev))
     onChange(key, val)
   }
 
@@ -887,6 +893,8 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       error: (!queue.busyField && queue.error?.field === key) ? queue.error.message : null,
       onRetry: () => { queue.clearError(); queue.click(key) },
       matchesOtherField: !!(fields[otherKey] ?? '').trim(),
+      // Text the user typed themselves -> the button improves it.
+      hasText: !!(fields[key] ?? '').trim() && !aiAppliedKeys[key],
       hint: queue.hint,
     }
   }

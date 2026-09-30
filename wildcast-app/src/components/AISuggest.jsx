@@ -12,7 +12,7 @@
 // between the Headline and Sub-headline rows), so this component is the
 // button + its inline error, plus the shared out-of-credits modal.
 
-export default function AISuggest({ onSuggest, busy, error, onRetry, matchesOtherField }) {
+export default function AISuggest({ onSuggest, busy, error, onRetry, matchesOtherField, hasText }) {
   return (
     <>
       <button
@@ -26,9 +26,11 @@ export default function AISuggest({ onSuggest, busy, error, onRetry, matchesOthe
           borderRadius: 6, padding: '4px 10px', cursor: busy ? 'default' : 'pointer', whiteSpace: 'nowrap',
           opacity: busy ? 0.7 : 1,
         }}
-        title={matchesOtherField
-          ? 'Writes lines that match the other field. Uses 1 credit for a new batch.'
-          : 'One AI line per click. Uses 1 credit per new batch.'}
+        title={hasText
+          ? 'Improves the text you typed, in the language you wrote it. Uses 1 credit.'
+          : matchesOtherField
+            ? 'Writes lines that match the other field. Uses 1 credit for a new batch.'
+            : 'One AI line per click. Uses 1 credit per new batch.'}
       >
         <span>{busy ? '…' : '✦'}</span> {busy ? 'Writing…' : 'AI Suggest'}
       </button>

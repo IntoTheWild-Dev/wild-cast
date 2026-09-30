@@ -303,7 +303,12 @@ export function checkLockedField(pair, ctx) {
   if (!ctx.locked) return null
   const { fieldKey, text } = ctx.locked
   const pairField = fieldKey === 'headline' ? 'headline' : 'subheadline'
-  if ((pair[pairField] || '').trim() !== text.trim()) {
+  // Case-insensitive: the editor stores caps-template text UPPERCASED, while
+  // the model is told to write in normal case, so a locked "WIR LIEBEN
+  // BURGER" legitimately comes back as "Wir lieben Burger" (ai-suggest.js
+  // snaps it back to the exact locked text after this check passes).
+  const same = (a, b) => (a || '').trim().replace(/\s+/g, ' ').toLowerCase() === (b || '').trim().replace(/\s+/g, ' ').toLowerCase()
+  if (!same(pair[pairField], text)) {
     return `${pairField} does not keep the locked text exactly`
   }
   return null

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { activationHeaders } from './activationKey'
+import { detectLang, langName, requestAiPairs } from './aiCopy'
 
 // The AI Suggest pair queue (Mark's v1.2 spec, section 8) — client-side,
 // in-memory React state, scoped per design + context.
@@ -143,13 +143,23 @@ export function usePairQueue(options) {
     return o.fieldProvenance(key) === 'kept' ? 'kept' : 'user_draft'
   }
 
+  // Language the batch is written in. "Improve with AI" (the clicked field
+  // holds the user's own text) follows the language of that text - English
+  // input stays English, German stays German - otherwise the language tab
+  // the user is working in.
+  function langFor(key) {
+    const o = optRef.current
+    if (kindFor(key) !== 'user_draft') return o.lang
+    return detectLang(o.getFieldText(key), o.lang)
+  }
+
   // ── The API call ─────────────────────────────────────────────────────────
   async function fetchBatch({ clickedField, locked, sessionBase }) {
     const o = optRef.current
     const texts = currentTexts()
     const body = {
       field: clickedField,
-      lang: o.lang,
+      lang: langFor(clickedField),
       brief: {
         design_id: o.designId ?? 'draft',
         template_id: o.templateId,
@@ -191,15 +201,7 @@ export function usePairQueue(options) {
     void sessionBase
     if (locked) body.brief.locked = locked
 
-    const res = await fetch('/api/ai-suggest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Could not write a line. Try again.')
-    if (!data.pairs?.length) throw new Error('Could not write a line. Try again.')
-    return data
+    return requestAiPairs(body)
   }
 
   function pairText(s, index, fieldKey) {
@@ -277,9 +279,12 @@ export function usePairQueue(options) {
           setCapped(true)
           return
         }
-        const message = otherIsLocked
-          ? 'Generate lines that match the other field\'s text? This uses 1 credit.'
-          : `Generate ${PAIRS_WANTED} AI suggestions? This uses 1 credit.`
+        const improving = kindFor(clickedField) === 'user_draft'
+        const message = improving
+          ? `Improve your text with AI, writing in ${langName(langFor(clickedField))}? This uses 1 credit.`
+          : otherIsLocked
+            ? 'Generate lines that match the other field\'s text? This uses 1 credit.'
+            : `Generate ${PAIRS_WANTED} AI suggestions? This uses 1 credit.`
         if (!window.confirm(message)) return
       }
 

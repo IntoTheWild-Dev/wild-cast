@@ -2126,6 +2126,8 @@ const SHOW_MODE_CHOOSER = false
             onSaveDraft={handleSaveBriefDraft}
             onOpenLibrary={() => handleNavigate('designs')}
             onNewBrief={() => handleNavigate('new-brief')}
+            credits={activation?.credits}
+            onCreditUsed={handleAiCreditUsed}
             onEdit={brief => {
               // Same bookkeeping BriefingForm's onSubmitted does, then straight
               // into the editor (the chat already picked the template + mode).

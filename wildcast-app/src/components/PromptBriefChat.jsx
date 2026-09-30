@@ -8,9 +8,10 @@ import {
   reuseAskText, reuseManyAskText, CONFIRM_USE, CONFIRM_DIFFERENT, answersOverTemplateLimit,
 } from '../lib/promptBriefFlow'
 import { askAssistant } from '../lib/promptBriefAI'
+import { detectLang, langName, draftFieldBlock, requestAiPairs } from '../lib/aiCopy'
+import { AISuggestOutOfCreditsModal } from './AISuggest'
 import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { hasTransparency, cropToContent } from '../lib/image'
-import { activationHeaders } from '../lib/activationKey'
 import { isCloseMatch } from '../lib/fuzzyMatch'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { aiFieldSettingsFor } from '../data/templateZones'
@@ -152,7 +153,7 @@ function UploadDrop({ label, onFile, busyLabel, note }) {
   )
 }
 
-export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief }) {
+export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief, credits, onCreditUsed }) {
   const [messages, setMessages] = useState([])
   const [answers, setAnswers] = useState({})
   const [currentId, setCurrentId] = useState(null)
@@ -167,6 +168,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   const [showTemplatePreview, setShowTemplatePreview] = useState(false)
   const [draft, setDraft] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
+  const [showOutOfCredits, setShowOutOfCredits] = useState(false)
   // Step id whose "Choose from Assets" popup is open (upload steps only).
   const [pickerId, setPickerId] = useState(null)
   // Step id whose upload is still being processed (background removal can
@@ -541,8 +543,13 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   // pair. The other field's answer so far (if any) is sent as its current
   // text, so pairs already fit around it. Empty draft = fresh lines from the
   // brief; typed draft = a rewrite of that line (kind user_draft, the API
-  // derives the mode). Credits are deliberately not deducted here yet (to be
-  // decided).
+  // derives the mode).
+  // Credits (Julia, 2026-09-30): every generation is a real Claude call, so
+  // each one costs 1 credit, confirm-gated and deducted only after success -
+  // same rules as the editor. The text typed in the input box IS the draft
+  // being improved: it is sent as the asked field's `current` (kind
+  // user_draft -> API rewrite mode), and its language (English/German)
+  // decides the language of the suggestions.
   // `entry` is null until a template is confirmed (chat-first rework) - today
   // headline/sub_headline (the only pre-confirm aiField steps) always come
   // after templateConfirm in the step order, so this is unreachable, but that
@@ -554,6 +561,17 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     if (currentId !== step.id || aiBusy) return
     const seed = draft.trim()
     const shown = aiShown[step.id] ?? []
+    const fieldKey = step.aiField
+    // Language: a typed draft wins; otherwise follow the brief the partner
+    // already gave (headline / sub-headline / offer answers, incl. a pasted
+    // brief), so an English brief gets English suggestions. German default.
+    const briefText = ['headline', 'sub_headline', 'offer'].map(k => answers[k]?.display).filter(Boolean).join(' ')
+    const lang = detectLang(seed || briefText, 'de')
+    if (credits != null && credits <= 0) { setShowOutOfCredits(true); return }
+    const confirmMsg = seed
+      ? `Improve "${seed}" with AI, writing in ${langName(lang)}? This uses 1 credit.`
+      : 'Generate AI suggestions? This uses 1 credit.'
+    if (!window.confirm(confirmMsg)) return
     push({ from: 'user', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
     setAiBusy(true)
     setTyping(true)
@@ -561,40 +579,37 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
       const category = entry?.category ?? 'restaurant'
       const businessType = category.charAt(0).toUpperCase() + category.slice(1)
       const settings = aiFieldSettingsFor(config, entry?.label, entry?.templateIdGuided)
-      const fieldKey = step.aiField
-      const res = await fetch('/api/ai-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({
-          field: step.aiField,
-          lang: 'de',
-          brief: {
-            design_id: 'prompt-brief',
-            template_id: entry?.templateIdGuided,
-            template_name: entry?.label,
-            vertical: businessType,
-            partner: { name: partnerNameFrom(answers) ?? '' },
-            logo_picked: !!answers.logo?.imageUrl,
-            static_text: settings?.[fieldKey]?.static_text ?? [],
-            other_fields: settings?.[fieldKey]?.other_fields ?? [],
-            offer: { text: answers.offer?.display ?? '', shown_in_badge: false },
-            user_note: '',
-            fields: {
-              headline: { current: answers.headline?.display ?? '', kind: answers.headline?.display ? 'user_draft' : 'placeholder' },
-              sub_headline: {
-                current: answers.sub_headline?.display ?? '',
-                kind: answers.sub_headline?.display ? 'user_draft' : 'placeholder',
-                role: settings?.sub_headline?.role ?? 'setup',
-                position: settings?.sub_headline?.position ?? 'above',
-              },
+      // The asked field's text is the unsent draft when there is one, else
+      // whatever was already answered for it.
+      const fieldBlock = key => draftFieldBlock({ current: key === fieldKey && seed ? seed : answers[key]?.display })
+      const data = await requestAiPairs({
+        field: fieldKey,
+        lang,
+        brief: {
+          design_id: 'prompt-brief',
+          template_id: entry?.templateIdGuided,
+          template_name: entry?.label,
+          vertical: businessType,
+          partner: { name: partnerNameFrom(answers) ?? '' },
+          logo_picked: !!answers.logo?.imageUrl,
+          static_text: settings?.[fieldKey]?.static_text ?? [],
+          other_fields: settings?.[fieldKey]?.other_fields ?? [],
+          offer: { text: answers.offer?.display ?? '', shown_in_badge: false },
+          user_note: '',
+          fields: {
+            headline: fieldBlock('headline'),
+            sub_headline: {
+              ...fieldBlock('sub_headline'),
+              role: settings?.sub_headline?.role ?? 'setup',
+              position: settings?.sub_headline?.position ?? 'above',
             },
-            box: settings ?? {},
-            exclude: more ? shown : [],
           },
-        }),
+          box: settings ?? {},
+          exclude: more ? shown : [],
+        },
       })
-      const data = await res.json()
-      if (!res.ok || !data.pairs?.length) throw new Error(data.error || 'No suggestions')
+      // Charged only now that the call succeeded.
+      onCreditUsed?.()
       // The chat fills one field at a time - surface each pair's line for
       // the field being asked (the partner line concept belongs to the
       // editor's queue, not this Q&A flow).
@@ -602,7 +617,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
       setAiShown(prev => ({ ...prev, [step.id]: [...(more ? shown : []), ...lines] }))
       push({
         from: 'ai', stepId: step.id, options: lines,
-        text: seed ? 'Here are some sharper versions, in German. Tap one to use it:' : 'Here are a few ideas, in German. Tap one to use it, or type your own:',
+        text: seed ? `Here are some sharper versions, in ${langName(lang)}. Tap one to use it:` : `Here are a few ideas, in ${langName(lang)}. Tap one to use it, or type your own:`,
       })
     } catch {
       push({ from: 'ai', text: "I couldn't reach the AI copywriter just now. You can type your own line, or try again in a moment." })
@@ -1017,6 +1032,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
           onClose={() => setShowResult(false)}
         />
       )}
+
+      {showOutOfCredits && <AISuggestOutOfCreditsModal onClose={() => setShowOutOfCredits(false)} />}
     </div>
   )
 }

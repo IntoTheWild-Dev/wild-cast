@@ -446,6 +446,17 @@ export default async function handler(req, res) {
       why: String(p?.why ?? ''),
     })
 
+    // A locked field must come back exactly as it is on the design. The
+    // editor stores caps-template text UPPERCASED but the model writes normal
+    // case, so once C11 (case-insensitive) accepts it, restore the locked
+    // text verbatim.
+    const snapLocked = pair => {
+      if (!locked) return pair
+      const key = locked.fieldKey === 'headline' ? 'headline' : 'subheadline'
+      const flat = t => String(t ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+      return flat(pair[key]) === flat(locked.text) ? { ...pair, [key]: locked.text.trim() } : pair
+    }
+
     // Known lines C6 compares against: every library line (Copy or lockup
     // halves) plus the partner history lines (always empty today, kept for
     // when §4.4 ships).
@@ -479,7 +490,7 @@ export default async function handler(req, res) {
       const passing = []
       const failed = []
       for (const raw of pairsIn) {
-        const pair = normalizePair(raw)
+        const pair = snapLocked(normalizePair(raw))
         if (!pair.subheadline && !pair.headline) continue
         // A half-empty pair is useless for the lockup UI — drop it with a
         // reason rather than checking only the field it has.
@@ -516,6 +527,9 @@ export default async function handler(req, res) {
       }
     }
 
+    const flags = Array.isArray(result.flags) ? result.flags.filter(f => typeof f === 'string') : []
+    if (!vertical) flags.push('vertical_unclear')
+
     if (passing.length === 0) {
       // Same user-safe message as §7.2, but carry the check verdicts for
       // the §11 test runs — "everything was dropped" is undiagnosable
@@ -530,9 +544,6 @@ export default async function handler(req, res) {
     // Order: rank 1 first; stable tiebreak on the model's own order.
     passing.sort((a, b) => a.rank - b.rank)
     const pairs = passing.map((p, i) => ({ ...p, rank: i + 1 }))
-
-    const flags = Array.isArray(result.flags) ? result.flags.filter(f => typeof f === 'string') : []
-    if (!vertical) flags.push('vertical_unclear')
 
     return res.status(200).json({
       pairs,
