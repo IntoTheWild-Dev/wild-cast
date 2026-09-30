@@ -7,11 +7,11 @@
 
 ## ⏰ Reminders for Julia — read first
 
-**Accounts & sign-in rework (branch `claude/signup-login-status-check-3rxbs0`, NOT merged yet).** Do these, in order:
+**Accounts & sign-in rework — MERGED to `main` 2026-09-30 (PR #53).** Julia tested email sign-in on the branch preview and it worked. Still to do, in order:
 
-1. **Test the branch preview.** Vercel → the `wildcast` project → **Deployments** → newest one for that branch → open its link. Try: team-email sign-up asks for the invite code; client email needs none; team account can publish/archive a template; 5 wrong passwords lock the email; an AI feature works while signed in.
+1. ~~Test the branch preview.~~ Done for email sign-in (Julia, 2026-09-30). Not confirmed on a live link: the team-email invite code, the 5-wrong-passwords lock, and a key user seeing the 5 October notice - worth a quick check on the live site.
 2. **Preview needs the variables too.** `AGENCY_APPROVED_EMAILS` and `AGENCY_INVITE_CODE` must be ticked for **Preview**, not just Production, or the invite code won't work on the preview link.
-3. **Merge** (after a review from Anang or whoever reviews) once the preview test passes.
+3. ~~Merge~~ Done 2026-09-30 (PR #53).
 4. **Then, and only then, turn off the shared activation keys.** In Vercel → Settings → Environment Variables add:
    - **Key:** `ACTIVATION_KEYS_END`
    - **Value:** `2026-10-05T00:00:00+02:00`
@@ -27,7 +27,29 @@ Full write-up of what changed and how it was tested: `claudedocs/accounts-change
 
 ## What's working right now
 
-### Accounts & sign-in rework (branch `claude/signup-login-status-check-3rxbs0`, 2026-09-30 — **BUILT and unit-tested, NOT merged, NOT yet tested on a Vercel preview**)
+### Improve with AI, food photo fit and Option A polish (2026-09-30, PRs #52, #55 and the Option A polish PR — **MERGED to `main`**)
+
+Tested on Vercel previews by Julia (chat + editor AI in English and German, food photo, empty-template previews, restaurant-name alignment), except the faded-headline nudge: that one was verified by browser measurement (typed text unchanged; placeholder moves and restores) and merged on Julia's go-ahead without a separate look. Canvas/editor changes below were explicitly requested by Julia on 2026-09-30 (this supersedes the 2026-09-29 "editor canvas must not change" rule for exactly these items).
+
+| Item | What changed | Where |
+|---|---|---|
+| Improve with AI (chat) | The chat sent only already-submitted answers, so the text typed in its input box never reached the API (it ran in generate mode). The typed draft is now the asked field's `current` with kind `user_draft` → rewrite mode. Chat now confirms and deducts **1 credit after a successful call**, with the out-of-credits modal. | `src/lib/aiCopy.js` (shared by chat and editor), `PromptBriefChat.jsx`, `usePairQueue.js` |
+| Language | Suggestions follow the language of the typed draft, else of the brief's headline/sub-headline/offer answers; German if unclear (editor: its language tab). Word-list heuristic, not a real detector - very short or mixed lines fall back to German. | `src/lib/aiCopy.js` (`detectLang`) |
+| Saved designs returned nothing | A saved design fills both fields; the other field is sent as locked text, stored UPPERCASE by the editor, and the model writes normal case, so the exact case-sensitive check (C11) dropped every result. Now case-insensitive, and the locked text is restored exactly. Also fixed a crash on the all-results-dropped path (`flags` read before its declaration → 500 instead of the friendly 502). Request now times out after 45 s with a clear message. Editor button stays "AI Suggest". | `api/_lib/checks.js`, `api/ai-suggest.js`, `tests/ai-improve.test.mjs` (3 tests; the UPPERCASE one fails on the old code) |
+| Food photo ~10% smaller | Cut-out food photos auto-fit at 90% of "as big as the zone allows" (one knob, `PHOTO_FILL`), centred, never cut. Covers upload, Library pick, reopened design, chat previews. Stickers unchanged; photos with a background still fill the box; hand-set Scales are never touched. | `src/lib/briefToCandidates.js` |
+| Empty-template previews | The faded placeholder photo now gets the same fit as an upload (Option A's dishes no longer spill over the restaurant name; Option C's plate no longer reaches the headline). | `TemplateCanvas.jsx` (`contentFitForImage`) |
+| Chat carries photo position | Chat previews/Edit design/Save draft/Send for review carry the photo's centring offset as well as its Scale, so they match the editor. | `PromptBriefResultModal.jsx`, `App.jsx` |
+| Option A restaurant name | Measured at 4x with the real WOLT fonts: name letters 14.0 tall vs the baked "♥ WOLT" 12.0. Now fontSize 18, y 152.6: letter tops 157.25 vs 157.0-157.25, bottoms 169.25 vs 169.0-169.25. | `src/data/templateZones.js` |
+| Option A faded headline | The placeholder "DREAMTEAM" ran ~6.4 units past its box (2.25 clear of the name line vs 18 above). New per-zone `placeholderDy` (-6.3) moves only the faded guide text; typed text is unchanged and the nudge is undone when typing starts. | `templateZones.js`, `TemplateCanvas.jsx` |
+
+**Not verified / open:**
+- Real AI output quality was only seen by Julia on previews; my own runs stubbed the Claude call and the copy sheet.
+- Option C's real template lives in storage (not reachable in local dev): its placeholder fit was checked by calculation and by Julia's eye on the preview.
+- Templates with no AI settings in `templateZones.js` (custom imports other than Option C) get no AI buttons by design (spec §4.1 - "must not run without limits"). Whether to add a generic fallback is an open decision.
+- `api/ai-suggest` can make two Claude calls plus a copy-sheet fetch and no `maxDuration` is set in `vercel.json`; check the Vercel plan's function time limit.
+- Other unmerged branches noticed: `fix/wolt-blue-print-color` (PR #54, Kraftelite, awaiting Anang), `update-copy-db` (413 commits ahead, last touched 18 Sept - ask its owner before deleting), and two old 1-commit branches (`fix/ai-suggest-headline-subline-only`, `combined/review-and-placeholder-fixes`). 22 other branches are fully merged and safe to delete.
+
+### Accounts & sign-in rework (PR #53, 2026-09-30 — **MERGED to `main`; unit-tested (29 tests in total incl. the AI ones); email sign-in tested on the Vercel preview by Julia**)
 
 Julia's decisions (2026-09-30): `@wildstack.studio` and `@intothewild.hamburg` = **agency** (full access incl. publish + Figma import); every other email = **client/partner** (no import, no template publishing; both Manager and Designer view-toggle values allowed); unlimited client seats, no client code; **AI credits uncapped** for now; shared activation keys end **Monday 5 October 2026**. Branch is `main` (as of `5774b7a` + PR #51) plus these changes; `main` had not moved at last push.
 

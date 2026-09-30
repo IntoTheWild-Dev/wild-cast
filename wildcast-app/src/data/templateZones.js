@@ -176,6 +176,12 @@ const WEN_CHENG_V3_ZONES = [
     type: 'text',
     x: 7.89, y: 108.18,
     width: 300.54, height: 40.46,
+    // Faded guide text only (TemplateCanvas.jsx): the placeholder "DREAMTEAM"
+    // at the zone's default size runs ~6.4 past this box's bottom (ink
+    // 120.5-155.0 vs box ending 148.64), crowding the restaurant-name line
+    // (2.25 clear) while 18 sat clear above. Nudged up so its ink bottom
+    // meets the box bottom (Julia, 2026-09-30). Real typed text is untouched.
+    placeholderDy: -6.3,
     fontSize: 56.6,
     fontFamily: 'omnes-cond',
     fontWeight: 900,
@@ -257,9 +263,15 @@ const WEN_CHENG_V3_ZONES = [
     // against the baked "♥ WOLT" wordmark: at y:149 the name's own baseline
     // sat 4px above WOLT's baseline, reading as not-inline. Confirmed via
     // canvas pixel scan, not guesswork.
-    x: -6.9, y: 150.3,
+    // 2026-09-30 (Julia: name "not in line" with ♥ WOLT): re-measured at 4x
+    // with the real WOLT Cond Black. At 20.96 the name's letters were 14.0
+    // tall against the wordmark's 12.0 (and sat ~0.4 lower at the bottom,
+    // ~1.6 higher at the top). 18 matches the wordmark's cap height, y 152.6
+    // puts both baselines on the same row. The text box is top-anchored, so
+    // changing fontSize moves the baseline: re-derive y if fontSize changes.
+    x: -6.9, y: 152.6,
     width: 174.3, height: 29.12,
-    fontSize: 20.96,
+    fontSize: 18,
     fontFamily: 'omnes-cond',
     fontWeight: 900,
     color: '#FFFFFF',
