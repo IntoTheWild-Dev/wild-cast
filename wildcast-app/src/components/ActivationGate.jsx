@@ -173,6 +173,17 @@ export default function ActivationGate({ onActivated }) {
 
           {mode === 'key' ? (
             <>
+              {/* Heads-up for shared-key users: keys are being retired in favour
+                  of personal accounts (Julia, 2026-09-30). The real cutoff is
+                  the ACTIVATION_KEYS_END env var (api/_lib/auth.js) - this
+                  date is only the text shown here, keep the two in step. */}
+              <div style={{
+                marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
+              }}>
+                <strong>Activation keys stop working on 5 October.</strong> Open the <em>Sign in</em> tab and create your own account before then - it takes a minute.
+              </div>
+
               {/* Activation key form - unchanged */}
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>

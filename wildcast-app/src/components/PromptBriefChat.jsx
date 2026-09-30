@@ -10,6 +10,7 @@ import {
 import { askAssistant } from '../lib/promptBriefAI'
 import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { hasTransparency, cropToContent } from '../lib/image'
+import { activationHeaders } from '../lib/activationKey'
 import { isCloseMatch } from '../lib/fuzzyMatch'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { aiFieldSettingsFor } from '../data/templateZones'
@@ -563,7 +564,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
       const fieldKey = step.aiField
       const res = await fetch('/api/ai-suggest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({
           field: step.aiField,
           lang: 'de',

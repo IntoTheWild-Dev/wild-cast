@@ -6,6 +6,8 @@
 // graceful). Note: plain `vite dev` has no /api, so locally this always
 // returns null and the chat stays paused - exercise the real flow on a
 // Vercel preview.
+import { activationHeaders } from './activationKey'
+
 const TIMEOUT_MS = 9000
 
 export async function askAssistant({ entry, steps, answers, currentStepId, userMessage = '', messages = [] }) {
@@ -14,7 +16,7 @@ export async function askAssistant({ entry, steps, answers, currentStepId, userM
   try {
     const res = await fetch('/api/prompt-brief-chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       signal: ctrl.signal,
       body: JSON.stringify({
         // entry is null until the partner confirms a template (the chat now

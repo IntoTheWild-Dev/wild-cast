@@ -2,6 +2,33 @@
 
 Running record for the executive write-up. Newest first. Each entry: what, why, how it was tested.
 
+## 2026-09-30 — Steps 3, 4, 5: AI access checks + usage, key switch-off, wrong-password lock
+**Step 3 — AI features now check who is calling, and record usage.**
+`ai-suggest` and `prompt-brief-chat` refuse anyone who is not signed in (401), so a stranger with the web
+address can no longer spend Anthropic credit. Each call is counted per person per day. **No credit cap** (Julia's
+call). A team-only report at `/api/usage` shows totals per person and per feature, so a cap can be decided
+later from real numbers. A failed usage write never blocks the feature.
+
+**Step 4 — activation-key switch-off, ready but OFF until you set it.**
+Set `ACTIVATION_KEYS_END` in Vercel to `2026-10-05T00:00:00+02:00` (Monday 5 Oct, Hamburg time). From that
+moment every shared key stops working everywhere (sign-in, template management, AI), including for people
+already signed in with one. Personal accounts are unaffected. Unset = keys keep working. A typo'd date is
+ignored with a warning so nobody is locked out by accident. The key tab on the sign-in screen now tells key
+users about 5 October (that text is fixed; keep it in step with the variable).
+
+**Step 5 — wrong-password lock.** 5 wrong passwords for one email within 15 minutes locks sign-in for that
+email for 15 minutes; a correct password clears the count; other emails are unaffected. Trade-off: while
+locked even the right password is refused, so someone could nuisance-lock a colleague for 15 minutes.
+Not covered: guessing across many different emails (no per-IP limit yet).
+
+**Tested:** 26 automated tests in total, all pass (11 new for these steps: unauthenticated AI calls refused,
+account/key/stale-token cases, per-person usage counting and summary, usage failures ignored, key cutoff
+before/after the date and bad-date handling, lock after 5 failures, unlock after 15 minutes, count cleared by a
+correct password, one email locked does not affect another). Deliberately breaking the AI check and the lock
+made the matching tests fail. Sign-in screen checked in a real browser (key-tab notice; team address reveals
+the invite-code field and shows the refusal message). App builds. Not yet tested against live storage or the
+real AI service; that needs the Vercel preview.
+
 ## 2026-09-30 — Step 2: team accounts can publish and manage templates
 **What:** publishing, archiving, editing zones and deleting templates now accept a personal team account
 (`@wildstack.studio` / `@intothewild.hamburg`), not only the old shared key. The browser sends the person's

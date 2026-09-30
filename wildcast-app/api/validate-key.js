@@ -10,8 +10,17 @@
 //                import feature.
 //   'agency'   — everything 'designer' gets, PLUS the Figma import screen.
 //                Wild Stack's own keys only.
+import { activationKeysEnabled } from './_lib/auth.js'
+
 export default function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+
+  // Shared keys are being retired in favour of personal accounts - once
+  // ACTIVATION_KEYS_END has passed (api/_lib/auth.js) every key is refused,
+  // including for people already signed in with one on this browser.
+  if (!activationKeysEnabled()) {
+    return res.status(410).json({ valid: false, keysEnded: true, error: 'Activation keys have ended. Please use the Sign in tab with your own account.' })
+  }
 
   const { key } = req.body ?? {}
   if (!key || typeof key !== 'string' || !key.trim()) {

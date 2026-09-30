@@ -26,6 +26,7 @@ import {
   SEAT_CAP, countPartnerSeats, ensurePersonFolder,
   isAgencyDomain, isApprovedAgencyEmail, isAgencyApproved,
 } from './_lib/accounts.js'
+import { checkLock, recordFailure, clearFailures } from './_lib/loginLimit.js'
 
 function accountPath(email) {
   const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
@@ -147,10 +148,20 @@ export default async function handler(req, res) {
       })
     }
 
-    // Existing account - this is a real login, verify the password.
+    // Existing account - this is a real login, verify the password. Repeated
+    // wrong passwords lock this email briefly (api/_lib/loginLimit.js).
+    const lock = await checkLock(trimmedEmail)
+    if (lock.locked) {
+      return res.status(429).json({ error: `Too many wrong passwords. Try again in ${lock.retryAfterMin} minute${lock.retryAfterMin === 1 ? '' : 's'}.` })
+    }
     if (!verifyPassword(password, existing.passwordSalt, existing.passwordHash)) {
+      const after = await recordFailure(trimmedEmail)
+      if (after.locked) {
+        return res.status(429).json({ error: `Too many wrong passwords. Try again in ${after.retryAfterMin} minutes.` })
+      }
       return res.status(401).json({ error: 'Wrong password' })
     }
+    await clearFailures(trimmedEmail)
     existing.sessionToken = sessionToken
     // Someone who signed up on a team address before it was recognised (e.g.
     // @intothewild.hamburg, 2026-09-30) is a 'partner' on file - promote them

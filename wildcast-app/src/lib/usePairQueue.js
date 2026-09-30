@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { activationHeaders } from './activationKey'
 
 // The AI Suggest pair queue (Mark's v1.2 spec, section 8) — client-side,
 // in-memory React state, scoped per design + context.
@@ -192,7 +193,7 @@ export function usePairQueue(options) {
 
     const res = await fetch('/api/ai-suggest', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify(body),
     })
     const data = await res.json()
