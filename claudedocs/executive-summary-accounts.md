@@ -1,6 +1,6 @@
 # WildCast — Accounts & Sign-in: Executive Summary
 
-*Draft, 2026-09-30. Updated as work ships.*
+*Draft, updated 2026-09-30 (end of day). Status: steps 1-5 built and automatically tested; awaiting a live preview test, then review and merge.*
 
 ## What we're doing
 Moving WildCast from shared access keys to **personal accounts**, so every person has their own login,
@@ -20,14 +20,14 @@ and the app knows who is on the Wild Stack team and who is a client.
 | Wild Stack team | `@wildstack.studio` or `@intothewild.hamburg` email, and approved | Everything, including publishing templates and Figma import |
 | Clients (Wolt, DoorDash, others) | Any other email | Everything except import and template publishing; Manager and Designer view toggle |
 
-## What we are building, in order
+## What we are building, in order (steps 1-5 built, not yet live)
 1. Recognise both team domains, and require approval (an approved-email list and/or invite code) before
    anyone can become team. Closes the "type a company email, get full access" gap.
 2. Let team accounts publish and manage templates (today only the old shared key can).
 3. Make the AI features check who is calling, and record AI usage per person. No credit cap for now.
 4. Switch off shared activation keys on **Monday 5 October 2026**. Key users need an account before then.
 5. Lock sign-in briefly after repeated wrong passwords.
-6. Later, once an email service is chosen: email confirmation and "forgot password".
+6. Later, once an email service is chosen: email confirmation and "forgot password" (not started).
 
 ## Decisions made
 - AI credits stay uncapped until usage is better understood; we will collect usage numbers meanwhile.

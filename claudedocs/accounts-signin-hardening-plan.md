@@ -3,6 +3,21 @@
 Written 2026-09-29 from a read-only review of `main` @ `5774b7a`. Nothing here has been run;
 findings are from reading the code and `wildcast-app/STATUS.md` (items 6, 7, 15, 36).
 
+## Build status (updated 2026-09-30, end of day)
+
+| Step | Status |
+|---|---|
+| 1. Team domains + approved-email / invite-code gate | Built, unit-tested |
+| 2. Team accounts can publish/manage templates | Built, unit-tested (was a real bug) |
+| 3. AI routes check the caller + per-person usage (no cap) | Built, unit-tested |
+| 4. Activation-key switch-off (`ACTIVATION_KEYS_END`) | Built, OFF until the variable is set |
+| 5. Wrong-password lock | Built, unit-tested |
+| 6. Email confirmation + forgot password | Not started (needs an email service) |
+
+Nothing merged. Next: Julia tests the Vercel preview, then review + merge, then set `ACTIVATION_KEYS_END`.
+See `wildcast-app/STATUS.md` (top reminders + branch entry) and `accounts-change-log.md`.
+The findings below are the original 2026-09-29 review, kept as history; items 1-4 are now addressed.
+
 ## Was it completed?
 
 **Yes, the original task shipped.** Team sign-in (email + password, first login = signup) is on `main`:

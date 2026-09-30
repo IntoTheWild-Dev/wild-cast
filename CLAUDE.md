@@ -3,6 +3,13 @@
 Read this before doing any git work in this repo. See `WILDCAST_CLAUDE.md` for
 the product/architecture spec and `wildcast-app/STATUS.md` for build history.
 
+## Work in flight
+
+- **Accounts & sign-in rework** — branch `claude/signup-login-status-check-3rxbs0`, built but not merged.
+  Start with the "Reminders for Julia" block at the top of `wildcast-app/STATUS.md`, then
+  `claudedocs/accounts-signin-hardening-plan.md` and `claudedocs/accounts-change-log.md`. Remove this
+  pointer when the branch is merged.
+
 ## Always pull from `main` before branching
 
 **Before creating any new branch, always `git fetch` + pull the latest `main`
