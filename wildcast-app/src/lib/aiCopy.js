@@ -6,6 +6,7 @@
 // brief's field block and the language rule here stops the two callers from
 // drifting apart again - the chat used to send only already-submitted answers
 // and silently dropped the text typed in its input box.
+import { activationHeaders } from './activationKey'
 
 const GERMAN_HINTS = new Set([
   'der', 'die', 'das', 'und', 'ist', 'wir', 'ihr', 'du', 'ich', 'mit', 'für', 'fur', 'nicht', 'ein', 'eine', 'auf',
@@ -52,7 +53,9 @@ export function draftFieldBlock({ current, kind }) {
 export async function requestAiPairs({ field, lang, brief }) {
   const res = await fetch('/api/ai-suggest', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // activationHeaders() identifies the caller to the API (key and/or
+    // account session) - the AI route checks it and records usage.
+    headers: { 'Content-Type': 'application/json', ...activationHeaders() },
     body: JSON.stringify({ field, lang, brief }),
   })
   let data = null
