@@ -1203,7 +1203,9 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Print settings</div>
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>ICC Profile</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>
+            ICC Profile <span style={{ fontWeight: 400, color: 'var(--mid)' }}>(pre-selected, can’t be changed)</span>
+          </div>
           {/* No longer a choice (FOGRA39 removed, Julia's ask, 2026-09-18) -
               every export uses FOGRA51, shown here for reference only. */}
           <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
