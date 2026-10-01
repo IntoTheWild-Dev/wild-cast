@@ -11,6 +11,7 @@ import AISuggest, { AISuggestOutOfCreditsModal } from './AISuggest'
 import PresetPicker from './PresetPicker'
 import useIsMobile from '../lib/useIsMobile'
 import { hasTransparency, cropToContent } from '../lib/image'
+import { LIBRARY_TILE_STYLE, LIBRARY_TILE_IMG_STYLE } from '../lib/libraryTile'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT, merchantForUpload } from '../lib/assetLibrary'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
@@ -432,7 +433,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
   const [uploading, setUploading] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySearch, setLibrarySearch] = useState('')
-  const [libraryMerchantFilter, setLibraryMerchantFilter] = useState(merchant)
+  const [libraryMerchantFilter, setLibraryMerchantFilter] = useState(ALL_MERCHANTS)
   const [libraryAssets, setLibraryAssets] = useState([])
 
   const libraryFolder = folder ?? 'other'
@@ -446,19 +447,13 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 
   const libraryMerchants = uniqueMerchants(libraryAssets)
 
-  // Default the library modal's merchant filter to whichever restaurant is
-  // currently being edited (re-applied on every open, in case the restaurant
-  // name changed since last time) - most of the time that's exactly what you
-  // want to reuse from. But `merchant` here is just the free-text restaurant_name
-  // field, which won't always match the (sometimes abbreviated, e.g. "McD")
-  // merchant tag a partner picked when they originally uploaded an asset -
-  // when it doesn't match any real tag, a raw `<select value=merchant>` with
-  // no matching <option> silently falls back to displaying "All merchants"
-  // (the first option) while React's own state stays on the unmatched value,
-  // so the list still filters (to nothing) as if that literal text were
-  // selected. Only default to `merchant` when it's a tag that actually exists.
+  // Every open starts on "All merchants" (Julia's ask, 2026-10-01). It used
+  // to default to the design's own merchant tag, but for a design with no
+  // restaurant name yet that tag is "General" (see merchantForUpload), so
+  // the picker opened filtered down to the few untagged assets and looked
+  // nearly empty. The dropdown is still there to narrow it down.
   function openLibrary() {
-    setLibraryMerchantFilter(libraryMerchants.includes(merchant) ? merchant : ALL_MERCHANTS)
+    setLibraryMerchantFilter(ALL_MERCHANTS)
     setLibraryOpen(true)
   }
   const filteredLibraryAssets = libraryAssets
@@ -649,18 +644,19 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
                   No assets match{librarySearch.trim() ? ` "${librarySearch.trim()}"` : ' this filter'}.
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
                   {filteredLibraryAssets.map(asset => (
-                    <div key={asset.id} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <img
-                        src={asset.src}
-                        alt={asset.name}
+                    <div key={asset.id} style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                      <button
+                        type="button"
                         title={asset.name}
                         onClick={() => handlePickFromLibrary(asset)}
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '1.5px solid var(--border)', transition: 'border-color 0.15s' }}
+                        style={LIBRARY_TILE_STYLE}
                         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
                         onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                      />
+                      >
+                        <img src={asset.src} alt={asset.name} loading="lazy" style={LIBRARY_TILE_IMG_STYLE} />
+                      </button>
                       <div style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asset.name}>
                         {asset.name}
                       </div>

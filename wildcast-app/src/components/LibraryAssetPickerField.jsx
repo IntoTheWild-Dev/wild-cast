@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getLibraryAssets, saveAssetToLibrary, libraryAssetSrc, removeBackgroundForUpload } from '../lib/assetLibrary'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { LIBRARY_TILE_STYLE, LIBRARY_TILE_IMG_STYLE } from '../lib/libraryTile'
 
 // "Nothing in the library yet" reads as broken if you don't know why - these
 // folders only ever get populated by uploading through the Library page
@@ -132,16 +133,19 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
                   {EMPTY_HINTS[folder] ?? 'Nothing in the library yet for this.'}
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
                   {assets.map(asset => (
-                    <div key={asset.id} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <img
-                        src={asset.src}
-                        alt={asset.name}
+                    <div key={asset.id} style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                      <button
+                        type="button"
                         title={asset.name}
                         onClick={() => { onSelect(asset); setOpen(false) }}
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '1.5px solid var(--border)' }}
-                      />
+                        style={LIBRARY_TILE_STYLE}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                      >
+                        <img src={asset.src} alt={asset.name} loading="lazy" style={LIBRARY_TILE_IMG_STYLE} />
+                      </button>
                       <div style={{ fontSize: 10, color: 'var(--mid)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asset.name}>{asset.name}</div>
                     </div>
                   ))}
