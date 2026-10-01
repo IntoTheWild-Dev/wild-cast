@@ -1246,6 +1246,23 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
     canvas.renderAll()
   }, [imageScales, imagePositions, config])
 
+  // Browser zoom (Cmd/Ctrl +) and dragging the window to another screen
+  // change devicePixelRatio without touching our own zoom state, so the
+  // canvas kept its old backing-store size and went soft (Julia's report,
+  // 2026-10-01). A resolution media query fires exactly when it changes;
+  // bumping this re-runs the backing-store effect below.
+  const [dprTick, setDprTick] = useState(0)
+  useEffect(() => {
+    let mq
+    const listen = () => {
+      mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+      mq.addEventListener('change', onChange, { once: true })
+    }
+    const onChange = () => { setDprTick(t => t + 1); listen() }
+    listen()
+    return () => mq?.removeEventListener('change', onChange)
+  }, [])
+
   // ── Zoom controls (button-driven only - no scroll wheel) ───────────────────
   const handleZoomIn  = useCallback(() => setZoom(z => Math.min(400, Math.round(z / 10) * 10 + 10)), [])
   const handleZoomOut = useCallback(() => setZoom(z => Math.max(40,  Math.round(z / 10) * 10 - 10)), [])
@@ -1268,7 +1285,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       }
     }
     requestAnimationFrame(() => { fabricRef.current?.calcOffset() })
-  }, [zoom])
+  }, [zoom, dprTick])
 
   // ── Drag-and-drop an image file straight onto a photo/logo zone ───────────
   // fabric's own getPointer() already resolves the CSS `transform: scale()`
@@ -1522,6 +1539,31 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   // that case so the canvas's own bottom edge doubles as the outer edge.
   const bleedPadBottom = config?.bleedExtraBottom ? 0 : BLEED_MARGIN
   const scale = zoom / 100
+
+  // Zoom controls. Desktop: pinned to the bottom of the dark area, outside
+  // the scrolling canvas, so zooming in can't push them out of view (they
+  // used to hang under the canvas and get clipped - Julia's report,
+  // 2026-10-01). Phone: still right under the canvas, where the page scroll
+  // reaches them.
+  const zoomControls = bottom => (
+    <div style={{
+      position: 'absolute', bottom, left: '50%', zIndex: 25, transform: 'translateX(-50%)',
+      display: 'flex', alignItems: 'center', gap: 4,
+      background: 'rgba(0,0,0,0.55)', borderRadius: 20, padding: '5px 10px',
+      userSelect: 'none', whiteSpace: 'nowrap',
+    }}>
+      <button onClick={handleZoomOut} title="Zoom out" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', padding: '0 4px', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      </button>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', minWidth: 32, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
+      <button onClick={handleZoomIn} title="Zoom in" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', padding: '0 4px', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      </button>
+      {zoom !== 100 && (
+        <button onClick={handleZoomReset} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 10, padding: '0 2px', marginLeft: 2 }}>· Reset</button>
+      )}
+    </div>
+  )
   const dropZone = dropZoneId ? config?.zones?.find(z => z.id === dropZoneId) : null
 
   return (
@@ -1549,10 +1591,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         minHeight: 0,
         background: '#2a2a2a',
         overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 40,
         position: 'relative',
       }}
     >
@@ -1613,6 +1651,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           {topRight}
         </div>
       )}
+      {/* Desktop: the canvas scrolls inside this layer while the badges and
+          zoom controls above/below stay put on the outer, non-scrolling
+          area. It used to be overflow: hidden + centred, so a zoomed-in
+          canvas was cut off top and bottom with no way to scroll to it.
+          'safe center' centres while it fits and stays scrollable to every
+          edge once it doesn't. fabric caches the canvas's page offset for
+          pointer math, so it's refreshed on every scroll. Phone: the outer
+          container already scrolls, so this layer is layout-neutral. */}
+      <div
+        onScroll={isMobile ? undefined : () => fabricRef.current?.calcOffset()}
+        style={isMobile ? { display: 'contents' } : {
+          position: 'absolute', inset: 0, overflow: 'auto',
+          display: 'flex', alignItems: 'safe center', justifyContent: 'safe center',
+          padding: '40px 40px 64px',
+        }}
+      >
       {/* Space-holder: takes up the zoomed canvas size (plus the bleed margin
           drawn around it below) so the container scrolls correctly */}
       <div style={{
@@ -1722,25 +1776,10 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             {dropError}
           </div>
         )}
-        {/* Zoom controls */}
-        <div style={{
-          position: 'absolute', bottom: -38, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', gap: 4,
-          background: 'rgba(0,0,0,0.55)', borderRadius: 20, padding: '5px 10px',
-          userSelect: 'none', whiteSpace: 'nowrap',
-        }}>
-          <button onClick={handleZoomOut} title="Zoom out" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', padding: '0 4px', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-          </button>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', minWidth: 32, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
-          <button onClick={handleZoomIn} title="Zoom in" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', padding: '0 4px', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-          </button>
-          {zoom !== 100 && (
-            <button onClick={handleZoomReset} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 10, padding: '0 2px', marginLeft: 2 }}>· Reset</button>
-          )}
-        </div>
+        {isMobile && zoomControls(-38)}
       </div>
+      </div>
+      {!isMobile && !loading && zoomControls(16)}
     </div>
   )
 }
