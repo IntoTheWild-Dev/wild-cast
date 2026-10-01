@@ -227,6 +227,65 @@ function inkHeightOf(text, fontSize, fontFamily, fontWeight) {
   return asc != null && desc != null ? asc + desc : null
 }
 
+// Where the headline sits vertically (Julia, 2026-10-01: "headline needs to
+// move up" on Options A, B and C - the greyed guide looked right, the typed
+// headline sat lower and crowded the line below it). The guide is drawn at
+// the zone's designed size with its top at the zone's top, so its BASELINE
+// (the letters' bottom edge) sits at a known height. A typed headline grows
+// to fill the box (see CAP_FIT_ZONE_IDS) but stayed pinned by its top edge,
+// so every point of extra size pushed its baseline further down. Now the
+// typed headline keeps the guide's baseline at any size and grows upward.
+// Fabric 5 draws a single line's baseline at top + fontSize * mult * (1 -
+// fraction) (text.class.js _renderTextCommon / _renderChar).
+function baselineOffsetOf(obj) {
+  return obj.fontSize * obj._fontSizeMult * (1 - obj._fontSizeFraction)
+}
+
+// Single-line, unrotated headline holding real text, with a known guide
+// baseline. Everything else (placeholders, wrapped headlines, other zones,
+// zones with no placeholder copy) keeps its old top-anchored position.
+function anchorHeadlineToGuide(obj, zone) {
+  if (!CAP_FIT_ZONE_IDS.has(zone.id) || zone.rotate || obj._wcPlaceholder || obj._wcGuideBaseline == null) return
+  if ((obj.textLines?.length ?? 1) !== 1) return
+  // Never LOWER than where the guide's own top sits: text smaller than the
+  // guide (a long headline shrunk to fit) stays top-anchored as it always
+  // was; only text bigger than the guide moves up to hold the baseline.
+  obj.set('top', Math.min(zone.y + (zone.placeholderDy ?? 0), obj._wcGuideBaseline - baselineOffsetOf(obj)))
+  obj.setCoords()
+}
+
+// How tall the headline's letters may be: the zone's height, but never more
+// than the room between the zone's top and the baseline it sits on, so a big
+// word grows up to the top of its box instead of poking out above it.
+function headlineFitLimit(obj, zone, fitLimit) {
+  if (obj._wcGuideBaseline == null || obj._wcPlaceholder) return fitLimit
+  const room = obj._wcGuideBaseline - zone.y
+  return room < fitLimit - 1 ? room : fitLimit // ignore sub-unit differences: A/B sit exactly on their box bottom
+}
+
+// Baseline of the faded guide text for a zone: the guide is fitted from the
+// zone's designed size, shrinking only (same loop as the placeholder branches
+// below), with its top at zone.y + placeholderDy. Measured on the zone's own
+// textbox, temporarily showing the guide copy, then put back exactly as it
+// was - so a design reopened with a typed headline gets the same answer as an
+// empty one.
+function guideBaselineFor(tb, zone, guideText) {
+  const saved = { text: tb.text, fontSize: tb.fontSize, top: tb.top, placeholder: tb._wcPlaceholder }
+  tb._wcPlaceholder = true // skips anchoring while measuring
+  tb.set('text', guideText)
+  let size = zone.fontSize ?? 24
+  let overflows = applyFontSizeAndCheckFit(tb, size, zone, zone.height)
+  while (overflows && size > 6) {
+    size -= 0.5
+    overflows = applyFontSizeAndCheckFit(tb, size, zone, zone.height)
+  }
+  const baseline = zone.y + (zone.placeholderDy ?? 0) + baselineOffsetOf(tb)
+  tb.set({ text: saved.text, fontSize: saved.fontSize, top: saved.top })
+  tb._wcPlaceholder = saved.placeholder
+  tb.initDimensions()
+  return baseline
+}
+
 function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   const textW = zone.textWidth ?? zone.width
   obj.set('fontSize', fontSize)
@@ -236,12 +295,13 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
     obj.set('width', textW)
     obj.initDimensions()
   }
+  anchorHeadlineToGuide(obj, zone)
   // Only meaningful for a single line - a wrapped multi-line block's real
   // height is dominated by line count/spacing, not one line's cap height,
   // so that case falls through to the same check every other zone uses.
   if (CAP_FIT_ZONE_IDS.has(zone.id) && !zone.rotate && (obj.textLines?.length ?? 1) === 1) {
     const ink = inkHeightOf(obj.text, fontSize, obj.fontFamily, obj.fontWeight)
-    if (ink != null) return ink > fitLimit + 2 || overflowsFitWidth(obj, zone)
+    if (ink != null) return ink > headlineFitLimit(obj, zone, fitLimit) + 2 || overflowsFitWidth(obj, zone)
   }
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
@@ -740,6 +800,9 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               _wcZoneId: zone.id,
               _wcPlaceholder: isPlaceholder,
             })
+            if (CAP_FIT_ZONE_IDS.has(zone.id) && !isRotated && placeholderText != null) {
+              tb._wcGuideBaseline = guideBaselineFor(tb, zone, zoneDisplayText(zone.id, placeholderText))
+            }
             // Show only the right-edge handle - dragging it reflows text width (Fabric.js Textbox built-in)
             if (!locked) tb.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mtr: false })
 
@@ -1078,7 +1141,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
       const obj = zoneObjsRef.current[zone.id]
       if (!obj || obj.type !== 'textbox') return
       const size = fontSizes[zone.id]
-      if (obj.fontSize !== size) { obj.set('fontSize', size); changed = true }
+      if (obj.fontSize !== size) { obj.set('fontSize', size); anchorHeadlineToGuide(obj, zone); changed = true }
     })
     if (changed) canvas.renderAll()
   }, [fontSizes, config])
