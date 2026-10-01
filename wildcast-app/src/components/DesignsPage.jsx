@@ -4,7 +4,8 @@ import Select from './Select'
 import { TEMPLATES } from '../data/templates'
 import { isCloseMatch } from '../lib/fuzzyMatch'
 import { patchCachedProject } from '../lib/projectCache'
-import { PAGE_PADDING_X } from '../lib/layout'
+import { PAGE_PADDING_X, stickyPageBar } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
 
 const ALL = '__all__'
@@ -480,6 +481,7 @@ function FolderCard({ name, count, onOpen }) {
 // personal to whoever's filing things into it), and stamping who's creating
 // a new folder.
 export default function DesignsPage({ onOpenProject, onDuplicateProject, customCards = [], activation, onBack }) {
+  const isMobile = useIsMobile()
   const [projects, setProjects] = useState([])
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [loadingId, setLoadingId] = useState(null)
@@ -713,7 +715,9 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   )
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
+    // No overflow here: the document is what scrolls, and an overflow box
+    // would trap the sticky title band (stickyPageBar) inside it.
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
       {pendingProject && (
         <ConfirmOpenModal
           project={pendingProject}
@@ -727,7 +731,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       {/* Inline "Viewing" filter bar, same placement/style as LibraryPage.jsx -
           replaces the old "Find a design" popup that gated the whole list
           until submitted (Julia's ask, 2026-09-15). */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff', ...stickyPageBar(isMobile) }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Design library</h1>
           {onBack && (

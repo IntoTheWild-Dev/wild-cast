@@ -10,3 +10,17 @@ export const PAGE_GUTTER = 32
 // with PAGE_MAX_WIDTH: at least the gutter, and on a wide window exactly
 // the space that centres a PAGE_MAX_WIDTH column.
 export const PAGE_PADDING_X = `max(${PAGE_GUTTER}px, calc((100% - ${PAGE_MAX_WIDTH}px) / 2 + ${PAGE_GUTTER}px))`
+
+// Height of Header.jsx's sticky bar (same on desktop and mobile) - anything
+// else that sticks while the page scrolls sits just below it.
+export const APP_HEADER_HEIGHT = 59
+
+// The white title/filter band on Design library / Assets / My Tasks stays
+// put under the app header while the list scrolls (Anang's ask, 2026-10-01).
+// Desktop only: on a phone those bands wrap to half the screen or more, and
+// pinning them would leave almost no room for the list itself. zIndex sits
+// under the app header (100) but above the cards, whose hover transforms
+// would otherwise paint over it.
+export function stickyPageBar(isMobile) {
+  return isMobile ? {} : { position: 'sticky', top: APP_HEADER_HEIGHT, zIndex: 50 }
+}

@@ -95,8 +95,8 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
   const headerRef = useRef(null)
   useEffect(() => {
     if (!menuOpen) return
-    // Outside tap closes it - same approach as UserMenu (a fixed backdrop
-    // is contained by the header's backdropFilter, so it can't cover the page).
+    // Outside tap closes it - same approach as UserMenu (no fixed backdrop
+    // layer needed).
     function handleOutside(e) {
       if (headerRef.current && !headerRef.current.contains(e.target)) setMenuOpen(false)
     }
@@ -153,7 +153,11 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
 
   return (
     <>
-    <header style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100 }}>
+    {/* Solid white, not frosted glass (Anang's ask, 2026-10-01): with the
+        Design library / Assets / My Tasks title bands now sticky, cards
+        scrolling under a translucent header showed through as blurry
+        smudges next to the logo. */}
+    <header style={{ background: '#fff', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100 }}>
       {/* Real flex layout, not the old position:absolute-centered nav
           (Julia's report, 2026-09-22: header still overlapping/cramped even
           after moving the role dropdown to its own row). Absolute centering

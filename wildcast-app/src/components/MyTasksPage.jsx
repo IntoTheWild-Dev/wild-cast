@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { PAGE_PADDING_X } from '../lib/layout'
+import { useState, useEffect, useRef } from 'react'
+import { PAGE_PADDING_X, APP_HEADER_HEIGHT, stickyPageBar } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
 
 // "Review queue in the user profile" (Notion card, 2026-09-22): "A simple
@@ -30,6 +31,16 @@ const STATUS_COLUMNS = [
 // wording ("first/second round review").
 const REVIEW_ROUND_COLOR = '#D97706'
 
+// Jira-style board (Anang's ask, 2026-10-01): each status column is a grey
+// lane, its title + count badge sticks below the app header while the page
+// scrolls, so a long column never loses which status it is.
+const LANE_BG = '#F1F2F4'
+const COUNT_BADGE_BG = '#DFE1E6'
+// Space between the title band and a lane's top. All of it lives in the
+// sticky header's gap strip, so it's the same 28px before and while
+// scrolling (Anang's ask, 2026-10-01: the gap shouldn't shrink on scroll).
+const LANE_GAP = 28
+
 function formatDate(ts) {
   if (!ts) return ''
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -42,6 +53,7 @@ function TaskCard({ project, opening, onOpen, hasUpdate, borderColor = 'var(--bo
       style={{
         position: 'relative',
         background: '#fff', border: `${borderColor === 'var(--border)' ? 1 : 2}px solid ${borderColor}`, borderRadius: 10, overflow: 'hidden',
+        boxShadow: '0 1px 2px rgba(9,30,66,0.12)',
         cursor: opening ? 'default' : 'pointer', display: 'flex', gap: 10, padding: 8,
         opacity: opening ? 0.7 : 1, transition: 'border-color 0.15s',
       }}
@@ -77,6 +89,20 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
   const [projects, setProjects] = useState([])
   const [loading, setLoading]   = useState(true)
   const [openingId, setOpeningId] = useState(null)
+  const isMobile = useIsMobile()
+
+  // The column headers stick just below the sticky title band, so they need
+  // its live height (it grows if the title ever wraps).
+  const bandRef = useRef(null)
+  const [bandHeight, setBandHeight] = useState(0)
+  useEffect(() => {
+    const el = bandRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setBandHeight(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const laneHeaderTop = APP_HEADER_HEIGHT + (isMobile ? 0 : bandHeight)
 
   useEffect(() => {
     fetch('/api/save-project')
@@ -104,10 +130,12 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
+    // No overflow here: the document is what scrolls, and an overflow box
+    // would trap the sticky title band and column headers inside it.
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       {/* Page header - same shape as LibraryPage/DesignsPage's own */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
+      <div ref={bandRef} style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff', ...stickyPageBar(isMobile) }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>My Tasks</h1>
           {onBack && (
@@ -125,20 +153,32 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
       </div>
 
       {loading ? <PageSpinner label="Loading your tasks…" /> : (
-      <div style={{ padding: `28px ${PAGE_PADDING_X}`, flex: 1 }}>
+      <div style={{ padding: `0 ${PAGE_PADDING_X} 28px`, flex: 1 }}>
         {!activation?.key ? (
           <div style={{ color: 'var(--mid)', fontSize: 13 }}>Sign in to see your tasks.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: 28 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: 12 }}>
             {STATUS_COLUMNS.map(col => {
               const items = mine.filter(p => (p.reviewStatus || 'design') === col.key)
               return (
-                <div key={col.key}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
-                    {col.label} · {items.length}
+                <div key={col.key} style={{ background: LANE_BG, borderRadius: 12, padding: '0 8px 8px', minHeight: 160 }}>
+                  {/* Sticky header = a page-colored gap strip + the lane's
+                      rounded top, like Jira: once stuck, the lane still reads
+                      as a card that starts a little below the title band
+                      instead of being cut flat against it. Spans the lane's
+                      side padding (-8px) so no grey edge shows beside the gap. */}
+                  <div style={{ position: 'sticky', top: laneHeaderTop, zIndex: 1, margin: '0 -8px', paddingTop: LANE_GAP, background: 'var(--bg)' }}>
+                    <div style={{ background: LANE_BG, borderRadius: '12px 12px 0 0', padding: '14px 14px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {col.label}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', background: COUNT_BADGE_BG, borderRadius: 4, padding: '1px 7px', lineHeight: '18px' }}>
+                        {items.length}
+                      </span>
+                    </div>
                   </div>
                   {items.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--light)' }}>Nothing here</div>
+                    <div style={{ fontSize: 12, color: 'var(--light)', padding: '4px 6px' }}>Nothing here</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {items.map(p => (
