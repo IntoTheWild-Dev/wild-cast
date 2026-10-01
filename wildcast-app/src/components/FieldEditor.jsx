@@ -1272,15 +1272,28 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             </button>
 
             {reviewSent && canExport ? (
-              <button
-                onClick={onExport}
-                disabled={exporting}
-                style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--dark)' }}
-                onMouseLeave={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--border)' }}
-              >
-                {exporting ? 'Exporting…' : 'Export PDF'}
-              </button>
+              <>
+                <button
+                  onClick={() => onExport('print')}
+                  disabled={exporting}
+                  style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--dark)' }}
+                  onMouseLeave={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--border)' }}
+                >
+                  {exporting ? 'Exporting…' : 'Export PDF'}
+                </button>
+                {/* Default export keeps photos RGB like InDesign's PDF/X-4 (the
+                    print shop converts them); this is for printers that only
+                    accept CMYK files - see EXPORT_MODES in api/export-cmyk.js. */}
+                <button
+                  onClick={() => onExport('cmyk')}
+                  disabled={exporting}
+                  title="Converts everything to CMYK before download. Use only if your printer asks for CMYK-only files."
+                  style={{ background: 'none', border: 'none', padding: '2px 0', fontSize: 12, color: 'var(--light)', textDecoration: 'underline', cursor: exporting ? 'default' : 'pointer' }}
+                >
+                  Printer needs CMYK only? Download CMYK-only PDF
+                </button>
+              </>
             ) : (
               <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--light)', padding: '4px 0' }}>
                 {!canExport ? '🔒 Export PDF - only Managers can export' : '🔒 Export PDF - unlocks once you send for review'}
