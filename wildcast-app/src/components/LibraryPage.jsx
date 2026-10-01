@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import Select from './Select'
 import ChoiceButton from './ChoiceButton'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -6,7 +7,8 @@ import { Delete02Icon } from '@hugeicons/core-free-icons'
 import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset, uniqueMerchants, removeBackgroundForUpload, LIBRARY_MAX_DIM } from '../lib/assetLibrary'
 import { FRAME_PRESETS, imageSize, resizeToFrame } from '../lib/image'
 import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground, isAlreadyCutOut } from '../lib/removeBackground'
-import { PAGE_PADDING_X } from '../lib/layout'
+import { PAGE_PADDING_X, stickyPageBar } from '../lib/layout'
+import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
 
 const ALL_MERCHANTS = '__all__'
@@ -200,7 +202,9 @@ function UploadModal({ label, merchants, defaultMerchant, removesBackground, ini
 
   const inputStyle = locked => ({ width: '100%', padding: '9px 30px 9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box', background: locked ? '#F9FAFB' : '#fff', color: locked ? 'var(--light)' : 'var(--dark)', cursor: locked ? 'not-allowed' : 'text' })
 
-  return (
+  // Portal: the upload buttons live inside the sticky title band, whose
+  // z-index would otherwise cap this overlay below the app header.
+  return createPortal(
     <div
       onClick={processing ? undefined : () => close()}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
@@ -433,7 +437,8 @@ function UploadModal({ label, merchants, defaultMerchant, removesBackground, ini
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -561,6 +566,62 @@ function DeleteAssetConfirmModal({ name, onConfirm, onClose }) {
   )
 }
 
+// Logos and discount badges are cut-outs - a checkerboard behind them shows
+// what's transparent. Shared by the card thumbnail and the preview modal.
+function assetBackground(folder) {
+  return folder === 'logos' || folder === 'stickers'
+    ? 'repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50% / 16px 16px'
+    : '#F3F4F6'
+}
+
+// Full-size look at one asset - the card thumbnail is too small to judge a
+// cut-out edge or a QR code. Click outside, Close, or Escape dismisses it.
+function AssetPreviewModal({ asset, dims, isHiRes, onClose }) {
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Preview ${asset.name}`}
+        style={{ background: '#fff', borderRadius: 16, padding: 20, width: 720, maxWidth: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', boxSizing: 'border-box' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ flex: 1, minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, overflow: 'hidden', background: assetBackground(asset.folder) }}>
+          <img src={asset.src} alt={asset.name} style={{ display: 'block', maxWidth: '100%', maxHeight: 'calc(100vh - 220px)', objectFit: 'contain' }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--dark)', overflowWrap: 'anywhere' }}>{asset.name}</div>
+            <div style={{ fontSize: 12, color: 'var(--mid)', marginTop: 4 }}>
+              {FOLDERS[asset.folder] || FOLDERS.other} · {asset.merchant || GENERAL_MERCHANT} · {formatDate(asset.uploadedAt)}
+            </div>
+            {dims && (
+              <div style={{ fontSize: 12, marginTop: 3, color: isHiRes ? '#3F9C6D' : '#B7791F', fontWeight: 600 }}>
+                {dims.w}×{dims.h}px {isHiRes ? '· High resolution ✓' : '· May be low-res for print'}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            style={{ flexShrink: 0, padding: '10px 20px', fontSize: 13, fontWeight: 700, background: '#fff', color: 'var(--dark)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMerchant }) {
   const [dims, setDims] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -568,12 +629,7 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
   const [renaming, setRenaming] = useState(false)
   const [movingMerchant, setMovingMerchant] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-
-  useEffect(() => {
-    const img = new Image()
-    img.onload = () => setDims({ w: img.naturalWidth, h: img.naturalHeight })
-    img.src = asset.src
-  }, [asset.src])
+  const [previewing, setPreviewing] = useState(false)
 
   const isHiRes = dims && Math.max(dims.w, dims.h) >= HI_RES_THRESHOLD
 
@@ -590,14 +646,27 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
     <div
       style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', position: 'relative' }}
     >
-      <div style={{
-        aspectRatio: '1 / 1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-        background: asset.folder === 'logos' || asset.folder === 'stickers'
-          ? 'repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50% / 16px 16px'
-          : '#F3F4F6',
-      }}>
-        <img src={asset.src} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-      </div>
+      <button
+        type="button"
+        onClick={() => setPreviewing(true)}
+        title="Click to preview"
+        aria-label={`Preview ${asset.name}`}
+        style={{
+          display: 'flex', width: '100%', padding: 0, border: 'none', cursor: 'zoom-in',
+          aspectRatio: '1 / 1', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+          background: assetBackground(asset.folder),
+        }}
+      >
+        {/* Lazy: a library holds dozens of full-res (up to 2400px) files and
+            only the visible rows should download. Dimensions come from this
+            same load - a separate new Image() would fetch every file up front
+            and defeat the lazy loading. */}
+        <img
+          src={asset.src} alt={asset.name} loading="lazy" decoding="async"
+          onLoad={e => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        />
+      </button>
       <div style={{ padding: '8px 10px' }}>
         {editing ? (
           <input
@@ -675,6 +744,9 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
       >
         <HugeiconsIcon icon={Delete02Icon} size={16} />
       </button>
+      {previewing && (
+        <AssetPreviewModal asset={asset} dims={dims} isHiRes={isHiRes} onClose={() => setPreviewing(false)} />
+      )}
       {confirmingDelete && (
         <DeleteAssetConfirmModal
           name={asset.name}
@@ -687,6 +759,7 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
 }
 
 export default function LibraryPage({ onBack }) {
+  const isMobile = useIsMobile()
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
   // Defaults to "All merchants", not GENERAL_MERCHANT - Julia's report,
@@ -751,10 +824,12 @@ export default function LibraryPage({ onBack }) {
   const defaultUploadMerchant = merchant === ALL_MERCHANTS ? (merchants[0] || GENERAL_MERCHANT) : merchant
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'auto' }}>
+    // No overflow here: the document is what scrolls, and an overflow box
+    // would trap the sticky title band (stickyPageBar) inside it.
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       {/* Page header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff', ...stickyPageBar(isMobile) }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Assets</h1>
           {onBack && (
