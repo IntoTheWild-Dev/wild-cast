@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import TemplateCanvas from './TemplateCanvas'
 import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
 import { buildCandidateFields, fetchMerchantAssets, fitContent } from '../lib/briefToCandidates'
+import { logoStartPct } from '../lib/logoStartScale'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
@@ -72,6 +73,13 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
       const fit = await fitContent(config?.zones, nextFields)
       built.imageScales = fit.scales
       built.imagePositions = fit.positions
+      // The logo's starting Scale for this template (Option C: 95%), so
+      // Edit design / Send for review open exactly like this preview.
+      const logoPct = nextFields.logoUrl ? logoStartPct(entry?.templateIdGuided) : null
+      if (logoPct) {
+        built.imageScales = { ...built.imageScales, logo: logoPct }
+        built.imagePositions = { ...built.imagePositions, logo: { x: 0, y: 0 } }
+      }
       if (cancelled) return
       setBrief(built)
       setFields(nextFields)
