@@ -22,6 +22,7 @@ import { uploadImageForZone, assetFolderForZone, merchantForUpload } from './lib
 import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields, fitContent } from './lib/briefToCandidates'
+import { logoStartPct } from './lib/logoStartScale'
 import useIsMobile from './lib/useIsMobile'
 import { sortIdsByFieldOrder } from './lib/fieldOrder'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from './lib/layout'
@@ -1140,7 +1141,10 @@ const SHOW_MODE_CHOOSER = false
     setAlignments({})
     // Prompt Brief designs carry a starting Scale for a cut-out photo/sticker
     // (fitContentScales) - same as its preview. Every other path starts at 100%.
-    setImageScales(brief.imageScales ?? {})
+    // Logo pulled from Assets (or given in the brief) starts at the
+    // template's own Scale unless the brief already carries one.
+    const logoPct = prefilledFields.logoUrl && !('logo' in (brief.imageScales ?? {})) ? logoStartPct(template?.id) : null
+    setImageScales({ ...(brief.imageScales ?? {}), ...(logoPct ? { logo: logoPct } : {}) })
     setImagePositions(brief.imagePositions ?? {})
     setTextPositions({})
     setZonePositions({})
@@ -1410,6 +1414,13 @@ const SHOW_MODE_CHOOSER = false
     setSaveStatus(null) // unsaved changes
     setHasUnsavedChanges(true)
     if (key.endsWith('Url')) autoFitImage(key.slice(0, -3), nextValue)
+    // A freshly set logo starts at the template's own Scale (Option C: 95%)
+    // and centred - same undo step as the logo change itself.
+    const logoPct = key === 'logoUrl' && nextValue ? logoStartPct(selectedTemplate?.id) : null
+    if (logoPct) {
+      setImageScales(prev => ({ ...prev, logo: logoPct }))
+      setImagePositions(prev => ({ ...prev, logo: { x: 0, y: 0 } }))
+    }
   }
 
   // A cut-out food photo / sticker gets the Scale + Position that make its
