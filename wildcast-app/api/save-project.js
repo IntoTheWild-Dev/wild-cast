@@ -208,6 +208,18 @@ export default async function handler(req, res) {
     const existing = await get(`projects/${incoming.id}.json`, { access: 'private', useCache: false, token })
     const existingProject = existing ? await new Response(existing.stream).json() : null
 
+    // An approved design is locked (Annika, 2026-10-01: "No more changes
+    // possible" until someone clicks Edit, which PATCHes it back to
+    // 'review' - the approval line - first). Enforced here, not just in the
+    // editor UI, because the editor never re-syncs reviewStatus while a tab
+    // sits open: a designer whose tab loaded before the Manager approved
+    // would otherwise keep autosaving edits into an approved design. A save
+    // that names a reviewStatus is an intentional transition (Send review
+    // link, approving with a pending edit, a duplicate) and goes through.
+    if (existingProject?.reviewStatus === 'approved' && !incoming.reviewStatus) {
+      return res.status(409).json({ error: 'This design is approved and locked. Click Edit to send it back through approval before changing it.' })
+    }
+
     const project = {
       ...incoming,
       reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',

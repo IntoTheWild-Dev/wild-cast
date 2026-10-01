@@ -246,7 +246,7 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
 
-export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, onImageDrop, activeZoneId, templateId, overlay, topRight }) {
+export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, locked, onImageDrop, activeZoneId, templateId, overlay, topRight }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
   const fabricRef = useRef(null)
@@ -1221,7 +1221,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
 
   function zoneIdFromDragEvent(e) {
     const canvas = fabricRef.current
-    if (!canvas || restricted) return null
+    if (!canvas || restricted || locked) return null
     const pt = canvas.getPointer(e, true)
     return zoneIdAtPoint(pt.x, pt.y)
   }
@@ -1511,7 +1511,22 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           fixed it for every canvas height). The canvas is always centred
           with plenty of dark space either side, so the corner stays clear.
           Same translucent-dark pill style as the zoom controls. */}
-      {mode === 'non-designer' && !loading && (
+      {locked && !loading && (
+        <div style={{
+          position: 'absolute', top: 16, left: 16,
+          background: 'rgba(22,163,74,0.9)', color: '#fff',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+          padding: '6px 12px', borderRadius: 20,
+          display: 'flex', alignItems: 'center', gap: 6,
+          whiteSpace: 'nowrap', zIndex: 5, pointerEvents: 'none',
+        }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Approved · locked
+        </div>
+      )}
+      {mode === 'non-designer' && !locked && !loading && (
         <div style={{
           position: 'absolute', top: 16, left: 16,
           background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.85)',
@@ -1593,6 +1608,24 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             a readable size at any zoom. Positions inside are fractions of
             this box, so they track zoom on their own. Plain DOM on top of
             the canvas, never part of the fabric scene, so never exported. */}
+        {/* Approved designs are locked: swallow every pointer event aimed at
+            the design itself so nothing can be selected, dragged, resized or
+            typed into. Below the comment overlay (z 20), so pins still open. */}
+        {locked && !loading && (
+          <div
+            data-testid="canvas-lock"
+            style={{
+              position: 'absolute',
+              left: BLEED_MARGIN * scale,
+              top: BLEED_MARGIN * scale,
+              width: canvasW * scale,
+              height: canvasH * scale,
+              pointerEvents: 'auto',
+              cursor: 'not-allowed',
+              zIndex: 15,
+            }}
+          />
+        )}
         {overlay && !loading && (
           <div style={{
             position: 'absolute',
