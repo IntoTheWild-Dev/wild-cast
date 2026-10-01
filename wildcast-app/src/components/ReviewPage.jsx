@@ -136,15 +136,20 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   // Same optimistic/rollback pattern as handleApprove.
   async function handleRequestChanges() {
     if (!canDecide || requestingChanges || project?.reviewStatus === 'changes_requested') return
-    if (!hasOpenFeedback) {
+    // A note typed in the box but not yet sent counts as the written reason
+    // and goes out with the request - no separate "Send comment" click first
+    // (Annika, 2026-10-01: the extra step was pure friction).
+    const hasDraft = !!text.trim() && !!name.trim()
+    if (!hasOpenFeedback && !hasDraft) {
       setNeedsCommentHint(true)
       commentBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       commentBoxRef.current?.focus()
       return
     }
     setRequestingChanges(true)
-    setProject(prev => ({ ...prev, reviewStatus: 'changes_requested' }))
     try {
+      await sendNote()
+      setProject(prev => ({ ...prev, reviewStatus: 'changes_requested' }))
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -174,19 +179,27 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     return id
   }
 
+  // Posts the general-note box as a comment. A no-op (returns false) when the
+  // box is empty or there's no name yet, so callers can call it unconditionally.
+  async function sendNote() {
+    if (!name.trim() || !text.trim()) return false
+    const res = await fetch('/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, name: name.trim(), text: text.trim() }),
+    })
+    if (!res.ok) throw new Error('Failed to submit comment')
+    setText('')
+    await loadComments()
+    return true
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!name.trim() || !text.trim() || submitting) return
+    if (submitting) return
     setSubmitting(true)
     try {
-      const res = await fetch('/api/comments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, name: name.trim(), text: text.trim() }),
-      })
-      if (!res.ok) throw new Error('Failed to submit comment')
-      setText('')
-      await loadComments()
+      await sendNote()
     } catch (err) {
       alert(err.message)
     } finally {
@@ -355,15 +368,14 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
           />
           {needsCommentHint && !hasOpenFeedback && (
             <div role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: '#92400E', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, padding: '8px 10px' }}>
-              Tell the designer what to change first - send a comment here, then click <strong>Request changes</strong> again.
+              Tell the designer what to change first - pin a comment on the design or type a note here, then click <strong>Request changes</strong> again.
             </div>
           )}
           <textarea
             ref={commentBoxRef}
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder={needsCommentHint && !hasOpenFeedback ? 'What should the designer change?' : 'Leave your feedback…'}
-            required
+            placeholder={needsCommentHint && !hasOpenFeedback ? 'What should the designer change?' : 'Add a general note (optional)…'}
             rows={4}
             style={{ padding: '9px 11px', fontSize: 13, border: `1px solid ${needsCommentHint && !hasOpenFeedback ? '#F59E0B' : 'var(--border)'}`, borderRadius: 8, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: 'var(--dark)', lineHeight: 1.5 }}
             onFocus={e => e.currentTarget.style.borderColor = 'var(--primary)'}

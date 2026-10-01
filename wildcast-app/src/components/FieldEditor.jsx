@@ -735,7 +735,36 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole }) {
+// Footer block for an approved (locked) design: the only way to change it is
+// to click Edit, which sends it back into the approval line (Annika,
+// 2026-10-01). Export stays Manager-only and only while approved.
+function ApprovedEditBlock({ onEdit, reopening }) {
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', fontSize: 12, lineHeight: 1.45, color: '#166534' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span><strong>Approved and locked.</strong> To change it, click Edit - it goes back into approval and can't be exported until it's approved again.</span>
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={reopening}
+        style={{
+          width: '100%', padding: '13px', fontSize: 14, fontWeight: 700,
+          background: reopening ? 'var(--mid)' : 'var(--primary)', color: '#fff', border: 'none',
+          borderRadius: 10, cursor: reopening ? 'default' : 'pointer', transition: 'background 0.15s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}
+      >
+        {reopening ? 'Reopening…' : 'Edit design'}
+      </button>
+    </>
+  )
+}
+
+export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
   const canExport = workflowRole === 'Manager'
   const isMobile = useIsMobile()
   const [expanded, setExpanded] = useState(false)
@@ -1108,7 +1137,10 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
       </div>
 
       {/* Scrollable fields */}
-      <div style={isMobile ? { padding: '16px' } : { flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }}>
+      <div
+        inert={locked || undefined}
+        style={{ ...(isMobile ? { padding: '16px' } : { flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 24px' }), ...(locked ? { opacity: 0.55, userSelect: 'none' } : {}) }}
+      >
 
         {/* Project name now lives centered in the header above the canvas,
             not here (Julia's ask, 2026-09-18) - see App.jsx's breadcrumb
@@ -1197,7 +1229,9 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
           see handleSaveAndReturnToPicker in App.jsx) and has no "Advanced"
           concept to gate export against. */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {restricted ? (
+        {restricted && locked ? (
+          <ApprovedEditBlock onEdit={onEditApproved} reopening={reopening} />
+        ) : restricted ? (
           <>
             <button
               onClick={onSendForReview}
@@ -1230,6 +1264,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
           </>
         ) : (
           <>
+            {locked ? <ApprovedEditBlock onEdit={onEditApproved} reopening={reopening} /> : (<>
             {/* Briefly moved to the left Review panel (2026-09-23), then
                 moved back here - that panel only exists once reviewStatus
                 has left 'design' (see App.jsx), so it can't also be where
@@ -1270,6 +1305,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             >
               {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save'}
             </button>
+            </>)}
 
             {reviewSent && canExport ? (
               <>
@@ -1296,7 +1332,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
               </>
             ) : (
               <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--light)', padding: '4px 0' }}>
-                {!canExport ? '🔒 Export PDF - only Managers can export' : '🔒 Export PDF - unlocks once you send for review'}
+                {!canExport ? '🔒 Export PDF - only Managers can export' : '🔒 Export PDF - unlocks once the design is approved'}
               </div>
             )}
           </>

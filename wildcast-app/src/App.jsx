@@ -395,28 +395,22 @@ const SHOW_MODE_CHOOSER = false
   // load, with no timer.
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [loadKey, setLoadKey]                 = useState(0)    // increments on project load to reset auto-shrink
-  // Gates Export PDF behind Send for Review (Julia's ask, 2026-09-18, per
-  // Annika's mockup - "assuming there's an approval step"; confirmed: yes,
-  // gate it). Session-local, not a persisted project field - resets
-  // whenever a fresh editing session starts (loadKey increments on every
-  // project load), so reopening a design later requires sending it for
-  // review again rather than remembering it forever.
-  const [reviewSentLoadKey, setReviewSentLoadKey] = useState(loadKey)
-  const [reviewSent, setReviewSent] = useState(false)
-  if (reviewSentLoadKey !== loadKey) {
-    setReviewSentLoadKey(loadKey)
-    setReviewSent(false)
-  }
   // Persisted review status for "My Tasks" (Notion card "Review queue in the
   // user profile", 2026-09-22) - 'design' | 'review' | 'changes_requested' |
-  // 'approved'. Distinct from reviewSent just above (a session-local
-  // Export-PDF gate that resets every reopen): this is saved on the project
-  // record itself (doSave()). handleSendForReview sets 'review' on every
-  // send, first or resubmit; 'changes_requested'/'approved' are set by
+  // 'approved'. Saved on the project record itself (doSave()).
+  // handleSendForReview sets 'review' on every send, first or resubmit; 'changes_requested'/'approved' are set by
   // handleRequestChangesInEditor/handleApproveInEditor here (Manager role)
   // or the matching buttons on ReviewPage.jsx (via api/save-project.js's
   // PATCH handler) - never by anything else on the creator's side.
   const [reviewStatus, setReviewStatus]       = useState('design')
+  // An approved design is locked (Annika, 2026-10-01: "After manager approves,
+  // the design should be locked. No more changes possible. If designer or
+  // manager wants to change it, they have to click Edit and the design goes
+  // back into the approval line"). The editor goes read-only, autosave stops,
+  // and Export PDF is only available while approved. api/save-project.js
+  // enforces the same rule server-side for tabs holding a stale status.
+  const isLocked = reviewStatus === 'approved'
+  const [reopening, setReopening] = useState(false)
   // everRequestedChanges (My Tasks' "second round" color-coding flag) is
   // deliberately NOT mirrored into component state here, after a first
   // attempt at exactly that (2026-09-24) turned out to just move the bug
@@ -592,6 +586,7 @@ const SHOW_MODE_CHOOSER = false
   }
 
   function handleUndo() {
+    if (isLocked) return
     const snapshot = historyRef.current.pop()
     if (!snapshot) return
     setFields(snapshot.fields)
@@ -984,6 +979,30 @@ const SHOW_MODE_CHOOSER = false
       alert('Could not request changes: ' + err.message)
     } finally {
       setEditorRequestingChanges(false)
+    }
+  }
+
+  // "Edit" on an approved (locked) design - designer or manager. Puts it back
+  // into the approval line ('review'), which unlocks the editor and takes
+  // Export PDF away until someone approves it again. Stays on the canvas so
+  // the person who clicked Edit can start changing things straight away.
+  async function handleEditApproved() {
+    if (reopening || !currentProjectId || reviewStatus !== 'approved') return
+    if (!window.confirm("Edit this approved design? It goes back into approval, and can't be exported until it's approved again.")) return
+    setReopening(true)
+    try {
+      const res = await fetch('/api/save-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProjectId, status: 'review' }),
+      })
+      if (!res.ok) throw new Error('Failed to reopen the design')
+      patchCachedProject(currentProjectId, { reviewStatus: 'review' })
+      setReviewStatus('review')
+    } catch (err) {
+      alert('Could not reopen for editing: ' + err.message)
+    } finally {
+      setReopening(false)
     }
   }
 
@@ -1670,11 +1689,11 @@ const SHOW_MODE_CHOOSER = false
   // and on !saving so a manual Save in flight isn't raced by this timer
   // landing at the same time.
   useEffect(() => {
-    if (screen !== 'editor' || !hasUnsavedChanges || saving) return
+    if (screen !== 'editor' || isLocked || !hasUnsavedChanges || saving) return
     const t = setTimeout(() => { autoSave() }, 2500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, fontSizes, alignments, imageScales, imagePositions, projectName, screen, hasUnsavedChanges, saving])
+  }, [fields, fontSizes, alignments, imageScales, imagePositions, projectName, screen, hasUnsavedChanges, saving, isLocked])
 
   // Save from the restricted review editor (a brief-generated candidate) -
   // Julia's ask (2026-08-03): persists via the same doSave()/Designs
@@ -1788,11 +1807,6 @@ const SHOW_MODE_CHOOSER = false
       setSaveStatus('saved')
       setHasUnsavedChanges(false)
       setTimeout(() => setSaveStatus(null), 3000)
-      // Unlocks Export PDF for this session either way - reviewSent resets
-      // on every reopen by design (see its own declaration), so a resubmit
-      // needs to set it too, same as the old Resolve and resubmit did.
-      // Missed on the first pass of merging these two functions together.
-      setReviewSent(true)
       if (isResubmit) {
         // Same "don't get stuck on the canvas" fix as the old Resolve and
         // resubmit had, and the same My Tasks destination (not Designs) -
@@ -2483,6 +2497,7 @@ const SHOW_MODE_CHOOSER = false
                 type="text"
                 value={projectName ?? ''}
                 onChange={e => { setProjectName(e.target.value); setHasUnsavedChanges(true) }}
+                readOnly={isLocked}
                 placeholder="e.g. Wen Cheng – Wolt Promo June"
                 title="Project name - used as the PDF filename and label in your Designs tab"
                 style={{
@@ -2527,7 +2542,7 @@ const SHOW_MODE_CHOOSER = false
               )}
               <button
                 onClick={handleUndo}
-                disabled={!canUndo}
+                disabled={!canUndo || isLocked}
                 title="Undo last change (⌘Z)"
                 style={{ fontSize: 12, fontWeight: 600, color: canUndo ? 'var(--mid)' : 'var(--light)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: canUndo ? 'pointer' : 'default', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', flexShrink: 0 }}
                 onMouseEnter={e => { if (canUndo) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' } }}
@@ -2543,9 +2558,10 @@ const SHOW_MODE_CHOOSER = false
               {!restrictedReview && (
                 <button
                   onClick={effectiveMode === 'non-designer' ? handleResetToBlank : handleResetLayout}
+                  disabled={isLocked}
                   title={effectiveMode === 'non-designer' ? 'Clear all fields and start the template over' : 'Reset all text zones to their original positions'}
-                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
+                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: isLocked ? 'default' : 'pointer', opacity: isLocked ? 0.5 : 1, transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
+                  onMouseEnter={e => { if (!isLocked) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' } }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
                 >
                   {effectiveMode === 'non-designer' ? 'Reset all fields' : 'Reset layout'}
@@ -2621,6 +2637,7 @@ const SHOW_MODE_CHOOSER = false
               onReady={handleCanvasReady}
               onAutoShrink={handleAutoShrink}
               restricted={restrictedReview}
+              locked={isLocked}
               onImageDrop={handleCanvasImageDrop}
               activeZoneId={activeZoneId}
               overlay={commentsOnCanvas && (
@@ -2693,12 +2710,15 @@ const SHOW_MODE_CHOOSER = false
             currentProjectId={currentProjectId}
             projectName={projectName}
             vertical={designVertical}
-            // An approved design also unlocks Export PDF, not just a send
-            // in this session - reviewSent resets on every reopen, so
-            // reopening an approved flyer used to lock Export again as if it
-            // had never been sent (Julia's report, 2026-09-28). Still
-            // Manager-only, via FieldEditor's own canExport.
-            reviewSent={reviewSent || reviewStatus === 'approved'}
+            // Export PDF is only available while the design is approved
+            // (Annika, 2026-10-01: after an edit it "needs approval again
+            // first"). Used to unlock on a send in this session too
+            // (reviewSent) - a design could be exported while still under
+            // review. Still Manager-only, via FieldEditor's own canExport.
+            reviewSent={reviewStatus === 'approved'}
+            locked={isLocked}
+            onEditApproved={handleEditApproved}
+            reopening={reopening}
           />
         </div>
       )}
