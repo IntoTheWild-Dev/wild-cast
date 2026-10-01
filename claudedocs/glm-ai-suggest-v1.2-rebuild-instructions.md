@@ -1,6 +1,6 @@
 # GLM Task: Rebuild AI Suggest per Mark's v1.2 spec (Phase 1)
 
-> ✅ **DONE — 2026-09-25.** Built on branch `feat/ai-suggest-v1.2` (6 commits, awaiting merge on Mark's go-ahead — see `wildcast-app/STATUS.md` → "AI Suggest v1.2 rebuild" for the full state, handoff notes and post-merge follow-ups).
+> ✅ **DONE — 2026-09-25, MERGED to `main` 2026-09-28** (`df8d50b`). Built on branch `feat/ai-suggest-v1.2` (6 commits) — see `wildcast-app/STATUS.md` → "AI Suggest v1.2 rebuild" for the full state, handoff notes and post-merge follow-ups.
 >
 > What shipped: new sheet reader (`api/_lib/campaignSheet.js`), brief + prompt + tool + §9 checks (`api/ai-suggest.js`, `api/_lib/checks.js`), §5.1 presets (`api/presets.js`), pair/queue client (`src/lib/usePairQueue.js`, `src/components/AISuggest.jsx`, `src/components/FieldEditor.jsx`), §4.1 field settings for Options A/B/C (`src/data/templateZones.js` — §11 ESTIMATE values, Julia still owes measured ones), Prompt Brief chat moved to the new contract. Two independent review rounds: 10 bugs + 1 blocker + 3 smaller issues found and fixed (all recorded in STATUS.md). All 12 §11 test briefs run — 11 via `wildcast-app/scripts/run-12-briefs.mjs` against the Vercel preview, T12 manually by Julia. JSON sent to Mark 2026-09-25.
 >
