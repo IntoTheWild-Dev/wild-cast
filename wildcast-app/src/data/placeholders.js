@@ -122,5 +122,7 @@ const TEMPLATE_IMAGE_PLACEHOLDERS = {
 
 export function placeholderImageFor(zone, templateId) {
   const overrides = TEMPLATE_IMAGE_PLACEHOLDERS[templatePlaceholderKey(templateId)]
-  return overrides?.[zone?.id] ?? IMAGE_PLACEHOLDERS[zone?.id]
+  // Order: hand-picked per-template photo, then the example exported from the
+  // Figma zone:photo layer (zone.placeholderImage), then the grey labelled box.
+  return overrides?.[zone?.id] ?? zone?.placeholderImage ?? IMAGE_PLACEHOLDERS[zone?.id]
 }
