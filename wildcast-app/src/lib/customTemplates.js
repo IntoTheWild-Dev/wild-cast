@@ -40,6 +40,9 @@ export function customZonesEntry(record) {
     canvasW: record.canvasW,
     canvasH: record.canvasH,
     backgroundUrl: templateAssetSrc(record.backgroundUrl),
+    // Vector PDF of the same frame (bleed included, TrimBox set), present on
+    // templates imported after PDF export was added. Nothing consumes it yet.
+    backgroundPdfUrl: record.backgroundPdfUrl ? templateAssetSrc(record.backgroundPdfUrl) : undefined,
     backgroundFill: record.backgroundFill,
     zones: (record.zones ?? []).map(normalizeZone),
   }

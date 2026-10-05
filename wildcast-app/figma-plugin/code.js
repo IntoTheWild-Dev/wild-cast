@@ -147,9 +147,46 @@ async function handleImport(slotKey, label, cat, format) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
 
-    figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [] })
+    // Vector PDF of the same frame, sent as a second request so it gets its
+    // own body-size budget. The template is already imported at this point -
+    // if the PDF step fails or is too big, the import still stands and the
+    // reason is shown instead of an error.
+    const pdfNote = await uploadPdf(frame, slotKey)
+
+    figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [], pdfNote })
   } catch (err) {
     figma.ui.postMessage({ type: 'error', message: String(err && err.message || err) })
+  }
+}
+
+// Vercel rejects request bodies over ~4.5 MB; leave headroom for the JSON
+// around the base64 string.
+const MAX_PDF_BASE64_CHARS = 4.2 * 1024 * 1024
+
+// Returns a short note for the UI: '' when the PDF uploaded, otherwise why it
+// didn't. Never throws - the PNG import has already succeeded.
+async function uploadPdf(frame, slotKey) {
+  try {
+    figma.ui.postMessage({ type: 'status', message: 'Exporting PDF…' })
+    const pdfBytes = await frame.exportAsync({ format: 'PDF' })
+    const pdfBase64 = bytesToBase64(pdfBytes)
+    if (pdfBase64.length > MAX_PDF_BASE64_CHARS) {
+      return ` PDF skipped: ${(pdfBytes.length / 1048576).toFixed(1)} MB is over the upload limit (PNG import is fine).`
+    }
+
+    figma.ui.postMessage({ type: 'status', message: 'Uploading PDF…' })
+    const res = await fetch(`${API_BASE}/api/import-figma-plugin-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
+      body: JSON.stringify({ slotKey, pdfBase64, frameBox: frame.absoluteBoundingBox }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return ` PDF upload failed: ${body.error || res.status} (PNG import is fine).`
+    }
+    return ''
+  } catch (err) {
+    return ` PDF export failed: ${String(err && err.message || err)} (PNG import is fine).`
   }
 }
 
