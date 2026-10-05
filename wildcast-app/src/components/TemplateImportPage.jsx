@@ -438,7 +438,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       const res = await fetch('/api/publish-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({ slotKey: result.slotKey, action: 'updateZones', zones }),
+        body: JSON.stringify({ slotKey: result.slotKey, action: 'updateZones', zones, expectedCreatedAt: result.createdAt }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not save zone settings')
@@ -464,7 +464,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
       const res = await fetch('/api/publish-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({ slotKey: result.slotKey, action: 'publish' }),
+        body: JSON.stringify({ slotKey: result.slotKey, action: 'publish', expectedCreatedAt: result.createdAt }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Publish failed')

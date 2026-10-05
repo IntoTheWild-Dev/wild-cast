@@ -43,3 +43,32 @@ export function isSiblingBlobUrl(url, recordUrl, expectedPath) {
     return false
   }
 }
+
+// Links are DERIVED when templates are listed (api/list-templates.js), not stored
+// in the record. A record is rewritten by several things (a re-import, "Save
+// zone settings", Publish ...) and Vercel Blob reads can lag a write by tens of
+// seconds, so a rewrite that started from a stale read puts an OLD record back
+// and silently drops any link stored in it (that is what made the tile and the
+// photo example vanish after a perfect import). A file that exists next to the
+// record can't be dropped that way: if `templates/<slot>-tile.png` is there, the
+// template has that tile. A file always wins over whatever the record says.
+export function attachDerivedLinks(record, urlByPath) {
+  try {
+    if (!record?.slotKey || record.isOverrideOnly || !urlByPath?.get) return record
+    const out = { ...record }
+    const tile = urlByPath.get(assetPath.tile(record.slotKey))
+    if (tile) out.tileUrl = tile
+    const pdf = urlByPath.get(assetPath.pdf(record.slotKey))
+    if (pdf) out.backgroundPdfUrl = pdf
+    if (Array.isArray(record.zones)) {
+      out.zones = record.zones.map(z => {
+        if (z?.type !== 'image' || !EXAMPLE_ZONES.includes(z.id)) return z
+        const example = urlByPath.get(assetPath.example(record.slotKey, z.id))
+        return example ? { ...z, placeholderImage: example } : z
+      })
+    }
+    return out
+  } catch {
+    return record
+  }
+}

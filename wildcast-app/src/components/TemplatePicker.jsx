@@ -481,7 +481,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       const res = await fetch('/api/publish-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...activationHeaders() },
-        body: JSON.stringify({ slotKey, action, label }),
+        body: JSON.stringify({ slotKey, action, label, expectedCreatedAt: customRecords.find(r => r.slotKey === slotKey)?.createdAt }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Action failed')

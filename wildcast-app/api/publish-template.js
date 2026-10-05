@@ -42,7 +42,17 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
   if (!(await requireDesignerKey(req, res))) return
 
-  const { slotKey, action, label, zones } = req.body ?? {}
+  const { slotKey, action, label, zones, expectedCreatedAt } = req.body ?? {}
+
+  // Optional guard against writing back a stale copy. The caller says which
+  // version of the template (its import timestamp) it was looking at; if the
+  // record we just read is a different one - because the template was
+  // re-imported since the page loaded, or because Vercel Blob handed us a
+  // read from before a recent write - saving would put an OLD record back over
+  // the new one. Refuse and tell the user to reload instead.
+  const staleCopy = record =>
+    !!(expectedCreatedAt && record?.createdAt && record.createdAt !== expectedCreatedAt)
+  const STALE_MESSAGE = 'This template was re-imported or changed since this page loaded. Reload the page and try again.'
 
   // A designer reviewing a fresh import can correct per-zone font size and
   // rotation right here — no code change or re-import needed for a simple
@@ -57,6 +67,7 @@ export default async function handler(req, res) {
     try {
       const record = await readRecord(slotKey, token)
       if (!record) return res.status(404).json({ error: `No template found for slotKey "${slotKey}"` })
+      if (staleCopy(record)) return res.status(409).json({ error: STALE_MESSAGE })
       // The caller sends back the zones it loaded, which can predate the
       // plugin's final link step (a review page left open during an import).
       // Don't let that stale copy wipe the photo/sticker example links.
@@ -99,6 +110,7 @@ export default async function handler(req, res) {
       const response = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) return res.status(500).json({ error: 'Could not read existing template record' })
       record = await response.json()
+      if (staleCopy(record)) return res.status(409).json({ error: STALE_MESSAGE })
     }
 
     const { live, archived } = ACTIONS[action]

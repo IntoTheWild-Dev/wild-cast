@@ -23,7 +23,7 @@ beforeEach(() => {
   store.clear()
   process.env.WILDCAST_KEYS = 'DES-KEY|Studio|100|designer'
   store.set('templates/t.json', JSON.stringify({
-    slotKey: 't', tileUrl: urlOf('templates/t-tile.png'), backgroundPdfUrl: urlOf('templates/t-bg.pdf'),
+    slotKey: 't', createdAt: '2026-10-05T12:00:00.000Z', tileUrl: urlOf('templates/t-tile.png'), backgroundPdfUrl: urlOf('templates/t-bg.pdf'),
     zones: [{ id: 'headline', type: 'text', x: 1 }, { id: 'photo', type: 'image', x: 2, placeholderImage: urlOf('templates/t-ph-photo.png') }],
   }))
 })
@@ -44,4 +44,27 @@ test('a link that is already on the incoming zone is not overridden', async () =
   const newer = [{ id: 'photo', type: 'image', placeholderImage: urlOf('templates/t-ph-photo-v2.png') }]
   await call({ slotKey: 't', action: 'updateZones', zones: newer })
   assert.equal(JSON.parse(store.get('templates/t.json')).zones[0].placeholderImage, urlOf('templates/t-ph-photo-v2.png'))
+})
+
+test('a stale copy is refused: the page loaded an older import than the record on file', async () => {
+  const before = store.get('templates/t.json')
+  const zones = [{ id: 'headline', type: 'text', x: 99 }]
+  for (const body of [
+    { slotKey: 't', action: 'updateZones', zones, expectedCreatedAt: '2026-10-05T11:00:00.000Z' },
+    { slotKey: 't', action: 'publish', expectedCreatedAt: '2026-10-05T11:00:00.000Z' },
+  ]) {
+    const { code, data } = await call(body)
+    assert.equal(code, 409)
+    assert.match(data.error, /Reload the page/)
+  }
+  assert.equal(store.get('templates/t.json'), before, 'nothing was written')
+})
+
+test('the matching version, or no version at all (older callers, old records), is allowed', async () => {
+  const zones = [{ id: 'headline', type: 'text', x: 5 }]
+  assert.equal((await call({ slotKey: 't', action: 'updateZones', zones, expectedCreatedAt: '2026-10-05T12:00:00.000Z' })).code, 200)
+  assert.equal((await call({ slotKey: 't', action: 'publish', expectedCreatedAt: '2026-10-05T12:00:00.000Z' })).code, 200)
+  assert.equal((await call({ slotKey: 't', action: 'unpublish' })).code, 200)
+  store.set('templates/old.json', JSON.stringify({ slotKey: 'old', zones: [] })) // no createdAt on file
+  assert.equal((await call({ slotKey: 'old', action: 'publish', expectedCreatedAt: '2026-10-05T11:00:00.000Z' })).code, 200)
 })

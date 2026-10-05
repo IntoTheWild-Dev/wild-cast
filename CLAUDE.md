@@ -62,9 +62,14 @@ at the start.
     a visible layer is baked into the background PNG/PDF as well as being an
     editable zone. Hidden content is exported from a temporary visible copy.
   - **Don't stack a new plugin step on one that hasn't been confirmed live.**
-    Keep each upload small and independent; files are saved first and linked in
-    one final request (`import-figma-plugin-finish`), never by several
-    read-modify-writes of the same record.
+    Keep each upload small and independent. The plugin's extra files are only
+    *saved* at fixed names (`<slot>-tile.png`, `-ph-photo.png`, ...) and
+    `list-templates.js` attaches them by name - **never store links to them in
+    `templates/<slot>.json` and never rewrite that record after the main
+    import**: Vercel Blob reads can lag a write by ~30s, and a rewrite from a
+    stale read puts an old record back and drops anything newer (this made the
+    tile and photo vanish after a perfect import). Any new read-modify-write of
+    the record must send `expectedCreatedAt` so a stale copy gets a 409, not a write.
   - `manifest.json` doesn't change between plugin versions - bump the version
     line in `figma-plugin/ui.html` on every plugin change and send a fresh zip.
   - Layer naming is by **exact name** (`sub_headline`, not `subline`); the
