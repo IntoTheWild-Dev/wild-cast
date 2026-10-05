@@ -1,7 +1,8 @@
-// Attaches the translucent example image for an image zone (today: the photo
-// zone) to a template that /api/import-figma-plugin.js already created. The
-// plugin exports the zone:photo layer's own pixels, so the example no longer
-// has to be hand-added per template in src/data/placeholders.js.
+// Attaches the translucent example image for an image zone (photo and sticker)
+// to a template that /api/import-figma-plugin.js already created. The plugin
+// exports the zone's (or its same-named sibling layer's) own pixels, so the
+// example no longer has to be hand-added per template in
+// src/data/placeholders.js.
 //
 // Separate request from the main import for the same reason as the PDF one
 // (Vercel's ~4.5 MB body cap). A failure here never affects the import: the
@@ -12,9 +13,9 @@ import { Buffer } from 'node:buffer'
 import { list, put } from '@vercel/blob'
 import { requirePluginKey } from './_lib/auth.js'
 
-// Only photos get a real example. logo / sticker / qr keep their labelled
-// boxes on purpose ("QR code must say QR code").
-const ALLOWED_ZONES = new Set(['photo'])
+// Photos and stickers get a real example. logo / qr keep their labelled boxes
+// on purpose ("QR code must say QR code").
+const ALLOWED_ZONES = new Set(['photo', 'sticker'])
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 
 async function readRecord(slotKey, token) {
