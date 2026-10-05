@@ -214,6 +214,9 @@ function serializeNode(node) {
     }
     if (typeof node.fontSize === 'number') base.fontSize = node.fontSize
     base.textAlignHorizontal = node.textAlignHorizontal
+    // The designed copy in the layer, used as the zone's translucent
+    // placeholder in WildCast. Hidden layers still carry their text.
+    if (typeof node.characters === 'string') base.characters = node.characters
   }
   return base
 }

@@ -226,6 +226,18 @@ function weightFromStyleName(styleName) {
   return FONT_WEIGHT_NAME_MAP[cleaned] ?? 400
 }
 
+// The copy designed into a Figma text layer, kept as the zone's translucent
+// placeholder in the editor (see src/data/placeholders.js). Line breaks become
+// spaces - the zone wraps by width anyway - and it's capped so a pasted
+// paragraph can't bloat the record. Returns undefined for empty text so the
+// editor falls back to its generic stand-in.
+const MAX_PLACEHOLDER_CHARS = 200
+export function placeholderFromText(characters) {
+  if (typeof characters !== 'string') return undefined
+  const text = characters.replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return text ? text.slice(0, MAX_PLACEHOLDER_CHARS) : undefined
+}
+
 // Twin of toCanvasZone() above, for the WildCast Figma plugin
 // (figma-plugin/code.js) instead of the REST-API path. The plugin can't
 // run this geometry/font math itself — duplicating it in a different JS
@@ -268,6 +280,8 @@ export function toCanvasZoneFromPluginNode(node, frameBox, allNodes = []) {
     zone.color = '#FFFFFF'
     zone.align = (node.textAlignHorizontal ?? 'CENTER').toLowerCase()
     zone.autoShrink = true
+    const placeholder = placeholderFromText(node.characters)
+    if (placeholder) zone.placeholder = placeholder
     return zone
   }
 
@@ -280,6 +294,8 @@ export function toCanvasZoneFromPluginNode(node, frameBox, allNodes = []) {
     zone.color = '#FFFFFF'
     zone.align = (sibling.textAlignHorizontal ?? 'CENTER').toLowerCase()
     zone.autoShrink = true
+    const placeholder = placeholderFromText(sibling.characters)
+    if (placeholder) zone.placeholder = placeholder
     return zone
   }
 

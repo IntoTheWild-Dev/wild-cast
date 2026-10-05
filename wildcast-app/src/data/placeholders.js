@@ -76,7 +76,10 @@ function templatePlaceholderKey(templateId) {
 const CAPS_FONT_FAMILY = 'omnes-cond'
 export function placeholderTextFor(zone, templateId) {
   const overrides = TEMPLATE_TEXT_PLACEHOLDERS[templatePlaceholderKey(templateId)]
-  const text = overrides?.[zone?.id] ?? TEXT_PLACEHOLDERS[zone?.id]
+  // Order: hand-written per-template copy, then the text designed into the
+  // Figma layer (zone.placeholder, captured by the plugin on import), then
+  // the generic stand-in.
+  const text = overrides?.[zone?.id] ?? zone?.placeholder ?? TEXT_PLACEHOLDERS[zone?.id]
   if (text == null) return undefined
   return (zone?.fontFamily || CAPS_FONT_FAMILY) === CAPS_FONT_FAMILY ? text.toUpperCase() : text
 }
