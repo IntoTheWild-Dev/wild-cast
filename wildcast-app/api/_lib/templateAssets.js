@@ -15,6 +15,7 @@ export const assetPath = {
   pdf: slotKey => `templates/${slotKey}-bg.pdf`,
   example: (slotKey, zoneId) => `templates/${slotKey}-ph-${zoneId}.png`,
   record: slotKey => `templates/${slotKey}.json`,
+  background: slotKey => `templates/${slotKey}-bg.png`,
 }
 
 export const SLOT_KEY_RE = /^[a-z0-9-]+$/

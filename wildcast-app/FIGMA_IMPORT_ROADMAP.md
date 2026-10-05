@@ -5,6 +5,7 @@
 - **Placeholders from Figma:** the faded example text is the text in the zone's live text layer (sent in the main request as `characters`); the photo/sticker examples are the pictures in layers named `photo` (or the older `image`) and `sticker`. Exported from a temporary visible copy, so zone content stays hidden in Figma and is not baked into the background.
 - **Catalogue tile:** the card picture in the template picker, made from a temporary copy of the frame with the content layers shown and the `zone:` boxes hidden. Manual replacement: "Card picture (tile)" on the review screen. Save/Publish on the review screen refuse (409 "reload") if the template was re-imported since the page loaded.
 - **Naming rule that caught us out:** a text sibling is matched by exact name = the zone id (`sub_headline`, not `subline`; `tc`, not `fineprint`).
+- **Fixing the artwork later:** the panel's "Update background only" re-exports the frame and replaces only the background picture (+ PDF + tile) of an already-imported template; zones and review-screen settings are untouched (`api/import-figma-plugin-background.js`).
 - **Plugin versioning:** `manifest.json` does not change between versions, so check the version line under the Import button. Figma does not update a development plugin by itself - reload it from the new folder.
 - The old paragraph "Decision: replace the server-side REST pull with a minimal Figma plugin" below is still the reason the plugin exists.
 

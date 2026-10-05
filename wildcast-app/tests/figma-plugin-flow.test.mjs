@@ -43,7 +43,7 @@ function buildFrame() {
 }
 
 // Runs one import against `behaviour` (which can make steps fail) and returns what happened.
-async function runImport(behaviour = {}) {
+async function runImport(behaviour = {}, action = 'import') {
   const frame = buildFrame()
   const calls = []        // [{ path, body }]
   const messages = []     // ui messages
@@ -58,6 +58,7 @@ async function runImport(behaviour = {}) {
     if (path.startsWith('/api/list-templates')) return reply(200, { templates: [] })
     if (path === '/api/import-figma-plugin') return reply(200, { label: 'Option E', needsReview: [], recordUrl: 'https://s.private.blob.vercel-storage.com/templates/t.json' })
     if (behaviour[path]) return behaviour[path](body, reply)
+    if (path === '/api/import-figma-plugin-background') return reply(200, { ok: true, url: 'https://s.private.blob.vercel-storage.com/templates/t-bg.png' })
     if (path === '/api/import-figma-plugin-pdf') return reply(200, { url: 'https://s.private.blob.vercel-storage.com/templates/t-bg.pdf' })
     if (path === '/api/import-figma-plugin-placeholder') {
       const urls = {}
@@ -98,7 +99,8 @@ async function runImport(behaviour = {}) {
   // new copies must be watched too
   Node.prototype.clone = function () { const c = origClone.call(this); watch(c); return c }
   try {
-    await vm.runInContext('handleImport', ctx)('t', 'Option E', 'restaurant', 'Flyer')
+    if (action === 'background') await vm.runInContext('handleBackgroundUpdate', ctx)('t', 'Option E')
+    else await vm.runInContext('handleImport', ctx)('t', 'Option E', 'restaurant', 'Flyer')
   } finally {
     Node.prototype.clone = origClone
   }
@@ -172,4 +174,28 @@ test('a missing food layer is explained instead of skipped silently', async () =
   const found = vm.runInContext('findExampleNode', ctx)(frame.children, 'photo')
   assert.equal(found.node, null)
   assert.equal(found.zoneMissing, undefined)
+})
+
+test('Update background only: re-exports the frame, replaces just the picture + pdf + tile, never touches zones or the record', async () => {
+  const { calls, done, frame, originalCount, exports_ } = await runImport({}, 'background')
+  assert.deepEqual(calls.filter(c => !c.path.startsWith('/api/list-templates')).map(c => c.path), [
+    '/api/import-figma-plugin-background', '/api/import-figma-plugin-pdf', '/api/import-figma-plugin-placeholder',
+  ])
+  const bg = calls.find(c => c.path === '/api/import-figma-plugin-background').body
+  assert.equal(bg.slotKey, 't')
+  assert.ok(bg.imageBase64 && bg.scale > 4 - 0.01 && bg.scale <= 4)
+  assert.deepEqual(Object.keys(calls.filter(c => c.path === '/api/import-figma-plugin-placeholder')[0].body.images), ['tile'], 'no photo / sticker examples re-sent')
+  assert.equal(done.kind, 'background')
+  assert.equal(done.needsReview.length, 0)
+  assert.match(done.pdfNote, /Saved: background, pdf, tile/)
+  assert.equal(frame.children.length, originalCount, 'temporary copies removed')
+  assert.ok(exports_.some(e => e.node === 'FINAL' && e.format === 'PNG' && !e.copyShows))
+  for (const n of frame.children) assert.equal(n.visible, n.name === 'Rectangle 941', `${n.name} visibility changed`)
+})
+
+test('Update background only: a server refusal (e.g. different frame shape) is shown, nothing else is sent', async () => {
+  const { messages, calls } = await runImport({ '/api/import-figma-plugin-background': (b, reply) => reply(400, { error: 'different shape' }) }, 'background')
+  assert.ok(messages.some(m => m.type === 'error' && /different shape/.test(m.message)))
+  assert.equal(messages.some(m => m.type === 'done'), false)
+  assert.equal(calls.some(c => c.path === '/api/import-figma-plugin-pdf'), false)
 })

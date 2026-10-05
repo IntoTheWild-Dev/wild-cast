@@ -74,7 +74,9 @@ async function loadEmptySlots() {
     const empty = BASE_SLOTS
       .filter(s => !s.live && !liveKeys.has(slugify(s.label)))
       .map(s => ({ ...s, slotKey: slugify(s.label) }))
-    figma.ui.postMessage({ type: 'slots', slots: empty })
+    // Templates that already exist (draft or live) - for "Update background only".
+    const existing = (data.templates || []).filter(r => r.slotKey && !r.isOverrideOnly).map(r => ({ slotKey: r.slotKey, label: r.label || r.slotKey, live: !!r.live }))
+    figma.ui.postMessage({ type: 'slots', slots: empty, existing })
   } catch (err) {
     figma.ui.postMessage({ type: 'slots-error', message: String(err && err.message || err) })
   }
@@ -84,6 +86,9 @@ loadEmptySlots()
 figma.ui.onmessage = async msg => {
   if (msg.type === 'import') {
     await handleImport(msg.slotKey, msg.label, msg.cat, msg.format)
+  }
+  if (msg.type === 'update-background') {
+    await handleBackgroundUpdate(msg.slotKey, msg.label)
   }
 }
 
@@ -163,6 +168,46 @@ async function handleImport(slotKey, label, cat, format) {
     if (saved.length) notes += ` Saved: ${saved.join(', ')} - they show up in WildCast within about 30 seconds.`
 
     figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [], pdfNote: notes })
+  } catch (err) {
+    figma.ui.postMessage({ type: 'error', message: String(err && err.message || err) })
+  }
+}
+
+// "Update background only": re-export the selected frame and replace just the
+// background picture (+ PDF + catalogue tile) of a template that is already
+// imported. Zones, fonts, positions and every review-screen setting are left
+// exactly as they are - nothing rewrites the template record. For when the
+// artwork was wrong (e.g. a layer that should be hidden was left visible and got
+// baked in) but the zones were fine. Use the same frame as the original import.
+async function handleBackgroundUpdate(slotKey, label) {
+  try {
+    const selection = figma.currentPage.selection
+    if (selection.length !== 1) {
+      figma.ui.postMessage({ type: 'error', message: 'Select exactly one frame in Figma, then try again.' })
+      return
+    }
+    const frame = selection[0]
+    if (!('absoluteBoundingBox' in frame) || !frame.absoluteBoundingBox) {
+      figma.ui.postMessage({ type: 'error', message: 'Selected node has no bounding box - select a frame, not a page.' })
+      return
+    }
+
+    figma.ui.postMessage({ type: 'status', message: 'Exporting background…' })
+    const scale = Math.min(4, 300 / 72)
+    const imageBase64 = bytesToBase64(await frame.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: scale } }))
+    figma.ui.postMessage({ type: 'status', message: 'Uploading background…' })
+    const r = await postJson('/api/import-figma-plugin-background', { slotKey, imageBase64, scale })
+    if (!r.ok) throw new Error(why(r))
+
+    // Same best-effort extras as a full import, minus the photo / sticker
+    // examples (the artwork changed, not those pictures).
+    const saved = ['background']
+    let notes = ''
+    notes += await uploadPdf(frame, slotKey, saved)
+    notes += await uploadTile(frame, slotKey, saved)
+    notes += ` Saved: ${saved.join(', ')} - they show up in WildCast within about 30 seconds.`
+
+    figma.ui.postMessage({ type: 'done', kind: 'background', label, needsReview: [], pdfNote: notes })
   } catch (err) {
     figma.ui.postMessage({ type: 'error', message: String(err && err.message || err) })
   }
