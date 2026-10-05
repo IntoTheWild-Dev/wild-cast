@@ -153,7 +153,7 @@ async function handleImport(slotKey, label, cat, format) {
     // if the PDF step fails or is too big, the import still stands and the
     // reason is shown instead of an error.
     const pdfNote = await uploadPdf(frame, slotKey)
-    const photoNote = await uploadExampleImages(liveNodes, slotKey)
+    const photoNote = await uploadExampleImages(liveNodes, slotKey, frame)
 
     figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [], pdfNote: pdfNote + photoNote })
   } catch (err) {
@@ -255,17 +255,72 @@ async function exportEvenIfHidden(node) {
   }
 }
 
+// Catalogue tile: the card picture in WildCast's template picker. Built-in
+// templates have hand-made finished-looking previews; an imported one only had
+// the plain background. So make a temporary copy of the frame, show the content
+// layers (headline, photo, sticker ...) and hide the dotted `zone:` guide
+// boxes, export that, and delete the copy. The original is never touched, so
+// nothing is baked into the real background. Made after the frame's own
+// PNG/PDF exports so the copy can't land in them.
+const TILE_SCALE = 1.5
+
+function applyTileVisibility(root) {
+  const nodes = collectAllNodes(root, [])
+  const show = n => { for (let p = n; p && p !== root; p = p.parent) p.visible = true }
+
+  // Guide markers are hidden, unless the marker IS the live text.
+  for (const n of nodes) {
+    if (n !== root && n.name.indexOf('zone:') === 0) n.visible = n.type === 'TEXT'
+  }
+  // Content layers are the ones named like a zone id (headline, offer, tc ...).
+  const zoneIds = new Set(nodes.filter(n => n.name.indexOf('zone:') === 0).map(n => n.name.slice(5)))
+  for (const n of nodes) {
+    if (n !== root && n.name.indexOf('zone:') !== 0 && zoneIds.has(n.name)) show(n)
+  }
+  // Photo / sticker, including the older `image` layer name.
+  for (const id of EXAMPLE_ZONES) {
+    const { node } = findExampleNode(nodes, id)
+    if (node) show(node)
+  }
+  root.visible = true
+}
+
+async function exportTile(frame) {
+  let copy = null
+  try {
+    copy = frame.clone()
+    applyTileVisibility(copy)
+    return await copy.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: TILE_SCALE } })
+  } finally {
+    if (copy) { try { copy.remove() } catch (e) { /* already gone */ } }
+  }
+}
+
 // All examples go up in ONE request: the server updates the template record
 // once, instead of one read-modify-write per image where a stale read could
 // wipe out the previous image's link.
 const MAX_PLACEHOLDER_TOTAL_CHARS = 4.0 * 1024 * 1024
 
-async function uploadExampleImages(liveNodes, slotKey) {
+async function uploadExampleImages(liveNodes, slotKey, frame) {
   try {
     let notes = ''
     const images = {}
     const sources = {}
     let total = 0
+
+    // Tile first, so it's the one that's never squeezed out by the size limit.
+    try {
+      figma.ui.postMessage({ type: 'status', message: 'Making catalogue tile…' })
+      const tileBase64 = bytesToBase64(await exportTile(frame))
+      if (tileBase64.length > MAX_PLACEHOLDER_TOTAL_CHARS) {
+        notes += ' Tile skipped: over the upload limit.'
+      } else {
+        images.tile = tileBase64
+        total += tileBase64.length
+      }
+    } catch (err) {
+      notes += ` Tile failed: ${String(err && err.message || err)}.`
+    }
     for (const id of EXAMPLE_ZONES) {
       const { node, zoneMissing } = findExampleNode(liveNodes, id)
       if (zoneMissing) continue
@@ -288,15 +343,17 @@ async function uploadExampleImages(liveNodes, slotKey) {
     const res = await fetch(`${API_BASE}/api/import-figma-plugin-placeholder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
-      body: JSON.stringify({ slotKey, images }),
+      body: JSON.stringify({ slotKey, images, tileScale: TILE_SCALE }),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) return notes + ` Examples upload failed: ${body.error || res.status}.`
 
     for (const id of Object.keys(images)) {
+      const label = id === 'tile' ? 'Tile' : `${id} example`
+      const from = id === 'tile' ? '' : ` from ${sources[id]}`
       notes += (body.imported || []).includes(id)
-        ? ` ${id} example imported from ${sources[id]}.`
-        : ` ${id} example not saved: ${(body.skipped || {})[id] || 'unknown reason'}.`
+        ? ` ${label} imported${from}.`
+        : ` ${label} not saved: ${(body.skipped || {})[id] || 'unknown reason'}.`
     }
     return notes
   } catch (err) {

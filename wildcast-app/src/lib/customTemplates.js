@@ -66,7 +66,9 @@ export function customTemplateCards(record) {
     cat: record.cat,
     format: record.format,
     name: record.label,
-    thumb: templateAssetSrc(record.backgroundUrl),
+    // The tile the plugin made from the finished-looking frame; older imports
+    // have none and fall back to the plain background.
+    thumb: templateAssetSrc(record.tileUrl || record.backgroundUrl),
     live: record.live,
     archived: !!record.archived,
   }
