@@ -26,7 +26,9 @@ globalThis.fetch = async url => {
 
 const { default: handler } = await import('../api/import-figma-plugin-placeholder.js')
 const { placeholderImageFor, IMAGE_PLACEHOLDERS } = await import('../src/data/placeholders.js')
-const { customZonesEntry } = await import('../src/lib/customTemplates.js')
+const { customZonesEntry, customTemplateCards } = await import('../src/lib/customTemplates.js')
+const sharp = (await import('sharp')).default
+const { BLEED_UNITS } = await import('../api/_lib/figma-import.js')
 
 // 1x1 transparent PNG
 const PNG = Buffer.from(
@@ -109,4 +111,46 @@ test('editor: proxied URL for custom templates, and order override -> Figma -> g
   assert.equal(placeholderImageFor(photo, 'brand-new-template'), photo.placeholderImage)
   assert.equal(placeholderImageFor(photo, 'wen-cheng-flyer1'), '/placeholders/wen-cheng-photo.png') // hand-picked still wins
   assert.equal(placeholderImageFor({ id: 'photo' }, 'brand-new-template'), IMAGE_PLACEHOLDERS.photo) // old records unchanged
+})
+
+// A flat PNG the size of the bleed frame at 1.5x (what the plugin sends for the tile).
+const frameAt = scale => sharp({
+  create: { width: Math.round(314.646 * scale), height: Math.round(436.535 * scale), channels: 3, background: '#20c4e4' },
+}).png().toBuffer()
+
+test('tile: trimmed to the finished size like the background, stored, linked as tileUrl', async () => {
+  const frame = await frameAt(1.5)
+  const { code, data } = await call({ slotKey: 't', images: { tile: frame.toString('base64') }, tileScale: 1.5 })
+  assert.equal(code, 200)
+  assert.deepEqual(data.imported, ['tile'])
+  const bleed = Math.round(BLEED_UNITS * 1.5)
+  const meta = await sharp(store.get('templates/t-tile.png')).metadata()
+  assert.equal(meta.width, Math.round(314.646 * 1.5) - bleed * 2)
+  assert.equal(meta.height, Math.round(436.535 * 1.5) - bleed * 2)
+  assert.equal(JSON.parse(store.get('templates/t.json')).tileUrl, 'mem://templates/t-tile.png')
+})
+
+test('tile and zone examples travel together and are all linked', async () => {
+  const frame = await frameAt(1.5)
+  const { data } = await call({
+    slotKey: 't', tileScale: 1.5,
+    images: { tile: frame.toString('base64'), photo: PNG.toString('base64'), sticker: PNG.toString('base64') },
+  })
+  assert.deepEqual(data.imported.sort(), ['photo', 'sticker', 'tile'])
+  const record = JSON.parse(store.get('templates/t.json'))
+  assert.ok(record.tileUrl && record.zones.find(z => z.id === 'photo').placeholderImage && record.zones.find(z => z.id === 'sticker').placeholderImage)
+})
+
+test('tile without a usable tileScale is rejected and nothing is written', async () => {
+  const frame = await frameAt(1.5)
+  assert.equal((await call({ slotKey: 't', images: { tile: frame.toString('base64') } })).code, 400)
+  assert.equal((await call({ slotKey: 't', images: { tile: frame.toString('base64') }, tileScale: 99 })).code, 400)
+  assert.equal(store.has('templates/t-tile.png'), false)
+})
+
+test('template card uses the tile when there is one, the plain background otherwise', () => {
+  const rec = { slotKey: 't', label: 'T', cat: 'restaurant', format: 'Flyer', backgroundUrl: 'mem://bg.png' }
+  const proxied = u => `/api/list-templates?url=${encodeURIComponent(u)}`
+  assert.equal(customTemplateCards(rec)[0].thumb, proxied('mem://bg.png'))
+  assert.equal(customTemplateCards({ ...rec, tileUrl: 'mem://tile.png' })[0].thumb, proxied('mem://tile.png'))
 })

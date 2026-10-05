@@ -12,8 +12,9 @@
 import { Buffer } from 'node:buffer'
 import { list, put } from '@vercel/blob'
 import { requirePluginKey } from './_lib/auth.js'
+import { cropToTrim } from './_lib/figma-import.js'
 
-// Photos and stickers get a real example. logo / qr keep their labelled boxes
+// Photos and stickers get a real example (plus the template card `tile`, handled separately below). logo / qr keep their labelled boxes
 // on purpose ("QR code must say QR code").
 const ALLOWED_ZONES = new Set(['photo', 'sticker'])
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47])
@@ -51,9 +52,17 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'slotKey must be lowercase letters/numbers/hyphens only' })
     }
 
+    // `tile` is the template picker's card picture, not a zone example: it
+    // arrives as the full bleed frame and is trimmed the same way the
+    // background is, so it needs the scale it was exported at.
+    const tileScale = Number(req.body?.tileScale)
+    if ('tile' in images && !(tileScale >= 0.5 && tileScale <= 4)) {
+      return res.status(400).json({ error: 'tile needs a tileScale between 0.5 and 4' })
+    }
+
     const decoded = {}
     for (const [id, b64] of Object.entries(images)) {
-      if (!ALLOWED_ZONES.has(id)) {
+      if (id !== 'tile' && !ALLOWED_ZONES.has(id)) {
         return res.status(400).json({ error: `Placeholder images are only supported for: ${[...ALLOWED_ZONES].join(', ')}` })
       }
       const image = Buffer.from(String(b64), 'base64')
@@ -72,6 +81,23 @@ export default async function handler(req, res) {
     const imported = []
     const skipped = {}
     for (const [id, image] of Object.entries(decoded)) {
+      if (id === 'tile') {
+        try {
+          const tile = await cropToTrim(image, tileScale)
+          const blob = await put(`templates/${slotKey}-tile.png`, tile, {
+            access: 'private',
+            addRandomSuffix: false,
+            allowOverwrite: true,
+            contentType: 'image/png',
+            token,
+          })
+          record.tileUrl = blob.url
+          imported.push('tile')
+        } catch (err) {
+          skipped.tile = `could not trim the tile image: ${err.message}`
+        }
+        continue
+      }
       const zone = (record.zones ?? []).find(z => z.id === id && z.type === 'image')
       if (!zone) { skipped[id] = `template has no image zone "${id}"`; continue }
       const blob = await put(`templates/${slotKey}-ph-${id}.png`, image, {
