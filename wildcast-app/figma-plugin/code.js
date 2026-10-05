@@ -207,11 +207,32 @@ function hasImagery(node) {
   return Array.isArray(node.fills) && node.fills.some(p => p.type === 'IMAGE')
 }
 
+// Layer names accepted as the picture for each zone. Older templates call the
+// food `image`, not `photo`. A same-named sibling is used as-is; an alias like
+// `image` is generic (the file may have other layers called that), so it only
+// counts if its centre sits inside the zone's box.
+const EXAMPLE_LAYER_NAMES = { photo: ['photo', 'image'], sticker: ['sticker'] }
+
+function centreInside(node, zone) {
+  const b = node.absoluteBoundingBox
+  const z = zone.absoluteBoundingBox
+  if (!b || !z) return false
+  const cx = b.x + b.width / 2
+  const cy = b.y + b.height / 2
+  return cx >= z.x && cx <= z.x + z.width && cy >= z.y && cy <= z.y + z.height
+}
+
 function findExampleNode(liveNodes, id) {
   const zone = liveNodes.find(n => n.name === `zone:${id}`)
   if (!zone) return { zoneMissing: true }
   if (hasImagery(zone)) return { node: zone }
-  return { node: liveNodes.find(n => n.name === id && hasImagery(n)) || null }
+  for (const name of EXAMPLE_LAYER_NAMES[id] || [id]) {
+    const candidates = liveNodes.filter(n => n.name === name && hasImagery(n))
+    if (name === id && candidates.length) return { node: candidates[0] }
+    const inside = candidates.find(n => centreInside(n, zone))
+    if (inside) return { node: inside }
+  }
+  return { node: null }
 }
 
 // Zone content is kept HIDDEN in Figma on purpose - a visible layer would be
@@ -248,7 +269,7 @@ async function uploadExampleImages(liveNodes, slotKey) {
     for (const id of EXAMPLE_ZONES) {
       const { node, zoneMissing } = findExampleNode(liveNodes, id)
       if (zoneMissing) continue
-      if (!node) { notes += ` No ${id} example: no layer named exactly "${id}" with a picture in it.`; continue }
+      if (!node) { notes += ` No ${id} example: no layer named exactly ${(EXAMPLE_LAYER_NAMES[id] || [id]).map(n => `"${n}"`).join(' or ')} with a picture in it.`; continue }
 
       figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
       const bytes = await exportEvenIfHidden(node)
@@ -259,7 +280,7 @@ async function uploadExampleImages(liveNodes, slotKey) {
       }
       total += imageBase64.length
       images[id] = imageBase64
-      sources[id] = node.name === id ? `the "${id}" layer` : `zone:${id}`
+      sources[id] = node.name === `zone:${id}` ? `zone:${id}` : `the "${node.name}" layer`
     }
     if (!Object.keys(images).length) return notes
 
