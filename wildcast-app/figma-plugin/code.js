@@ -215,6 +215,26 @@ function findExampleNode(liveNodes, id) {
   return { node: liveNodes.find(n => n.name === id && hasImagery(n)) || null }
 }
 
+// Zone content is kept HIDDEN in Figma on purpose - a visible layer would be
+// baked into the background PNG/PDF as well as being an editable zone. A
+// hidden layer may export blank, and un-hiding the real one would change the
+// designer's file, so export a temporary visible copy instead and delete it
+// right away. The original is never touched. Falls back to exporting the
+// original if it can't be cloned.
+async function exportEvenIfHidden(node) {
+  const settings = { format: 'PNG', constraint: { type: 'SCALE', value: 2 } }
+  let copy = null
+  try {
+    copy = node.clone()
+    copy.visible = true
+    return await copy.exportAsync(settings)
+  } catch (err) {
+    return await node.exportAsync(settings)
+  } finally {
+    if (copy) { try { copy.remove() } catch (e) { /* already gone */ } }
+  }
+}
+
 async function uploadExampleImages(liveNodes, slotKey) {
   let notes = ''
   for (const id of EXAMPLE_ZONES) notes += await uploadExampleImage(liveNodes, slotKey, id)
@@ -228,7 +248,7 @@ async function uploadExampleImage(liveNodes, slotKey, id) {
     if (!node) return ` No ${id} example: no layer named exactly "${id}" with a picture in it.`
 
     figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
-    const bytes = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } })
+    const bytes = await exportEvenIfHidden(node)
     const imageBase64 = bytesToBase64(bytes)
     if (imageBase64.length > MAX_PLACEHOLDER_BASE64_CHARS) {
       return ` ${id} example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
