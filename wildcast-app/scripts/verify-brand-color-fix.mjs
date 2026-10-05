@@ -269,4 +269,34 @@ for (const mode of ['print', 'cmyk']) {
   console.log(`PASS: second brand color blends cleanly too (${mode}): worst magenta step ${magenta.worst.toFixed(2)}`)
 }
 
+// Two brand colors side by side, the second a darker shade of the first
+// (TEST-ONLY values): every exact pixel must keep its own stencil value.
+const pairLibrary = [
+  { hex: '#00C2E8', cmyk: { c: 75, m: 0, y: 10, k: 0 }, label: 'test blue' },
+  { hex: '#006174', cmyk: { c: 90, m: 20, y: 30, k: 40 }, label: 'test dark blue' },
+]
+const pairScene = await sharp({ create: { width, height, channels: 3, background: blue } })
+  .composite([{ input: Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect x="${width / 2}" y="0" width="${width / 2}" height="${height}" fill="#006174" shape-rendering="crispEdges"/></svg>`) }])
+  .png().toBuffer()
+for (const mode of ['print', 'cmyk']) {
+  const out = await renderFlyerImage({ pngBuffer: pairScene, brand: null, mode, lutPath, library: pairLibrary })
+  assert.equal(out.brandMasks.length, 2)
+  const rowBytes = Math.ceil(outputWidth / 8)
+  let checked = 0
+  for (const color of out.brandMasks) {
+    const want = [color.bytes.c, color.bytes.m, color.bytes.y, color.bytes.k]
+    for (let px = 0; px < outputWidth * outputHeight; px++) {
+      const x = px % outputWidth, at = ((px - x) / outputWidth) * rowBytes + (x >> 3), bit = 128 >> (x & 7)
+      if (!(color.mask[at] & bit)) continue
+      checked++
+      if (mode === 'print') assert.ok(!out.brandBlend || !(out.brandBlend.mask[at] & bit), 'blend overlay must not cover an exact brand pixel')
+      else assert.deepEqual([...out.pixels.subarray(px * 4, px * 4 + 4)], want, 'exact brand pixel must keep its brand bytes')
+    }
+  }
+  assert.ok(checked > outputWidth * outputHeight * 0.9)
+  console.log(`PASS: neighbouring brand colors keep their exact values (${mode})`)
+}
+
 console.log('All checks passed. Original InDesign/Delta E comparison remains a separate acceptance check.')

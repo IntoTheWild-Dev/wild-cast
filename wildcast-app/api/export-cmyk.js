@@ -260,6 +260,19 @@ function blendBrandEdges(rgbBuffer, cmykBuffer, colors, lut) {
   const clamp01 = value => Math.min(1, Math.max(0, value))
   const FAR = BLEND_REACH_PX + 1
 
+  // Exact brand pixels belong to their own stencil, whichever color it is:
+  // the blend never touches them, even when one brand color is a shade or
+  // tint of another.
+  const stenciled = new Uint8Array(pixelCount)
+  for (const color of colors) {
+    for (let y = 0, px = 0; y < PX_H; y++) {
+      const row = y * rowBytes
+      for (let x = 0; x < PX_W; x++, px++) {
+        if (color.mask[row + (x >> 3)] & (128 >> (x & 7))) stenciled[px] = 1
+      }
+    }
+  }
+
   const deltas = colors.map((color, index) => {
     const [br, bg, bb] = color.rgb
     // Chebyshev distance to the nearest exact brand pixel, capped at FAR:
@@ -300,7 +313,7 @@ function blendBrandEdges(rgbBuffer, cmykBuffer, colors, lut) {
     }
 
     for (let px = 0, ri = 0; px < pixelCount; px++, ri += 3) {
-      if (dist[px] === 0) continue
+      if (stenciled[px]) continue
       const r = rgbBuffer[ri], g = rgbBuffer[ri + 1], b = rgbBuffer[ri + 2]
       let mix = 0
       if (r > br) mix = Math.max(mix, (r - br) / (255 - br))
