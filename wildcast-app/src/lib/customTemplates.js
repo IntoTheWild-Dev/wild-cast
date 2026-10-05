@@ -28,6 +28,11 @@ export function templateAssetSrc(url) {
 // Rotated zones (the tc sidebar) keep their configured left align; every
 // other text zone renders centred.
 function normalizeZone(zone) {
+  // The photo example exported from Figma is a private Blob, so it goes
+  // through the same proxy as the background.
+  if (zone?.type === 'image') {
+    return zone.placeholderImage ? { ...zone, placeholderImage: templateAssetSrc(zone.placeholderImage) } : zone
+  }
   if (zone?.type !== 'text') return zone
   const fixed = { ...zone, autoShrink: true }
   if (!fixed.rotate) fixed.align = 'center'
@@ -40,6 +45,9 @@ export function customZonesEntry(record) {
     canvasW: record.canvasW,
     canvasH: record.canvasH,
     backgroundUrl: templateAssetSrc(record.backgroundUrl),
+    // Vector PDF of the same frame (bleed included, TrimBox set), present on
+    // templates imported after PDF export was added. Nothing consumes it yet.
+    backgroundPdfUrl: record.backgroundPdfUrl ? templateAssetSrc(record.backgroundPdfUrl) : undefined,
     backgroundFill: record.backgroundFill,
     zones: (record.zones ?? []).map(normalizeZone),
   }

@@ -115,7 +115,8 @@ async function handleImport(slotKey, label, cat, format) {
     // TemplateCanvas.jsx (Julia's ask, 2026-09-11: "sticker above everything,
     // then food, then headline..." - a different order per template, meant
     // to be set by her, not hardcoded by us each time she wants it changed).
-    const allNodes = collectAllNodes(frame, []).map((node, i) => ({ ...serializeNode(node), _zIndex: i }))
+    const liveNodes = collectAllNodes(frame, [])
+    const allNodes = liveNodes.map((node, i) => ({ ...serializeNode(node), _zIndex: i }))
     const zoneNodes = allNodes.filter(n => n.name && n.name.indexOf('zone:') === 0)
 
     if (!zoneNodes.length) {
@@ -147,9 +148,88 @@ async function handleImport(slotKey, label, cat, format) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
 
-    figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [] })
+    // Vector PDF of the same frame, sent as a second request so it gets its
+    // own body-size budget. The template is already imported at this point -
+    // if the PDF step fails or is too big, the import still stands and the
+    // reason is shown instead of an error.
+    const pdfNote = await uploadPdf(frame, slotKey)
+    const photoNote = await uploadPhotoPlaceholder(liveNodes, slotKey)
+
+    figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [], pdfNote: pdfNote + photoNote })
   } catch (err) {
     figma.ui.postMessage({ type: 'error', message: String(err && err.message || err) })
+  }
+}
+
+// Vercel rejects request bodies over ~4.5 MB; leave headroom for the JSON
+// around the base64 string.
+const MAX_PDF_BASE64_CHARS = 4.2 * 1024 * 1024
+
+// Returns a short note for the UI: '' when the PDF uploaded, otherwise why it
+// didn't. Never throws - the PNG import has already succeeded.
+async function uploadPdf(frame, slotKey) {
+  try {
+    figma.ui.postMessage({ type: 'status', message: 'Exporting PDF…' })
+    const pdfBytes = await frame.exportAsync({ format: 'PDF' })
+    const pdfBase64 = bytesToBase64(pdfBytes)
+    if (pdfBase64.length > MAX_PDF_BASE64_CHARS) {
+      return ` PDF skipped: ${(pdfBytes.length / 1048576).toFixed(1)} MB is over the upload limit (PNG import is fine).`
+    }
+
+    figma.ui.postMessage({ type: 'status', message: 'Uploading PDF…' })
+    const res = await fetch(`${API_BASE}/api/import-figma-plugin-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
+      body: JSON.stringify({ slotKey, pdfBase64, frameBox: frame.absoluteBoundingBox }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return ` PDF upload failed: ${body.error || res.status} (PNG import is fine).`
+    }
+    return ''
+  } catch (err) {
+    return ` PDF export failed: ${String(err && err.message || err)} (PNG import is fine).`
+  }
+}
+
+// The translucent photo example shown in an empty photo zone. If the
+// zone:photo layer actually contains imagery (an image fill, or child layers),
+// its own pixels are exported and become that example, so it no longer has to
+// be hand-added per template in WildCast. A plain empty box has nothing to
+// show and is skipped (WildCast keeps its grey PHOTO box). Only `photo` -
+// logo / sticker / QR keep their labelled boxes on purpose ("QR code must say
+// QR code"). Returns a short note for the UI; never throws.
+const MAX_PLACEHOLDER_BASE64_CHARS = 3.5 * 1024 * 1024
+
+function hasImagery(node) {
+  if ('children' in node && node.children.length) return true
+  return Array.isArray(node.fills) && node.fills.some(p => p.type === 'IMAGE')
+}
+
+async function uploadPhotoPlaceholder(liveNodes, slotKey) {
+  try {
+    const node = liveNodes.find(n => n.name === 'zone:photo')
+    if (!node || !hasImagery(node)) return ''
+
+    figma.ui.postMessage({ type: 'status', message: 'Exporting photo example…' })
+    const bytes = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } })
+    const imageBase64 = bytesToBase64(bytes)
+    if (imageBase64.length > MAX_PLACEHOLDER_BASE64_CHARS) {
+      return ` Photo example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
+    }
+
+    const res = await fetch(`${API_BASE}/api/import-figma-plugin-placeholder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
+      body: JSON.stringify({ slotKey, zoneId: 'photo', imageBase64 }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return ` Photo example upload failed: ${body.error || res.status}.`
+    }
+    return ' Photo example imported from zone:photo.'
+  } catch (err) {
+    return ` Photo example export failed: ${String(err && err.message || err)}.`
   }
 }
 
@@ -177,6 +257,9 @@ function serializeNode(node) {
     }
     if (typeof node.fontSize === 'number') base.fontSize = node.fontSize
     base.textAlignHorizontal = node.textAlignHorizontal
+    // The designed copy in the layer, used as the zone's translucent
+    // placeholder in WildCast. Hidden layers still carry their text.
+    if (typeof node.characters === 'string') base.characters = node.characters
   }
   return base
 }

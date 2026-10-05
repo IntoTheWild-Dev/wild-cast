@@ -128,7 +128,7 @@
       const reviewNote = msg.needsReview.length
         ? ` — check font settings for: ${msg.needsReview.join(', ')}`
         : ''
-      setStatus(`Imported "${msg.label}" as a draft${reviewNote}. Review and publish it in WildCast.`, 'done')
+      setStatus(`Imported "${msg.label}" as a draft${reviewNote}. Review and publish it in WildCast.${msg.pdfNote || ''}`, 'done')
       importBtn.disabled = false
     }
   }
