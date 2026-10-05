@@ -48,7 +48,7 @@ beforeEach(() => {
   store.clear()
   store.set('templates/t.json', JSON.stringify({
     slotKey: 't', backgroundUrl: 'mem://templates/t-bg.png',
-    zones: [{ id: 'headline', type: 'text' }, { id: 'photo', type: 'image' }],
+    zones: [{ id: 'headline', type: 'text' }, { id: 'photo', type: 'image' }, { id: 'sticker', type: 'image' }, { id: 'qr', type: 'image' }],
   }))
 })
 
@@ -61,11 +61,19 @@ test('stores the PNG and links it on the photo zone only', async () => {
   assert.equal('placeholderImage' in record.zones.find(z => z.id === 'headline'), false)
 })
 
+test('sticker gets its own example, separate from the photo', async () => {
+  assert.equal((await call({ slotKey: 't', zoneId: 'sticker', imageBase64: PNG.toString('base64') })).code, 200)
+  const record = JSON.parse(store.get('templates/t.json'))
+  assert.equal(record.zones.find(z => z.id === 'sticker').placeholderImage, 'mem://templates/t-ph-sticker.png')
+  assert.equal('placeholderImage' in record.zones.find(z => z.id === 'photo'), false)
+})
+
 test('rejects bad key, non-PNG, unsupported zone, unknown template and missing zone', async () => {
   const body = { slotKey: 't', zoneId: 'photo', imageBase64: PNG.toString('base64') }
   assert.equal((await call(body, 'nope')).code, 403)
   assert.equal((await call({ ...body, imageBase64: Buffer.from('not a png at all').toString('base64') })).code, 400)
   assert.equal((await call({ ...body, zoneId: 'qr' })).code, 400)
+  assert.equal((await call({ ...body, zoneId: 'logo' })).code, 400)
   assert.equal((await call({ ...body, slotKey: 'missing' })).code, 404)
   store.set('templates/t.json', JSON.stringify({ slotKey: 't', zones: [{ id: 'headline', type: 'text' }] }))
   assert.equal((await call(body)).code, 404)

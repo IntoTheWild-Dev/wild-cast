@@ -153,7 +153,7 @@ async function handleImport(slotKey, label, cat, format) {
     // if the PDF step fails or is too big, the import still stands and the
     // reason is shown instead of an error.
     const pdfNote = await uploadPdf(frame, slotKey)
-    const photoNote = await uploadPhotoPlaceholder(liveNodes, slotKey)
+    const photoNote = await uploadExampleImages(liveNodes, slotKey)
 
     figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [], pdfNote: pdfNote + photoNote })
   } catch (err) {
@@ -192,13 +192,15 @@ async function uploadPdf(frame, slotKey) {
   }
 }
 
-// The translucent photo example shown in an empty photo zone. If the
-// zone:photo layer actually contains imagery (an image fill, or child layers),
-// its own pixels are exported and become that example, so it no longer has to
-// be hand-added per template in WildCast. A plain empty box has nothing to
-// show and is skipped (WildCast keeps its grey PHOTO box). Only `photo` -
-// logo / sticker / QR keep their labelled boxes on purpose ("QR code must say
-// QR code"). Returns a short note for the UI; never throws.
+// The translucent example shown in an empty photo or sticker zone. Same
+// boundary-box + sibling layout the text zones support: zone:photo is often
+// just an empty rectangle marking WHERE the picture goes, with the picture
+// itself in a separate layer named exactly `photo` (and `sticker` for
+// zone:sticker). The zone's own pixels are used if it holds imagery,
+// otherwise that same-named sibling. Logo / QR keep their labelled boxes on
+// purpose ("QR code must say QR code"). Returns a short note for the UI saying
+// what happened for each; never throws.
+const EXAMPLE_ZONES = ['photo', 'sticker']
 const MAX_PLACEHOLDER_BASE64_CHARS = 3.5 * 1024 * 1024
 
 function hasImagery(node) {
@@ -206,41 +208,64 @@ function hasImagery(node) {
   return Array.isArray(node.fills) && node.fills.some(p => p.type === 'IMAGE')
 }
 
-// Same boundary-box + sibling layout the text zones support: zone:photo is
-// often just an empty rectangle marking WHERE the photo goes, with the actual
-// picture in a separate layer named exactly `photo`. Use zone:photo itself if
-// it holds imagery, otherwise that sibling.
-function findPhotoExample(liveNodes) {
-  const zone = liveNodes.find(n => n.name === 'zone:photo')
-  if (!zone) return null
-  if (hasImagery(zone)) return zone
-  return liveNodes.find(n => n.name === 'photo' && hasImagery(n)) || null
+function findExampleNode(liveNodes, id) {
+  const zone = liveNodes.find(n => n.name === `zone:${id}`)
+  if (!zone) return { zoneMissing: true }
+  if (hasImagery(zone)) return { node: zone }
+  return { node: liveNodes.find(n => n.name === id && hasImagery(n)) || null }
 }
 
-async function uploadPhotoPlaceholder(liveNodes, slotKey) {
+// Zone content is kept HIDDEN in Figma on purpose - a visible layer would be
+// baked into the background PNG/PDF as well as being an editable zone. A
+// hidden layer may export blank, and un-hiding the real one would change the
+// designer's file, so export a temporary visible copy instead and delete it
+// right away. The original is never touched. Falls back to exporting the
+// original if it can't be cloned.
+async function exportEvenIfHidden(node) {
+  const settings = { format: 'PNG', constraint: { type: 'SCALE', value: 2 } }
+  let copy = null
   try {
-    const node = findPhotoExample(liveNodes)
-    if (!node) return ''
+    copy = node.clone()
+    copy.visible = true
+    return await copy.exportAsync(settings)
+  } catch (err) {
+    return await node.exportAsync(settings)
+  } finally {
+    if (copy) { try { copy.remove() } catch (e) { /* already gone */ } }
+  }
+}
 
-    figma.ui.postMessage({ type: 'status', message: 'Exporting photo example…' })
-    const bytes = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } })
+async function uploadExampleImages(liveNodes, slotKey) {
+  let notes = ''
+  for (const id of EXAMPLE_ZONES) notes += await uploadExampleImage(liveNodes, slotKey, id)
+  return notes
+}
+
+async function uploadExampleImage(liveNodes, slotKey, id) {
+  try {
+    const { node, zoneMissing } = findExampleNode(liveNodes, id)
+    if (zoneMissing) return ''
+    if (!node) return ` No ${id} example: no layer named exactly "${id}" with a picture in it.`
+
+    figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
+    const bytes = await exportEvenIfHidden(node)
     const imageBase64 = bytesToBase64(bytes)
     if (imageBase64.length > MAX_PLACEHOLDER_BASE64_CHARS) {
-      return ` Photo example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
+      return ` ${id} example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
     }
 
     const res = await fetch(`${API_BASE}/api/import-figma-plugin-placeholder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
-      body: JSON.stringify({ slotKey, zoneId: 'photo', imageBase64 }),
+      body: JSON.stringify({ slotKey, zoneId: id, imageBase64 }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      return ` Photo example upload failed: ${body.error || res.status}.`
+      return ` ${id} example upload failed: ${body.error || res.status}.`
     }
-    return node.name === 'photo' ? ' Photo example imported from the photo layer.' : ' Photo example imported from zone:photo.'
+    return ` ${id} example imported from ${node.name === id ? `the "${id}" layer` : `zone:${id}`}.`
   } catch (err) {
-    return ` Photo example export failed: ${String(err && err.message || err)}.`
+    return ` ${id} example export failed: ${String(err && err.message || err)}.`
   }
 }
 
