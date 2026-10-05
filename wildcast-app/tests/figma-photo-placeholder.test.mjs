@@ -68,6 +68,26 @@ test('sticker gets its own example, separate from the photo', async () => {
   assert.equal('placeholderImage' in record.zones.find(z => z.id === 'photo'), false)
 })
 
+test('photo and sticker in ONE request both end up linked (single record write)', async () => {
+  const b64 = PNG.toString('base64')
+  const { code, data } = await call({ slotKey: 't', images: { photo: b64, sticker: b64 } })
+  assert.equal(code, 200)
+  assert.deepEqual(data.imported.sort(), ['photo', 'sticker'])
+  const record = JSON.parse(store.get('templates/t.json'))
+  assert.equal(record.zones.find(z => z.id === 'photo').placeholderImage, 'mem://templates/t-ph-photo.png')
+  assert.equal(record.zones.find(z => z.id === 'sticker').placeholderImage, 'mem://templates/t-ph-sticker.png')
+})
+
+test('a zone the template does not have is reported as skipped, the rest still import', async () => {
+  store.set('templates/t.json', JSON.stringify({ slotKey: 't', zones: [{ id: 'photo', type: 'image' }] }))
+  const b64 = PNG.toString('base64')
+  const { code, data } = await call({ slotKey: 't', images: { photo: b64, sticker: b64 } })
+  assert.equal(code, 200)
+  assert.deepEqual(data.imported, ['photo'])
+  assert.match(data.skipped.sticker, /no image zone/)
+  assert.equal(store.has('templates/t-ph-sticker.png'), false)
+})
+
 test('rejects bad key, non-PNG, unsupported zone, unknown template and missing zone', async () => {
   const body = { slotKey: 't', zoneId: 'photo', imageBase64: PNG.toString('base64') }
   assert.equal((await call(body, 'nope')).code, 403)

@@ -201,18 +201,38 @@ async function uploadPdf(frame, slotKey) {
 // purpose ("QR code must say QR code"). Returns a short note for the UI saying
 // what happened for each; never throws.
 const EXAMPLE_ZONES = ['photo', 'sticker']
-const MAX_PLACEHOLDER_BASE64_CHARS = 3.5 * 1024 * 1024
 
 function hasImagery(node) {
   if ('children' in node && node.children.length) return true
   return Array.isArray(node.fills) && node.fills.some(p => p.type === 'IMAGE')
 }
 
+// Layer names accepted as the picture for each zone. Older templates call the
+// food `image`, not `photo`. A same-named sibling is used as-is; an alias like
+// `image` is generic (the file may have other layers called that), so it only
+// counts if its centre sits inside the zone's box.
+const EXAMPLE_LAYER_NAMES = { photo: ['photo', 'image'], sticker: ['sticker'] }
+
+function centreInside(node, zone) {
+  const b = node.absoluteBoundingBox
+  const z = zone.absoluteBoundingBox
+  if (!b || !z) return false
+  const cx = b.x + b.width / 2
+  const cy = b.y + b.height / 2
+  return cx >= z.x && cx <= z.x + z.width && cy >= z.y && cy <= z.y + z.height
+}
+
 function findExampleNode(liveNodes, id) {
   const zone = liveNodes.find(n => n.name === `zone:${id}`)
   if (!zone) return { zoneMissing: true }
   if (hasImagery(zone)) return { node: zone }
-  return { node: liveNodes.find(n => n.name === id && hasImagery(n)) || null }
+  for (const name of EXAMPLE_LAYER_NAMES[id] || [id]) {
+    const candidates = liveNodes.filter(n => n.name === name && hasImagery(n))
+    if (name === id && candidates.length) return { node: candidates[0] }
+    const inside = candidates.find(n => centreInside(n, zone))
+    if (inside) return { node: inside }
+  }
+  return { node: null }
 }
 
 // Zone content is kept HIDDEN in Figma on purpose - a visible layer would be
@@ -235,37 +255,52 @@ async function exportEvenIfHidden(node) {
   }
 }
 
+// All examples go up in ONE request: the server updates the template record
+// once, instead of one read-modify-write per image where a stale read could
+// wipe out the previous image's link.
+const MAX_PLACEHOLDER_TOTAL_CHARS = 4.0 * 1024 * 1024
+
 async function uploadExampleImages(liveNodes, slotKey) {
-  let notes = ''
-  for (const id of EXAMPLE_ZONES) notes += await uploadExampleImage(liveNodes, slotKey, id)
-  return notes
-}
-
-async function uploadExampleImage(liveNodes, slotKey, id) {
   try {
-    const { node, zoneMissing } = findExampleNode(liveNodes, id)
-    if (zoneMissing) return ''
-    if (!node) return ` No ${id} example: no layer named exactly "${id}" with a picture in it.`
+    let notes = ''
+    const images = {}
+    const sources = {}
+    let total = 0
+    for (const id of EXAMPLE_ZONES) {
+      const { node, zoneMissing } = findExampleNode(liveNodes, id)
+      if (zoneMissing) continue
+      if (!node) { notes += ` No ${id} example: no layer named exactly ${(EXAMPLE_LAYER_NAMES[id] || [id]).map(n => `"${n}"`).join(' or ')} with a picture in it.`; continue }
 
-    figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
-    const bytes = await exportEvenIfHidden(node)
-    const imageBase64 = bytesToBase64(bytes)
-    if (imageBase64.length > MAX_PLACEHOLDER_BASE64_CHARS) {
-      return ` ${id} example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
+      figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
+      const bytes = await exportEvenIfHidden(node)
+      const imageBase64 = bytesToBase64(bytes)
+      if (total + imageBase64.length > MAX_PLACEHOLDER_TOTAL_CHARS) {
+        notes += ` ${id} example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
+        continue
+      }
+      total += imageBase64.length
+      images[id] = imageBase64
+      sources[id] = node.name === `zone:${id}` ? `zone:${id}` : `the "${node.name}" layer`
     }
+    if (!Object.keys(images).length) return notes
 
+    figma.ui.postMessage({ type: 'status', message: 'Uploading examples…' })
     const res = await fetch(`${API_BASE}/api/import-figma-plugin-placeholder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
-      body: JSON.stringify({ slotKey, zoneId: id, imageBase64 }),
+      body: JSON.stringify({ slotKey, images }),
     })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      return ` ${id} example upload failed: ${body.error || res.status}.`
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) return notes + ` Examples upload failed: ${body.error || res.status}.`
+
+    for (const id of Object.keys(images)) {
+      notes += (body.imported || []).includes(id)
+        ? ` ${id} example imported from ${sources[id]}.`
+        : ` ${id} example not saved: ${(body.skipped || {})[id] || 'unknown reason'}.`
     }
-    return ` ${id} example imported from ${node.name === id ? `the "${id}" layer` : `zone:${id}`}.`
+    return notes
   } catch (err) {
-    return ` ${id} example export failed: ${String(err && err.message || err)}.`
+    return ` Example export failed: ${String(err && err.message || err)}.`
   }
 }
 
