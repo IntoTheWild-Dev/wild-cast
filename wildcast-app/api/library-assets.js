@@ -1,6 +1,7 @@
 // Merged upload/list/delete-library-asset.js into one route (dispatched by
 // method) to stay under Vercel's per-deployment serverless function count.
 import { put, list, del, copy } from '@vercel/blob'
+import { isBlobHost } from './_lib/templateAssets.js'
 
 const FOLDER_PATTERN = /^[a-z-]+$/
 
@@ -56,6 +57,8 @@ async function handleGet(req, res) {
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
   if (req.query.url) {
+    // Never send our Blob token to a host we don't own.
+    if (!isBlobHost(req.query.url)) return res.status(400).end()
     try {
       const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
       if (!upstream.ok) return res.status(upstream.status).end()
