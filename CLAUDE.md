@@ -74,3 +74,7 @@ at the start.
     line in `figma-plugin/ui.html` on every plugin change and send a fresh zip.
   - Layer naming is by **exact name** (`sub_headline`, not `subline`); the
     table is at the end of `wildcast-app/STATUS.md`.
+  - To correct artwork in an already-imported template, use the plugin's
+    **Update background only** (it writes only `<slot>-bg.png` + PDF + tile) -
+    don't tell the designer to redo the import, which resets zone settings made
+    on the review screen.
