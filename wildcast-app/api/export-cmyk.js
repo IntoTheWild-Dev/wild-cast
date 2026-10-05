@@ -98,7 +98,7 @@ export default async function handler(req, res) {
     // Raw bytes + FlateDecode (below), never JPEG: CMYK JPEG's APP14 "Adobe"
     // marker inverts byte values, causing PDF viewers to render near-black.
     // See renderFlyerImage for the resize/bleed/conversion/brand-lookup details.
-    const { pixels, brandMasks, unverifiedColorCount } = await renderFlyerImage({
+    const { pixels, brandMasks, brandBlend, unverifiedColorCount } = await renderFlyerImage({
       pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut),
     })
 
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
     const pdfBuffer = buildPdfX4({
       imageZ: deflateSync(pixels),
       imageIcc: mode === 'print' ? readFileSync(join(__dirname, 'icc', SRGB_ICC)) : null,
-      brandMasks, iccProfile, profileMeta,
+      brandMasks, brandBlend, iccProfile, profileMeta,
     })
 
     const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
@@ -130,8 +130,9 @@ export default async function handler(req, res) {
 
 // ── Flyer image: resize/bleed, then sRGB ('print') or CMYK ('cmyk') ─────────
 // Returns the raw image samples (3 bytes/px sRGB, or 4 bytes/px CMYK), the
-// exact-CMYK brand stencils and the unverified-color count.
-export async function renderFlyerImage({ pngBuffer, brand, mode, lutPath }) {
+// exact-CMYK brand stencils, the brand blend overlay ('print' only, see
+// blendBrandEdges) and the unverified-color count.
+export async function renderFlyerImage({ pngBuffer, brand, mode, lutPath, library = getBrandLibrary(brand) }) {
   // 'cover' (not 'fill') — the editor canvas is 316×441px, which is ~1% off
   // true A6's 105:148 ratio (canvasH was rounded to 441 rather than the more
   // precise 445 when these constants were first chosen), so a naive
@@ -158,14 +159,14 @@ export async function renderFlyerImage({ pngBuffer, brand, mode, lutPath }) {
 
   // 'cmyk': Relative Colorimetric + BPC via the profile's lookup table (0=no
   // ink, 4 bytes/px). 'print': the sRGB samples go into the PDF untouched.
-  const cmykBuffer = mode === 'cmyk' ? applyLut(rgbBuffer, loadLut(lutPath)) : null
+  const lut = loadLut(lutPath)
+  const cmykBuffer = mode === 'cmyk' ? applyLut(rgbBuffer, lut) : null
 
   // Unmatched colors are counted for the warning, including exports without
   // a library (see applyBrandColorLibrary for the visible-area threshold).
-  const { brandMasks, unverifiedColorCount } = applyBrandColorLibrary(
-    rgbBuffer, cmykBuffer, getBrandLibrary(brand),
-  )
-  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, unverifiedColorCount }
+  const { brandMasks, unverifiedColorCount } = applyBrandColorLibrary(rgbBuffer, cmykBuffer, library)
+  const brandBlend = blendBrandEdges(rgbBuffer, cmykBuffer, brandMasks, lut)
+  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, brandBlend, unverifiedColorCount }
 }
 
 // Warning count (requirement 3): distinct unmatched RGB values that cover at
@@ -184,6 +185,7 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
       throw new Error('Invalid brand color library entry')
     }
     byHex.set((rgb.r << 16) | (rgb.g << 8) | rgb.b, {
+      rgb: [rgb.r, rgb.g, rgb.b],
       cmyk: components.map(value => value / 100),
       bytes: cmykToBytes(entry.cmyk),
       mask: null,
@@ -222,12 +224,155 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
   }
 }
 
+// ── Brand blend zone (2026-10-04) ────────────────────────────────────────────
+// The stencils above only cover pixels that match a brand hex exactly. This
+// is a raster export, so every anti-aliased edge, soft shadow and tint next
+// to the brand color is a slightly different RGB value: those pixels fell
+// back to the plain conversion (Wolt Blue: C67 instead of C75) and printed
+// as a lighter halo right beside the exact brand color.
+//
+// Fix: treat each such pixel as a mix of the brand color and something else.
+// `mix` is the smallest share of "something else" that explains the pixel
+// (0 = pure brand color, 1 = no brand color in it); the pixel then gets
+// (1 - mix) of the difference between the official CMYK and the plain
+// conversion of the brand hex. Pure brand color lands on the official value,
+// the correction fades to nothing as the brand color fades out, and it never
+// exceeds that difference. It applies to pixels that are
+//  - within BLEND_REACH_PX of an exact brand pixel (edges; fades with distance),
+//  - almost the brand color itself (mix <= ~0.1, e.g. #01C2E8), or
+//  - the brand color mixed with a neutral (shadows, tints, white text edges).
+// Photo pixels away from the brand color match none of these and stay
+// untouched.
+//
+// 'cmyk': corrected in place in the CMYK image. 'print': the image stays
+// sRGB, so the corrected pixels go into a CMYK overlay with a 1-bit mask
+// (plain masking, no transparency), converted with the same Relative
+// Colorimetric + BPC table a RIP applies to the RGB pixels around them.
+const BLEND_REACH_PX = 4
+const BLEND_MIN_WEIGHT = 0.02
+
+function blendBrandEdges(rgbBuffer, cmykBuffer, colors, lut) {
+  if (!colors.length) return null
+  const rowBytes = Math.ceil(PX_W / 8)
+  const pixelCount = rgbBuffer.length / 3
+  const weight = new Float32Array(pixelCount)
+  const owner = new Uint8Array(pixelCount)
+  const clamp01 = value => Math.min(1, Math.max(0, value))
+  const FAR = BLEND_REACH_PX + 1
+
+  const deltas = colors.map((color, index) => {
+    const [br, bg, bb] = color.rgb
+    // Chebyshev distance to the nearest exact brand pixel, capped at FAR:
+    // stencil pixels are 0, then each ring grows outward from the last one.
+    const dist = new Uint8Array(pixelCount).fill(FAR)
+    for (let y = 0, px = 0; y < PX_H; y++) {
+      const row = y * rowBytes
+      for (let x = 0; x < PX_W; x++, px++) {
+        if (color.mask[row + (x >> 3)] & (128 >> (x & 7))) dist[px] = 0
+      }
+    }
+    let ring = []
+    for (let y = 0, px = 0; y < PX_H; y++) {
+      for (let x = 0; x < PX_W; x++, px++) {
+        if (dist[px] === 0) continue
+        const x0 = x > 0 ? -1 : 0, x1 = x < PX_W - 1 ? 1 : 0
+        const up = y > 0 ? px - PX_W : px, down = y < PX_H - 1 ? px + PX_W : px
+        if (dist[px + x0] === 0 || dist[px + x1] === 0 ||
+            dist[up + x0] === 0 || dist[up] === 0 || dist[up + x1] === 0 ||
+            dist[down + x0] === 0 || dist[down] === 0 || dist[down + x1] === 0) {
+          dist[px] = 1
+          ring.push(px)
+        }
+      }
+    }
+    for (let step = 2; step <= BLEND_REACH_PX; step++) {
+      const next = []
+      for (const px of ring) {
+        const x = px % PX_W, y = (px - x) / PX_W
+        for (let ny = Math.max(0, y - 1); ny <= Math.min(PX_H - 1, y + 1); ny++) {
+          for (let nx = Math.max(0, x - 1); nx <= Math.min(PX_W - 1, x + 1); nx++) {
+            const n = ny * PX_W + nx
+            if (dist[n] === FAR) { dist[n] = step; next.push(n) }
+          }
+        }
+      }
+      ring = next
+    }
+
+    for (let px = 0, ri = 0; px < pixelCount; px++, ri += 3) {
+      if (dist[px] === 0) continue
+      const r = rgbBuffer[ri], g = rgbBuffer[ri + 1], b = rgbBuffer[ri + 2]
+      let mix = 0
+      if (r > br) mix = Math.max(mix, (r - br) / (255 - br))
+      else if (r < br) mix = Math.max(mix, (br - r) / br)
+      if (g > bg) mix = Math.max(mix, (g - bg) / (255 - bg))
+      else if (g < bg) mix = Math.max(mix, (bg - g) / bg)
+      if (b > bb) mix = Math.max(mix, (b - bb) / (255 - bb))
+      else if (b < bb) mix = Math.max(mix, (bb - b) / bb)
+      if (mix >= 1) continue
+      // The "something else" the brand color is mixed with; neutral when its
+      // channels sit close together.
+      const keep = 1 - mix
+      const otherR = (r - keep * br) / mix, otherG = (g - keep * bg) / mix, otherB = (b - keep * bb) / mix
+      const spread = Math.max(otherR, otherG, otherB) - Math.min(otherR, otherG, otherB)
+      const reach = clamp01((FAR - dist[px]) / BLEND_REACH_PX)
+      const almost = clamp01((0.25 - mix) / 0.15)
+      const neutral = clamp01((60 - spread) / 30)
+      const w = keep * Math.max(reach, almost, neutral)
+      if (w > weight[px]) { weight[px] = w; owner[px] = index }
+    }
+
+    const converted = applyLut(Buffer.from(color.rgb), lut)
+    return color.cmyk.map((value, c) => value * 255 - converted[c])
+  })
+
+  let zoneSize = 0
+  for (let px = 0; px < pixelCount; px++) if (weight[px] >= BLEND_MIN_WEIGHT) zoneSize++
+  if (!zoneSize) return null
+  const zone = new Int32Array(zoneSize)
+  for (let px = 0, i = 0; px < pixelCount; px++) if (weight[px] >= BLEND_MIN_WEIGHT) zone[i++] = px
+
+  // The zone pixels start from the plain conversion: already in cmykBuffer
+  // for 'cmyk'. For 'print' the whole page is converted (stencil pixels at
+  // their brand value), not only the zone: viewers and RIPs resample the
+  // overlay, and samples left blank beside the zone showed up as a white
+  // hairline along its edge.
+  const pixels = cmykBuffer ?? applyLut(rgbBuffer, lut)
+  if (!cmykBuffer) {
+    for (const color of colors) {
+      for (let px = 0; px < pixelCount; px++) {
+        const x = px % PX_W
+        if (!(color.mask[((px - x) / PX_W) * rowBytes + (x >> 3)] & (128 >> (x & 7)))) continue
+        pixels[px * 4] = color.bytes.c
+        pixels[px * 4 + 1] = color.bytes.m
+        pixels[px * 4 + 2] = color.bytes.y
+        pixels[px * 4 + 3] = color.bytes.k
+      }
+    }
+  }
+  const mask = cmykBuffer ? null : Buffer.alloc(rowBytes * PX_H)
+  for (let i = 0; i < zoneSize; i++) {
+    const px = zone[i]
+    const delta = deltas[owner[px]]
+    for (let c = 0; c < 4; c++) {
+      pixels[px * 4 + c] = Math.min(255, Math.max(0, Math.round(pixels[px * 4 + c] + weight[px] * delta[c])))
+    }
+    if (mask) {
+      const x = px % PX_W
+      mask[((px - x) / PX_W) * rowBytes + (x >> 3)] |= 128 >> (x & 7)
+    }
+  }
+  return mask ? { pixels, mask } : null
+}
+
 // ── PDF/X-4 builder ───────────────────────────────────────────────────────────
 // Objects 1–9 are fixed (see below); in 'print' mode object 10 is the sRGB
-// ICC profile the image is tagged with; brand stencil masks follow.
-function buildPdfX4({ imageZ, imageIcc, brandMasks, iccProfile, profileMeta }) {
+// ICC profile the image is tagged with; brand stencil masks follow, then the
+// brand blend overlay and its mask ('print' mode, when there is a blend zone).
+function buildPdfX4({ imageZ, imageIcc, brandMasks, brandBlend, iccProfile, profileMeta }) {
   const IMAGE_ICC_ID = 10
   const MASK_ID0 = imageIcc ? 11 : 10
+  const BLEND_ID = MASK_ID0 + brandMasks.length
   const chunks  = []
   const offsets = {}
 
@@ -320,7 +465,7 @@ function buildPdfX4({ imageZ, imageIcc, brandMasks, iccProfile, profileMeta }) {
     `   /MediaBox [0 0 ${PT_W} ${PT_H}]\n` +
     `   /TrimBox [${tx0} ${ty0} ${tx1} ${ty1}]\n` +
     `   /BleedBox [0 0 ${PT_W} ${PT_H}]\n` +
-    `   /Resources << /XObject << /Im1 7 0 R ${brandMasks.map((_, i) => `/Brand${i} ${MASK_ID0 + i} 0 R`).join(' ')} >> >>\n` +
+    `   /Resources << /XObject << /Im1 7 0 R ${brandMasks.map((_, i) => `/Brand${i} ${MASK_ID0 + i} 0 R`).join(' ')}${brandBlend ? ` /Blend ${BLEND_ID} 0 R` : ''} >> >>\n` +
     '   /Contents 8 0 R\n' +
     '>>\nendobj\n',
   )
@@ -357,7 +502,8 @@ function buildPdfX4({ imageZ, imageIcc, brandMasks, iccProfile, profileMeta }) {
   const brandPaint = brandMasks.map((color, i) =>
     `q\n${color.cmyk.join(' ')} k\n/Brand${i} Do\nQ\n`,
   ).join('')
-  const cs = `q\n${PT_W} 0 0 ${PT_H} 0 0 cm\n/Im1 Do\n${brandPaint}Q\n`
+  // The blend overlay never overlaps a stencil, so it paints last.
+  const cs = `q\n${PT_W} 0 0 ${PT_H} 0 0 cm\n/Im1 Do\n${brandPaint}${brandBlend ? '/Blend Do\n' : ''}Q\n`
   mark(8)
   push(`8 0 obj\n<< /Length ${cs.length} >>\nstream\n${cs}\nendstream\nendobj\n`)
 
@@ -388,9 +534,24 @@ function buildPdfX4({ imageZ, imageIcc, brandMasks, iccProfile, profileMeta }) {
     push('\nendstream\nendobj\n')
   })
 
+  // Brand blend overlay: DeviceCMYK samples (same exact-ink convention as the
+  // stencil operands) shown only where its explicit 1-bit mask is set.
+  if (brandBlend) {
+    const blendZ = deflateSync(brandBlend.pixels)
+    mark(BLEND_ID)
+    push(`${BLEND_ID} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${PX_W} /Height ${PX_H} /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Mask ${BLEND_ID + 1} 0 R /Interpolate false /Filter /FlateDecode /Length ${blendZ.length} >>\nstream\n`)
+    push(blendZ)
+    push('\nendstream\nendobj\n')
+    const blendMaskZ = deflateSync(brandBlend.mask)
+    mark(BLEND_ID + 1)
+    push(`${BLEND_ID + 1} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${PX_W} /Height ${PX_H} /ImageMask true /BitsPerComponent 1 /Decode [1 0] /Interpolate false /Filter /FlateDecode /Length ${blendMaskZ.length} >>\nstream\n`)
+    push(blendMaskZ)
+    push('\nendstream\nendobj\n')
+  }
+
   // ── Cross-reference table ─────────────────────────────────────────────────
   const xrefOffset = tell()
-  const N = MASK_ID0 + brandMasks.length  // fixed objects plus brand stencils
+  const N = BLEND_ID + (brandBlend ? 2 : 0)  // fixed objects, brand stencils, blend overlay
   push(`xref\n0 ${N}\n`)
   push('0000000000 65535 f \n')
   for (let i = 1; i < N; i++) {
