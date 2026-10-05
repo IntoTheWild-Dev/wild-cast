@@ -206,10 +206,21 @@ function hasImagery(node) {
   return Array.isArray(node.fills) && node.fills.some(p => p.type === 'IMAGE')
 }
 
+// Same boundary-box + sibling layout the text zones support: zone:photo is
+// often just an empty rectangle marking WHERE the photo goes, with the actual
+// picture in a separate layer named exactly `photo`. Use zone:photo itself if
+// it holds imagery, otherwise that sibling.
+function findPhotoExample(liveNodes) {
+  const zone = liveNodes.find(n => n.name === 'zone:photo')
+  if (!zone) return null
+  if (hasImagery(zone)) return zone
+  return liveNodes.find(n => n.name === 'photo' && hasImagery(n)) || null
+}
+
 async function uploadPhotoPlaceholder(liveNodes, slotKey) {
   try {
-    const node = liveNodes.find(n => n.name === 'zone:photo')
-    if (!node || !hasImagery(node)) return ''
+    const node = findPhotoExample(liveNodes)
+    if (!node) return ''
 
     figma.ui.postMessage({ type: 'status', message: 'Exporting photo example…' })
     const bytes = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } })
@@ -227,7 +238,7 @@ async function uploadPhotoPlaceholder(liveNodes, slotKey) {
       const body = await res.json().catch(() => ({}))
       return ` Photo example upload failed: ${body.error || res.status}.`
     }
-    return ' Photo example imported from zone:photo.'
+    return node.name === 'photo' ? ' Photo example imported from the photo layer.' : ' Photo example imported from zone:photo.'
   } catch (err) {
     return ` Photo example export failed: ${String(err && err.message || err)}.`
   }
