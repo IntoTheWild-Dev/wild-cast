@@ -36,20 +36,31 @@ export default async function handler(req, res) {
   if (!requirePluginKey(req, res)) return
 
   try {
+    // Body: { slotKey, images: { photo: <base64>, sticker: <base64> } }. All
+    // images go in ONE request so the template record is read and written
+    // once - separate requests each did their own read-modify-write, and a
+    // stale read in the second one could silently overwrite the first one's
+    // link (the photo example vanished while the sticker's survived). The old
+    // single-image shape { slotKey, zoneId, imageBase64 } still works.
     const { slotKey, zoneId, imageBase64 } = req.body ?? {}
-    if (!slotKey || !zoneId || !imageBase64) {
-      return res.status(400).json({ error: 'Missing slotKey, zoneId, or imageBase64' })
+    const images = req.body?.images ?? (zoneId && imageBase64 ? { [zoneId]: imageBase64 } : null)
+    if (!slotKey || !images || typeof images !== 'object' || !Object.keys(images).length) {
+      return res.status(400).json({ error: 'Missing slotKey or images' })
     }
     if (!/^[a-z0-9-]+$/.test(slotKey)) {
       return res.status(400).json({ error: 'slotKey must be lowercase letters/numbers/hyphens only' })
     }
-    if (!ALLOWED_ZONES.has(zoneId)) {
-      return res.status(400).json({ error: `Placeholder images are only supported for: ${[...ALLOWED_ZONES].join(', ')}` })
-    }
 
-    const image = Buffer.from(imageBase64, 'base64')
-    if (image.length < 8 || !image.subarray(0, 4).equals(PNG_MAGIC)) {
-      return res.status(400).json({ error: 'Not a PNG file' })
+    const decoded = {}
+    for (const [id, b64] of Object.entries(images)) {
+      if (!ALLOWED_ZONES.has(id)) {
+        return res.status(400).json({ error: `Placeholder images are only supported for: ${[...ALLOWED_ZONES].join(', ')}` })
+      }
+      const image = Buffer.from(String(b64), 'base64')
+      if (image.length < 8 || !image.subarray(0, 4).equals(PNG_MAGIC)) {
+        return res.status(400).json({ error: `${id}: not a PNG file` })
+      }
+      decoded[id] = image
     }
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
@@ -57,20 +68,26 @@ export default async function handler(req, res) {
     if (!record) {
       return res.status(404).json({ error: `No template found for slotKey "${slotKey}" - import it first` })
     }
-    const zone = (record.zones ?? []).find(z => z.id === zoneId && z.type === 'image')
-    if (!zone) {
-      return res.status(404).json({ error: `Template "${slotKey}" has no image zone "${zoneId}"` })
+
+    const imported = []
+    const skipped = {}
+    for (const [id, image] of Object.entries(decoded)) {
+      const zone = (record.zones ?? []).find(z => z.id === id && z.type === 'image')
+      if (!zone) { skipped[id] = `template has no image zone "${id}"`; continue }
+      const blob = await put(`templates/${slotKey}-ph-${id}.png`, image, {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: 'image/png',
+        token,
+      })
+      zone.placeholderImage = blob.url
+      imported.push(id)
+    }
+    if (!imported.length) {
+      return res.status(404).json({ error: Object.values(skipped).join('; ') })
     }
 
-    const blob = await put(`templates/${slotKey}-ph-${zoneId}.png`, image, {
-      access: 'private',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: 'image/png',
-      token,
-    })
-
-    zone.placeholderImage = blob.url
     await put(`templates/${slotKey}.json`, JSON.stringify(record), {
       access: 'private',
       addRandomSuffix: false,
@@ -79,7 +96,7 @@ export default async function handler(req, res) {
       token,
     })
 
-    return res.status(200).json({ ok: true, slotKey, zoneId, placeholderImage: blob.url, bytes: image.length })
+    return res.status(200).json({ ok: true, slotKey, imported, skipped })
   } catch (err) {
     console.error('import-figma-plugin-placeholder error:', err)
     return res.status(500).json({ error: err.message })

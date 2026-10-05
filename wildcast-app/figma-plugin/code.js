@@ -201,7 +201,6 @@ async function uploadPdf(frame, slotKey) {
 // purpose ("QR code must say QR code"). Returns a short note for the UI saying
 // what happened for each; never throws.
 const EXAMPLE_ZONES = ['photo', 'sticker']
-const MAX_PLACEHOLDER_BASE64_CHARS = 3.5 * 1024 * 1024
 
 function hasImagery(node) {
   if ('children' in node && node.children.length) return true
@@ -235,37 +234,52 @@ async function exportEvenIfHidden(node) {
   }
 }
 
+// All examples go up in ONE request: the server updates the template record
+// once, instead of one read-modify-write per image where a stale read could
+// wipe out the previous image's link.
+const MAX_PLACEHOLDER_TOTAL_CHARS = 4.0 * 1024 * 1024
+
 async function uploadExampleImages(liveNodes, slotKey) {
-  let notes = ''
-  for (const id of EXAMPLE_ZONES) notes += await uploadExampleImage(liveNodes, slotKey, id)
-  return notes
-}
-
-async function uploadExampleImage(liveNodes, slotKey, id) {
   try {
-    const { node, zoneMissing } = findExampleNode(liveNodes, id)
-    if (zoneMissing) return ''
-    if (!node) return ` No ${id} example: no layer named exactly "${id}" with a picture in it.`
+    let notes = ''
+    const images = {}
+    const sources = {}
+    let total = 0
+    for (const id of EXAMPLE_ZONES) {
+      const { node, zoneMissing } = findExampleNode(liveNodes, id)
+      if (zoneMissing) continue
+      if (!node) { notes += ` No ${id} example: no layer named exactly "${id}" with a picture in it.`; continue }
 
-    figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
-    const bytes = await exportEvenIfHidden(node)
-    const imageBase64 = bytesToBase64(bytes)
-    if (imageBase64.length > MAX_PLACEHOLDER_BASE64_CHARS) {
-      return ` ${id} example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
+      figma.ui.postMessage({ type: 'status', message: `Exporting ${id} example…` })
+      const bytes = await exportEvenIfHidden(node)
+      const imageBase64 = bytesToBase64(bytes)
+      if (total + imageBase64.length > MAX_PLACEHOLDER_TOTAL_CHARS) {
+        notes += ` ${id} example skipped: ${(bytes.length / 1048576).toFixed(1)} MB is over the upload limit.`
+        continue
+      }
+      total += imageBase64.length
+      images[id] = imageBase64
+      sources[id] = node.name === id ? `the "${id}" layer` : `zone:${id}`
     }
+    if (!Object.keys(images).length) return notes
 
+    figma.ui.postMessage({ type: 'status', message: 'Uploading examples…' })
     const res = await fetch(`${API_BASE}/api/import-figma-plugin-placeholder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
-      body: JSON.stringify({ slotKey, zoneId: id, imageBase64 }),
+      body: JSON.stringify({ slotKey, images }),
     })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      return ` ${id} example upload failed: ${body.error || res.status}.`
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) return notes + ` Examples upload failed: ${body.error || res.status}.`
+
+    for (const id of Object.keys(images)) {
+      notes += (body.imported || []).includes(id)
+        ? ` ${id} example imported from ${sources[id]}.`
+        : ` ${id} example not saved: ${(body.skipped || {})[id] || 'unknown reason'}.`
     }
-    return ` ${id} example imported from ${node.name === id ? `the "${id}" layer` : `zone:${id}`}.`
+    return notes
   } catch (err) {
-    return ` ${id} example export failed: ${String(err && err.message || err)}.`
+    return ` Example export failed: ${String(err && err.message || err)}.`
   }
 }
 
