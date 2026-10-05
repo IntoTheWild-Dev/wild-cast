@@ -20,6 +20,7 @@ import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { aiFieldSettingsFor } from '../data/templateZones'
 import { usePairQueue } from '../lib/usePairQueue'
 import { IMAGE_PLACEHOLDERS, placeholderTextFor } from '../data/placeholders'
+import { designedCharLimit } from '../lib/designedLimit'
 import { ResetIcon } from './ActionIcons'
 
 const ALL_MERCHANTS = '__all__'
@@ -785,6 +786,12 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
   // one) - placeholderTextFor's own fallback then defaults to the omnes-cond
   // capitalization rule, same as TemplateCanvas.jsx's zone.fontFamily ||
   // 'omnes-cond' default.
+  // Imported templates: a line longer than the global limit that the designer
+  // put in the Figma text layer is allowed (see lib/designedLimit.js).
+  function designedLimit(zoneId) {
+    return designedCharLimit(templateConfig?.zones?.find(z => z.id === zoneId), CHAR_LIMITS[zoneId])
+  }
+
   function effectivePlaceholder(zoneId) {
     const zone = templateConfig?.zones?.find(z => z.id === zoneId) ?? { id: zoneId }
     return placeholderTextFor(zone, template?.id)
@@ -976,7 +983,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             // auto-shrunk, §8.1) so valid min-pt-sized AI lines don't show
             // a false red over-limit; presets box-fit at the same width
             // (spec §5.1).
-            aiLimit={aiSettings?.headline?.max_chars_min_pt ?? aiSettings?.headline?.max_chars}
+            aiLimit={aiSettings?.headline?.max_chars_min_pt ?? aiSettings?.headline?.max_chars ?? designedLimit('headline')}
             presetMaxChars={aiSettings?.headline?.max_chars_min_pt ?? aiSettings?.headline?.max_chars}
             presetRole={aiSettings?.headline?.role}
             ai={aiRowProps('headline')}
@@ -1002,7 +1009,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             fontSize={effectiveFontSize('sub_headline', 20)} onFontSize={s => onFontSizeChange('sub_headline', s)}
             align={effectiveAlign('sub_headline', 'center')} onAlign={a => onAlignChange('sub_headline', a)}
             onResetPosition={() => onResetZone?.('sub_headline')}
-            aiLimit={aiSettings?.sub_headline?.max_chars_min_pt ?? aiSettings?.sub_headline?.max_chars}
+            aiLimit={aiSettings?.sub_headline?.max_chars_min_pt ?? aiSettings?.sub_headline?.max_chars ?? designedLimit('sub_headline')}
             presetMaxChars={aiSettings?.sub_headline?.max_chars_min_pt ?? aiSettings?.sub_headline?.max_chars}
             presetRole={aiSettings?.sub_headline?.role}
             ai={aiRowProps('sub_headline')}
@@ -1015,6 +1022,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
         return (
           <StepFieldRow
             step={step} label="Restaurant name" fieldKey="restaurant_name" placeholderValue={effectivePlaceholder('restaurant_name')}
+            aiLimit={designedLimit('restaurant_name')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -1030,6 +1038,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
         return (
           <StepFieldRow
             step={step} label="Offer" fieldKey="offer" placeholderValue={effectivePlaceholder('offer')}
+            aiLimit={designedLimit('offer')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -1051,6 +1060,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
         return (
           <StepFieldRow
             step={step} label="T&amp;Cs" fieldKey="tc" placeholderValue={effectivePlaceholder('tc')}
+            aiLimit={designedLimit('tc')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
@@ -1070,6 +1080,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
         return (
           <StepFieldRow
             step={step} label="App download line" fieldKey="cta" placeholderValue={effectivePlaceholder('cta')}
+            aiLimit={designedLimit('cta')}
             onFocusField={onFocusField}
             vertical={vertical}
             partnerName={partnerName}
