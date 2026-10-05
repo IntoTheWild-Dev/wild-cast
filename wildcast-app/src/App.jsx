@@ -1504,21 +1504,6 @@ const SHOW_MODE_CHOOSER = false
       a.click()
       URL.revokeObjectURL(url)
 
-      // Requirement 3 (brief §5): surface a warning when one or more colors
-      // have no official brand print value, so nobody assumes an unflagged
-      // flyer is fully brand-accurate. See X-Unverified-Colors in
-      // api/export-cmyk.js. Who converts them depends on the mode.
-      const unverifiedCount = Number(response.headers.get('X-Unverified-Colors') || 0)
-      if (unverifiedCount > 0) {
-        alert(
-          `Heads up: ${unverifiedCount} color${unverifiedCount === 1 ? '' : 's'} in this export ` +
-          `${unverifiedCount === 1 ? 'has' : 'have'} no official brand print value` +
-          (mode === 'cmyk'
-            ? ' and were converted to CMYK with the standard screen-to-print conversion.'
-            : ' and will be converted by the print shop, like photos in an InDesign export.')
-        )
-      }
-
       // PDF export is free - only AI feature usage costs credits now, see
       // handleAiCreditUsed (Julia's ask, 2026-09-15: replace the old
       // per-export credit system with an AI-usage-only one).
