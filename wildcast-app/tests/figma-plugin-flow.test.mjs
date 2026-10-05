@@ -64,10 +64,6 @@ async function runImport(behaviour = {}) {
       for (const id of Object.keys(body.images)) urls[id] = `https://s.private.blob.vercel-storage.com/templates/t-${id === 'tile' ? 'tile' : 'ph-' + id}.png`
       return reply(200, { urls, failed: {} })
     }
-    if (path === '/api/import-figma-plugin-finish') {
-      const l = body.links
-      return reply(200, { linked: [l.tileUrl && 'tile', ...Object.keys(l.placeholderImages || {}), l.backgroundPdfUrl && 'pdf'].filter(Boolean), skipped: {} })
-    }
     return reply(404, { error: 'unexpected ' + path })
   }
 
@@ -110,25 +106,19 @@ async function runImport(behaviour = {}) {
   return { frame, calls, messages, exports_, done, originalCount }
 }
 
-test('happy path: import, pdf, tile, examples, then ONE link request with everything', async () => {
+test('happy path: import, pdf, tile, examples - and the record is never touched again', async () => {
   const { calls, done, frame, originalCount } = await runImport()
   assert.deepEqual(calls.filter(c => !c.path.startsWith('/api/list-templates')).map(c => c.path), [
-    '/api/import-figma-plugin', '/api/import-figma-plugin-pdf', '/api/import-figma-plugin-placeholder',
-    '/api/import-figma-plugin-placeholder', '/api/import-figma-plugin-finish',
+    '/api/import-figma-plugin', '/api/import-figma-plugin-pdf',
+    '/api/import-figma-plugin-placeholder', '/api/import-figma-plugin-placeholder',
   ])
   const placeholderCalls = calls.filter(c => c.path === '/api/import-figma-plugin-placeholder')
   assert.deepEqual(Object.keys(placeholderCalls[0].body.images), ['tile'])
   assert.equal(placeholderCalls[0].body.tileScale, 1.5)
   assert.deepEqual(Object.keys(placeholderCalls[1].body.images).sort(), ['photo', 'sticker'])
 
-  const finish = calls.find(c => c.path === '/api/import-figma-plugin-finish').body
-  assert.equal(finish.slotKey, 't')
-  assert.equal(finish.recordUrl, 'https://s.private.blob.vercel-storage.com/templates/t.json')
-  assert.ok(finish.links.tileUrl.endsWith('/t-tile.png'))
-  assert.ok(finish.links.backgroundPdfUrl.endsWith('/t-bg.pdf'))
-  assert.deepEqual(Object.keys(finish.links.placeholderImages).sort(), ['photo', 'sticker'])
-
-  assert.match(done.pdfNote, /Linked: tile, photo, sticker, pdf\./)
+  assert.match(done.pdfNote, /Saved: pdf, tile, photo \(the "photo" layer\), sticker \(the "sticker" layer\)/)
+  assert.match(done.pdfNote, /within about 30 seconds/)
   assert.equal(frame.children.length, originalCount, 'every temporary copy was removed')
 })
 
@@ -155,28 +145,22 @@ test('the tile copy shows the content layers and hides the zone guide boxes', as
   assert.equal(tile.copyShows['zone:sticker'], false)
 })
 
-test('a failing tile export is reported, its copy is still removed, and the other files still get linked', async () => {
+test('a failing tile export is reported, its copy is still removed, and the other files still get saved', async () => {
   const { done, calls, frame, originalCount } = await runImport({ failTileExport: true })
   assert.ok(done, 'the import itself still finishes')
   assert.match(done.pdfNote, /Tile failed: export boom/)
   assert.equal(frame.children.length, originalCount, 'the temporary copy was removed even though its export threw')
-  const finish = calls.find(c => c.path === '/api/import-figma-plugin-finish').body
-  assert.equal(finish.links.tileUrl, undefined)
-  assert.ok(finish.links.backgroundPdfUrl)
-  assert.deepEqual(Object.keys(finish.links.placeholderImages).sort(), ['photo', 'sticker'])
-})
-
-test('if the link step fails the message says the files were saved but NOT linked', async () => {
-  const { done } = await runImport({ '/api/import-figma-plugin-finish': (b, reply) => reply(500, { error: 'boom' }) })
-  assert.match(done.pdfNote, /saved but NOT linked to the template: boom/)
+  assert.match(done.pdfNote, /Saved: pdf, photo/)
+  assert.doesNotMatch(done.pdfNote, /tile \(|Saved:[^.]*tile/)
+  assert.equal(calls.filter(c => c.path === '/api/import-figma-plugin-placeholder').length, 1, 'only the examples request went out')
 })
 
 test('a server error on an upload is reported with its reason and does not stop the rest', async () => {
   const { done, calls } = await runImport({ '/api/import-figma-plugin-pdf': (b, reply) => reply(500, { error: 'pdf boom' }) })
   assert.match(done.pdfNote, /PDF upload failed: pdf boom/)
-  const finish = calls.find(c => c.path === '/api/import-figma-plugin-finish').body
-  assert.equal(finish.links.backgroundPdfUrl, undefined)
-  assert.ok(finish.links.tileUrl)
+  assert.match(done.pdfNote, /Saved: tile, photo/)
+  assert.doesNotMatch(done.pdfNote, /Saved:[^.]*pdf/)
+  assert.equal(calls.filter(c => c.path === '/api/import-figma-plugin-placeholder').length, 2, 'tile and examples still went out')
 })
 
 test('a missing food layer is explained instead of skipped silently', async () => {

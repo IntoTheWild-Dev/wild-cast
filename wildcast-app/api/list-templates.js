@@ -1,7 +1,7 @@
 // Returns every custom (Figma-imported) template record, draft or published.
 // The frontend merges these with the static built-in templates at load time.
 import { list } from '@vercel/blob'
-import { isBlobHost } from './_lib/templateAssets.js'
+import { attachDerivedLinks, isBlobHost } from './_lib/templateAssets.js'
 
 export default async function handler(req, res) {
   // The Figma plugin (figma-plugin/code.js) calls this from inside Figma's
@@ -73,7 +73,10 @@ export default async function handler(req, res) {
 
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     res.setHeader('Pragma', 'no-cache')
-    return res.status(200).json({ templates: records.filter(Boolean) })
+    // Tile / PDF / photo + sticker example links come from the files that exist
+    // next to each record, not from the record itself - see attachDerivedLinks.
+    const urlByPath = new Map(blobs.map(b => [b.pathname, b.url]))
+    return res.status(200).json({ templates: records.filter(Boolean).map(r => attachDerivedLinks(r, urlByPath)) })
   } catch (err) {
     console.error('list-templates error:', err)
     return res.status(200).json({ templates: [] })

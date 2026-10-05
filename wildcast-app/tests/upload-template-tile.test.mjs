@@ -1,7 +1,8 @@
 // Run with: npm test
 // api/upload-template-tile.js: the manual way to set a template's card picture.
 // Designers only; any readable image becomes a PNG tile (capped at 1200px wide)
-// saved as templates/<slot>-tile.png and linked on the record.
+// saved as templates/<slot>-tile.png. The record is never rewritten (a template
+// finds its tile by file name when listed - see list-templates-links.test.mjs).
 import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { makeBlobMock, urlOf } from './_blobMock.mjs'
@@ -34,12 +35,12 @@ beforeEach(() => {
   store.set('templates/t.json', JSON.stringify({ slotKey: 't', backgroundUrl: urlOf('templates/t-bg.png'), zones: [] }))
 })
 
-test('a designer uploads a PNG: saved as the tile and linked on the record', async () => {
+test('a designer uploads a PNG: saved as the tile, record left alone', async () => {
   const png = await image(600, 850)
   const { code, data } = await call({ slotKey: 't', imageBase64: png.toString('base64') })
   assert.equal(code, 200)
   assert.equal(data.tileUrl, urlOf('templates/t-tile.png'))
-  assert.equal(JSON.parse(store.get('templates/t.json')).tileUrl, urlOf('templates/t-tile.png'))
+  assert.equal(JSON.parse(store.get('templates/t.json')).tileUrl, undefined, 'record untouched')
   assert.equal((await sharp(store.get('templates/t-tile.png')).metadata()).width, 600)
 })
 

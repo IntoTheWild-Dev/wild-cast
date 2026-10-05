@@ -149,17 +149,18 @@ async function handleImport(slotKey, label, cat, format) {
     if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
 
     // Everything below is extra and runs AFTER the import has already
-    // succeeded: each piece is its own small request (so one failing or being
-    // slow can't take the others down, and each gets its own body-size and
-    // time budget), the files are saved first, and ONE final request links them
-    // to the template record. Nothing here can turn a good import into an
-    // error - problems are reported in the final message instead.
-    const links = {}
+    // succeeded. Each piece is its own small request (one failing or being slow
+    // can't take the others down) that only SAVES a file next to the template.
+    // Nothing rewrites the template record any more: WildCast finds the files by
+    // name when it lists templates, so a stale read can't drop them. Nothing
+    // here can turn a good import into an error - problems are reported in the
+    // final message instead.
+    const saved = []
     let notes = ''
-    notes += await uploadPdf(frame, slotKey, links)
-    notes += await uploadTile(frame, slotKey, links)
-    notes += await uploadExamples(liveNodes, slotKey, links)
-    notes += await linkUploads(slotKey, data.recordUrl, links)
+    notes += await uploadPdf(frame, slotKey, saved)
+    notes += await uploadTile(frame, slotKey, saved)
+    notes += await uploadExamples(liveNodes, slotKey, saved)
+    if (saved.length) notes += ` Saved: ${saved.join(', ')} - they show up in WildCast within about 30 seconds.`
 
     figma.ui.postMessage({ type: 'done', label: data.label, needsReview: data.needsReview || [], pdfNote: notes })
   } catch (err) {
@@ -183,10 +184,9 @@ async function postJson(path, payload) {
 
 const why = r => r.body.error || `HTTP ${r.status}`
 
-// Each upload* returns a short note for the UI ('' when all is well), puts the
-// saved file's URL into `links` for the final link step, and never throws -
-// the PNG import has already succeeded.
-async function uploadPdf(frame, slotKey, links) {
+// Each upload* returns a short note for the UI ('' when all is well), adds what
+// it saved to `saved`, and never throws - the PNG import has already succeeded.
+async function uploadPdf(frame, slotKey, saved) {
   try {
     figma.ui.postMessage({ type: 'status', message: 'Exporting PDF…' })
     const pdfBytes = await frame.exportAsync({ format: 'PDF' })
@@ -198,7 +198,7 @@ async function uploadPdf(frame, slotKey, links) {
     figma.ui.postMessage({ type: 'status', message: 'Uploading PDF…' })
     const r = await postJson('/api/import-figma-plugin-pdf', { slotKey, pdfBase64, frameBox: frame.absoluteBoundingBox })
     if (!r.ok) return ` PDF upload failed: ${why(r)} (PNG import is fine).`
-    links.backgroundPdfUrl = r.body.url
+    saved.push('pdf')
     return ''
   } catch (err) {
     return ` PDF export failed: ${String(err && err.message || err)} (PNG import is fine).`
@@ -312,14 +312,14 @@ async function exportTile(frame) {
 const MAX_IMAGE_BASE64_CHARS = 3.5 * 1024 * 1024
 
 // The catalogue tile, in its own request (the biggest single image).
-async function uploadTile(frame, slotKey, links) {
+async function uploadTile(frame, slotKey, saved) {
   try {
     figma.ui.postMessage({ type: 'status', message: 'Making catalogue tile…' })
     const tileBase64 = bytesToBase64(await exportTile(frame))
     if (tileBase64.length > MAX_IMAGE_BASE64_CHARS) return ' Tile skipped: over the upload limit.'
     const r = await postJson('/api/import-figma-plugin-placeholder', { slotKey, images: { tile: tileBase64 }, tileScale: TILE_SCALE })
     if (!r.ok || !(r.body.urls && r.body.urls.tile)) return ` Tile not saved: ${why(r)}.`
-    links.tileUrl = r.body.urls.tile
+    saved.push('tile')
     return ''
   } catch (err) {
     return ` Tile failed: ${String(err && err.message || err)}.`
@@ -327,7 +327,7 @@ async function uploadTile(frame, slotKey, links) {
 }
 
 // The photo and sticker examples, together in one request.
-async function uploadExamples(liveNodes, slotKey, links) {
+async function uploadExamples(liveNodes, slotKey, saved) {
   try {
     let notes = ''
     const images = {}
@@ -351,30 +351,13 @@ async function uploadExamples(liveNodes, slotKey, links) {
     const r = await postJson('/api/import-figma-plugin-placeholder', { slotKey, images })
     if (!r.ok) return notes + ` Examples upload failed: ${why(r)}.`
     const urls = r.body.urls || {}
-    links.placeholderImages = {}
     for (const id of Object.keys(images)) {
-      if (urls[id]) links.placeholderImages[id] = urls[id]
+      if (urls[id]) saved.push(`${id} (${sources[id]})`)
       else notes += ` ${id} example not saved: ${(r.body.failed || {})[id] || 'unknown reason'}.`
     }
     return notes
   } catch (err) {
     return ` Example export failed: ${String(err && err.message || err)}.`
-  }
-}
-
-// One final request links everything that was saved to the template record
-// (a single write, so uploads can never overwrite each other's links).
-async function linkUploads(slotKey, recordUrl, links) {
-  const anything = links.tileUrl || links.backgroundPdfUrl || (links.placeholderImages && Object.keys(links.placeholderImages).length)
-  if (!anything) return ''
-  try {
-    figma.ui.postMessage({ type: 'status', message: 'Linking files to the template…' })
-    const r = await postJson('/api/import-figma-plugin-finish', { slotKey, recordUrl, links })
-    if (!r.ok) return ` Files were saved but NOT linked to the template: ${why(r)}.`
-    const skipped = Object.entries(r.body.skipped || {}).map(([k, v]) => ` ${k} not linked: ${v}.`).join('')
-    return ` Linked: ${(r.body.linked || []).join(', ') || 'nothing'}.${skipped}`
-  } catch (err) {
-    return ` Files were saved but NOT linked to the template: ${String(err && err.message || err)}.`
   }
 }
 
