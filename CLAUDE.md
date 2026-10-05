@@ -52,3 +52,20 @@ at the start.
   and often already documents a relevant past bug, decision, or rejected
   approach (e.g. Ghostscript for CMYK export was already tried and abandoned
   once — see STATUS.md's CMYK/color section before re-proposing it).
+- **Figma plugin work (added 2026-10-05, after a day of avoidable churn):**
+  - The plugin can't be run from the Claude cloud sandbox, and
+    `cast.wildstack.studio` is blocked by the egress policy (no production
+    records, no server logs). So **ask for the plugin's final message and a
+    screenshot before guessing**, and make every plugin step report its own
+    result in that message.
+  - **Never tell the designer to un-hide `zone:` content layers** for an import:
+    a visible layer is baked into the background PNG/PDF as well as being an
+    editable zone. Hidden content is exported from a temporary visible copy.
+  - **Don't stack a new plugin step on one that hasn't been confirmed live.**
+    Keep each upload small and independent; files are saved first and linked in
+    one final request (`import-figma-plugin-finish`), never by several
+    read-modify-writes of the same record.
+  - `manifest.json` doesn't change between plugin versions - bump the version
+    line in `figma-plugin/ui.html` on every plugin change and send a fresh zip.
+  - Layer naming is by **exact name** (`sub_headline`, not `subline`); the
+    table is at the end of `wildcast-app/STATUS.md`.

@@ -1,29 +1,19 @@
 // Run with: npm test
-// Exercises api/import-figma-plugin-pdf.js's real handler with Vercel Blob
-// swapped for an in-memory store: the PDF is stored, its TrimBox lands on the
-// finished A6 inside the 3mm bleed, and the template record points at it.
+// api/import-figma-plugin-pdf.js with Vercel Blob swapped for an in-memory
+// store: the PDF is saved with its TrimBox on the finished A6 inside the 3mm
+// bleed and its URL returned. It does NOT touch the template record (linking is
+// import-figma-plugin-finish.js's job - see figma-plugin-finish.test.mjs).
 import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { PDFDocument } from 'pdf-lib'
+import { makeBlobMock, urlOf } from './_blobMock.mjs'
 
 process.env.FIGMA_PLUGIN_KEY = 'test-key'
 process.env.BLOB_READ_WRITE_TOKEN = 'test-token'
 
-const store = new Map()
-mock.module('@vercel/blob', {
-  namedExports: {
-    list: async ({ prefix }) => ({
-      blobs: [...store.keys()].filter(k => k.startsWith(prefix)).map(k => ({ pathname: k, url: `mem://${k}` })),
-    }),
-    put: async (path, body) => { store.set(path, body); return { pathname: path, url: `mem://${path}` } },
-  },
-})
-globalThis.fetch = async url => {
-  const key = String(url).replace('mem://', '').split('?')[0]
-  return store.has(key)
-    ? { ok: true, json: async () => JSON.parse(store.get(key)) }
-    : { ok: false }
-}
+const { store, namedExports, fetchMock } = makeBlobMock()
+mock.module('@vercel/blob', { namedExports })
+globalThis.fetch = fetchMock
 
 const { default: handler } = await import('../api/import-figma-plugin-pdf.js')
 
@@ -41,7 +31,6 @@ async function makePdf(pages = 1) {
 function call(body, key = 'test-key') {
   return new Promise(resolve => {
     const res = {
-      headers: {},
       setHeader() {},
       status(code) { this.code = code; return this },
       json(data) { resolve({ code: this.code, data }) },
@@ -51,18 +40,19 @@ function call(body, key = 'test-key') {
   })
 }
 
+const record = { slotKey: 'test-slot', backgroundUrl: urlOf('templates/test-slot-bg.png') }
 beforeEach(() => {
   store.clear()
-  store.set('templates/test-slot.json', JSON.stringify({ slotKey: 'test-slot', backgroundUrl: 'mem://templates/test-slot-bg.png' }))
+  store.set('templates/test-slot.json', JSON.stringify(record))
 })
 
-test('stores the PDF, sets TrimBox to the A6 inside the bleed, links it on the record', async () => {
+test('saves the PDF with TrimBox = the A6 inside the bleed, returns its URL, leaves the record alone', async () => {
   const pdf = await makePdf()
   const { code, data } = await call({ slotKey: 'test-slot', pdfBase64: pdf.toString('base64'), frameBox: FRAME })
   assert.equal(code, 200)
+  assert.equal(data.url, urlOf('templates/test-slot-bg.pdf'))
 
-  const stored = await PDFDocument.load(store.get('templates/test-slot-bg.pdf'))
-  const page = stored.getPage(0)
+  const page = (await PDFDocument.load(store.get('templates/test-slot-bg.pdf'))).getPage(0)
   const bleed = 3 * MM
   const trim = page.getTrimBox()
   assert.ok(Math.abs(trim.x - bleed) < 0.01 && Math.abs(trim.y - bleed) < 0.01)
@@ -70,10 +60,7 @@ test('stores the PDF, sets TrimBox to the A6 inside the bleed, links it on the r
   assert.ok(Math.abs(trim.height - 148 * MM) < 0.01, `trim height ${trim.height}`)
   assert.deepEqual(page.getBleedBox(), page.getMediaBox())
 
-  const record = JSON.parse(store.get('templates/test-slot.json'))
-  assert.equal(record.backgroundPdfUrl, 'mem://templates/test-slot-bg.pdf')
-  assert.equal(record.backgroundUrl, 'mem://templates/test-slot-bg.png') // PNG untouched
-  assert.equal(data.bytes, store.get('templates/test-slot-bg.pdf').length)
+  assert.deepEqual(JSON.parse(store.get('templates/test-slot.json')), record) // not rewritten
 })
 
 test('rejects a wrong plugin key', async () => {
@@ -83,18 +70,12 @@ test('rejects a wrong plugin key', async () => {
   assert.equal(store.has('templates/test-slot-bg.pdf'), false)
 })
 
-test('404 when the template was never imported', async () => {
-  const pdf = await makePdf()
-  const { code } = await call({ slotKey: 'other-slot', pdfBase64: pdf.toString('base64'), frameBox: FRAME })
-  assert.equal(code, 404)
-})
-
-test('400 for a non-PDF or multi-page upload, and writes nothing', async () => {
+test('400 for a non-PDF, a multi-page PDF, or a bad slotKey - and writes nothing', async () => {
   const notPdf = await call({ slotKey: 'test-slot', pdfBase64: Buffer.from('hello').toString('base64'), frameBox: FRAME })
   assert.equal(notPdf.code, 400)
   const two = await makePdf(2)
-  const multi = await call({ slotKey: 'test-slot', pdfBase64: two.toString('base64'), frameBox: FRAME })
-  assert.equal(multi.code, 400)
+  assert.equal((await call({ slotKey: 'test-slot', pdfBase64: two.toString('base64'), frameBox: FRAME })).code, 400)
+  const one = await makePdf()
+  assert.equal((await call({ slotKey: '../evil', pdfBase64: one.toString('base64'), frameBox: FRAME })).code, 400)
   assert.equal(store.has('templates/test-slot-bg.pdf'), false)
-  assert.equal(JSON.parse(store.get('templates/test-slot.json')).backgroundPdfUrl, undefined)
 })

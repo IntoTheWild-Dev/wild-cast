@@ -57,7 +57,11 @@ export default async function handler(req, res) {
     try {
       const record = await readRecord(slotKey, token)
       if (!record) return res.status(404).json({ error: `No template found for slotKey "${slotKey}"` })
-      record.zones = zones
+      // The caller sends back the zones it loaded, which can predate the
+      // plugin's final link step (a review page left open during an import).
+      // Don't let that stale copy wipe the photo/sticker example links.
+      const linked = new Map((record.zones ?? []).map(z => [z.id, z.placeholderImage]))
+      record.zones = zones.map(z => (z?.placeholderImage || !linked.get(z?.id) ? z : { ...z, placeholderImage: linked.get(z.id) }))
       await writeRecord(slotKey, record, token)
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
       return res.status(200).json({ ok: true, slotKey, zones: record.zones })
