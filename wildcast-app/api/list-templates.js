@@ -1,6 +1,7 @@
 // Returns every custom (Figma-imported) template record, draft or published.
 // The frontend merges these with the static built-in templates at load time.
 import { list } from '@vercel/blob'
+import { isBlobHost } from './_lib/templateAssets.js'
 
 export default async function handler(req, res) {
   // The Figma plugin (figma-plugin/code.js) calls this from inside Figma's
@@ -31,6 +32,8 @@ export default async function handler(req, res) {
   // directly on Option C: a re-import she'd already cleaned up in Figma
   // still showed the old guide-text-baked-in image on the review screen.
   if (req.query.url) {
+    // Never send our Blob token to a host we don't own.
+    if (!isBlobHost(req.query.url)) return res.status(400).end()
     try {
       const cacheBustUrl = req.query.url + (req.query.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
       const upstream = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
