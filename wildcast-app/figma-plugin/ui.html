@@ -80,7 +80,15 @@
   <select id="slot" disabled><option>Loading slots…</option></select>
 
   <button id="importBtn" disabled>Import to WildCast</button>
-  <p class="hint" style="margin-top:10px;font-size:10px;opacity:.7">Plugin v7 (5 Oct 2026): PNG + PDF + text, photo, sticker examples + catalogue tile</p>
+
+  <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb">
+    <label for="existing">Already imported? Fix the artwork only</label>
+    <select id="existing" disabled><option>Loading…</option></select>
+    <button id="bgBtn" disabled style="margin-top:8px">Update background only</button>
+    <p class="hint" style="margin-top:6px;font-size:10px">Replaces just the picture (and tile). Zones and every setting you changed in WildCast stay as they are. Select the same frame you imported.</p>
+  </div>
+
+  <p class="hint" style="margin-top:10px;font-size:10px;opacity:.7">Plugin v8 (5 Oct 2026): PNG + PDF + text, photo, sticker examples + catalogue tile + background-only update</p>
   <div id="status"></div>
 </div>
 
@@ -88,7 +96,11 @@
   const slotSelect = document.getElementById('slot')
   const importBtn = document.getElementById('importBtn')
   const statusEl = document.getElementById('status')
+  const existingSelect = document.getElementById('existing')
+  const bgBtn = document.getElementById('bgBtn')
   let slots = []
+  let existing = []
+  let armedLive = null // slotKey of a LIVE template waiting for a second click
 
   function setStatus(text, kind) {
     if (!text) { statusEl.className = ''; statusEl.textContent = ''; return }
@@ -101,6 +113,16 @@
     if (!msg) return
 
     if (msg.type === 'slots') {
+      // Already-imported templates, for "Update background only" (filled first:
+      // the import list below can return early when no empty slot is left).
+      existing = msg.existing || []
+      if (existing.length) {
+        existingSelect.innerHTML = existing.map(t => `<option value="${t.slotKey}">${t.label}${t.live ? ' (live)' : ' (draft)'}</option>`).join('')
+        existingSelect.disabled = false
+        bgBtn.disabled = false
+      } else {
+        existingSelect.innerHTML = '<option value="">Nothing imported yet</option>'
+      }
       slots = msg.slots
       slotSelect.innerHTML = ''
       if (!slots.length) {
@@ -122,7 +144,15 @@
 
     if (msg.type === 'error') {
       setStatus(msg.message, 'error')
-      importBtn.disabled = false
+      importBtn.disabled = !slots.length
+      bgBtn.disabled = !existing.length
+    }
+
+    if (msg.type === 'done' && msg.kind === 'background') {
+      setStatus(`Updated the background of "${msg.label}". Zones and settings are unchanged.${msg.pdfNote || ''}`, 'done')
+      importBtn.disabled = !slots.length
+      bgBtn.disabled = !existing.length
+      return
     }
 
     if (msg.type === 'done') {
@@ -134,10 +164,30 @@
     }
   }
 
+  existingSelect.onchange = () => { armedLive = null; bgBtn.textContent = 'Update background only' }
+
+  bgBtn.onclick = () => {
+    const t = existing.find(x => x.slotKey === existingSelect.value)
+    if (!t) return
+    // Figma's plugin window blocks confirm(), so a live template asks for a second click instead.
+    if (t.live && armedLive !== t.slotKey) {
+      armedLive = t.slotKey
+      bgBtn.textContent = `"${t.label}" is LIVE - click again to replace its background`
+      return
+    }
+    armedLive = null
+    bgBtn.textContent = 'Update background only'
+    bgBtn.disabled = true
+    importBtn.disabled = true
+    setStatus('Starting…', 'info')
+    parent.postMessage({ pluginMessage: { type: 'update-background', slotKey: t.slotKey, label: t.label } }, '*')
+  }
+
   importBtn.onclick = () => {
     const slot = slots.find(s => s.slotKey === slotSelect.value)
     if (!slot) return
     importBtn.disabled = true
+    bgBtn.disabled = true
     setStatus('Starting…', 'info')
     parent.postMessage({
       pluginMessage: {
