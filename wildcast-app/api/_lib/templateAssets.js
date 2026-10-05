@@ -1,0 +1,45 @@
+// Where a template's extra files live in Vercel Blob, and how to check that a
+// URL the plugin hands back really is one of them.
+//
+// A template is `templates/<slotKey>.json` (the record), `-bg.png` (background),
+// plus - added by the plugin after the import - `-bg.pdf`, `-tile.png` (the card
+// picture in the template picker) and `-ph-<zone>.png` (translucent examples).
+// The upload endpoints only SAVE these files; one final request
+// (import-figma-plugin-finish.js) links them to the record, so uploads can never
+// overwrite each other's links.
+
+export const EXAMPLE_ZONES = ['photo', 'sticker']
+
+export const assetPath = {
+  tile: slotKey => `templates/${slotKey}-tile.png`,
+  pdf: slotKey => `templates/${slotKey}-bg.pdf`,
+  example: (slotKey, zoneId) => `templates/${slotKey}-ph-${zoneId}.png`,
+  record: slotKey => `templates/${slotKey}.json`,
+}
+
+export const SLOT_KEY_RE = /^[a-z0-9-]+$/
+
+// A URL we are willing to send our Blob token to: https, on Vercel's blob
+// storage domain (<store>.private.blob.vercel-storage.com), at exactly the
+// expected path. Never fetch a client-supplied URL
+// without this check.
+export function isBlobUrl(url, expectedPath) {
+  try {
+    const u = new URL(url)
+    return u.protocol === 'https:'
+      && u.hostname.endsWith('.vercel-storage.com')
+      && decodeURIComponent(u.pathname) === `/${expectedPath}`
+  } catch {
+    return false
+  }
+}
+
+// Same store as the record, at exactly the expected path.
+export function isSiblingBlobUrl(url, recordUrl, expectedPath) {
+  try {
+    return new URL(url).origin === new URL(recordUrl).origin
+      && decodeURIComponent(new URL(url).pathname) === `/${expectedPath}`
+  } catch {
+    return false
+  }
+}

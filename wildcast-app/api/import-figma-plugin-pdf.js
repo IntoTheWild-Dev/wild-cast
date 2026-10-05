@@ -1,29 +1,17 @@
-// Second half of a plugin import: attaches the vector PDF of the frame to a
-// template that /api/import-figma-plugin.js already created.
+// Saves the vector PDF the Figma plugin exports for a frame, alongside the
+// background PNG that /api/import-figma-plugin.js already stored.
 //
-// It's a separate request (not part of the PNG one) because Vercel caps a
-// function's request body at ~4.5 MB and the PNG alone is already large; the
-// PDF gets its own budget. The plugin only calls this after the main import
-// succeeded, and a failure here never undoes the PNG import - the template
-// keeps working off the PNG exactly as before, it just has no vector
-// background yet.
-//
-// Stores templates/<slotKey>-bg.pdf and adds backgroundPdfUrl to the record.
-// Nothing reads the PDF yet - the editor and the CMYK export still use the
-// PNG (see STATUS.md).
+// Separate request from the PNG import because Vercel caps a function's request
+// body at ~4.5 MB. It only SAVES the file (templates/<slotKey>-bg.pdf) and
+// returns its URL - linking it to the template record is done once, at the end
+// of the plugin run, by /api/import-figma-plugin-finish. A failure here never
+// affects the PNG import. Nothing reads the PDF yet - the editor and the CMYK
+// export still use the PNG (see STATUS.md).
 import { Buffer } from 'node:buffer'
-import { list, put } from '@vercel/blob'
+import { put } from '@vercel/blob'
 import { requirePluginKey } from './_lib/auth.js'
 import { prepareBackgroundPdf } from './_lib/backgroundPdf.js'
-
-async function readRecord(slotKey, token) {
-  const { blobs } = await list({ prefix: `templates/${slotKey}.json`, token })
-  if (!blobs.length) return null
-  const cacheBustUrl = blobs[0].url + (blobs[0].url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
-  const response = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) throw new Error('Could not read existing template record')
-  return response.json()
-}
+import { assetPath, SLOT_KEY_RE } from './_lib/templateAssets.js'
 
 export default async function handler(req, res) {
   // Same CORS reasoning as import-figma-plugin.js: called from Figma's
@@ -40,14 +28,8 @@ export default async function handler(req, res) {
     if (!slotKey || !pdfBase64 || !frameBox) {
       return res.status(400).json({ error: 'Missing slotKey, pdfBase64, or frameBox' })
     }
-    if (!/^[a-z0-9-]+$/.test(slotKey)) {
+    if (!SLOT_KEY_RE.test(slotKey)) {
       return res.status(400).json({ error: 'slotKey must be lowercase letters/numbers/hyphens only' })
-    }
-
-    const token = process.env.BLOB_READ_WRITE_TOKEN
-    const record = await readRecord(slotKey, token)
-    if (!record) {
-      return res.status(404).json({ error: `No template found for slotKey "${slotKey}" - import it first` })
     }
 
     let prepared
@@ -57,31 +39,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: err.message })
     }
 
-    const pdfBlob = await put(`templates/${slotKey}-bg.pdf`, prepared.buffer, {
+    const blob = await put(assetPath.pdf(slotKey), prepared.buffer, {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: 'application/pdf',
-      token,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
     })
 
-    record.backgroundPdfUrl = pdfBlob.url
-    record.backgroundPdfBytes = prepared.buffer.length
-    await put(`templates/${slotKey}.json`, JSON.stringify(record), {
-      access: 'private',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: 'application/json',
-      token,
-    })
-
-    return res.status(200).json({
-      ok: true,
-      slotKey,
-      backgroundPdfUrl: pdfBlob.url,
-      bytes: prepared.buffer.length,
-      trimBox: prepared.trimBox,
-    })
+    return res.status(200).json({ ok: true, slotKey, url: blob.url, bytes: prepared.buffer.length, trimBox: prepared.trimBox })
   } catch (err) {
     console.error('import-figma-plugin-pdf error:', err)
     return res.status(500).json({ error: err.message })

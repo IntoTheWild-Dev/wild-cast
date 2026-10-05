@@ -1,32 +1,25 @@
-// Attaches the translucent example image for an image zone (photo and sticker)
-// to a template that /api/import-figma-plugin.js already created. The plugin
-// exports the zone's (or its same-named sibling layer's) own pixels, so the
-// example no longer has to be hand-added per template in
-// src/data/placeholders.js.
+// Saves the images the Figma plugin makes for a template, and returns their
+// URLs: the translucent photo / sticker examples (the zone's own pixels, or its
+// same-named sibling layer) and the catalogue `tile` (the card picture in the
+// template picker, made from a temporary finished-looking copy of the frame).
 //
-// Separate request from the main import for the same reason as the PDF one
-// (Vercel's ~4.5 MB body cap). A failure here never affects the import: the
-// zone just keeps its grey labelled box.
+// It only SAVES files. Linking them to the template record is done once, at the
+// end of the plugin run, by /api/import-figma-plugin-finish - earlier versions
+// updated the record here, and two uploads' read-modify-writes could overwrite
+// each other (the photo link vanished while the sticker's survived). Each
+// request is also small and quick, so one failing can't take the others down.
+// A failure never affects the import: the zone just keeps its grey labelled box
+// and the card keeps the plain background.
 //
-// Stores templates/<slotKey>-ph-<zoneId>.png and sets zone.placeholderImage.
+// Body: { slotKey, images: { photo?, sticker?, tile? }, tileScale? } (base64
+// PNGs). The old single-image shape { slotKey, zoneId, imageBase64 } still works.
 import { Buffer } from 'node:buffer'
-import { list, put } from '@vercel/blob'
+import { put } from '@vercel/blob'
 import { requirePluginKey } from './_lib/auth.js'
 import { cropToTrim } from './_lib/figma-import.js'
+import { assetPath, EXAMPLE_ZONES, SLOT_KEY_RE } from './_lib/templateAssets.js'
 
-// Photos and stickers get a real example (plus the template card `tile`, handled separately below). logo / qr keep their labelled boxes
-// on purpose ("QR code must say QR code").
-const ALLOWED_ZONES = new Set(['photo', 'sticker'])
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47])
-
-async function readRecord(slotKey, token) {
-  const { blobs } = await list({ prefix: `templates/${slotKey}.json`, token })
-  if (!blobs.length) return null
-  const cacheBustUrl = blobs[0].url + (blobs[0].url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
-  const response = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) throw new Error('Could not read existing template record')
-  return response.json()
-}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -37,23 +30,16 @@ export default async function handler(req, res) {
   if (!requirePluginKey(req, res)) return
 
   try {
-    // Body: { slotKey, images: { photo: <base64>, sticker: <base64> } }. All
-    // images go in ONE request so the template record is read and written
-    // once - separate requests each did their own read-modify-write, and a
-    // stale read in the second one could silently overwrite the first one's
-    // link (the photo example vanished while the sticker's survived). The old
-    // single-image shape { slotKey, zoneId, imageBase64 } still works.
     const { slotKey, zoneId, imageBase64 } = req.body ?? {}
     const images = req.body?.images ?? (zoneId && imageBase64 ? { [zoneId]: imageBase64 } : null)
     if (!slotKey || !images || typeof images !== 'object' || !Object.keys(images).length) {
       return res.status(400).json({ error: 'Missing slotKey or images' })
     }
-    if (!/^[a-z0-9-]+$/.test(slotKey)) {
+    if (!SLOT_KEY_RE.test(slotKey)) {
       return res.status(400).json({ error: 'slotKey must be lowercase letters/numbers/hyphens only' })
     }
 
-    // `tile` is the template picker's card picture, not a zone example: it
-    // arrives as the full bleed frame and is trimmed the same way the
+    // `tile` arrives as the full bleed frame and is trimmed the same way the
     // background is, so it needs the scale it was exported at.
     const tileScale = Number(req.body?.tileScale)
     if ('tile' in images && !(tileScale >= 0.5 && tileScale <= 4)) {
@@ -62,8 +48,8 @@ export default async function handler(req, res) {
 
     const decoded = {}
     for (const [id, b64] of Object.entries(images)) {
-      if (id !== 'tile' && !ALLOWED_ZONES.has(id)) {
-        return res.status(400).json({ error: `Placeholder images are only supported for: ${[...ALLOWED_ZONES].join(', ')}` })
+      if (id !== 'tile' && !EXAMPLE_ZONES.includes(id)) {
+        return res.status(400).json({ error: `Images are only supported for: tile, ${EXAMPLE_ZONES.join(', ')}` })
       }
       const image = Buffer.from(String(b64), 'base64')
       if (image.length < 8 || !image.subarray(0, 4).equals(PNG_MAGIC)) {
@@ -73,56 +59,34 @@ export default async function handler(req, res) {
     }
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
-    const record = await readRecord(slotKey, token)
-    if (!record) {
-      return res.status(404).json({ error: `No template found for slotKey "${slotKey}" - import it first` })
-    }
-
-    const imported = []
-    const skipped = {}
-    for (const [id, image] of Object.entries(decoded)) {
-      if (id === 'tile') {
-        try {
-          const tile = await cropToTrim(image, tileScale)
-          const blob = await put(`templates/${slotKey}-tile.png`, tile, {
-            access: 'private',
-            addRandomSuffix: false,
-            allowOverwrite: true,
-            contentType: 'image/png',
-            token,
-          })
-          record.tileUrl = blob.url
-          imported.push('tile')
-        } catch (err) {
-          skipped.tile = `could not trim the tile image: ${err.message}`
-        }
-        continue
-      }
-      const zone = (record.zones ?? []).find(z => z.id === id && z.type === 'image')
-      if (!zone) { skipped[id] = `template has no image zone "${id}"`; continue }
-      const blob = await put(`templates/${slotKey}-ph-${id}.png`, image, {
-        access: 'private',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: 'image/png',
-        token,
-      })
-      zone.placeholderImage = blob.url
-      imported.push(id)
-    }
-    if (!imported.length) {
-      return res.status(404).json({ error: Object.values(skipped).join('; ') })
-    }
-
-    await put(`templates/${slotKey}.json`, JSON.stringify(record), {
+    const save = async (path, body) => (await put(path, body, {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
-      contentType: 'application/json',
+      contentType: 'image/png',
       token,
-    })
+    })).url
 
-    return res.status(200).json({ ok: true, slotKey, imported, skipped })
+    // In parallel - they are independent files.
+    const outcomes = await Promise.all(Object.entries(decoded).map(async ([id, image]) => {
+      try {
+        if (id === 'tile') return [id, await save(assetPath.tile(slotKey), await cropToTrim(image, tileScale)), null]
+        return [id, await save(assetPath.example(slotKey, id), image), null]
+      } catch (err) {
+        return [id, null, err.message]
+      }
+    }))
+
+    const urls = {}
+    const failed = {}
+    for (const [id, url, err] of outcomes) {
+      if (url) urls[id] = url
+      else failed[id] = err
+    }
+    if (!Object.keys(urls).length) {
+      return res.status(500).json({ error: Object.values(failed).join('; '), failed })
+    }
+    return res.status(200).json({ ok: true, slotKey, urls, failed })
   } catch (err) {
     console.error('import-figma-plugin-placeholder error:', err)
     return res.status(500).json({ error: err.message })

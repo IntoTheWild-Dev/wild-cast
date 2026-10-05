@@ -63,6 +63,71 @@ function ZoneOverlay({ zones, backgroundUrl }) {
   )
 }
 
+// The template's catalogue tile - the card picture in the template picker.
+// The Figma plugin makes one at import; this shows it and lets a designer
+// replace it (or add one to a template imported before the plugin did).
+// Max ~3 MB so the upload stays under Vercel's request size limit.
+const MAX_TILE_BYTES = 3 * 1024 * 1024
+const tileButtonStyle = { fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }
+function TileUploader({ slotKey, tileUrl, onDone }) {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [version, setVersion] = useState(0) // forces the preview to reload after a re-upload
+  const inputRef = useRef(null)
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > MAX_TILE_BYTES) { setMessage('That image is over 3 MB - please use a smaller one.'); return }
+    setBusy(true)
+    setMessage('')
+    try {
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result).split(',')[1])
+        reader.onerror = () => reject(new Error('Could not read that file'))
+        reader.readAsDataURL(file)
+      })
+      const res = await fetch('/api/upload-template-tile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
+        body: JSON.stringify({ slotKey, imageBase64 }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`)
+      setVersion(v => v + 1)
+      onDone?.(data.tileUrl)
+      setMessage('Saved - the card now uses this picture.')
+    } catch (err) {
+      setMessage(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark)', marginBottom: 6 }}>Card picture (tile)</div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ width: 56, height: 79, borderRadius: 6, border: '1px solid var(--border)', overflow: 'hidden', background: '#F3F4F6', flexShrink: 0 }}>
+          {tileUrl && <img src={`${templateAssetSrc(tileUrl)}&v=${version}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+        </div>
+        <div>
+          <input ref={inputRef} type="file" accept="image/png,image/jpeg" onChange={handleFile} style={{ display: 'none' }} />
+          <button type="button" style={tileButtonStyle} disabled={busy} onClick={() => inputRef.current?.click()}>
+            {busy ? 'Uploading…' : tileUrl ? 'Replace picture' : 'Upload picture'}
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>
+            {tileUrl ? 'Shown on the template card.' : 'None yet - the card shows the plain background.'}
+          </div>
+        </div>
+      </div>
+      {message && <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 6 }}>{message}</div>}
+    </div>
+  )
+}
+
 // A labeled value with BOTH a slider (quick, visual adjustment) and a number
 // input (exact value) side by side - Julia's ask, 2026-09-11: raw X/Y/W/H
 // number boxes alone felt "a little bit confusing" to work with. The slider
@@ -506,6 +571,11 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
                 <div style={{ fontSize: 12, color: 'var(--mid)' }}>
                   {result.zones.length} zone(s): {result.zones.map(z => z.id).join(', ')}
                 </div>
+                <TileUploader
+                  slotKey={result.slotKey}
+                  tileUrl={result.tileUrl}
+                  onDone={tileUrl => onOptimisticPatch?.(result.slotKey, { tileUrl })}
+                />
               </div>
             </div>
 
