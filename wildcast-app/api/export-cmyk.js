@@ -9,6 +9,7 @@ import { deflateSync } from 'zlib'
 import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
 import { buildLayeredPdf } from './_lib/layeredPdf.js'
+import { preflightPdf } from './_lib/preflight.js'
 import { isBlobHost } from './_lib/templateAssets.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -76,6 +77,10 @@ const ICC_PROFILES = {
 //    Convert to Destination does), not sharp's Perceptual-only conversion,
 //    which measured dE ~2.5-3.2 off on the reference's food photos.
 const EXPORT_MODES = new Set(['print', 'cmyk'])
+// Uploads enlarged below this print resolution get a preflight warning.
+const MIN_SOURCE_PPI = 300
+// Same names the editor's field list uses.
+const ZONE_NAMES = { photo: 'Food photo', logo: 'Restaurant logo', qr: 'QR code', sticker: 'Sticker' }
 const SRGB_ICC = 'sRGB_IEC61966-2-1.icc'  // same profile InDesign embeds
 
 export default async function handler(req, res) {
@@ -90,7 +95,20 @@ export default async function handler(req, res) {
   if (!EXPORT_MODES.has(mode)) return res.status(400).json({ error: `Unknown mode "${mode}"` })
 
   const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
-  const send = (pdfBuffer, unverifiedColorCount, exportKind) => {
+  const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = []) => {
+    // Print preflight on the finished file (api/_lib/preflight.js): plain-word
+    // warnings for the export dialog. Never blocks the download.
+    const warnings = []
+    try {
+      const pf = await preflightPdf(pdfBuffer, { lut: loadLut(join(__dirname, 'icc', profileMeta.lut)) })
+      for (const c of pf.checks) if (c.status !== 'pass' && c.id !== 'livetext' && c.id !== 'ppi') warnings.push(`${c.label}: ${c.detail}`)
+    } catch (err) {
+      console.error('export-cmyk preflight error:', err)
+    }
+    for (const s of sourcePpi) {
+      const name = ZONE_NAMES[s.zoneId] ?? 'An image'
+      if (s.ppi < MIN_SOURCE_PPI) warnings.push(`${name} is ${s.ppi} ppi at print size (300 needed). Upload a larger file.`)
+    }
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`)
     res.setHeader('X-Export-Mode', mode)
@@ -98,7 +116,9 @@ export default async function handler(req, res) {
     res.setHeader('Content-Length', pdfBuffer.length)
     // Requirement 3 (brief §5): flag colours with no official print value.
     res.setHeader('X-Unverified-Colors', String(unverifiedColorCount))
-    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode, X-Export-Kind')
+    // ASCII-safe JSON array of warnings (headers can't carry raw UTF-8).
+    res.setHeader('X-Preflight', JSON.stringify(warnings).replace(/[^ -~]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')))
+    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode, X-Export-Kind, X-Preflight')
     return res.status(200).send(pdfBuffer)
   }
 
@@ -108,7 +128,7 @@ export default async function handler(req, res) {
   if (layered) {
     try {
       const templatePdf = await fetchTemplatePdf(backgroundPdfUrl)
-      const { pdf, unverifiedColorCount } = await buildLayeredPdf({
+      const { pdf, unverifiedColorCount, sourcePpi } = await buildLayeredPdf({
         templatePdf, layout, mode,
         library: getBrandLibrary(brand),
         lut: loadLut(join(__dirname, 'icc', profileMeta.lut)),
@@ -118,7 +138,7 @@ export default async function handler(req, res) {
         srgbIcc: readFileSync(join(__dirname, 'icc', SRGB_ICC)),
         page: { PT_W, PT_H, BLEED_PT },
       })
-      return send(pdf, unverifiedColorCount, 'layered')
+      return await send(pdf, unverifiedColorCount, 'layered', sourcePpi)
     } catch (err) {
       console.error('export-cmyk layered error:', err)
       if (!png) return res.status(500).json({ error: err.message })
@@ -150,7 +170,7 @@ export default async function handler(req, res) {
       brandMasks, iccProfile, profileMeta,
     })
 
-    return send(pdfBuffer, unverifiedColorCount, 'flat')
+    return await send(pdfBuffer, unverifiedColorCount, 'flat')
   } catch (err) {
     console.error('export-cmyk error:', err)
     return res.status(500).json({ error: err.message })

@@ -581,7 +581,11 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             objects.forEach((o, i) => { o.visible = saved[i] })
             canvas.backgroundImage = bg
             canvas.backgroundColor = bgColor
-            items.push({ type: 'image', zoneId: obj._wcZoneId ?? null, box: [x0, y0, x1 - x0, y1 - y0], src })
+            // Canvas units per source pixel: the server turns this into the
+            // upload's real print resolution (the PNG above is always rendered
+            // at ~300 ppi, which would hide an enlarged low-res upload).
+            const sourceScale = obj.type === 'image' ? Math.max(Math.abs(obj.scaleX || 1), Math.abs(obj.scaleY || 1)) : null
+            items.push({ type: 'image', zoneId: obj._wcZoneId ?? null, box: [x0, y0, x1 - x0, y1 - y0], src, sourceScale })
           }
           canvas.renderAll()
           return { canvasW, canvasH, items }

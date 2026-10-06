@@ -93,7 +93,7 @@ const num = v => {
 // ── L1: recolour the template PDF's content streams ─────────────────────────
 // A small tokenizer (enough for Figma/pdf-lib output: numbers, names, strings,
 // hex strings, arrays/dicts, operators; inline images are copied through).
-function tokenize(src) {
+export function tokenize(src) {
   const tokens = []
   let i = 0
   const n = src.length
@@ -415,6 +415,7 @@ export async function buildLayeredPdf({
   let seq = 0
   const ops = []
   const usedFonts = new Set()
+  const sourcePpi = []
 
   for (const item of layout.items) {
     if (item.type === 'image' && item.src) {
@@ -424,6 +425,7 @@ export async function buildLayeredPdf({
       // Image space is the unit square, top row first: map it onto the
       // object's box in canvas units, then onto the page.
       const [x, y, w, h] = item.box
+      if (item.sourceScale > 0) sourcePpi.push({ zoneId: item.zoneId, ppi: Math.round(72 / (item.sourceScale * Math.max(sx, sy))) })
       const m = mul(A, [w, 0, 0, -h, x, y + h])
       ops.push(`q ${m.map(num).join(' ')} cm /${key} Do Q`)
     } else if (item.type === 'text') {
@@ -526,6 +528,7 @@ export async function buildLayeredPdf({
   return {
     pdf: bytes,
     stats: { recoloredOps: stats.ops, templateImages: stats.images.length, items: layout.items.length, fonts: usedFonts.size },
+    sourcePpi,
     unverifiedColorCount: unverified.size,
   }
 }

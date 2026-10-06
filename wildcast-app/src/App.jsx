@@ -1515,6 +1515,14 @@ const SHOW_MODE_CHOOSER = false
       a.click()
       URL.revokeObjectURL(url)
 
+      // Print preflight (api/_lib/preflight.js): only real print problems -
+      // a low-resolution upload, ink over 300%, a missing font. Never blocks.
+      let preflight = []
+      try { preflight = JSON.parse(response.headers.get('X-Preflight') || '[]') } catch { preflight = [] }
+      if (preflight.length) {
+        alert('Print check - please review before sending to the printer:\n\n' + preflight.map(w => '- ' + w).join('\n'))
+      }
+
       // PDF export is free - only AI feature usage costs credits now, see
       // handleAiCreditUsed (Julia's ask, 2026-09-15: replace the old
       // per-export credit system with an AI-usage-only one).
