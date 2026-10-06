@@ -525,6 +525,67 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
           canvas.renderAll()
           return data
         },
+        // Layered print export (api/_lib/layeredPdf.js): what the editor shows,
+        // object by object, instead of one flattened PNG. Text zones become
+        // their final lines (after auto-fit and wrapping) with each line's
+        // baseline position, so the PDF can set them as live text exactly where
+        // Fabric drew them. Everything else (photos, logos, stickers, QR) is
+        // rendered alone through the canvas - same clip, crop and nudge as on
+        // screen - onto a transparent background. Coordinates are canvas
+        // units; the trim box is 0..canvasW x 0..canvasH. Guides and
+        // placeholder content are skipped, exactly as getPng() hides them.
+        getLayoutSnapshot: ({ imageMultiplier = 4.2 } = {}) => {
+          const cg = zoneObjsRef.current['_centre-guide']
+          const items = []
+          const objects = canvas.getObjects()
+          const isHidden = o => o.visible === false || o._wcGuide || o._wcPlaceholder || o === cg
+          for (const obj of objects) {
+            if (isHidden(obj)) continue
+            if (obj.type === 'textbox' || obj.type === 'i-text' || obj.type === 'text') {
+              const lines = []
+              const top = obj._getTopOffset()
+              const left = obj._getLeftOffset()
+              let acc = 0
+              obj._textLines.forEach((chars, i) => {
+                const h = obj.getHeightOfLine(i)
+                // Fabric's own draw position (_renderTextCommon + _renderChars):
+                // line top + h/lineHeight, raised by _fontSizeFraction.
+                const baseline = top + acc + (h / obj.lineHeight) * (1 - obj._fontSizeFraction)
+                lines.push({ text: chars.join(''), x: left + obj._getLineLeftOffset(i), y: baseline })
+                acc += h
+              })
+              items.push({
+                type: 'text', zoneId: obj._wcZoneId ?? null,
+                fontFamily: obj.fontFamily, fontWeight: obj.fontWeight, fontSize: obj.fontSize,
+                fill: typeof obj.fill === 'string' ? obj.fill : '#000000', charSpacing: obj.charSpacing || 0,
+                matrix: obj.calcTransformMatrix(), lines,
+              })
+              continue
+            }
+            // Render this object alone, clipped to what is visible inside the trim box.
+            const r = obj.getBoundingRect(true, true)
+            let x0 = Math.max(0, r.left), y0 = Math.max(0, r.top)
+            let x1 = Math.min(canvasW, r.left + r.width), y1 = Math.min(canvasH, r.top + r.height)
+            if (obj.clipPath?.absolutePositioned) {
+              const c = obj.clipPath.getBoundingRect(true, true)
+              x0 = Math.max(x0, c.left); y0 = Math.max(y0, c.top)
+              x1 = Math.min(x1, c.left + c.width); y1 = Math.min(y1, c.top + c.height)
+            }
+            if (x1 - x0 < 0.5 || y1 - y0 < 0.5) continue
+            const saved = objects.map(o => o.visible)
+            const bg = canvas.backgroundImage, bgColor = canvas.backgroundColor
+            objects.forEach(o => { o.visible = o === obj })
+            canvas.backgroundImage = null
+            canvas.backgroundColor = ''
+            const src = canvas.toDataURL({ format: 'png', multiplier: imageMultiplier, left: x0, top: y0, width: x1 - x0, height: y1 - y0 })
+            objects.forEach((o, i) => { o.visible = saved[i] })
+            canvas.backgroundImage = bg
+            canvas.backgroundColor = bgColor
+            items.push({ type: 'image', zoneId: obj._wcZoneId ?? null, box: [x0, y0, x1 - x0, y1 - y0], src })
+          }
+          canvas.renderAll()
+          return { canvasW, canvasH, items }
+        },
         resetLayout: () => {
           zones.forEach(snapZone)
           canvas.renderAll()
