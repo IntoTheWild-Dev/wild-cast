@@ -14,8 +14,8 @@ function slotKeyFor(label) {
 
 // ── Template data ─────────────────────────────────────────────────────────────
 // This is the fixed 30-slot skeleton (labels/categories/formats never change).
-// Which slots are actually "live" can come from here (Option A/B, hardcoded)
-// or be overlaid at runtime from Figma-imported templates - see
+// Which slots are actually "live" is overlaid at runtime from Figma-imported
+// templates (Option A/B used to be hardcoded live here, no longer) - see
 // overlayCustomCards() below, used by the default-exported TemplatePicker.
 export const BASE_TEMPLATES = [
   {
@@ -23,7 +23,11 @@ export const BASE_TEMPLATES = [
     category: 'restaurant', format: 'Flyer',
     groupThumb: '/templates/tile-restaurant-flyer.png',
     thumb: '/templates/preview_opt-a.png',
-    live: true,
+    // live:false - Option A/B are now filled by Figma-plugin imports like
+    // Option C (a hardcoded live:true slot ignores imports entirely, see
+    // overlayCustomCards). The old static data stays in templates.js /
+    // templateZones.js so already-saved designs keep opening. Julia's ask, 2026-10-07.
+    live: false,
     templateIdGuided:        'wen-cheng-flyer2-simple',
     templateIdGuidedText:    'wen-cheng-flyer1-simple',
     templateIdDesigner:      'wen-cheng-flyer2',
@@ -33,7 +37,11 @@ export const BASE_TEMPLATES = [
     label: 'Restaurant Flyer · Option B',
     category: 'restaurant', format: 'Flyer',
     thumb: '/templates/preview_opt-b.png',
-    live: true,
+    // live:false - Option A/B are now filled by Figma-plugin imports like
+    // Option C (a hardcoded live:true slot ignores imports entirely, see
+    // overlayCustomCards). The old static data stays in templates.js /
+    // templateZones.js so already-saved designs keep opening. Julia's ask, 2026-10-07.
+    live: false,
     templateIdGuided:   'opt-b-flyer2-simple',
     templateIdDesigner: 'opt-b-flyer2',
   },
