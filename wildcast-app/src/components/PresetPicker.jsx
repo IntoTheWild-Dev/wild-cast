@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 // Real historical Wolt campaign copy pulled straight from the Google Sheet
 // (api/presets.js) - no AI, no generation, exact lines that have already
@@ -21,6 +21,33 @@ import { useState } from 'react'
 // Shown collapsed to this many entries first - free/no-AI-cost, so "More
 // options" just reveals the rest of what's already fetched, no refetch.
 const VISIBLE_COUNT = 4
+const MENU_WIDTH = 260
+const MENU_EDGE_GAP = 8
+
+// The edit panel scrolls, so anything poking past its edge is clipped. Find
+// the nearest ancestor that clips (or the viewport) to measure against.
+function clippingRect(el) {
+  for (let node = el?.parentElement; node; node = node.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(node)
+    if (/(auto|scroll|hidden|clip)/.test(overflowX + overflowY)) return node.getBoundingClientRect()
+  }
+  return { left: 0, right: window.innerWidth }
+}
+
+// Where to put the menu (left offset from the button, and width) so it stays
+// fully inside the clipping panel. The button sits right-aligned in its row
+// and the panel can be narrower than the menu, so neither a fixed left: 0
+// nor right: 0 fits every case - the menu is shifted, then narrowed if the
+// panel itself is too small.
+function menuPlacement(wrap) {
+  const btn = wrap.getBoundingClientRect()
+  const clip = clippingRect(wrap)
+  const minX = clip.left + MENU_EDGE_GAP
+  const maxX = clip.right - MENU_EDGE_GAP
+  const width = Math.max(0, Math.min(MENU_WIDTH, maxX - minX))
+  const x = Math.max(minX, Math.min(btn.left, maxX - width))
+  return { left: x - btn.left, width }
+}
 
 export default function PresetPicker({ field, onApply, partnerName, vertical, maxChars, role }) {
   const [open, setOpen] = useState(false)
@@ -29,6 +56,8 @@ export default function PresetPicker({ field, onApply, partnerName, vertical, ma
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [showAll, setShowAll] = useState(false)
+  const [placement, setPlacement] = useState({ left: 0, width: MENU_WIDTH })
+  const wrapRef = useRef(null)
 
   async function fetchPresets() {
     setLoading(true)
@@ -56,12 +85,13 @@ export default function PresetPicker({ field, onApply, partnerName, vertical, ma
     setOpen(willOpen)
     if (willOpen) {
       setShowAll(false)
+      if (wrapRef.current) setPlacement(menuPlacement(wrapRef.current))
       if (presets === null || fetchedFor !== `${vertical ?? ''}|${partnerName}|${maxChars ?? ''}|${role ?? ''}`) fetchPresets()
     }
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <button
         type="button"
         onClick={handleToggle}
@@ -79,10 +109,11 @@ export default function PresetPicker({ field, onApply, partnerName, vertical, ma
           <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
 
           <div style={{
-            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
+            position: 'absolute', top: 'calc(100% + 6px)', zIndex: 50,
+            left: placement.left, width: placement.width, boxSizing: 'border-box',
             background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            minWidth: 260, maxHeight: 320, overflowY: 'auto',
+            maxHeight: 320, overflowY: 'auto',
           }}>
             <div style={{ padding: '10px 12px 8px' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>

@@ -379,12 +379,12 @@ export default function ActivationGate({ onActivated }) {
         </div>
       </main>
 
-      {/* Matches WildScale's own footer exactly (Julia's ask, 2026-09-16) -
-          scale.wildstack.studio's footer is a single centered copyright
-          line: max-w-6xl (1152px) mx-auto, px-6 py-6 (24px), text-xs
-          (12px), text-gray-400 (var(--light), same hex), text-center. */}
+      {/* Single centered copyright line in WildScale's footer style (Julia's
+          ask, 2026-09-16: text-xs, text-gray-400, centered). Kept slim at 44px,
+          below the header's 58px (Anang's ask, 2026-10-07) - the old 24px
+          top/bottom padding made it taller than the header. */}
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `24px ${PAGE_GUTTER}px`, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
+        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `0 ${PAGE_GUTTER}px`, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--light)' }}>
           © {new Date().getFullYear()} Wildstack Studio
         </div>
       </footer>

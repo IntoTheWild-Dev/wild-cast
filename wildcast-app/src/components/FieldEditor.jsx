@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 import Select from './Select'
 
 function formatDateTime(ts) {
@@ -181,7 +183,11 @@ function CollapsedFieldRow({ label, ready, preview, thumb, onClick }) {
           </span>
         )}
       </span>
-      <span style={{ color: 'var(--light)', fontSize: 12, flexShrink: 0 }}>⌄</span>
+      {/* Same Hugeicons chevron as Select/UserMenu - the old ⌄ text glyph
+          sat low (it's drawn near the baseline) and looked off-center. */}
+      <span style={{ color: 'var(--mid)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <HugeiconsIcon icon={ArrowDown01Icon} size={18} />
+      </span>
     </button>
   )
 }
