@@ -7,7 +7,8 @@ import { URL } from 'node:url'
 import { inflateSync } from 'node:zlib'
 import sharp from 'sharp'
 import { PDFDocument, PDFName } from 'pdf-lib'
-import handler from '../api/export-cmyk.js'
+import handler, { renderFlyerImage } from '../api/export-cmyk.js'
+import { loadLut, applyLut } from '../api/_lib/cmykLut.js'
 
 const width = 1241, height = 1749, outputWidth = 1311, outputHeight = 1819
 const solid = background => sharp({ create: { width, height, channels: 3, background } }).png().toBuffer()
@@ -77,8 +78,21 @@ async function exportPdf(png, brand, mode) {
   assert.ok(!xmp.includes('GTS_PDFXConformance'))
   const xmpDate = xmp.match(/<xmp:CreateDate>([^<]+)</)[1]
   assert.equal(info.get(name('CreationDate')).decodeText(), `D:${xmpDate.replace(/[-:T]/g, '').replace('Z', '')}Z`)
+  // Brand blend overlay ('print' mode only): DeviceCMYK image + explicit mask
+  let blend = null
+  if (objects.has(name('Blend'))) {
+    const stream = objects.lookup(name('Blend'))
+    assert.equal(stream.dict.get(name('ColorSpace')).toString(), '/DeviceCMYK')
+    assert.equal(stream.dict.get(name('Width')).asNumber(), outputWidth)
+    assert.equal(stream.dict.get(name('Height')).asNumber(), outputHeight)
+    const mask = stream.dict.lookup(name('Mask'))
+    assert.equal(mask.dict.get(name('ImageMask')).toString(), 'true')
+    assert.equal(mask.dict.get(name('Decode')).toString(), '[ 1 0 ]')
+    assert.match(commands, /\/Blend Do\s+Q\s*$/)
+    blend = { pixels: inflateSync(stream.getContents()), mask: inflateSync(mask.getContents()) }
+  }
   return {
-    warning: Number(res.headers['X-Unverified-Colors']), commands, masks,
+    warning: Number(res.headers['X-Unverified-Colors']), commands, masks, blend,
     samples: inflateSync(image.getContents()),
   }
 }
@@ -162,4 +176,127 @@ for (const mode of [undefined, 'cmyk']) {
   assert.match(flyer.commands, /0\.75 0 0\.1 0 k/)
   console.log(`PASS: real flyer PDF (${mode ?? 'print'}) uses exact blue and reports ${flyer.warning} unverified colors`)
 }
+// Brand blend zone: pixels that are almost (but not exactly) the brand color -
+// anti-aliased edges, soft shadows, one-off values like #01C2E8 - must land
+// next to the official CMYK instead of dropping to the plain conversion
+// (C67 for Wolt Blue, an 8-point cyan step = the printed "halo"). Checked on
+// the ink each pixel finally carries: stencil operands, blend overlay, or the
+// Relative Colorimetric + BPC conversion of the image sample.
+const lutPath = new URL('../api/icc/PSOcoated_v3.relcol-bpc.lut', import.meta.url).pathname
+const lut = loadLut(lutPath)
+const pixelCount = outputWidth * outputHeight
+function finalInk({ pixels, exactMask, exactBytes, blend }) {
+  const ink = pixels.length === pixelCount * 3 ? applyLut(pixels, lut) : Buffer.from(pixels)
+  const kind = new Uint8Array(pixelCount)  // 0 image, 1 stencil, 2 blend overlay
+  for (let px = 0; px < pixelCount; px++) {
+    const x = px % outputWidth, y = (px - x) / outputWidth
+    if (blend && painted(blend.mask, x, y)) { blend.pixels.copy(ink, px * 4, px * 4, px * 4 + 4); kind[px] = 2 }
+    if (painted(exactMask, x, y)) {
+      assert.notEqual(kind[px], 2, 'blend overlay must never cover a stencil pixel')
+      exactBytes.forEach((v, c) => { ink[px * 4 + c] = v }); kind[px] = 1
+    }
+  }
+  return { ink, kind }
+}
+// Largest drop in one ink channel between the stencil and its direct
+// non-stencil neighbours that are still >= 90% brand color.
+function haloStep({ ink, kind }, rgbPixels, brandRgb, channel, target) {
+  let worst = 0, count = 0
+  for (let y = 1; y < outputHeight - 1; y++) for (let x = 1; x < outputWidth - 1; x++) {
+    const px = y * outputWidth + x
+    if (kind[px] === 1) continue
+    if (![px - 1, px + 1, px - outputWidth, px + outputWidth].some(n => kind[n] === 1)) continue
+    let mix = 0
+    brandRgb.forEach((b, c) => {
+      const v = rgbPixels[px * 3 + c]
+      mix = Math.max(mix, v > b ? (v - b) / (255 - b) : v < b ? (b - v) / b : 0)
+    })
+    if (mix > 0.1) continue
+    count++
+    worst = Math.max(worst, Math.abs(target - ink[px * 4 + channel] / 255 * 100))
+  }
+  return { worst, count }
+}
+// Blue page with a soft dark shadow, anti-aliased white text shapes and a
+// saturated "photo" block - the three things that sit on brand color in a flyer.
+const scene = await sharp({ create: { width, height, channels: 3, background: blue } })
+  .composite([{ input: Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
+    '<defs><filter id="f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter></defs>' +
+    '<ellipse cx="620" cy="1150" rx="260" ry="60" fill="#000" opacity="0.45" filter="url(#f)"/>' +
+    '<circle cx="400" cy="400" r="150.5" fill="#fff"/><path d="M700 250 L1000.3 300.7 L820.5 520.2 Z" fill="#fff"/>' +
+    '<rect x="420" y="800" width="400" height="300" fill="#D8281C"/><rect x="470" y="850" width="300" height="200" fill="#F5A300"/>' +
+    '</svg>') }])
+  .png().toBuffer()
+for (const mode of [undefined, 'cmyk']) {
+  const out = await exportPdf(scene, 'wolt', mode)
+  assert.equal(Boolean(out.blend), mode !== 'cmyk', 'print mode carries the blend overlay; cmyk corrects in place')
+  // same resize/bleed the handler applied, to know each pixel's source RGB
+  const { pixels: sceneRgb } = await renderFlyerImage({ pngBuffer: scene, brand: null, mode: 'print', lutPath })
+  const result = finalInk({ pixels: out.samples, exactMask: out.masks[0], exactBytes: [191, 0, 26, 0], blend: out.blend })
+  const cyan = haloStep(result, sceneRgb, [0, 194, 232], 0, 75)
+  assert.ok(cyan.count > 1000, 'scene must contain almost-blue pixels beside the stencil')
+  assert.ok(cyan.worst <= 4, `halo: cyan drops ${cyan.worst.toFixed(1)} points beside exact Wolt Blue (${mode ?? 'print'})`)
+  // Photo block interior (saturated, no brand color in it) keeps the plain conversion
+  const plain = applyLut(sceneRgb, lut)
+  for (const [x, y] of [[480, 870], [655, 985], [700, 1000], [800, 1090]]) {
+    const px = (y + 35) * outputWidth + (x + 35)
+    assert.equal(result.kind[px], 0)
+    assert.deepEqual([...result.ink.subarray(px * 4, px * 4 + 4)], [...plain.subarray(px * 4, px * 4 + 4)], 'photo pixels must not change')
+  }
+  console.log(`PASS: no halo beside Wolt Blue (${mode ?? 'print'}): worst cyan step ${cyan.worst.toFixed(2)} over ${cyan.count} edge pixels; photo block untouched`)
+}
+
+// Any brand color in a library gets the same treatment, not just Wolt Blue.
+// TEST-ONLY values (not an official brand guide): a yellow whose print value
+// is far from its plain conversion, with white shapes on top.
+const testLibrary = [{ hex: '#FFBC0D', cmyk: { c: 0, m: 30, y: 100, k: 0 }, label: 'test yellow' }]
+const yellowScene = await sharp({ create: { width, height, channels: 3, background: { r: 255, g: 188, b: 13 } } })
+  .composite([{ input: Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
+    '<defs><filter id="f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter></defs>' +
+    '<ellipse cx="620" cy="1350" rx="260" ry="60" fill="#000" opacity="0.45" filter="url(#f)"/>' +
+    '<circle cx="600" cy="800" r="250.5" fill="#fff"/><path d="M200 200 L500.3 250.7 L320.5 470.2 Z" fill="#1A1A1A"/></svg>') }])
+  .png().toBuffer()
+for (const mode of ['print', 'cmyk']) {
+  const out = await renderFlyerImage({ pngBuffer: yellowScene, brand: null, mode, lutPath, library: testLibrary })
+  const { pixels: yellowRgb } = await renderFlyerImage({ pngBuffer: yellowScene, brand: null, mode: 'print', lutPath })
+  assert.equal(out.brandMasks.length, 1)
+  const result = finalInk({ pixels: out.pixels, exactMask: out.brandMasks[0].mask, exactBytes: [0, 77, 255, 0], blend: out.brandBlend })
+  const magenta = haloStep(result, yellowRgb, [255, 188, 13], 1, 30)
+  assert.ok(magenta.count > 500)
+  assert.ok(magenta.worst <= 4, `halo: magenta off by ${magenta.worst.toFixed(1)} points beside the test yellow (${mode})`)
+  console.log(`PASS: second brand color blends cleanly too (${mode}): worst magenta step ${magenta.worst.toFixed(2)}`)
+}
+
+// Two brand colors side by side, the second a darker shade of the first
+// (TEST-ONLY values): every exact pixel must keep its own stencil value.
+const pairLibrary = [
+  { hex: '#00C2E8', cmyk: { c: 75, m: 0, y: 10, k: 0 }, label: 'test blue' },
+  { hex: '#006174', cmyk: { c: 90, m: 20, y: 30, k: 40 }, label: 'test dark blue' },
+]
+const pairScene = await sharp({ create: { width, height, channels: 3, background: blue } })
+  .composite([{ input: Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect x="${width / 2}" y="0" width="${width / 2}" height="${height}" fill="#006174" shape-rendering="crispEdges"/></svg>`) }])
+  .png().toBuffer()
+for (const mode of ['print', 'cmyk']) {
+  const out = await renderFlyerImage({ pngBuffer: pairScene, brand: null, mode, lutPath, library: pairLibrary })
+  assert.equal(out.brandMasks.length, 2)
+  const rowBytes = Math.ceil(outputWidth / 8)
+  let checked = 0
+  for (const color of out.brandMasks) {
+    const want = [color.bytes.c, color.bytes.m, color.bytes.y, color.bytes.k]
+    for (let px = 0; px < outputWidth * outputHeight; px++) {
+      const x = px % outputWidth, at = ((px - x) / outputWidth) * rowBytes + (x >> 3), bit = 128 >> (x & 7)
+      if (!(color.mask[at] & bit)) continue
+      checked++
+      if (mode === 'print') assert.ok(!out.brandBlend || !(out.brandBlend.mask[at] & bit), 'blend overlay must not cover an exact brand pixel')
+      else assert.deepEqual([...out.pixels.subarray(px * 4, px * 4 + 4)], want, 'exact brand pixel must keep its brand bytes')
+    }
+  }
+  assert.ok(checked > outputWidth * outputHeight * 0.9)
+  console.log(`PASS: neighbouring brand colors keep their exact values (${mode})`)
+}
+
 console.log('All checks passed. Original InDesign/Delta E comparison remains a separate acceptance check.')
