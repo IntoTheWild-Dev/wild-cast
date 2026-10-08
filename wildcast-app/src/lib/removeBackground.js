@@ -1,17 +1,33 @@
 // Every image upload in the app (except QR codes - see shouldRemoveBackground)
-// gets its background removed automatically by Photoroom, via our own
-// /api/remove-bg proxy - same approach as wild-scale. Replaces the old
-// "please upload a transparent PNG" rejection: partners can now upload a
-// normal photo and the cut-out happens behind the scenes.
+// can have its background removed by Photoroom, via our own /api/remove-bg
+// proxy - same approach as wild-scale. Replaces the old "please upload a
+// transparent PNG" rejection: partners can upload a normal photo and get it
+// cut out. Not automatic any more (Anang's ask, 2026-10-08): the user is asked
+// first (askRemoveBackground / RemoveBgPrompt.jsx), or picks it with the
+// toggle in the Library's batch upload.
 
 // Keeps the request under Vercel's 4.5MB function body limit - see
 // api/remove-bg.js. Same ceiling the Library stores at anyway
 // (LIBRARY_MAX_DIM in assetLibrary.js), so no real resolution is lost.
 const MAX_DIM = 2400
 
-// Short text shown above every upload field so nobody is surprised their
-// photo came back cut out.
-export const AUTO_REMOVE_BG_NOTE = 'Backgrounds are removed automatically after upload - no need to cut the image out yourself.'
+// Short text shown above every upload field so nobody is surprised by the
+// question after picking a file.
+export const REMOVE_BG_NOTE = "After choosing an image you can have its background removed - no need to cut it out yourself."
+
+// The confirm dialog lives in RemoveBgPrompt.jsx (mounted once in main.jsx)
+// and registers itself here, so upload code anywhere can just await the
+// answer. No dialog mounted = keep the original, never a silent cut-out.
+let promptHandler = null
+export function setRemoveBackgroundPrompt(handler) {
+  promptHandler = handler
+  return () => { if (promptHandler === handler) promptHandler = null }
+}
+
+// Resolves true = remove the background, false = keep the image as it is.
+export function askRemoveBackground(file, { requireTransparent } = {}) {
+  return promptHandler ? promptHandler(file, { requireTransparent }) : Promise.resolve(false)
+}
 
 // QR codes need their white quiet zone to stay scannable, so they're never
 // cut out. Everything else (logos, food photos, discount badges, other) is.

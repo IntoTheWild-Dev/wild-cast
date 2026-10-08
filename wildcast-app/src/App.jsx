@@ -1157,7 +1157,8 @@ const SHOW_MODE_CHOOSER = false
     setCurrentProjectId(null)
     pendingNewIdRef.current = null
     setProjectOwner(null)
-    setProjectFolder(null)
+    // Prompt Brief's "Save to folder" choice - the editor's first save files it there.
+    setProjectFolder(brief.folder ?? null)
     setReviewStatus('design')
     setSaveStatus(null)
     setHasUnsavedChanges(false)
@@ -1859,7 +1860,7 @@ const SHOW_MODE_CHOOSER = false
       projectName: opts.name ?? template.name,
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: opts.imageScales ?? {}, imagePositions: opts.imagePositions ?? {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview, previewHd,
-      ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
+      ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: opts.folder ?? null,
       // Candidate saves only happen via the brief flow, so the brief's
       // business type is the design's vertical.
       vertical: opts.vertical ?? briefSubmission?.businessType ?? null,
@@ -1878,7 +1879,7 @@ const SHOW_MODE_CHOOSER = false
   // opening the editor. Uploaded images are blob: URLs, which die with the tab
   // - converted to data URLs first, exactly as doSave() does for the editor.
   // Returns { url } or throws (the popup shows the message and offers a retry).
-  async function handleSendPromptBriefForReview({ brief, fields: briefFields, png }) {
+  async function handleSendPromptBriefForReview({ brief, fields: briefFields, png, folder }) {
     const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
     if (!template) throw new Error('Template not found.')
     if (!png) throw new Error('The preview is not ready yet.')
@@ -1891,7 +1892,7 @@ const SHOW_MODE_CHOOSER = false
     // Same naming rule as the Edit design hand-off (handleSelectTemplateFromBrief).
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
-    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions })
+    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions, folder })
     return { url: `${window.location.origin}/?review=${id}` }
   }
 
@@ -1900,7 +1901,7 @@ const SHOW_MODE_CHOOSER = false
   // (same saveCandidateForReview call), but without a review link or leaving
   // the chat - so a partner who gets called away mid-brief doesn't lose the
   // finished design, and can pick it back up from the Design library.
-  async function handleSaveBriefDraft({ brief, fields: briefFields, png }) {
+  async function handleSaveBriefDraft({ brief, fields: briefFields, png, folder }) {
     const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
     if (!template) throw new Error('Template not found.')
     if (!png) throw new Error('The preview is not ready yet.')
@@ -1912,7 +1913,7 @@ const SHOW_MODE_CHOOSER = false
     }
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
-    await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions })
+    await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions, folder })
   }
 
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
@@ -2180,6 +2181,7 @@ const SHOW_MODE_CHOOSER = false
             onNewBrief={() => handleNavigate('new-brief')}
             credits={activation?.credits}
             onCreditUsed={handleAiCreditUsed}
+            activation={activation}
             onEdit={brief => {
               // Same bookkeeping BriefingForm's onSubmitted does, then straight
               // into the editor (the chat already picked the template + mode).
@@ -2762,12 +2764,12 @@ const SHOW_MODE_CHOOSER = false
       {/* Help modal */}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
-      {/* Matches WildScale's own footer exactly (Julia's ask, 2026-09-16) -
-          scale.wildstack.studio's footer is a single centered copyright
-          line: max-w-6xl (1152px) mx-auto, px-6 py-6 (24px), text-xs
-          (12px), text-gray-400 (var(--light), same hex), text-center. */}
+      {/* Single centered copyright line in WildScale's footer style (Julia's
+          ask, 2026-09-16: text-xs, text-gray-400, centered). Kept slim at 44px,
+          below the header's 58px (Anang's ask, 2026-10-07) - the old 24px
+          top/bottom padding made it taller than the header. */}
       <footer style={{ background: '#FFFFFF', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `24px ${PAGE_GUTTER}px`, fontSize: 12, color: 'var(--light)', textAlign: 'center' }}>
+        <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `0 ${PAGE_GUTTER}px`, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--light)' }}>
           © {new Date().getFullYear()} Wildstack Studio
         </div>
       </footer>

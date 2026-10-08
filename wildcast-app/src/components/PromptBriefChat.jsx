@@ -13,7 +13,7 @@ import { AISuggestOutOfCreditsModal } from './AISuggest'
 import { uploadImageForZone, assetFolderForZone, getLibraryAssets, GENERAL_MERCHANT } from '../lib/assetLibrary'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { isCloseMatch } from '../lib/fuzzyMatch'
-import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { aiFieldSettingsFor } from '../data/templateZones'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 
@@ -153,7 +153,7 @@ function UploadDrop({ label, onFile, busyLabel, note }) {
   )
 }
 
-export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief, credits, onCreditUsed }) {
+export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief, credits, onCreditUsed, activation }) {
   const [messages, setMessages] = useState([])
   const [answers, setAnswers] = useState({})
   const [currentId, setCurrentId] = useState(null)
@@ -666,7 +666,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
   }
 
   // Same pipeline as the editor's own upload (FieldEditor's ImageUpload):
-  // automatic background removal, then a copy saved into the partner's
+  // optional background removal (the user is asked), then a copy saved into the partner's
   // Library. A failed upload is explained in the chat and the step stays open.
   async function pickFile(step, file) {
     if (currentId !== step.id || uploadingId) return
@@ -940,8 +940,8 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
                         <UploadDrop
                           label={step.summaryLabel === 'Logo' ? 'Upload your logo.' : `Upload the ${step.summaryLabel.toLowerCase()}.`}
                           onFile={f => pickFile(step, f)}
-                          busyLabel={uploadingId === step.id ? (shouldRemoveBackground(assetFolderForZone(step.id)) ? 'Removing background…' : 'Uploading…') : null}
-                          note={shouldRemoveBackground(assetFolderForZone(step.id)) ? AUTO_REMOVE_BG_NOTE : null}
+                          busyLabel={uploadingId === step.id ? 'Uploading…' : null}
+                          note={shouldRemoveBackground(assetFolderForZone(step.id)) ? REMOVE_BG_NOTE : null}
                         />
                       </div>
                       <button
@@ -1029,6 +1029,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
           onSaveDraft={onSaveDraft}
           onOpenLibrary={onOpenLibrary}
           onNewBrief={onNewBrief}
+          activation={activation}
           onClose={() => setShowResult(false)}
         />
       )}

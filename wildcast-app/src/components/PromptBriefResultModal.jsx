@@ -3,6 +3,7 @@ import TemplateCanvas from './TemplateCanvas'
 import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
 import { buildCandidateFields, fetchMerchantAssets, fitContent } from '../lib/briefToCandidates'
 import { logoStartPct } from '../lib/logoStartScale'
+import Select from './Select'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
@@ -13,6 +14,13 @@ import { logoStartPct } from '../lib/logoStartScale'
 // TemplateCanvas's onReady fires once text is placed but image zones load in
 // a later step, so the capture waits a beat before reading the PNG.
 const CAPTURE_DELAY_MS = 1600
+
+// "Save to folder" (Anang's ask, 2026-10-08): which of the signed-in person's
+// Design library folders the design lands in - same personal folders as the
+// Designs page's Folders view (api/folders.js). Applies to Send for review,
+// Save for later and Edit design (the editor's first save files it there).
+const NO_FOLDER = ''
+const NEW_FOLDER = '__new__'
 
 function SummaryRow({ row }) {
   return (
@@ -27,7 +35,7 @@ function SummaryRow({ row }) {
   )
 }
 
-export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief }) {
+export default function PromptBriefResultModal({ entry, config, answers, rows, onEdit, onClose, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief, activation }) {
   // Send for review: onSendForReview({ brief, fields, png }) saves the design
   // (without opening the editor) and resolves { url } - the shareable review
   // link. sentUrl is kept so going Back and pressing Send again shows the same
@@ -52,6 +60,47 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   const [autoLogo, setAutoLogo] = useState(false)
   const exportRef = useRef(null)
   const captureTimer = useRef(null)
+  const [folders, setFolders] = useState([])
+  const [folder, setFolder] = useState(NO_FOLDER)
+  const [folderError, setFolderError] = useState(null)
+  const ownerKey = activation?.key
+
+  useEffect(() => {
+    if (!ownerKey) return
+    let cancelled = false
+    fetch('/api/folders', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        const mine = (data.owners ?? []).find(o => o.ownerEmail === ownerKey)
+        if (!cancelled) setFolders([...(mine?.folders ?? [])].sort((a, b) => a.localeCompare(b)))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [ownerKey])
+
+  // "+ New folder…" registers the folder straight away (so it shows in the
+  // Designs page even before this design is saved) and selects it.
+  async function handleFolderChange(value) {
+    setFolderError(null)
+    if (value !== NEW_FOLDER) { setFolder(value); return }
+    const name = window.prompt('New folder name')?.trim()
+    if (!name) return
+    const existing = folders.find(f => f.toLowerCase() === name.toLowerCase())
+    if (existing) { setFolder(existing); return }
+    try {
+      const res = await fetch('/api/folders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerEmail: ownerKey, ownerName: activation?.clientName, folderName: name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not create folder')
+      setFolders([...(data.folders ?? [])].sort((a, b) => a.localeCompare(b)))
+      setFolder(data.folders?.find(f => f.toLowerCase() === name.toLowerCase()) ?? name)
+    } catch (err) {
+      setFolderError(err.message)
+    }
+  }
+  const chosenFolder = folder || null
 
   useEffect(() => {
     let cancelled = false
@@ -96,7 +145,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
     setSendError(null)
     setSending(true)
     try {
-      const { url } = await onSendForReview({ brief, fields, png })
+      const { url } = await onSendForReview({ brief, fields, png, folder: chosenFolder })
       setSentUrl(url)
       setConfirming(false)
       setView('sent')
@@ -112,7 +161,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
     setSaveDraftError(null)
     setSavingDraft(true)
     try {
-      await onSaveDraft({ brief, fields, png })
+      await onSaveDraft({ brief, fields, png, folder: chosenFolder })
       setSavedDraft(true)
     } catch (err) {
       setSaveDraftError(err?.message || 'Something went wrong.')
@@ -215,6 +264,23 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                   </div>
                 </>
               )}
+              {!sent && ownerKey && (
+                <div style={{ marginBottom: 16 }}>
+                  <label htmlFor="brief-folder" style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--dark)', marginBottom: 6 }}>Save to folder</label>
+                  <Select
+                    id="brief-folder"
+                    value={folder}
+                    disabled={!!sentUrl || savedDraft}
+                    onChange={e => handleFolderChange(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--dark)', boxSizing: 'border-box' }}
+                  >
+                    <option value={NO_FOLDER}>No folder</option>
+                    {folders.map(f => <option key={f} value={f}>{f}</option>)}
+                    <option value={NEW_FOLDER}>+ New folder…</option>
+                  </Select>
+                  {folderError && <div style={{ fontSize: 12, color: '#B91C1C', marginTop: 6 }}>Couldn't create folder: {folderError}</div>}
+                </div>
+              )}
 
               {sendError && !sent && (
                 <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10, lineHeight: 1.5 }}>
@@ -246,7 +312,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
                 {!sent && !confirming && (
                   <>
                     <button
-                      type="button" onClick={() => onEdit(brief)}
+                      type="button" onClick={() => onEdit(brief && { ...brief, folder: chosenFolder })}
                       style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700, background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
                       Edit design

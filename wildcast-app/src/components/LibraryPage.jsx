@@ -6,7 +6,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Delete02Icon } from '@hugeicons/core-free-icons'
 import { FOLDERS, GENERAL_MERCHANT, getLibraryAssets, saveAssetToLibrary, deleteLibraryAsset, renameLibraryAsset, uniqueMerchants, removeBackgroundForUpload, LIBRARY_MAX_DIM } from '../lib/assetLibrary'
 import { FRAME_PRESETS, imageSize, resizeToFrame } from '../lib/image'
-import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground, isAlreadyCutOut } from '../lib/removeBackground'
+import { shouldRemoveBackground, isAlreadyCutOut } from '../lib/removeBackground'
 import { PAGE_PADDING_X, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
@@ -16,9 +16,9 @@ const ALL_TYPES = '__all__'
 const LAST_MERCHANT_KEY = 'wildcast_library_last_merchant'
 
 // Folders a partner can upload straight into from this page. Every upload
-// except QR codes gets its background removed automatically (see
-// lib/removeBackground.js). requireTransparent now only decides what happens
-// if that removal fails: product photos and stickers can't fall back to the
+// except QR codes can have its background removed - a toggle in the upload
+// modal, off by default (see lib/removeBackground.js). requireTransparent only
+// decides what happens if that removal fails: product photos and stickers can't fall back to the
 // original with its background, logos can.
 const UPLOADABLE_FOLDERS = [
   { key: 'logos', label: 'Upload a logo', requireTransparent: false },
@@ -126,6 +126,8 @@ function UploadModal({ label, merchants, defaultMerchant, removesBackground, ini
   const shownSize = preset ?? customSize ?? (single ? cappedSize(items[0].size) : null)
 
   const [processing, setProcessing] = useState(false)
+  // Opt-in, not automatic (Anang's ask, 2026-10-08) - one choice for the batch.
+  const [removeBg, setRemoveBg] = useState(false)
   const merchantName = mode === 'new' ? newName.trim() : existingChoice
   const pendingItems = items.filter(i => i.status !== 'done')
   const failedCount = items.filter(i => i.status === 'error').length
@@ -179,7 +181,7 @@ function UploadModal({ label, merchants, defaultMerchant, removesBackground, ini
       while (queue.length) {
         const item = queue.shift()
         try {
-          await onUploadItem(item, merchantName, frameFor(item), status => updateItem(item.id, { status }))
+          await onUploadItem(item, merchantName, frameFor(item), removeBg, status => updateItem(item.id, { status }))
           updateItem(item.id, { status: 'done' })
           results.push(true)
         } catch (err) {
@@ -215,9 +217,10 @@ function UploadModal({ label, merchants, defaultMerchant, removesBackground, ini
         </div>
         <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: removesBackground ? 10 : 16 }}>Assets are organized by merchant so they don't get mixed up.</div>
         {removesBackground && (
-          <div style={{ fontSize: 12, color: 'var(--dark)', background: 'var(--primary-glow)', borderRadius: 8, padding: '8px 10px', marginBottom: 16, lineHeight: 1.45 }}>
-            {AUTO_REMOVE_BG_NOTE}
-          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--dark)', background: 'var(--primary-glow)', borderRadius: 8, padding: '8px 10px', marginBottom: 16, lineHeight: 1.45, cursor: processing ? 'default' : 'pointer' }}>
+            <input type="checkbox" checked={removeBg} disabled={processing} onChange={e => setRemoveBg(e.target.checked)} style={{ accentColor: 'var(--primary)', margin: 0 }} />
+            <span><strong>Remove background</strong> - cut the images out automatically. Leave off to keep them as they are.</span>
+          </label>
         )}
 
         {/* Images - the originals as picked, before any processing. */}
@@ -225,7 +228,7 @@ function UploadModal({ label, merchants, defaultMerchant, removesBackground, ini
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>
             Images <span style={{ fontWeight: 500, color: 'var(--mid)' }}>({items.length})</span>
           </div>
-          {removesBackground && items.length > 0 && (
+          {removesBackground && removeBg && items.length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--mid)', textAlign: 'right' }}>
               {toRemove === 0
                 ? 'All already transparent - no background removal needed'
@@ -475,9 +478,9 @@ function UploadCard({ folderKey, label, requireTransparent, merchants, defaultMe
   // One image's full pipeline, called by the modal for each item (several
   // in parallel). onStatus drives that item's label in the grid; throwing
   // marks just that item as failed.
-  async function uploadItem(item, merchant, frame, onStatus) {
-    if (removesBackground && !item.alreadyCutOut) onStatus('remove-bg')
-    const { url, name } = await removeBackgroundForUpload(item.file, { folder: folderKey, requireTransparent })
+  async function uploadItem(item, merchant, frame, removeBg, onStatus) {
+    if (removesBackground && removeBg && !item.alreadyCutOut) onStatus('remove-bg')
+    const { url, name } = await removeBackgroundForUpload(item.file, { folder: folderKey, requireTransparent, removeBg: removeBg && !item.alreadyCutOut })
     onStatus('resize')
     const framedUrl = await resizeToFrame(url, frame.width, frame.height, { centreContent: frame.centreContent })
     URL.revokeObjectURL(url)
@@ -878,7 +881,7 @@ export default function LibraryPage({ onBack }) {
           />
         </div>
 
-        <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE} QR codes are kept as they are.</div>
+        <div style={{ fontSize: 12, color: 'var(--mid)', marginBottom: 8 }}>Backgrounds can be removed when uploading - QR codes are always kept as they are.</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {UPLOADABLE_FOLDERS.map(f => (
             <UploadCard key={f.key} folderKey={f.key} label={f.label} requireTransparent={f.requireTransparent} merchants={merchants} defaultMerchant={defaultUploadMerchant} onUploaded={refresh} />

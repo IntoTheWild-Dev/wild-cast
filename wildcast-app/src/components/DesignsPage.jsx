@@ -192,6 +192,14 @@ function ConfirmOpenModal({ project, busy, onEditOriginal, onDuplicate, onCancel
 // it"). Extracted to a shared module 2026-09-24 once App.jsx needed the
 // identical fix for a different field (reviewStatus).
 
+// Labels for the status filter, keyed by a saved project's reviewStatus.
+const REVIEW_STATUS_LABEL = {
+  approved: 'Approved',
+  review: 'In review',
+  changes_requested: 'Changes requested',
+  design: 'Draft',
+}
+
 function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize, people, onMove, showOwner }) {
   const [moving, setMoving] = useState(false)
   return (
@@ -491,6 +499,9 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const [formatFilter, setFormatFilter] = useState(ALL)
   const [merchantFilter, setMerchantFilter] = useState(ALL)
   const [personFilter, setPersonFilter] = useState(ALL)
+  // Review status (Anang's ask, 2026-10-08: "approved" filter for finding
+  // finished designs quickly). Values match the saved project's reviewStatus.
+  const [statusFilter, setStatusFilter] = useState(ALL)
   const [nameSearch, setNameSearch] = useState('')
   const [pendingProject, setPendingProject] = useState(null)
   const [pendingBusy, setPendingBusy] = useState(false)
@@ -538,12 +549,13 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
         // can be typed with different casing or a small typo.
         (merchantFilter === ALL || merchantGroups.canonicalOf.get(p.merchant) === merchantFilter) &&
         (personFilter === ALL || p.ownerEmail === personFilter) &&
+        (statusFilter === ALL || (p.reviewStatus ?? 'design') === statusFilter) &&
         (!q || (p.projectName || p.templateName || '').toLowerCase().includes(q))
       )
       // Newest first - the blob listing this comes from has no inherent
       // order, which read as random once designs from many merchants mixed.
       .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-  }, [enriched, formatFilter, merchantFilter, merchantGroups, personFilter, nameSearch])
+  }, [enriched, formatFilter, merchantFilter, merchantGroups, personFilter, statusFilter, nameSearch])
 
   const grouped = useMemo(() => {
     const byGroup = {}
@@ -671,12 +683,13 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   }
 
 
-  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, personFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
+  const activeFilterCount = [formatFilter !== ALL, merchantFilter !== ALL, personFilter !== ALL, statusFilter !== ALL, !!nameSearch.trim()].filter(Boolean).length
   const activeFilterSummary = activeFilterCount > 0
     ? [
         formatFilter !== ALL ? formatFilter : null,
         merchantFilter !== ALL ? merchantFilter : null,
         personFilter !== ALL ? people.find(p => p.ownerEmail === personFilter)?.ownerName : null,
+        statusFilter !== ALL ? REVIEW_STATUS_LABEL[statusFilter] : null,
         nameSearch.trim() ? `"${nameSearch.trim()}"` : null,
       ].filter(Boolean).join(' · ')
     : null
@@ -794,6 +807,14 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
             >
               <option value={ALL}>Everyone</option>
               {people.map(p => <option key={p.ownerEmail} value={p.ownerEmail}>{p.ownerName}</option>)}
+            </Select>
+            <Select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }}
+            >
+              <option value={ALL}>All statuses</option>
+              {Object.entries(REVIEW_STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select>
             <input
               type="text"
