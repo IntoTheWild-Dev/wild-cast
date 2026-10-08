@@ -15,7 +15,7 @@ import useIsMobile from '../lib/useIsMobile'
 import { hasTransparency, cropToContent } from '../lib/image'
 import { LIBRARY_TILE_STYLE, LIBRARY_TILE_IMG_STYLE } from '../lib/libraryTile'
 import { assetFolderForZone, getLibraryAssets, uniqueMerchants, uploadImageForZone, GENERAL_MERCHANT, merchantForUpload } from '../lib/assetLibrary'
-import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { findCloseSuggestion } from '../lib/fuzzyMatch'
 import { PLACEHOLDER_PARTNERS } from '../lib/briefConstants'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
@@ -559,7 +559,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
       </div>
 
       {!restricted && shouldRemoveBackground(libraryFolder) && (
-        <div style={{ fontSize: 11, color: 'var(--mid)', lineHeight: 1.4, marginBottom: 8 }}>{AUTO_REMOVE_BG_NOTE}</div>
+        <div style={{ fontSize: 11, color: 'var(--mid)', lineHeight: 1.4, marginBottom: 8 }}>{REMOVE_BG_NOTE}</div>
       )}
 
       {/* Upload and "choose from library" side by side as two equal buttons,
@@ -585,7 +585,7 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
           )}
           <span style={{ fontSize: 11, fontWeight: 600, color: value ? 'var(--primary)' : 'var(--dark)', lineHeight: 1.3 }}>
             {uploading
-              ? (shouldRemoveBackground(libraryFolder) ? 'Removing background…' : 'Uploading…')
+              ? 'Uploading…'
               : value ? (restricted ? 'Uploaded ✓' : 'Click to replace') : (restricted ? 'No image' : 'Click to upload')}
           </span>
         </button>
