@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { PAGE_PADDING_X, APP_HEADER_HEIGHT, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
+import Select from './Select'
 
 // "Review queue in the user profile" (Notion card, 2026-09-22): "A simple
 // task board under the profile. Each asset shows its state: under design,
@@ -9,7 +10,9 @@ import PageSpinner from './PageSpinner'
 // filters beyond the fixed status columns below - just "my own designs,
 // grouped by where they are." A fourth column was added 2026-09-23 (Mark's
 // ask via Julia) once "under review" needed to distinguish "still waiting
-// on a first look" from "reviewer sent it back."
+// on a first look" from "reviewer sent it back." Search, filters and a sort
+// were added after all (Anang's ask, 2026-10-08) once the board got long -
+// same "Viewing" bar as DesignsPage, newest first by default.
 const STATUS_COLUMNS = [
   { key: 'design',             label: 'Under design' },
   // Relabeled 2026-09-23 (Julia) for plainer, more encouraging language -
@@ -30,6 +33,9 @@ const STATUS_COLUMNS = [
 // api/save-project.js). Scoped to the 'review' column only, matching her
 // wording ("first/second round review").
 const REVIEW_ROUND_COLOR = '#D97706'
+
+const ALL = '__all__'
+const FILTER_STYLE = { fontSize: 13, fontWeight: 600, color: 'var(--dark)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff' }
 
 // Jira-style board (Anang's ask, 2026-10-01): each status column is a grey
 // lane, its title + count badge sticks below the app header while the page
@@ -115,7 +121,25 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
   // Same ownership identity DesignsPage/Folders already use - activation.key
   // is the shared activation key string or, for an individual account, the
   // signed-in email (see App.jsx's own activation shape).
-  const mine = projects.filter(p => activation?.key && p.ownerEmail === activation.key)
+  const ownerKey = activation?.key
+  const mine = useMemo(() => projects.filter(p => ownerKey && p.ownerEmail === ownerKey), [projects, ownerKey])
+
+  const [statusFilter, setStatusFilter] = useState(ALL)
+  const [merchantFilter, setMerchantFilter] = useState(ALL)
+  const [sortOrder, setSortOrder] = useState('newest') // 'newest' | 'oldest'
+  const [search, setSearch] = useState('')
+  const merchantOptions = useMemo(() => [...new Set(mine.map(p => p.merchant).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [mine])
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const dir = sortOrder === 'newest' ? -1 : 1
+    return mine
+      .filter(p =>
+        (merchantFilter === ALL || p.merchant === merchantFilter) &&
+        (!q || [p.projectName, p.templateName, p.merchant].some(v => v?.toLowerCase().includes(q)))
+      )
+      .sort((a, b) => dir * ((a.savedAt ?? 0) - (b.savedAt ?? 0)))
+  }, [mine, merchantFilter, sortOrder, search])
+  const columns = statusFilter === ALL ? STATUS_COLUMNS : STATUS_COLUMNS.filter(c => c.key === statusFilter)
 
   async function handleOpen(project) {
     if (openingId) return
@@ -150,6 +174,32 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
             </button>
           )}
         </div>
+        {activation?.key && !loading && mine.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Viewing
+            </label>
+            <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={FILTER_STYLE}>
+              <option value={ALL}>All statuses</option>
+              {STATUS_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </Select>
+            <Select value={merchantFilter} onChange={e => setMerchantFilter(e.target.value)} style={FILTER_STYLE}>
+              <option value={ALL}>All merchants</option>
+              {merchantOptions.map(m => <option key={m} value={m}>{m}</option>)}
+            </Select>
+            <Select value={sortOrder} onChange={e => setSortOrder(e.target.value)} style={FILTER_STYLE}>
+              <option value="newest">Latest first</option>
+              <option value="oldest">Oldest first</option>
+            </Select>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name or merchant…"
+              style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 13, padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff', width: isMobile ? '100%' : 240, boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
       </div>
 
       {loading ? <PageSpinner label="Loading your tasks…" /> : (
@@ -158,8 +208,8 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
           <div style={{ color: 'var(--mid)', fontSize: 13 }}>Sign in to see your tasks.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: 12 }}>
-            {STATUS_COLUMNS.map(col => {
-              const items = mine.filter(p => (p.reviewStatus || 'design') === col.key)
+            {columns.map(col => {
+              const items = visible.filter(p => (p.reviewStatus || 'design') === col.key)
               return (
                 <div key={col.key} style={{ background: LANE_BG, borderRadius: 12, padding: '0 8px 8px', minHeight: 160 }}>
                   {/* Sticky header = a page-colored gap strip + the lane's
@@ -178,7 +228,7 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
                     </div>
                   </div>
                   {items.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--light)', padding: '4px 6px' }}>Nothing here</div>
+                    <div style={{ fontSize: 12, color: 'var(--light)', padding: '4px 6px' }}>{search.trim() || merchantFilter !== ALL ? 'No matches' : 'Nothing here'}</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {items.map(p => (

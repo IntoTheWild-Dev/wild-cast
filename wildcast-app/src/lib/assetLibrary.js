@@ -1,5 +1,5 @@
 import { blobUrlToDataUrl, cropToContent } from './image'
-import { removeBackgroundFromFile, shouldRemoveBackground } from './removeBackground'
+import { removeBackgroundFromFile, shouldRemoveBackground, isAlreadyCutOut, askRemoveBackground } from './removeBackground'
 
 // Shared library, backed by Vercel Blob (not localStorage) - same asset is
 // reusable across designs AND across browsers/devices, and stored at real
@@ -117,11 +117,21 @@ export async function uploadImageForZone(file, { requireTransparent, autoCropCon
 // The background-removal step on its own, for upload paths that don't go
 // through uploadImageForZone (Library page, briefing-form picker). Returns a
 // blob: URL plus the name to save it under (.png once it's been cut out).
+// removeBg: true/false when the caller already knows (the Library's batch
+// toggle); left out, the user is asked (askRemoveBackground) - unless the
+// image is already cut out, where there's nothing to ask about.
 // If Photoroom fails: a zone that must be transparent can't use the original
 // photo, so that throws; anywhere else the original is kept so the upload
 // isn't blocked by an outage or an exhausted quota.
-export async function removeBackgroundForUpload(file, { folder, requireTransparent } = {}) {
+export async function removeBackgroundForUpload(file, { folder, requireTransparent, removeBg } = {}) {
   if (!shouldRemoveBackground(folder)) return { url: URL.createObjectURL(file), name: file.name }
+  if (removeBg === undefined) {
+    const previewUrl = URL.createObjectURL(file)
+    const cutOut = await isAlreadyCutOut(previewUrl).catch(() => false)
+    URL.revokeObjectURL(previewUrl)
+    removeBg = !cutOut && await askRemoveBackground(file, { requireTransparent })
+  }
+  if (!removeBg) return { url: URL.createObjectURL(file), name: file.name }
   try {
     const url = await removeBackgroundFromFile(file)
     return { url, name: file.name.replace(/\.[^.]+$/, '') + '.png' }

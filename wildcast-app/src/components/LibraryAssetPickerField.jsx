@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getLibraryAssets, saveAssetToLibrary, libraryAssetSrc, removeBackgroundForUpload } from '../lib/assetLibrary'
-import { AUTO_REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
+import { REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { LIBRARY_TILE_STYLE, LIBRARY_TILE_IMG_STYLE } from '../lib/libraryTile'
 
 // "Nothing in the library yet" reads as broken if you don't know why - these
@@ -17,9 +17,9 @@ const EMPTY_HINTS = {
 
 // A compact "pick an existing asset from the shared Library, or upload a new
 // one" field - used for Sticker, QR code and Food photo in the briefing
-// form. Uploads get their background removed automatically first (see
-// lib/removeBackground.js, same pipeline as every other upload), except QR
-// codes. A successful upload both saves to the shared Library AND selects it for
+// form. Uploads can have their background removed first - the user is asked
+// (see lib/removeBackground.js, same pipeline as every other upload), except
+// QR codes. A successful upload both saves to the shared Library AND selects it for
 // this field in one step, since picking is the point here (unlike the
 // Library page's plain "add to library").
 export default function LibraryAssetPickerField({ label, hint, folder, merchant, value, onSelect, requireTransparent }) {
@@ -105,7 +105,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
             </div>
 
             {shouldRemoveBackground(folder) && (
-              <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 6 }}>{AUTO_REMOVE_BG_NOTE}</div>
+              <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 6 }}>{REMOVE_BG_NOTE}</div>
             )}
             <button
               type="button"
@@ -119,7 +119,7 @@ export default function LibraryAssetPickerField({ label, hint, folder, merchant,
                 opacity: uploading ? 0.6 : 1,
               }}
             >
-              {uploading ? (shouldRemoveBackground(folder) ? 'Removing background…' : 'Uploading…') : '↑ Upload from computer'}
+              {uploading ? 'Uploading…' : '↑ Upload from computer'}
             </button>
             {uploadError && (
               <div style={{ marginBottom: 12, fontSize: 11, color: '#B91C1C' }}>✕ {uploadError}</div>
