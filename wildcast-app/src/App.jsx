@@ -1157,7 +1157,8 @@ const SHOW_MODE_CHOOSER = false
     setCurrentProjectId(null)
     pendingNewIdRef.current = null
     setProjectOwner(null)
-    setProjectFolder(null)
+    // Prompt Brief's "Save to folder" choice - the editor's first save files it there.
+    setProjectFolder(brief.folder ?? null)
     setReviewStatus('design')
     setSaveStatus(null)
     setHasUnsavedChanges(false)
@@ -1840,7 +1841,7 @@ const SHOW_MODE_CHOOSER = false
       projectName: opts.name ?? template.name,
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: opts.imageScales ?? {}, imagePositions: opts.imagePositions ?? {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview, previewHd,
-      ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: null,
+      ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: opts.folder ?? null,
       // Candidate saves only happen via the brief flow, so the brief's
       // business type is the design's vertical.
       vertical: opts.vertical ?? briefSubmission?.businessType ?? null,
@@ -1859,7 +1860,7 @@ const SHOW_MODE_CHOOSER = false
   // opening the editor. Uploaded images are blob: URLs, which die with the tab
   // - converted to data URLs first, exactly as doSave() does for the editor.
   // Returns { url } or throws (the popup shows the message and offers a retry).
-  async function handleSendPromptBriefForReview({ brief, fields: briefFields, png }) {
+  async function handleSendPromptBriefForReview({ brief, fields: briefFields, png, folder }) {
     const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
     if (!template) throw new Error('Template not found.')
     if (!png) throw new Error('The preview is not ready yet.')
@@ -1872,7 +1873,7 @@ const SHOW_MODE_CHOOSER = false
     // Same naming rule as the Edit design hand-off (handleSelectTemplateFromBrief).
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
-    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions })
+    const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions, folder })
     return { url: `${window.location.origin}/?review=${id}` }
   }
 
@@ -1881,7 +1882,7 @@ const SHOW_MODE_CHOOSER = false
   // (same saveCandidateForReview call), but without a review link or leaving
   // the chat - so a partner who gets called away mid-brief doesn't lose the
   // finished design, and can pick it back up from the Design library.
-  async function handleSaveBriefDraft({ brief, fields: briefFields, png }) {
+  async function handleSaveBriefDraft({ brief, fields: briefFields, png, folder }) {
     const template = TEMPLATES.find(t => t.id === promptTemplateId) ?? customTemplates.cards.find(t => t.id === promptTemplateId)
     if (!template) throw new Error('Template not found.')
     if (!png) throw new Error('The preview is not ready yet.')
@@ -1893,7 +1894,7 @@ const SHOW_MODE_CHOOSER = false
     }
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
-    await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions })
+    await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions, folder })
   }
 
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
@@ -2161,6 +2162,7 @@ const SHOW_MODE_CHOOSER = false
             onNewBrief={() => handleNavigate('new-brief')}
             credits={activation?.credits}
             onCreditUsed={handleAiCreditUsed}
+            activation={activation}
             onEdit={brief => {
               // Same bookkeeping BriefingForm's onSubmitted does, then straight
               // into the editor (the chat already picked the template + mode).

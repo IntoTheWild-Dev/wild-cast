@@ -153,7 +153,7 @@ function UploadDrop({ label, onFile, busyLabel, note }) {
   )
 }
 
-export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief, credits, onCreditUsed }) {
+export default function PromptBriefChat({ entry, config, templateChoices = [], onConfirmTemplate, onChangeTemplate, onBack, onEdit, onSendForReview, onSaveDraft, onOpenLibrary, onNewBrief, credits, onCreditUsed, activation }) {
   const [messages, setMessages] = useState([])
   const [answers, setAnswers] = useState({})
   const [currentId, setCurrentId] = useState(null)
@@ -1029,6 +1029,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
           onSaveDraft={onSaveDraft}
           onOpenLibrary={onOpenLibrary}
           onNewBrief={onNewBrief}
+          activation={activation}
           onClose={() => setShowResult(false)}
         />
       )}
