@@ -3,6 +3,7 @@ import { ApproveIcon, RequestChangesIcon } from './ActionIcons'
 import { CommentPinLayer, CommentThreadCard } from './CanvasComments'
 import { buildThreads, hasOpenThread } from '../lib/commentThreads'
 import useIsMobile from '../lib/useIsMobile'
+import { showAlert } from '../lib/dialog'
 
 export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   const isMobile = useIsMobile()
@@ -121,7 +122,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
       if (!res.ok) throw new Error('Failed to approve')
     } catch (err) {
       setProject(prev => ({ ...prev, reviewStatus: 'review' }))
-      alert('Could not approve: ' + err.message)
+      showAlert(err.message, { title: 'Could not approve' })
     } finally {
       setApproving(false)
     }
@@ -158,7 +159,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
       if (!res.ok) throw new Error('Failed to request changes')
     } catch (err) {
       setProject(prev => ({ ...prev, reviewStatus: 'review' }))
-      alert('Could not request changes: ' + err.message)
+      showAlert(err.message, { title: 'Could not request changes' })
     } finally {
       setRequestingChanges(false)
     }
@@ -201,7 +202,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     try {
       await sendNote()
     } catch (err) {
-      alert(err.message)
+      showAlert(err.message, { title: 'Could not send' })
     } finally {
       setSubmitting(false)
     }

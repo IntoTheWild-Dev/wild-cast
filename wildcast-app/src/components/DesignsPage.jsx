@@ -7,6 +7,7 @@ import { patchCachedProject } from '../lib/projectCache'
 import { PAGE_PADDING_X, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
+import { showAlert, showConfirm, showPrompt } from '../lib/dialog'
 
 const ALL = '__all__'
 
@@ -263,7 +264,7 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
           title={project.projectName || project.templateName}
           onClick={e => {
             e.stopPropagation()
-            window.alert(project.projectName || project.templateName)
+            showAlert(project.projectName || project.templateName)
           }}
           style={{ fontWeight: 700, fontSize: 14, color: 'var(--dark)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'default' }}
         >
@@ -359,8 +360,8 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
 // click inside stops propagation so it never bubbles up into the card's
 // own onOpen underneath it.
 function MoveModal({ project, people, onClose, onMove }) {
-  function createAndMove(ownerEmail, ownerName) {
-    const name = window.prompt('New folder name')?.trim()
+  async function createAndMove(ownerEmail, ownerName) {
+    const name = (await showPrompt('New folder name', { confirmLabel: 'Create' }))?.trim()
     if (name) onMove(name, ownerEmail, ownerName)
   }
 
@@ -563,17 +564,17 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     return Object.entries(byGroup).sort(([a], [b]) => a.localeCompare(b))
   }, [filtered])
 
-  function handleDelete(id) {
-    if (!window.confirm('Delete this design? This cannot be undone.')) return
+  async function handleDelete(id) {
+    if (!(await showConfirm('This cannot be undone.', { title: 'Delete this design?', confirmLabel: 'Delete' }))) return
     setProjects(prev => prev.filter(p => p.id !== id))
     fetch(`/api/delete-project?id=${id}`, { method: 'DELETE' }).catch(() => {})
   }
 
   // Renames right from the card, no need to open the editor - Julia's ask,
   // 2026-09-15. Not owner-gated (see DesignCard's own comment on this).
-  function handleRename(project) {
+  async function handleRename(project) {
     const current = project.projectName || project.templateName || ''
-    const next = window.prompt('Rename this design', current)?.trim()
+    const next = (await showPrompt('Rename this design', { defaultValue: current, confirmLabel: 'Rename' }))?.trim()
     if (!next || next === current) return
     setProjects(prev => prev.map(p => p.id === project.id ? { ...p, projectName: next } : p))
     patchCachedProject(project.id, { projectName: next })
@@ -599,7 +600,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       // function - no catch meant a failed open just reset the busy
       // spinner with zero explanation, an unhandled promise rejection
       // visible only in the console.
-      alert('Could not open this design: ' + err.message)
+      showAlert(err.message, { title: 'Could not open this design' })
     } finally {
       setPendingBusy(false)
       setLoadingId(null)
@@ -620,7 +621,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       // reset the busy state with zero explanation - an unhandled promise
       // rejection visible only in the console, not to the person waiting
       // on the popup.
-      alert('Could not duplicate this design: ' + err.message)
+      showAlert(err.message, { title: 'Could not duplicate this design' })
     } finally {
       setPendingBusy(false)
       setLoadingId(null)
@@ -653,7 +654,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     }).catch(err => {
       setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...before } : p))
       patchCachedProject(project.id, before)
-      alert(`Could not move this design (${err.message}). It is still in its original folder.`)
+      showAlert(`It is still in its original folder. (${err.message})`, { title: 'Could not move this design' })
     })
     if (folder) {
       setFolderRegistry(prev => {
@@ -666,7 +667,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   }
 
   async function handleCreateFolder() {
-    const name = window.prompt('New folder name')?.trim()
+    const name = (await showPrompt('New folder name', { confirmLabel: 'Create' }))?.trim()
     if (!name || !activation?.key) return
     try {
       const res = await fetch('/api/folders', {
@@ -678,7 +679,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
       setFolderRegistry(prev => [...prev.filter(r => r.ownerEmail !== activation.key), data])
       setActiveFolder(name)
     } catch (err) {
-      alert('Could not create folder: ' + err.message)
+      showAlert(err.message, { title: 'Could not create folder' })
     }
   }
 

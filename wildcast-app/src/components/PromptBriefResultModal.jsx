@@ -4,6 +4,7 @@ import { assembleBrief, partnerNameFrom } from '../lib/promptBriefFlow'
 import { buildCandidateFields, fetchMerchantAssets, fitContent } from '../lib/briefToCandidates'
 import { logoStartPct } from '../lib/logoStartScale'
 import Select from './Select'
+import { showPrompt } from '../lib/dialog'
 
 // Last step of the Prompt Brief chat (Julia's ask, 2026-09-19): once the chat
 // has every answer it shows the finished template with two exits - Edit (into
@@ -83,7 +84,7 @@ export default function PromptBriefResultModal({ entry, config, answers, rows, o
   async function handleFolderChange(value) {
     setFolderError(null)
     if (value !== NEW_FOLDER) { setFolder(value); return }
-    const name = window.prompt('New folder name')?.trim()
+    const name = (await showPrompt('New folder name', { confirmLabel: 'Create' }))?.trim()
     if (!name) return
     const existing = folders.find(f => f.toLowerCase() === name.toLowerCase())
     if (existing) { setFolder(existing); return }

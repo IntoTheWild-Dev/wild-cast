@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { showAlert } from '../lib/dialog'
 
 // Figma-style pinned comments (Anang's ask, 2026-09-28): click anywhere on
 // the design to drop a numbered pin with its own reply thread. Shared by the
@@ -78,7 +79,7 @@ function Composer({ placeholder, submitLabel, onSubmit, autoFocus, needName, nam
       await onSubmit(text.trim())
       setText('')
     } catch (err) {
-      alert('Could not send: ' + err.message)
+      showAlert(err.message, { title: 'Could not send' })
     } finally {
       setBusy(false)
     }

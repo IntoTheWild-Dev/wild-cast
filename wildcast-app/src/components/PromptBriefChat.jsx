@@ -16,6 +16,7 @@ import { isCloseMatch } from '../lib/fuzzyMatch'
 import { REMOVE_BG_NOTE, shouldRemoveBackground } from '../lib/removeBackground'
 import { aiFieldSettingsFor } from '../data/templateZones'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
+import { showConfirm } from '../lib/dialog'
 
 // "Prompt Brief" screen (Julia's ask, 2026-09-19; chat-first rework 2026-09-28).
 // Same page shell as the landing page (hero copy, tip box, feature grid), with
@@ -571,7 +572,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
     const confirmMsg = seed
       ? `Improve "${seed}" with AI, writing in ${langName(lang)}? This uses 1 credit.`
       : 'Generate AI suggestions? This uses 1 credit.'
-    if (!window.confirm(confirmMsg)) return
+    if (!(await showConfirm(confirmMsg, { confirmLabel: 'Continue' }))) return
     push({ from: 'user', text: seed ? `Improve "${seed}" with AI` : (more ? 'Suggest more' : 'Suggest something with AI') })
     setAiBusy(true)
     setTyping(true)
@@ -812,7 +813,7 @@ export default function PromptBriefChat({ entry, config, templateChoices = [], o
               </div>
             </div>
             <button
-              type="button" onClick={() => { if (!answered || window.confirm('Start the chat over? Your answers so far will be cleared.')) start() }}
+              type="button" onClick={async () => { if (!answered || await showConfirm('Your answers so far will be cleared.', { title: 'Start the chat over?', confirmLabel: 'Start over' })) start() }}
               style={{ fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
