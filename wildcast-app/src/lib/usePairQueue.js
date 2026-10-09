@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { detectLang, langName, requestAiPairs } from './aiCopy'
+import { showConfirm } from './dialog'
 
 // The AI Suggest pair queue (Mark's v1.2 spec, section 8) — client-side,
 // in-memory React state, scoped per design + context.
@@ -285,7 +286,7 @@ export function usePairQueue(options) {
           : otherIsLocked
             ? 'Generate lines that match the other field\'s text? This uses 1 credit.'
             : `Generate ${PAIRS_WANTED} AI suggestions? This uses 1 credit.`
-        if (!window.confirm(message)) return
+        if (!(await showConfirm(message, { confirmLabel: 'Continue' }))) return
       }
 
       setBusyField(clickedField)

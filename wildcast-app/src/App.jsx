@@ -15,6 +15,7 @@ import MyTasksPage from './components/MyTasksPage'
 import LibraryPage from './components/LibraryPage'
 import ReviewPage from './components/ReviewPage'
 import TemplateImportPage from './components/TemplateImportPage'
+import BatchCreator from './components/BatchCreator'
 import { TEMPLATE_ZONES } from './data/templateZones'
 import { TEMPLATES } from './data/templates'
 import { blobUrlToDataUrl } from './lib/image'
@@ -30,6 +31,7 @@ import useNotifications from './lib/useNotifications'
 import { ApproveIcon, RequestChangesIcon } from './components/ActionIcons'
 import { CommentPinLayer, CommentThreadCard } from './components/CanvasComments'
 import { buildThreads, hasOpenThread } from './lib/commentThreads'
+import { showAlert, showConfirm } from './lib/dialog'
 
 const DEFAULT_FIELDS = {
   headline:        '',
@@ -42,6 +44,11 @@ const DEFAULT_FIELDS = {
   photoUrl:        null,
   qrUrl:           null,
 }
+
+// Unsaved-changes guard shared by every way out of the editor / Import review.
+const LEAVE_EDITOR = "Any changes you've made to this design will be lost."
+const LEAVE_IMPORT = "Any zone setting changes you've made will be lost."
+const confirmLeave = message => showConfirm(message, { title: 'Leave without saving?', confirmLabel: 'Leave' })
 
 // Generate a medium-res preview image (2× canvas) - the Designs / My Tasks
 // card image (?thumb= in api/save-project.js). w/h/quality overridable for
@@ -212,6 +219,7 @@ export default function App() {
   // real first thing anyone sees now - 'brief' (the actual picker+form flow)
   // only shows once "Start from scratch" is picked from there.
   const [screen, setScreen]                   = useState('landing')
+  const [batchTemplate, setBatchTemplate]     = useState(null) // "Create many" (BatchCreator.jsx)
   // Set synchronously (before the deep-link effect even runs) whenever the
   // URL is already /content/<id> on first paint, so that render shows a
   // loading placeholder instead of flashing the landing page for a frame
@@ -671,7 +679,7 @@ const SHOW_MODE_CHOOSER = false
         await openLoadedProject(project, { customTemplatesOverride: customTemplatesNow ?? customTemplates })
       } catch (err) {
         console.error('Deep-link load error:', err)
-        alert('Could not open that design - it may have been deleted.')
+        showAlert('It may have been deleted.', { title: 'Could not open that design' })
       } finally {
         setResolvingDeepLink(false)
       }
@@ -847,7 +855,7 @@ const SHOW_MODE_CHOOSER = false
       const data = await fetch(`/api/comments?id=${currentProjectId}`).then(r => r.json())
       setComments(data.comments || [])
     } catch (err) {
-      alert('Could not send reply: ' + err.message)
+      showAlert(err.message, { title: 'Could not send reply' })
     } finally {
       setPostingReply(false)
     }
@@ -907,7 +915,7 @@ const SHOW_MODE_CHOOSER = false
       await doSave({ nextReviewStatus: knownReviewStatus })
       setHasUnsavedChanges(false)
     } catch (err) {
-      alert('Status updated, but your last edit could not be saved: ' + err.message)
+      showAlert(err.message, { title: 'Status updated, but your last edit could not be saved' })
     }
   }
 
@@ -946,7 +954,7 @@ const SHOW_MODE_CHOOSER = false
       setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
-      alert('Could not approve: ' + err.message)
+      showAlert(err.message, { title: 'Could not approve' })
     } finally {
       setEditorApproving(false)
     }
@@ -977,7 +985,7 @@ const SHOW_MODE_CHOOSER = false
       setTimeout(() => setScreen('tasks'), 900)
     } catch (err) {
       setReviewStatus('review')
-      alert('Could not request changes: ' + err.message)
+      showAlert(err.message, { title: 'Could not request changes' })
     } finally {
       setEditorRequestingChanges(false)
     }
@@ -989,7 +997,7 @@ const SHOW_MODE_CHOOSER = false
   // the person who clicked Edit can start changing things straight away.
   async function handleEditApproved() {
     if (reopening || !currentProjectId || reviewStatus !== 'approved') return
-    if (!window.confirm("Edit this approved design? It goes back into approval, and can't be exported until it's approved again.")) return
+    if (!(await showConfirm("It goes back into approval, and can't be exported until it's approved again.", { title: 'Edit this approved design?', confirmLabel: 'Edit' }))) return
     setReopening(true)
     try {
       const res = await fetch('/api/save-project', {
@@ -1001,7 +1009,7 @@ const SHOW_MODE_CHOOSER = false
       patchCachedProject(currentProjectId, { reviewStatus: 'review' })
       setReviewStatus('review')
     } catch (err) {
-      alert('Could not reopen for editing: ' + err.message)
+      showAlert(err.message, { title: 'Could not reopen for editing' })
     } finally {
       setReopening(false)
     }
@@ -1044,8 +1052,8 @@ const SHOW_MODE_CHOOSER = false
   // catalogue uses for a published template, no separate code path.
   // Reset layout/exit both behave normally; nothing here is published or
   // saved back to the draft record just by opening/testing it.
-  function handleTestDraft(record) {
-    if (importDirty && !window.confirm("Leave without saving? Any zone setting changes you've made will be lost.")) return
+  async function handleTestDraft(record) {
+    if (importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
     setImportDirty(false)
     handleSelectTemplate({ id: record.slotKey, mode: 'designer', name: record.label })
   }
@@ -1175,9 +1183,9 @@ const SHOW_MODE_CHOOSER = false
   // dropping any unsaved edits. Guard every nav target here - but not the
   // logo click (onLogoClick, wired separately in the JSX below), which is
   // meant to just resume whatever brief/picker was already in progress.
-  function handleNavigate(target) {
-    if (screen === 'editor' && hasUnsavedChanges && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
-    if (screen === 'import' && importDirty && !window.confirm("Leave without saving? Any zone setting changes you've made will be lost.")) return
+  async function handleNavigate(target) {
+    if (screen === 'editor' && hasUnsavedChanges && !(await confirmLeave(LEAVE_EDITOR))) return
+    if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
     // Confirmed leaving (or wasn't dirty) - clear so a later return trip to
     // Import doesn't inherit a stale flag from before this component remounts.
     if (screen === 'import') setImportDirty(false)
@@ -1385,8 +1393,8 @@ const SHOW_MODE_CHOOSER = false
   // has nothing to do. There "Reset" means starting the template over from blank:
   // clears every field/image plus all overrides, and remounts the canvas (loadKey)
   // for a guaranteed-clean slate, same as picking the template fresh.
-  function handleResetToBlank() {
-    if (!window.confirm('Clear all fields and start over? This cannot be undone.')) return
+  async function handleResetToBlank() {
+    if (!(await showConfirm('This cannot be undone.', { title: 'Clear all fields and start over?', confirmLabel: 'Clear all' }))) return
     historyRef.current = []; setCanUndo(false)
     setFields(DEFAULT_FIELDS)
     setFontSizes({})
@@ -1470,11 +1478,11 @@ const SHOW_MODE_CHOOSER = false
     // disabled/hidden for non-Managers - shouldn't normally be reachable, but
     // keeps this correct even if the button state is ever stale.
     if (workflowRole !== 'Manager') {
-      alert('Only Managers can export.')
+      showAlert('Only Managers can export.')
       return
     }
     if (!exportRef.current?.getPng) {
-      alert('Canvas not ready - please wait a moment and try again.')
+      showAlert('Please wait a moment and try again.', { title: 'Canvas not ready' })
       return
     }
     setExporting(true)
@@ -1521,7 +1529,7 @@ const SHOW_MODE_CHOOSER = false
       let preflight = []
       try { preflight = JSON.parse(response.headers.get('X-Preflight') || '[]') } catch { preflight = [] }
       if (preflight.length) {
-        alert('Print check - please review before sending to the printer:\n\n' + preflight.map(w => '- ' + w).join('\n'))
+        showAlert(preflight.map(w => '- ' + w).join('\n'), { title: 'Print check - please review before sending to the printer' })
       }
 
       // PDF export is free - only AI feature usage costs credits now, see
@@ -1530,7 +1538,7 @@ const SHOW_MODE_CHOOSER = false
       offerMoreFormats()
     } catch (err) {
       console.error('Export error:', err)
-      alert('Export failed: ' + err.message)
+      showAlert(err.message, { title: 'Export failed' })
     } finally {
       setExporting(false)
     }
@@ -1671,7 +1679,7 @@ const SHOW_MODE_CHOOSER = false
       if (!showedMoreFormats) setShowSavedModal(true)
     } catch (err) {
       console.error('Save error:', err)
-      alert('Save failed: ' + err.message)
+      showAlert(err.message, { title: 'Save failed' })
     } finally {
       setSaving(false)
     }
@@ -1738,7 +1746,7 @@ const SHOW_MODE_CHOOSER = false
       setScreen('brief')
     } catch (err) {
       console.error('Save error:', err)
-      alert('Save failed: ' + err.message)
+      showAlert(err.message, { title: 'Save failed' })
     } finally {
       setSaving(false)
     }
@@ -1765,7 +1773,7 @@ const SHOW_MODE_CHOOSER = false
     // redesign, 2026-09-18) - this used to be framed as an alternative to
     // exporting ("skips exporting... first"), which is now backwards: this
     // IS what unlocks Export PDF, not something instead of it.
-    if (!isResubmit && !window.confirm('Send this design for review? This creates a shareable review link and unlocks PDF export.')) return
+    if (!isResubmit && !(await showConfirm('This creates a shareable review link and unlocks PDF export.', { title: 'Send this design for review?', confirmLabel: 'Send' }))) return
 
     // Bug fix, 2026-09-24 (found by review): setSaving(true) now runs
     // immediately, before any of the async work below - it used to wait
@@ -1804,7 +1812,7 @@ const SHOW_MODE_CHOOSER = false
           }
         } catch { /* network error - fall back to local state rather than block sending */ }
       }
-      if (isResubmit && currentReviewStatus === 'approved' && !window.confirm('This design has already been approved. Sending it again will undo the approval and put it back under review. Continue?')) return
+      if (isResubmit && currentReviewStatus === 'approved' && !(await showConfirm('Sending it again will undo the approval and put it back under review.', { title: 'This design has already been approved', confirmLabel: 'Continue' }))) return
 
       if (isResubmit) {
         // Thread roots only - Done is per thread, and each PATCH is its own
@@ -1835,7 +1843,7 @@ const SHOW_MODE_CHOOSER = false
       }
     } catch (err) {
       console.error('Send for Review error:', err)
-      alert('Send for Review failed: ' + err.message)
+      showAlert(err.message, { title: 'Send for Review failed' })
     } finally {
       setSaving(false)
     }
@@ -1916,6 +1924,19 @@ const SHOW_MODE_CHOOSER = false
     await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions, folder })
   }
 
+  // "Create many" (BatchCreator.jsx): saves one row of a batch as its own
+  // design - same saveCandidateForReview path as Prompt Brief's Save for
+  // later, so it lands in the Design library ready for review.
+  async function handleSaveBatchDesign({ fields: rowFields, png, name, folder, imageScales, imagePositions }) {
+    const savedFields = { ...DEFAULT_FIELDS, ...rowFields }
+    for (const key of Object.keys(savedFields)) {
+      if (key.endsWith('Url') && typeof savedFields[key] === 'string' && savedFields[key].startsWith('blob:')) {
+        savedFields[key] = await blobUrlToDataUrl(savedFields[key])
+      }
+    }
+    await saveCandidateForReview(batchTemplate, savedFields, png, { name, folder, imageScales, imagePositions, vertical: null })
+  }
+
   // items: [{ template, fields, png, label }] - one entry per ticked candidate.
   // Ticking both Option A and B produces two independent saved designs and two
   // review links, shown together in the same ReviewModal.
@@ -1933,7 +1954,7 @@ const SHOW_MODE_CHOOSER = false
       })))
     } catch (err) {
       console.error('Send candidates for review error:', err)
-      alert('Send for Review failed: ' + err.message)
+      showAlert(err.message, { title: 'Send for Review failed' })
     } finally {
       setSaving(false)
     }
@@ -2020,14 +2041,14 @@ const SHOW_MODE_CHOOSER = false
   // unsaved-changes guard as the nav (handleNavigate), since it leaves
   // whatever's open in the editor.
   async function handleOpenProjectById(id) {
-    if (screen === 'editor' && hasUnsavedChanges && !window.confirm("Leave without saving? Any changes you've made to this design will be lost.")) return
+    if (screen === 'editor' && hasUnsavedChanges && !(await confirmLeave(LEAVE_EDITOR))) return
     try {
       const res = await fetch(`/api/load-project?id=${encodeURIComponent(id)}&_t=${Date.now()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Design not found')
       await openLoadedProject(await res.json())
     } catch (err) {
       console.error('Open from notification error:', err)
-      alert('Could not open that design - it may have been deleted.')
+      showAlert('It may have been deleted.', { title: 'Could not open that design' })
     }
   }
 
@@ -2290,6 +2311,24 @@ const SHOW_MODE_CHOOSER = false
             onOptimisticPatch={patchCustomRecord}
             onRecordDeleted={removeCustomRecord}
             onBack={() => setScreen('landing')}
+            onBatch={template => { setBatchTemplate(template); setScreen('batch') }}
+          />
+        </div>
+      )}
+
+      {screen === 'batch' && batchTemplate && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <BatchCreator
+            key={batchTemplate.id}
+            template={batchTemplate}
+            config={TEMPLATE_ZONES[batchTemplate.id] ?? customTemplates.zonesById[batchTemplate.id] ?? null}
+            activation={activation}
+            onSaveDesign={handleSaveBatchDesign}
+            onBack={() => setScreen('catalogue')}
+            onDone={({ count, folder }) => {
+              showAlert(`They're in the Design library${folder ? `, folder "${folder}"` : ''}.`, { title: `${count} design${count === 1 ? '' : 's'} saved` })
+              setScreen('designs')
+            }}
           />
         </div>
       )}

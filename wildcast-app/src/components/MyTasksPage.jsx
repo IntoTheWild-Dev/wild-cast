@@ -3,6 +3,7 @@ import { PAGE_PADDING_X, APP_HEADER_HEIGHT, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
 import Select from './Select'
+import { showAlert } from '../lib/dialog'
 
 // "Review queue in the user profile" (Notion card, 2026-09-22): "A simple
 // task board under the profile. Each asset shows its state: under design,
@@ -147,7 +148,7 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
     try {
       await onOpenProject(project)
     } catch (err) {
-      alert('Could not open this design: ' + err.message)
+      showAlert(err.message, { title: 'Could not open this design' })
     } finally {
       setOpeningId(null)
     }

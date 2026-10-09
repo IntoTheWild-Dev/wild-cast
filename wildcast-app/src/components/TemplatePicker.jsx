@@ -4,6 +4,7 @@ import { activationHeaders } from '../lib/activationKey'
 import { FORMAT_TEMPLATE_GROUP } from '../lib/briefConstants'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 import PageSpinner from './PageSpinner'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 // Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label -
 // duplicated (not imported) to keep this file's only dependency on that one
@@ -446,7 +447,7 @@ function ManageMenu({ record, onAction, onDelete, onRequestArchive }) {
 // removed - clicking a template card goes straight into the editor in Guided
 // mode. Flip this flag to true to restore the popup.
 const SHOW_MODE_CHOOSER = false
-function OptionsView({ group, customCards, customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onSelect }) {
+function OptionsView({ group, customCards, customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onSelect, onBatch }) {
   const [modal, setModal] = useState(null)
   const [archiveConfirm, setArchiveConfirm] = useState(null)
   const [archiving, setArchiving] = useState(false)
@@ -458,6 +459,12 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
     const template = TEMPLATES.find(t => t.id === templateId) ?? customCards.find(t => t.id === templateId)
     if (template) onSelect(template)
     setModal(null)
+  }
+
+  // "Create many" (App.jsx BatchCreator) - same template lookup as handlePick.
+  function handleBatch(templateId) {
+    const template = TEMPLATES.find(t => t.id === templateId) ?? customCards.find(t => t.id === templateId)
+    if (template) onBatch(template)
   }
 
   // Every BASE_TEMPLATES slot (custom import or hardcoded) is keyed by the
@@ -495,7 +502,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       // "have to press it 3 times before it published").
       onOptimisticPatch?.(slotKey, { live: data.live, archived: data.archived, isOverrideOnly: data.isOverrideOnly, label })
     } catch (err) {
-      window.alert(err.message)
+      showAlert(err.message, { title: 'Something went wrong' })
     }
   }
 
@@ -507,7 +514,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
   }
 
   async function handleDelete(slotKey, label) {
-    const ok = window.confirm(`Permanently delete "${label}"? This removes its imported background and zone data for good - unlike Archive, this can't be undone.`)
+    const ok = await showConfirm("This removes its imported background and zone data for good - unlike Archive, this can't be undone.", { title: `Permanently delete "${label}"?`, confirmLabel: 'Delete' })
     if (!ok) return
     try {
       const res = await fetch(`/api/delete-template?slotKey=${encodeURIComponent(slotKey)}`, {
@@ -519,7 +526,7 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
       // Same reasoning as handleManageAction above - no immediate onRefetch().
       onRecordDeleted?.(slotKey)
     } catch (err) {
-      window.alert(err.message)
+      showAlert(err.message, { title: 'Something went wrong' })
     }
   }
 
@@ -585,13 +592,23 @@ function OptionsView({ group, customCards, customRecords = [], canManage = false
                 </div>
                 <div style={{ padding: '16px 18px 18px' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dark)', marginBottom: 3 }}>{t.label}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     <div style={{ display: 'flex', gap: 5 }}>
                       {['A6', 'CMYK', '3mm bleed'].map(tag => (
                         <span key={tag} style={{ fontSize: 10, fontWeight: 600, color: 'var(--mid)', background: '#F3F4F6', padding: '2px 7px', borderRadius: 100 }}>{tag}</span>
                       ))}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>Open ↗</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {onBatch && (
+                        <button
+                          type="button"
+                          title="Make several designs at once from this template"
+                          onClick={e => { e.stopPropagation(); handleBatch(t.templateIdGuided ?? t.templateIdDesigner) }}
+                          style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', background: '#fff', border: '1px solid var(--primary)', borderRadius: 100, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        >Create many</button>
+                      )}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>Open ↗</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -823,7 +840,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) - reached via the header logo.
 // mode="catalogue": full template grid - reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, loading }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, loading, onBatch }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
@@ -846,6 +863,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
         onRecordDeleted={onRecordDeleted}
         onBack={() => setSelectedGroup(null)}
         onSelect={onSelect}
+        onBatch={onBatch}
       />
     )
   }
