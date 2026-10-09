@@ -1,5 +1,13 @@
 {
   "rewrites": [
-    { "source": "/content/(.*)", "destination": "/index.html" }
-  ]
+    {
+      "source": "/content/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/export-cmyk.js": {
+      "includeFiles": "api/{fonts/wolt,icc}/**"
+    }
+  }
 }

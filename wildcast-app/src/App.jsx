@@ -1479,18 +1479,29 @@ const SHOW_MODE_CHOOSER = false
     }
     setExporting(true)
     try {
-      const png = exportRef.current.getPng()
       const filename = (projectName.trim() || selectedTemplate?.name || 'wildcast-flyer')
-
-      const response = await fetch('/api/export-cmyk', {
+      // brand: 'wolt' - hardcoded for now since every current WildCast
+      // template is a Wolt flyer (see api/_lib/brandColors.js, Phase 1 of
+      // the print-color fix, 2026-09-25 brief). Once templates for other
+      // brands exist, this should come from the template/partner instead.
+      const common = { filename, profile: iccProfile, brand: 'wolt', mode }
+      const post = body => fetch('/api/export-cmyk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // brand: 'wolt' - hardcoded for now since every current WildCast
-        // template is a Wolt flyer (see api/_lib/brandColors.js, Phase 1 of
-        // the print-color fix, 2026-09-25 brief). Once templates for other
-        // brands exist, this should come from the template/partner instead.
-        body: JSON.stringify({ png, filename, profile: iccProfile, brand: 'wolt', mode }),
+        body: JSON.stringify({ ...common, ...body }),
       })
+
+      // Layered export (vector background + live text + separate images, see
+      // api/_lib/layeredPdf.js) whenever the template has a vector PDF from
+      // the Figma plugin. The flat PNG is left out of that request to stay
+      // under the upload limit; if the layered build fails, export flat.
+      let response = null
+      const backgroundPdfUrl = templateConfig?.backgroundPdfUrl
+      if (backgroundPdfUrl && exportRef.current.getLayoutSnapshot) {
+        response = await post({ layout: exportRef.current.getLayoutSnapshot(), backgroundPdfUrl })
+        if (!response.ok) console.warn('Layered export failed, falling back to the flat export', response.status)
+      }
+      if (!response?.ok) response = await post({ png: exportRef.current.getPng() })
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: response.statusText }))
@@ -1504,6 +1515,14 @@ const SHOW_MODE_CHOOSER = false
       a.download = `${filename}${mode === 'cmyk' ? '-cmyk' : ''}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+
+      // Print preflight (api/_lib/preflight.js): only real print problems -
+      // a low-resolution upload, ink over 300%, a missing font. Never blocks.
+      let preflight = []
+      try { preflight = JSON.parse(response.headers.get('X-Preflight') || '[]') } catch { preflight = [] }
+      if (preflight.length) {
+        alert('Print check - please review before sending to the printer:\n\n' + preflight.map(w => '- ' + w).join('\n'))
+      }
 
       // PDF export is free - only AI feature usage costs credits now, see
       // handleAiCreditUsed (Julia's ask, 2026-09-15: replace the old

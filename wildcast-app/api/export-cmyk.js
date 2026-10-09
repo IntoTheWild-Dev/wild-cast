@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { readFileSync } from 'fs'
@@ -7,6 +8,9 @@ import { fileURLToPath } from 'url'
 import { deflateSync } from 'zlib'
 import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
+import { buildLayeredPdf } from './_lib/layeredPdf.js'
+import { preflightPdf } from './_lib/preflight.js'
+import { isBlobHost } from './_lib/templateAssets.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -73,17 +77,74 @@ const ICC_PROFILES = {
 //    Convert to Destination does), not sharp's Perceptual-only conversion,
 //    which measured dE ~2.5-3.2 off on the reference's food photos.
 const EXPORT_MODES = new Set(['print', 'cmyk'])
+// Uploads enlarged below this print resolution get a preflight warning.
+const MIN_SOURCE_PPI = 300
+// Same names the editor's field list uses.
+const ZONE_NAMES = { photo: 'Food photo', logo: 'Restaurant logo', qr: 'QR code', sticker: 'Sticker' }
 const SRGB_ICC = 'sRGB_IEC61966-2-1.icc'  // same profile InDesign embeds
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print' } = req.body
-  if (!png) return res.status(400).json({ error: 'Missing png' })
+  const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print', layout = null, backgroundPdfUrl = null } = req.body
+  const layered = Boolean(layout && backgroundPdfUrl)
+  if (!png && !layered) return res.status(400).json({ error: 'Missing png' })
 
   const profileMeta = ICC_PROFILES[profile]
   if (!profileMeta) return res.status(400).json({ error: `Unknown profile "${profile}"` })
   if (!EXPORT_MODES.has(mode)) return res.status(400).json({ error: `Unknown mode "${mode}"` })
+
+  const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
+  const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = []) => {
+    // Print preflight on the finished file (api/_lib/preflight.js): plain-word
+    // warnings for the export dialog. Never blocks the download.
+    const warnings = []
+    try {
+      const pf = await preflightPdf(pdfBuffer, { lut: loadLut(join(__dirname, 'icc', profileMeta.lut)) })
+      for (const c of pf.checks) if (c.status !== 'pass' && c.id !== 'livetext' && c.id !== 'ppi') warnings.push(`${c.label}: ${c.detail}`)
+    } catch (err) {
+      console.error('export-cmyk preflight error:', err)
+    }
+    for (const s of sourcePpi) {
+      const name = ZONE_NAMES[s.zoneId] ?? 'An image'
+      if (s.ppi < MIN_SOURCE_PPI) warnings.push(`${name} is ${s.ppi} ppi at print size (300 needed). Upload a larger file.`)
+    }
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`)
+    res.setHeader('X-Export-Mode', mode)
+    res.setHeader('X-Export-Kind', exportKind)
+    res.setHeader('Content-Length', pdfBuffer.length)
+    // Requirement 3 (brief §5): flag colours with no official print value.
+    res.setHeader('X-Unverified-Colors', String(unverifiedColorCount))
+    // ASCII-safe JSON array of warnings (headers can't carry raw UTF-8).
+    res.setHeader('X-Preflight', JSON.stringify(warnings).replace(/[^ -~]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')))
+    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode, X-Export-Kind, X-Preflight')
+    return res.status(200).send(pdfBuffer)
+  }
+
+  // ── Layered export (2026-10-06): the template's vector PDF + live text +
+  // separate images, see api/_lib/layeredPdf.js. Used whenever the template
+  // has a stored vector background; anything else keeps the flat path below.
+  if (layered) {
+    try {
+      const templatePdf = await fetchTemplatePdf(backgroundPdfUrl)
+      const { pdf, unverifiedColorCount, sourcePpi } = await buildLayeredPdf({
+        templatePdf, layout, mode,
+        library: getBrandLibrary(brand),
+        lut: loadLut(join(__dirname, 'icc', profileMeta.lut)),
+        iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)),
+        profileMeta,
+        fontsDir: join(__dirname, 'fonts', 'wolt'),
+        srgbIcc: readFileSync(join(__dirname, 'icc', SRGB_ICC)),
+        page: { PT_W, PT_H, BLEED_PT },
+      })
+      return await send(pdf, unverifiedColorCount, 'layered', sourcePpi)
+    } catch (err) {
+      console.error('export-cmyk layered error:', err)
+      if (!png) return res.status(500).json({ error: err.message })
+      // Fall through to the flat export so the user still gets a file.
+    }
+  }
 
   try {
     const pngBuffer = Buffer.from(
@@ -109,23 +170,33 @@ export default async function handler(req, res) {
       brandMasks, brandBlend, iccProfile, profileMeta,
     })
 
-    const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`)
-    res.setHeader('X-Export-Mode', mode)
-    res.setHeader('Content-Length', pdfBuffer.length)
-    // Requirement 3 (brief §5): flag any export that used the fallback
-    // conversion for one or more colors, so nobody assumes an unflagged
-    // flyer is fully brand-accurate. Exposed as a response header (rather
-    // than baked into the PDF itself) so the UI can show "N colors not
-    // brand-verified" without touching the print file.
-    res.setHeader('X-Unverified-Colors', String(unverifiedColorCount))
-    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode')
-    return res.status(200).send(pdfBuffer)
+    return await send(pdfBuffer, unverifiedColorCount, 'flat')
   } catch (err) {
     console.error('export-cmyk error:', err)
     return res.status(500).json({ error: err.message })
   }
+}
+
+// The template's vector background. The editor holds it as a proxy link
+// ("/api/list-templates?url=<blob url>", src/lib/customTemplates.js); only
+// that template file on our Blob store is ever fetched with the token.
+// WILDCAST_TEMPLATE_PROXY (local development only, no Blob token) fetches
+// through a deployed app's own proxy instead.
+const TEMPLATE_PDF_PATH = /^\/templates\/[a-z0-9-]+-bg\.pdf$/
+export async function fetchTemplatePdf(link) {
+  let blobUrl = String(link)
+  if (blobUrl.startsWith('/api/list-templates?')) blobUrl = new URLSearchParams(blobUrl.split('?')[1]).get('url') ?? ''
+  if (!isBlobHost(blobUrl) || !TEMPLATE_PDF_PATH.test(decodeURIComponent(new URL(blobUrl).pathname))) {
+    throw new Error('Not a template background PDF')
+  }
+  const token = process.env.BLOB_READ_WRITE_TOKEN
+  const proxy = process.env.WILDCAST_TEMPLATE_PROXY
+  const url = token || !proxy ? `${blobUrl}?_t=${Date.now()}` : `${proxy}/api/list-templates?url=${encodeURIComponent(blobUrl)}`
+  const r = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
+  if (!r.ok) throw new Error(`Template PDF not available (${r.status})`)
+  const bytes = Buffer.from(await r.arrayBuffer())
+  if (bytes.toString('latin1', 0, 5) !== '%PDF-') throw new Error('Template background is not a PDF')
+  return bytes
 }
 
 // ── Flyer image: resize/bleed, then sRGB ('print') or CMYK ('cmyk') ─────────

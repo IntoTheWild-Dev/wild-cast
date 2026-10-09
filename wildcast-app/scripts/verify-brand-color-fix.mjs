@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
-import { URL } from 'node:url'
+import { URL, fileURLToPath } from 'node:url'
 import { inflateSync } from 'node:zlib'
 import sharp from 'sharp'
 import { PDFDocument, PDFName } from 'pdf-lib'
@@ -182,7 +182,7 @@ for (const mode of [undefined, 'cmyk']) {
 // (C67 for Wolt Blue, an 8-point cyan step = the printed "halo"). Checked on
 // the ink each pixel finally carries: stencil operands, blend overlay, or the
 // Relative Colorimetric + BPC conversion of the image sample.
-const lutPath = new URL('../api/icc/PSOcoated_v3.relcol-bpc.lut', import.meta.url).pathname
+const lutPath = fileURLToPath(new URL('../api/icc/PSOcoated_v3.relcol-bpc.lut', import.meta.url))
 const lut = loadLut(lutPath)
 const pixelCount = outputWidth * outputHeight
 function finalInk({ pixels, exactMask, exactBytes, blend }) {
