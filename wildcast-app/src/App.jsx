@@ -214,6 +214,9 @@ function SavedModal({ onContinue, onNewDesign, onExit }) {
   )
 }
 
+// Nav-bar pages that show the floating Back / Home pill (FloatingNav).
+const FLOATING_NAV_SCREENS = ['catalogue', 'designs', 'tasks', 'library', 'import']
+
 export default function App() {
   // 'landing' (the new 3-button home screen, Julia's ask 2026-09-11) is the
   // real first thing anyone sees now - 'brief' (the actual picker+form flow)
@@ -235,9 +238,15 @@ export default function App() {
   // the loading state), so that case keeps the Designs fallback.
   const prevScreenRef = useRef(null)
   const editorBackTargetRef = useRef('designs')
+  const pageBackTargetRef = useRef('landing')
   useEffect(() => {
     if (screen === 'editor' && prevScreenRef.current && prevScreenRef.current !== 'editor') {
       editorBackTargetRef.current = prevScreenRef.current
+    }
+    // The floating Back on the nav-bar pages (FloatingNav): the screen before
+    // it, but not the editor - coming back from a design keeps the original.
+    if (FLOATING_NAV_SCREENS.includes(screen) && prevScreenRef.current && prevScreenRef.current !== screen && prevScreenRef.current !== 'editor') {
+      pageBackTargetRef.current = prevScreenRef.current
     }
     if (!resolvingDeepLink) prevScreenRef.current = screen
   }, [screen, resolvingDeepLink])
@@ -1183,6 +1192,14 @@ const SHOW_MODE_CHOOSER = false
   // dropping any unsaved edits. Guard every nav target here - but not the
   // logo click (onLogoClick, wired separately in the JSX below), which is
   // meant to just resume whatever brief/picker was already in progress.
+  // FloatingNav's Back - straight to the remembered screen (handleNavigate
+  // would restart a brief chat), with the same unsaved-import guard.
+  async function handlePageBack() {
+    if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
+    if (screen === 'import') setImportDirty(false)
+    setScreen(pageBackTargetRef.current)
+  }
+
   async function handleNavigate(target) {
     if (screen === 'editor' && hasUnsavedChanges && !(await confirmLeave(LEAVE_EDITOR))) return
     if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
@@ -2310,7 +2327,8 @@ const SHOW_MODE_CHOOSER = false
             canManage={activation?.role === 'designer' || activation?.role === 'agency'}
             onOptimisticPatch={patchCustomRecord}
             onRecordDeleted={removeCustomRecord}
-            onBack={() => setScreen('landing')}
+            onBack={handlePageBack}
+            onHome={() => handleNavigate('landing')}
             onBatch={template => { setBatchTemplate(template); setScreen('batch') }}
           />
         </div>
@@ -2335,19 +2353,19 @@ const SHOW_MODE_CHOOSER = false
 
       {screen === 'designs' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} activation={activation} onBack={() => setScreen('landing')} />
+          <DesignsPage onOpenProject={handleOpenProject} onDuplicateProject={handleDuplicateProject} customCards={customTemplates.cards} activation={activation} onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
         </div>
       )}
 
       {screen === 'library' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <LibraryPage onBack={() => setScreen('landing')} />
+          <LibraryPage onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
         </div>
       )}
 
       {screen === 'tasks' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <MyTasksPage onOpenProject={handleOpenProject} activation={activation} unreadProjectIds={notifications.unreadProjectIds} onBack={() => setScreen('landing')} />
+          <MyTasksPage onOpenProject={handleOpenProject} activation={activation} unreadProjectIds={notifications.unreadProjectIds} onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
         </div>
       )}
 
@@ -2359,6 +2377,8 @@ const SHOW_MODE_CHOOSER = false
             onOptimisticPatch={patchCustomRecord}
             onTestDraft={handleTestDraft}
             onDirtyChange={setImportDirty}
+            onBack={handlePageBack}
+            onHome={() => handleNavigate('landing')}
           />
         </div>
       )}

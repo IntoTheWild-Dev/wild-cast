@@ -4,6 +4,7 @@ import { activationHeaders } from '../lib/activationKey'
 import { FORMAT_TEMPLATE_GROUP } from '../lib/briefConstants'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 import PageSpinner from './PageSpinner'
+import FloatingNav from './FloatingNav'
 import { showAlert, showConfirm } from '../lib/dialog'
 
 // Same slugify TemplateImportPage.jsx uses to derive a slotKey from a label -
@@ -276,30 +277,19 @@ function GroupCard({ group, onViewAll }) {
 }
 
 // ── Catalogue view (all template groups) ──────────────────────────────────────
-function CatalogueView({ groups, onViewGroup, onBack, loading }) {
+function CatalogueView({ groups, onViewGroup, onBack, onHome, loading }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `40px ${PAGE_GUTTER}px 64px` }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-          <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--dark)', margin: 0 }}>All templates</h1>
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
-            >
-              ← Back
-            </button>
-          )}
-        </div>
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `32px ${PAGE_GUTTER}px 64px` }}>
         {loading ? <PageSpinner label="Loading templates…" /> : (
+          <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))', gap: 20 }}>
             {groups.map(g => (
               <GroupCard key={g.key} group={g} onViewAll={() => onViewGroup(g)} />
             ))}
           </div>
+          <FloatingNav onBack={onBack} onHome={onHome} />
+          </>
         )}
       </div>
     </div>
@@ -840,7 +830,7 @@ function BriefingForm({ onSubmit }) {
 // ── Main component ────────────────────────────────────────────────────────────
 // mode="hero": marketing landing (hero copy + briefing form) - reached via the header logo.
 // mode="catalogue": full template grid - reached via the "Templates" nav link.
-export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, loading, onBatch }) {
+export default function TemplatePicker({ onSelect, mode = 'hero', customCards = [], customRecords = [], canManage = false, onOptimisticPatch, onRecordDeleted, onBack, onHome, loading, onBatch }) {
   const [selectedGroup, setSelectedGroup] = useState(null)  // null = top-level view for this mode
 
   const allTemplates = useMemo(() => overlayCustomCards(BASE_TEMPLATES, customCards, customRecords), [customCards, customRecords])
@@ -869,7 +859,7 @@ export default function TemplatePicker({ onSelect, mode = 'hero', customCards = 
   }
 
   if (mode === 'catalogue') {
-    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} onBack={onBack} loading={loading} />
+    return <CatalogueView groups={allGroups} onViewGroup={setSelectedGroup} onBack={onBack} onHome={onHome} loading={loading} />
   }
 
   function handleBriefSubmit({ category, format }) {

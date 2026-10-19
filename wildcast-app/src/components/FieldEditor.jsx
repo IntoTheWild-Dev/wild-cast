@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
+import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
 import Select from './Select'
 
 function formatDateTime(ts) {
@@ -1132,8 +1132,9 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                 read as "only ever expands, no way to close it back up".
                 Pointing right (›) now means "expand"; left (‹) means
                 "collapse/close", matching how these arrows are normally
-                read regardless of which state is currently showing. */}
-            {expanded ? '‹' : '›'}
+                read regardless of which state is currently showing.
+                Hugeicons chevrons instead of the ‹ › text glyphs. */}
+            <HugeiconsIcon icon={expanded ? ArrowLeft01Icon : ArrowRight01Icon} size={16} />
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dark)' }}>Edit content</div>
