@@ -10,6 +10,7 @@ import { shouldRemoveBackground, isAlreadyCutOut } from '../lib/removeBackground
 import { PAGE_PADDING_X, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
+import FloatingNav from './FloatingNav'
 
 const ALL_MERCHANTS = '__all__'
 const ALL_TYPES = '__all__'
@@ -761,7 +762,7 @@ function AssetCard({ asset, onDelete, onRename, onMove, allMerchants, showMercha
   )
 }
 
-export default function LibraryPage({ onBack }) {
+export default function LibraryPage({ onBack, onHome }) {
   const isMobile = useIsMobile()
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -831,24 +832,11 @@ export default function LibraryPage({ onBack }) {
     // would trap the sticky title band (stickyPageBar) inside it.
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
-      {/* Page header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff', ...stickyPageBar(isMobile) }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>Assets</h1>
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
-            >
-              ← Back
-            </button>
-          )}
-        </div>
-        <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--mid)' }}>
-          {loading ? 'Loading…' : assets.length === 0
+      {/* Page header - hidden while loading, like My Tasks */}
+      {!loading && (
+      <div style={{ borderBottom: '1px solid var(--border)', padding: `20px ${PAGE_PADDING_X}`, background: '#fff', ...stickyPageBar(isMobile) }}>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--mid)' }}>
+          {assets.length === 0
             ? 'Your uploaded logos and photos, ready to reuse across designs.'
             : `${assets.length} saved asset${assets.length === 1 ? '' : 's'}`}
         </p>
@@ -888,6 +876,7 @@ export default function LibraryPage({ onBack }) {
           ))}
         </div>
       </div>
+      )}
 
       {loading ? (
         <PageSpinner label="Loading assets…" />
@@ -920,6 +909,7 @@ export default function LibraryPage({ onBack }) {
         </div>
       )}
 
+      {!loading && <FloatingNav onBack={onBack} onHome={onHome} />}
     </div>
   )
 }

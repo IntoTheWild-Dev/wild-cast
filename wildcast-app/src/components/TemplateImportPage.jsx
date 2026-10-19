@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Select from './Select'
+import FloatingNav from './FloatingNav'
+import { RefreshIcon } from './ActionIcons'
 import { templateAssetSrc } from '../lib/customTemplates'
 import { activationHeaders } from '../lib/activationKey'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
@@ -277,7 +279,7 @@ function ZoneCard({ z, expanded, onToggle, needsReview, onChange, onMoveForward,
   )
 }
 
-export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch, onTestDraft, onDirtyChange }) {
+export default function TemplateImportPage({ customRecords, onRefetch, onOptimisticPatch, onTestDraft, onDirtyChange, onBack, onHome }) {
   const isMobile = useIsMobile()
   const [error, setError] = useState('')
   // A slotKey, not a snapshotted record - the actual record is looked up
@@ -495,9 +497,6 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--bg)' }}>
       <div style={{ maxWidth: PAGE_MAX_WIDTH, margin: '0 auto', padding: `40px ${PAGE_GUTTER}px 64px` }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--dark)', marginBottom: 4 }}>
-          Review Figma imports
-        </h1>
         <p style={{ fontSize: 13, color: 'var(--mid)', marginBottom: 20 }}>
           Designer-only. Check the zone layout an import pulled from Figma, then publish it to the catalogue.
         </p>
@@ -510,16 +509,17 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
         </div>
 
         <div style={{ marginBottom: 32, maxWidth: 420 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--dark)' }}>Import to review</label>
             <button
               type="button"
               onClick={handleManualRefresh}
               disabled={refreshing}
               title="Check for new imports from the plugin"
-              style={{ fontSize: 11, fontWeight: 600, color: refreshing ? 'var(--light)' : 'var(--primary)', background: 'transparent', border: 'none', cursor: refreshing ? 'default' : 'pointer', padding: 0 }}
+              style={{ fontSize: 11, fontWeight: 600, color: refreshing ? 'var(--light)' : 'var(--primary)', background: 'transparent', border: 'none', cursor: refreshing ? 'default' : 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              {refreshing ? 'Checking…' : '↻ Refresh'}
+              <RefreshIcon size={13} spinning={refreshing} />
+              {refreshing ? 'Checking…' : 'Refresh'}
             </button>
           </div>
           <Select
@@ -651,6 +651,7 @@ export default function TemplateImportPage({ customRecords, onRefetch, onOptimis
             </div>
           </div>
         )}
+        <FloatingNav onBack={onBack} onHome={onHome} />
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { PAGE_PADDING_X, APP_HEADER_HEIGHT, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
 import PageSpinner from './PageSpinner'
 import Select from './Select'
+import FloatingNav from './FloatingNav'
 import { showAlert } from '../lib/dialog'
 
 // "Review queue in the user profile" (Notion card, 2026-09-22): "A simple
@@ -92,7 +93,7 @@ function TaskCard({ project, opening, onOpen, hasUpdate, borderColor = 'var(--bo
   )
 }
 
-export default function MyTasksPage({ onOpenProject, activation, unreadProjectIds, onBack }) {
+export default function MyTasksPage({ onOpenProject, activation, unreadProjectIds, onBack, onHome }) {
   const [projects, setProjects] = useState([])
   const [loading, setLoading]   = useState(true)
   const [openingId, setOpeningId] = useState(null)
@@ -124,6 +125,7 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
   // signed-in email (see App.jsx's own activation shape).
   const ownerKey = activation?.key
   const mine = useMemo(() => projects.filter(p => ownerKey && p.ownerEmail === ownerKey), [projects, ownerKey])
+  const showFilters = Boolean(activation?.key) && !loading && mine.length > 0
 
   const [statusFilter, setStatusFilter] = useState(ALL)
   const [merchantFilter, setMerchantFilter] = useState(ALL)
@@ -160,23 +162,11 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       {/* Page header - same shape as LibraryPage/DesignsPage's own */}
-      <div ref={bandRef} style={{ borderBottom: '1px solid var(--border)', padding: `28px ${PAGE_PADDING_X} 24px`, background: '#fff', ...stickyPageBar(isMobile) }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--dark)' }}>My Tasks</h1>
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--mid)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit', flexShrink: 0 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--mid)' }}
-            >
-              ← Back
-            </button>
-          )}
-        </div>
-        {activation?.key && !loading && mine.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+      {/* Hidden (not unmounted - bandRef's observer stays attached) until
+          the filters have something to show, so loading isn't an empty bar. */}
+      <div ref={bandRef} style={{ display: showFilters ? 'block' : 'none', borderBottom: '1px solid var(--border)', padding: `20px ${PAGE_PADDING_X}`, background: '#fff', ...stickyPageBar(isMobile) }}>
+        {showFilters && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mid)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Viewing
             </label>
@@ -251,6 +241,8 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
         )}
       </div>
       )}
+
+      {!loading && <FloatingNav onBack={onBack} onHome={onHome} />}
     </div>
   )
 }
