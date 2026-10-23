@@ -34,7 +34,7 @@ Every hook outside this folder is marked `[print-colors]`:
 
 1. Delete `api/_lib/printColors/`, `api/print-colors.js`, `src/features/printColors/`, `tests/print-colors*.test.mjs`, `api/icc/PSOcoated_v3.cmyk-to-srgb.lut` and `scripts/build-cmyk-to-rgb-lut.py`.
 2. `api/export-cmyk.js`: remove the import and the `printSettings` line, remove the `finishPdf` line in `send`, and change the two `library: printSettings.library` lines back to `library: getBrandLibrary(brand)` (the flat one can simply be deleted).
-3. `src/App.jsx`: remove the import, the `print-colors` line in `handleNavigate`, and the `screen === 'print-colors'` block.
+3. `src/App.jsx`: remove every line marked `[print-colors]` (the two imports, plus the leave-guard lines in `handlePageBack` and `handleNavigate`), the `print-colors` case in `handleNavigate`, and the `screen === 'print-colors'` block.
 4. `src/components/Header.jsx`: remove the `Print colours` nav line.
 5. `vercel.json`: remove the `api/print-colors.js` entry.
 6. `api/_lib/auth.js`: `resolveKeyRole` can go back to not being exported.
