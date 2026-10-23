@@ -205,7 +205,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
               a Coming Soon popup - everything else designer-tier stays the
               same for both roles. See api/_lib/auth.js. */}
           {activation?.role === 'agency' && navItem('Import', 'import')}
-          {activation?.role === 'agency' && navItem('Print colours', 'print-colors')}
+          {/* [print-colors] */ activation?.role === 'agency' && navItem('Print colours', 'print-colors')}
           {activation?.role === 'designer' && navItem('Import', 'import', true)}
           <span
             onClick={() => { setMenuOpen(false); onHelp?.() }}

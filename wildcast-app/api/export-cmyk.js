@@ -6,7 +6,9 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { deflateSync } from 'zlib'
-import { getBrandLibrary, loadBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
+import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
+// Print colours module (removable, see api/_lib/printColors/README.md)
+import { resolvePrintSettings, finishPdf } from './_lib/printColors/index.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
 import { buildLayeredPdf } from './_lib/layeredPdf.js'
 import { preflightPdf } from './_lib/preflight.js'
@@ -94,6 +96,8 @@ export default async function handler(req, res) {
   if (!profileMeta) return res.status(400).json({ error: `Unknown profile "${profile}"` })
   if (!EXPORT_MODES.has(mode)) return res.status(400).json({ error: `Unknown mode "${mode}"` })
 
+  // [print-colors] brand colours + default printer from the admin setting
+  const printSettings = await resolvePrintSettings(brand)
   const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
   const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = []) => {
     // Print preflight on the finished file (api/_lib/preflight.js): plain-word
@@ -105,6 +109,8 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error('export-cmyk preflight error:', err)
     }
+    // [print-colors] relabel for the default printer, after preflight checked the content
+    pdfBuffer = await finishPdf(pdfBuffer, printSettings.printer)
     for (const s of sourcePpi) {
       const name = ZONE_NAMES[s.zoneId] ?? 'An image'
       if (s.ppi < MIN_SOURCE_PPI) warnings.push(`${name} is ${s.ppi} ppi at print size (300 needed). Upload a larger file.`)
@@ -130,7 +136,7 @@ export default async function handler(req, res) {
       const templatePdf = await fetchTemplatePdf(backgroundPdfUrl)
       const { pdf, unverifiedColorCount, sourcePpi } = await buildLayeredPdf({
         templatePdf, layout, mode,
-        library: await loadBrandLibrary(brand),
+        library: printSettings.library,  // [print-colors]
         lut: loadLut(join(__dirname, 'icc', profileMeta.lut)),
         iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)),
         profileMeta,
@@ -160,7 +166,8 @@ export default async function handler(req, res) {
     // marker inverts byte values, causing PDF viewers to render near-black.
     // See renderFlyerImage for the resize/bleed/conversion/brand-lookup details.
     const { pixels, brandMasks, brandBlend, unverifiedColorCount } = await renderFlyerImage({
-      pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut), library: await loadBrandLibrary(brand),
+      pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut),
+      library: printSettings.library,  // [print-colors]
     })
 
     // ── Build PDF/X-4 ────────────────────────────────────────────────────────

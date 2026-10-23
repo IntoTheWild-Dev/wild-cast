@@ -1,4 +1,4 @@
-// HEX <-> RGB <-> CMYK for the Print colours setting (api/brand-colors.js).
+// HEX <-> RGB <-> CMYK for the Print colours setting (api/print-colors.js).
 // Both directions go through the same press profile the export uses
 // (PSO Coated v3, Relative Colorimetric + BPC, precomputed with LittleCMS):
 //   sRGB -> CMYK: api/icc/PSOcoated_v3.relcol-bpc.lut   (scripts/build-cmyk-lut.py)
@@ -7,7 +7,7 @@
 // typed (e.g. the brand book's 75/0/10/0) is never replaced by a conversion.
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
-import { applyLut } from './cmykLut.js'
+import { applyLut } from '../cmykLut.js'
 
 const reverseCache = new Map()
 

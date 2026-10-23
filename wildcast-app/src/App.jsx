@@ -13,7 +13,7 @@ import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
 import MyTasksPage from './components/MyTasksPage'
 import LibraryPage from './components/LibraryPage'
-import PrintColorsPage from './components/PrintColorsPage'
+import PrintColorsPage from './features/printColors/PrintColorsPage'  // [print-colors]
 import ReviewPage from './components/ReviewPage'
 import TemplateImportPage from './components/TemplateImportPage'
 import BatchCreator from './components/BatchCreator'
