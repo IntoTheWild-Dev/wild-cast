@@ -14,6 +14,7 @@ import DesignsPage from './components/DesignsPage'
 import MyTasksPage from './components/MyTasksPage'
 import LibraryPage from './components/LibraryPage'
 import PrintColorsPage from './features/printColors/PrintColorsPage'  // [print-colors]
+import { confirmLeavePrintColors } from './features/printColors/leaveGuard'  // [print-colors]
 import ReviewPage from './components/ReviewPage'
 import TemplateImportPage from './components/TemplateImportPage'
 import BatchCreator from './components/BatchCreator'
@@ -1196,12 +1197,14 @@ const SHOW_MODE_CHOOSER = false
   // FloatingNav's Back - straight to the remembered screen (handleNavigate
   // would restart a brief chat), with the same unsaved-import guard.
   async function handlePageBack() {
+    if (screen === 'print-colors' && !(await confirmLeavePrintColors())) return  // [print-colors]
     if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
     if (screen === 'import') setImportDirty(false)
     setScreen(pageBackTargetRef.current)
   }
 
   async function handleNavigate(target) {
+    if (screen === 'print-colors' && target !== 'print-colors' && !(await confirmLeavePrintColors())) return  // [print-colors]
     if (screen === 'editor' && hasUnsavedChanges && !(await confirmLeave(LEAVE_EDITOR))) return
     if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
     // Confirmed leaving (or wasn't dirty) - clear so a later return trip to
