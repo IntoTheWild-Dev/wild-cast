@@ -8,6 +8,9 @@
   "functions": {
     "api/export-cmyk.js": {
       "includeFiles": "api/{fonts/wolt,icc}/**"
+    },
+    "api/brand-colors.js": {
+      "includeFiles": "api/icc/*.lut"
     }
   }
 }

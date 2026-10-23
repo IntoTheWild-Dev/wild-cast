@@ -13,6 +13,7 @@ import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
 import MyTasksPage from './components/MyTasksPage'
 import LibraryPage from './components/LibraryPage'
+import PrintColorsPage from './components/PrintColorsPage'
 import ReviewPage from './components/ReviewPage'
 import TemplateImportPage from './components/TemplateImportPage'
 import BatchCreator from './components/BatchCreator'
@@ -1247,6 +1248,7 @@ const SHOW_MODE_CHOOSER = false
     else if (target === 'tasks') setScreen('tasks')
     else if (target === 'library') setScreen('library')
     else if (target === 'import' && activation?.role === 'agency') setScreen('import')
+    else if (target === 'print-colors' && activation?.role === 'agency') setScreen('print-colors')
   }
 
   // Returns the fetch's own promise (not just fire-and-forget) so a caller
@@ -2360,6 +2362,12 @@ const SHOW_MODE_CHOOSER = false
       {screen === 'library' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <LibraryPage onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
+        </div>
+      )}
+
+      {screen === 'print-colors' && activation?.role === 'agency' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <PrintColorsPage onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
         </div>
       )}
 

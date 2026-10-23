@@ -118,3 +118,26 @@ export function requirePluginKey(req, res) {
   }
   return true
 }
+
+// Agency-only gate (Print colours setting): Wild Stack's own keys or team
+// accounts with role 'agency'. Client-facing 'designer' keys are refused, so
+// brand print colours can't be changed outside the team. Returns a short
+// "who" label for the audit field, or null after sending the 403 itself.
+export async function requireAgency(req, res) {
+  const key = req.headers['x-activation-key']
+  if (resolveKeyRole(key) === 'agency') return 'agency key'
+
+  const email = req.headers['x-account-email']
+  const sessionToken = req.headers['x-account-token']
+  if (email && sessionToken) {
+    try {
+      const account = await verifySession(email, sessionToken)
+      if (account?.role === 'agency') return account.email || email
+    } catch (err) {
+      console.error('requireAgency session check failed:', err)
+    }
+  }
+
+  res.status(403).json({ error: 'Only Wild Stack team accounts can change print colours.' })
+  return null
+}

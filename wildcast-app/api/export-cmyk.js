@@ -6,7 +6,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { deflateSync } from 'zlib'
-import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
+import { getBrandLibrary, loadBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
 import { buildLayeredPdf } from './_lib/layeredPdf.js'
 import { preflightPdf } from './_lib/preflight.js'
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
       const templatePdf = await fetchTemplatePdf(backgroundPdfUrl)
       const { pdf, unverifiedColorCount, sourcePpi } = await buildLayeredPdf({
         templatePdf, layout, mode,
-        library: getBrandLibrary(brand),
+        library: await loadBrandLibrary(brand),
         lut: loadLut(join(__dirname, 'icc', profileMeta.lut)),
         iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)),
         profileMeta,
@@ -160,7 +160,7 @@ export default async function handler(req, res) {
     // marker inverts byte values, causing PDF viewers to render near-black.
     // See renderFlyerImage for the resize/bleed/conversion/brand-lookup details.
     const { pixels, brandMasks, brandBlend, unverifiedColorCount } = await renderFlyerImage({
-      pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut),
+      pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut), library: await loadBrandLibrary(brand),
     })
 
     // ── Build PDF/X-4 ────────────────────────────────────────────────────────
