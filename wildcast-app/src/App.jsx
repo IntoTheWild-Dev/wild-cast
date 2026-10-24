@@ -1507,7 +1507,7 @@ const SHOW_MODE_CHOOSER = false
       showAlert('Please wait a moment and try again.', { title: 'Canvas not ready' })
       return
     }
-    setExporting(true)
+    setExporting(mode)  // which export is running: 'print' or 'cmyk'
     try {
       const filename = (projectName.trim() || selectedTemplate?.name || 'wildcast-flyer')
       // brand: 'wolt' - hardcoded for now since every current WildCast
