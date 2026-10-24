@@ -10,7 +10,7 @@ import { PDFDocument, PDFName } from 'pdf-lib'
 import { loadLut } from '../api/_lib/cmykLut.js'
 import { loadReverseLut, convertColor, cmykToRgb } from '../api/_lib/printColors/convert.js'
 import { calibrationGrid, patchByCode, calibrationSheetPdf } from '../api/_lib/printColors/calibration.js'
-import { relabelLikeInDesign } from '../api/_lib/printColors/relabel.js'
+import { relabelPdf } from '../api/_lib/printColors/relabel.js'
 import { validateColors, validatePrinters, codeSnippet } from '../api/_lib/printColors/store.js'
 
 const p = f => fileURLToPath(new URL(`../api/icc/${f}`, import.meta.url))
@@ -61,19 +61,33 @@ test('calibration sheet is a one-page A4 PDF with the InDesign-style intent', as
   assert.equal(intent.get(PDFName.of('OutputConditionIdentifier')).decodeText(), 'PSO Coated v3')
 })
 
-test('relabel: same content, not marked PDF/X, intent named PSO Coated v3', async () => {
-  // Build a tiny PDF/X-4-style file the way the exports do.
+// A tiny PDF/X-4 file shaped like the exports' output.
+async function pdfx4Sample() {
   const doc = await PDFDocument.create()
   doc.addPage([100, 100]).drawRectangle({ x: 0, y: 0, width: 50, height: 50 })
   const ctx = doc.context
   ctx.trailerInfo.Info = ctx.register(ctx.obj({ GTS_PDFXVersion: 'PDF/X-4', Trapped: 'False' }))
   doc.catalog.set(PDFName.of('OutputIntents'), ctx.obj([ctx.obj({ Type: 'OutputIntent', S: 'GTS_PDFX', OutputConditionIdentifier: 'FOGRA51' })]))
-  doc.catalog.set(PDFName.of('Metadata'), ctx.register(ctx.stream('<x><pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion></x>', { Type: 'Metadata', Subtype: 'XML' })))
-  const out = await relabelLikeInDesign(Buffer.from(await doc.save()))
-  const s = out.toString('latin1')
+  doc.catalog.set(PDFName.of('Metadata'), ctx.register(ctx.stream('<x><pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion><xmpMM:RenditionClass>default</xmpMM:RenditionClass></x>', { Type: 'Metadata', Subtype: 'XML' })))
+  return Buffer.from(await doc.save())
+}
+
+test('relabel "indesign": still PDF/X-4, profile named PSO Coated v3, RenditionClass proof:pdf (as InDesign writes it)', async () => {
+  const s = (await relabelPdf(await pdfx4Sample(), 'indesign')).toString('latin1')
   assert.equal(s.slice(0, 8), '%PDF-1.6')
+  assert.match(s, /\/GTS_PDFXVersion/)  // Info marker kept (exact value form is checked on a real export in print-colors-api)
+  assert.match(s, /<pdfxid:GTS_PDFXVersion>PDF\/X-4/)
+  assert.match(s, /OutputConditionIdentifier \(PSO Coated v3\)/)
+  assert.match(s, /RenditionClass>proof:pdf</)
+  assert.doesNotMatch(s, /FOGRA51/)
+})
+
+test('relabel "plain": not marked PDF/X; "pdfx4" leaves the file untouched', async () => {
+  const src = await pdfx4Sample()
+  const s = (await relabelPdf(src, 'plain')).toString('latin1')
   assert.doesNotMatch(s, /GTS_PDFXVersion/)
   assert.match(s, /OutputConditionIdentifier \(PSO Coated v3\)/)
+  assert.equal(await relabelPdf(src, 'pdfx4'), src)
 })
 
 test('validation and code snippet', () => {

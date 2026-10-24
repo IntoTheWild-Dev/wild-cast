@@ -103,7 +103,7 @@ test('export: built-in colours and PDF/X-4 when nothing is saved', async () => {
   assert.match(r.data.toString('latin1'), /GTS_PDFXVersion \(PDF\/X-4\)/)
 })
 
-test('export: the default printer\'s colour and "Like InDesign" labelling are used', async () => {
+test('export: the default printer\'s colour and "Like InDesign" labelling are used (still PDF/X-4)', async () => {
   await save({
     colors: [{ ...WOLT, status: 'approved' }],
     printers: [{ name: 'Clarisse digital', label: 'indesign', overrides: { '#00C2E8': { c: 68, m: 0, y: 6, k: 0 } } }],
@@ -115,8 +115,9 @@ test('export: the default printer\'s colour and "Like InDesign" labelling are us
   const s = r.data.toString('latin1')
   assert.match(inks(r.data), /0\.68 0 0\.06 0 k/)
   assert.doesNotMatch(inks(r.data), /0\.75 0 0\.1 0 k/)
-  assert.doesNotMatch(s, /GTS_PDFXVersion/)
-  assert.match(s, /\(PSO Coated v3\)/)
+  assert.match(s, /GTS_PDFXVersion \(PDF\/X-4\)/)
+  assert.match(s, /OutputConditionIdentifier \(PSO Coated v3\)/)
+  assert.doesNotMatch(s, /\(FOGRA51\)/)
   assert.equal(Number(r.headers['Content-Length']), r.data.length)
 })
 

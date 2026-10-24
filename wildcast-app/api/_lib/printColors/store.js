@@ -4,7 +4,7 @@
 // Record shape:
 //   colors:   [{ hex, label, cmyk:{c,m,y,k}, lockHex, lockCmyk,
 //                status:'draft'|'approved', approvedBy, approvedAt }]
-//   printers: [{ id, name, label:'pdfx4'|'indesign', overrides:{ '#HEX': {c,m,y,k} } }]
+//   printers: [{ id, name, label:'pdfx4'|'indesign'|'plain', overrides:{ '#HEX': {c,m,y,k} } }]
 //   defaultPrinter: 'standard' | printer id
 //   history:  [{ at, by, summary }]   newest first, capped
 // The code table in api/_lib/brandColors.js is the fallback whenever nothing
@@ -76,7 +76,7 @@ export function validatePrinters(printers, colorHexes) {
       if (colorHexes && !colorHexes.has(hex)) continue  // colour was removed from the table
       overrides[hex] = cleanCmyk(cmyk, `${name} ${hex}`)
     }
-    return { id, name, label: p?.label === 'indesign' ? 'indesign' : 'pdfx4', overrides }
+    return { id, name, label: ['indesign', 'plain'].includes(p?.label) ? p.label : 'pdfx4', overrides }
   })
 }
 

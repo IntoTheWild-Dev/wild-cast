@@ -5,7 +5,7 @@ import { getBrandLibrary } from '../brandColors.js'
 import { verifySession } from '../accounts.js'
 import { resolveKeyRole } from '../auth.js'
 import { loadSettings } from './store.js'
-import { relabelLikeInDesign } from './relabel.js'
+import { relabelPdf } from './relabel.js'
 
 // PRINT_COLORS=off switches the whole module off: exports use the code table
 // in brandColors.js and standard PDF/X-4 labelling, the API refuses.
@@ -42,11 +42,11 @@ export async function resolvePrintSettings(brand) {
 }
 
 // Last step of an export: relabel the finished PDF when the brand's default
-// printer asks for "Like InDesign". Returns the buffer unchanged otherwise.
+// printer asks for InDesign-style or plain labelling. Unchanged otherwise.
 export async function finishPdf(pdfBuffer, printer) {
-  if (printer?.label !== 'indesign') return pdfBuffer
+  if (printer?.label !== 'indesign' && printer?.label !== 'plain') return pdfBuffer
   try {
-    return await relabelLikeInDesign(pdfBuffer)
+    return await relabelPdf(pdfBuffer, printer.label)
   } catch (err) {
     console.error('printColors: relabel failed, sending PDF/X-4 file', err)
     return pdfBuffer

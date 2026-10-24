@@ -23,6 +23,14 @@ const PATCH_RE = /^[A-F][1-5]$/
 const GUIDE_KEY = 'wildcast_print_colors_guide'
 
 const adjustments = p => { const n = Object.keys(p.overrides || {}).length; return n === 0 ? 'Brand colours' : n === 1 ? '1 colour adjusted' : `${n} colours adjusted` }
+// File labelling per printer (api/_lib/printColors/relabel.js). Same ink
+// values in every case; only how the file names itself to the printer.
+const LABEL_OPTIONS = [
+  ['pdfx4', 'Standard PDF/X-4', 'The usual print standard. The colour profile is named by its registered condition, FOGRA51.'],
+  ['indesign', 'Like InDesign', 'PDF/X-4 labelled exactly like an InDesign export (profile named "PSO Coated v3"). Same colours.'],
+  ['plain', 'Plain PDF', "Not marked PDF/X. Only for a printer that converts PDF/X files when it shouldn't."],
+]
+const LABEL_SHORT = { pdfx4: 'standard PDF/X-4', indesign: 'PDF/X-4 labelled like InDesign', plain: 'plain PDF, not PDF/X' }
 const slug = name => String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
 
 const toRow = (c, i) => ({
@@ -388,7 +396,7 @@ export default function PrintColorsPage({ onBack, onHome }) {
   const openId = calibrating?.startsWith('hex:') ? rows.find(r => `hex:${r.hex}` === calibrating)?.id : calibrating
   const approvedCount = rows.filter(r => r.status === 'approved').length
   const printerOptions = [{ ...(server?.standardPrinter ?? { id: 'standard' }), id: 'standard', name: 'Standard', desc: 'Brand colours, standard PDF/X-4 file. Right for any properly calibrated printer.' },
-    ...printers.map(p => ({ ...p, desc: `${adjustments(p)} · ${p.label === 'indesign' ? 'labelled like InDesign' : 'standard PDF/X-4'}` }))]
+    ...printers.map(p => ({ ...p, desc: `${adjustments(p)} · ${LABEL_SHORT[p.label] ?? LABEL_SHORT.pdfx4}` }))]
   const activePrinterName = defaultPrinter !== 'standard' ? printers.find(p => p.id === defaultPrinter)?.name : null
   const tabs = [['colours', 'Colours'], ['printers', 'Printers'], ['history', 'History']]
 
@@ -541,8 +549,8 @@ export default function PrintColorsPage({ onBack, onHome }) {
 
               <div>
                 <div style={{ ...S.label, marginBottom: 6 }}>File labelling</div>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
-                  {[['pdfx4', 'Standard PDF/X-4', 'The usual print standard.'], ['indesign', 'Like InDesign', 'Same colours, labelled like an InDesign export. Try this if InDesign files print right on this printer but WildCast files don\'t.']].map(([val, title, desc]) => (
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                  {LABEL_OPTIONS.map(([val, title, desc]) => (
                     <label key={val} style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 8, border: `1px solid ${p.label === val ? 'var(--dark)' : 'var(--border)'}`, cursor: 'pointer' }}>
                       <input type="radio" aria-label={title} name={`label-${p.id}`} checked={p.label === val} onChange={() => editPrinter(i, () => ({ label: val }))} style={{ marginTop: 2 }} />
                       <span><span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{title}</span><span style={{ display: 'block', fontSize: 12, color: 'var(--mid)', lineHeight: 1.45 }}>{desc}</span></span>
