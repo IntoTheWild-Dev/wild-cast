@@ -1515,11 +1515,15 @@ const SHOW_MODE_CHOOSER = false
       // the print-color fix, 2026-09-25 brief). Once templates for other
       // brands exist, this should come from the template/partner instead.
       const common = { filename, profile: iccProfile, brand: 'wolt', mode }
-      const post = body => fetch('/api/export-cmyk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...common, ...body }),
-      })
+      // Vercel refuses request bodies over 4.5 MB (413) before our code runs,
+      // so measure first and skip a request that can't get through.
+      const MAX_BODY_CHARS = 4_400_000
+      const tooLarge = { ok: false, status: 413 }
+      const post = body => {
+        const json = JSON.stringify({ ...common, ...body })
+        if (json.length > MAX_BODY_CHARS) return Promise.resolve(tooLarge)
+        return fetch('/api/export-cmyk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json })
+      }
 
       // Layered export (vector background + live text + separate images, see
       // api/_lib/layeredPdf.js) whenever the template has a vector PDF from
@@ -1533,8 +1537,11 @@ const SHOW_MODE_CHOOSER = false
       }
       if (!response?.ok) response = await post({ png: exportRef.current.getPng() })
 
+      if (response.status === 413) {
+        throw new Error('This design is too large to send for export (over 4.5 MB). This can happen with very detailed images. Please let the Wild Stack team know which design it was.')
+      }
       if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: response.statusText }))
+        const err = await response.json?.().catch(() => null) ?? { error: response.statusText }
         throw new Error(err.error || 'Export failed')
       }
 

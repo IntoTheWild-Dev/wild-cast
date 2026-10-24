@@ -314,7 +314,7 @@ export default function PrintColorsPage({ onBack, onHome }) {
     setSaving(true)
     try {
       const saved = await api({
-        action: 'save', defaultPrinter,
+        action: 'save', defaultPrinter, expectedUpdatedAt: server?.updatedAt ?? null,
         colors: nextRows.map(r => ({ label: r.label, hex: r.hex, cmyk: r.cmyk, lockHex: r.lockHex, lockCmyk: r.lockCmyk, status: r.status })),
         printers,
       })

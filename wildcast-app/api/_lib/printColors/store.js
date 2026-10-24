@@ -67,7 +67,7 @@ export function validatePrinters(printers, colorHexes) {
     const name = String(p?.name || '').trim().slice(0, 60)
     if (!name) throw new Error(`Printer ${i + 1} needs a name`)
     let id = String(p?.id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || `printer-${i + 1}`
-    while (ids.has(id)) id += '-2'
+    if (ids.has(id)) throw new Error(`Two printers share the id "${id}". Rename one of them.`)
     ids.add(id)
     const overrides = {}
     for (const [rawHex, cmyk] of Object.entries(p?.overrides || {})) {
@@ -136,11 +136,18 @@ function describeChanges(before, after) {
 // as 'approved' that wasn't approved before (or whose CMYK changed) gets
 // this caller and time; changing an approved colour's CMYK makes it a draft
 // again unless the same save re-approves it.
-export async function saveSettings(brand, { colors, printers = [], defaultPrinter = 'standard' }, by) {
+export async function saveSettings(brand, { colors, printers = [], defaultPrinter = 'standard', expectedUpdatedAt }, by) {
   const key = normalizeBrand(brand)
   if (!key) throw new Error('Unknown brand')
   if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("Print colours can't be saved here: storage isn't connected.")
   const before = await loadSettings(key)
+  // Optimistic lock: refuse to overwrite a save made since this admin loaded
+  // the page (two people editing at once would otherwise lose one's work).
+  if (expectedUpdatedAt !== undefined && (expectedUpdatedAt || null) !== (before.updatedAt || null)) {
+    const err = new Error(`${before.updatedBy || 'Someone'} saved changes since you opened this page. Reload to see them, then make your change again.`)
+    err.code = 'conflict'
+    throw err
+  }
   const prev = new Map(before.colors.map(c => [c.hex, c]))
   const now = new Date().toISOString()
   const cleanColors = validateColors(colors).map(c => {

@@ -56,6 +56,6 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     // Validation messages are written for people (see store.js).
-    return res.status(400).json({ error: err.message })
+    return res.status(err.code === 'conflict' ? 409 : 400).json({ error: err.message })
   }
 }

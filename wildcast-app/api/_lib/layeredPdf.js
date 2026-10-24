@@ -85,6 +85,26 @@ export function makeColorMapper(library, lut) {
   return { map, unverified }
 }
 
+// CSS colour as the canvas reads it: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(),
+// rgba() and the two names templates use. Anything unreadable is black, as
+// on a canvas (never white, which would hide the text on a light area).
+const NAMED = { black: [0, 0, 0], white: [255, 255, 255] }
+export function parseCssColor(value) {
+  const s = String(value ?? '').trim().toLowerCase()
+  if (NAMED[s]) return { r: NAMED[s][0], g: NAMED[s][1], b: NAMED[s][2], a: 1 }
+  let m = /^#([0-9a-f]{3,8})$/.exec(s)
+  if (m && [3, 4, 6, 8].includes(m[1].length)) {
+    const h = m[1].length <= 4 ? [...m[1]].map(c => c + c).join('') : m[1]
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16), a: h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1 }
+  }
+  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(s)
+  if (m) {
+    const c = v => Math.max(0, Math.min(255, Math.round(Number(v))))
+    return { r: c(m[1]), g: c(m[2]), b: c(m[3]), a: m[4] == null ? 1 : Math.max(0, Math.min(1, Number(m[4]))) }
+  }
+  return { r: 0, g: 0, b: 0, a: 1 }
+}
+
 const num = v => {
   const s = (Math.round(v * 10000) / 10000).toString()
   return s === '-0' ? '0' : s
@@ -115,7 +135,12 @@ export function tokenize(src) {
     }
     if (c === '<' && src[i + 1] === '<') { tokens.push({ t: 'raw', v: '<<' }); i += 2; continue }
     if (c === '>' && src[i + 1] === '>') { tokens.push({ t: 'raw', v: '>>' }); i += 2; continue }
-    if (c === '<') { i = src.indexOf('>', i) + 1; tokens.push({ t: 'str', v: src.slice(start, i) }); continue }
+    if (c === '<') {
+      // Unterminated hex string (damaged file): take the rest; never loop back to 0.
+      const close = src.indexOf('>', i)
+      i = close < 0 ? n : close + 1
+      tokens.push({ t: 'str', v: src.slice(start, i) }); continue
+    }
     if (c === '[' || c === ']' || c === '{' || c === '}') { tokens.push({ t: 'raw', v: c }); i++; continue }
     if (c === '/') {
       i++
@@ -218,11 +243,65 @@ function rgbSpaceNames(context, resources) {
   return names
 }
 
+// Gradients (sh operator, or a shading pattern used via scn): Figma exports
+// them as axial/radial shadings in RGB with a Type 2 function (two stops) or a
+// Type 3 stitching function of Type 2s. Their colour stops get the same
+// mapping as flat colours and the shading becomes DeviceCMYK. Anything else
+// (sampled/PostScript functions) is left as is and flagged as unverified.
+function isRgbSpace(context, cs) {
+  const v = context.lookup(cs)
+  if (v instanceof PDFName) return String(v) === '/DeviceRGB'
+  if (v instanceof PDFArray && String(v.get(0)) === '/ICCBased') return context.lookup(v.get(1))?.dict?.get(PDFName.of('N'))?.asNumber?.() === 3
+  return false
+}
+function mapStops(context, fn, mapColor) {
+  const f = context.lookup(fn)
+  if (!(f instanceof PDFDict)) return false
+  const type = f.get(PDFName.of('FunctionType'))?.asNumber?.()
+  if (type === 2) {
+    const out = {}
+    for (const key of ['C0', 'C1']) {
+      const arr = f.lookup(PDFName.of(key))
+      const rgb = arr instanceof PDFArray ? arr.asArray().map(n => n.asNumber()) : (key === 'C0' ? [0, 0, 0] : [1, 1, 1])
+      if (rgb.length !== 3) return false
+      out[key] = mapColor(...rgb.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255))).cmyk
+    }
+    for (const key of ['C0', 'C1']) f.set(PDFName.of(key), context.obj(out[key]))
+    return true
+  }
+  if (type === 3) {
+    const subs = f.lookup(PDFName.of('Functions'))
+    return subs instanceof PDFArray && subs.asArray().every(s => mapStops(context, s, mapColor))
+  }
+  return false
+}
+function recolorShading(context, shRef, mapColor, stats, done) {
+  if (done.has(shRef)) return
+  done.add(shRef)
+  const sh = context.lookup(shRef)
+  const dict = sh instanceof PDFDict ? sh : sh?.dict
+  if (!(dict instanceof PDFDict) || !isRgbSpace(context, dict.get(PDFName.of('ColorSpace')))) return
+  if (!mapStops(context, dict.get(PDFName.of('Function')), mapColor)) { stats.unconvertedShadings++; return }
+  dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceCMYK'))
+  dict.delete(PDFName.of('Background'))
+  stats.shadings++
+}
+
 // Walks a content-bearing object (page or Form XObject) and everything it
 // draws. Soft-mask groups (ExtGState /SMask /G) are left alone: their colours
 // define a luminosity mask, not ink.
 function recolorTree(context, contentsRefs, resources, mapColor, seen, skip, stats) {
   const rgb = rgbSpaceNames(context, resources)
+  const shadings = resources instanceof PDFDict ? resources.lookup(PDFName.of('Shading')) : null
+  if (shadings instanceof PDFDict) for (const [, ref] of shadings.entries()) recolorShading(context, ref, mapColor, stats, stats.shadingSeen)
+  const patterns = resources instanceof PDFDict ? resources.lookup(PDFName.of('Pattern')) : null
+  if (patterns instanceof PDFDict) {
+    for (const [, ref] of patterns.entries()) {
+      const p = context.lookup(ref)
+      const pd = p instanceof PDFDict ? p : p?.dict
+      if (pd?.get(PDFName.of('PatternType'))?.asNumber?.() === 2) recolorShading(context, pd.get(PDFName.of('Shading')), mapColor, stats, stats.shadingSeen)
+    }
+  }
   for (const ref of contentsRefs) {
     const stream = context.lookup(ref)
     if (!stream || seen.has(ref)) continue
@@ -330,16 +409,23 @@ async function resampleSoftMask(context, imgDict, w, h) {
 }
 
 // ── L2: images ──────────────────────────────────────────────────────────────
-async function embedImage(doc, dataUrl, mode, lut, srgbRef) {
-  const b64 = String(dataUrl).replace(/^data:image\/[a-z]+;base64,/, '')
-  const { data, info } = await sharp(Buffer.from(b64, 'base64')).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+const dataUrlBytes = url => Buffer.from(String(url).replace(/^data:image\/[a-z+]+;base64,/, ''), 'base64')
+
+// `src` is the object's colour (PNG with alpha, or a JPEG); `alphaSrc` is an
+// optional separate grayscale PNG mask. Photos arrive as JPEG + mask so the
+// request stays under the 4.5 MB upload limit (a PNG photo alone can be 6 MB).
+async function embedImage(doc, dataUrl, mode, lut, srgbRef, alphaUrl = null) {
+  const { data, info } = await sharp(dataUrlBytes(dataUrl)).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   const n = info.width * info.height
   const rgb = Buffer.alloc(n * 3)
   const alpha = Buffer.alloc(n)
   let opaque = true
+  const mask = alphaUrl
+    ? await sharp(dataUrlBytes(alphaUrl)).resize(info.width, info.height, { fit: 'fill' }).toColourspace('b-w').extractChannel(0).raw().toBuffer()
+    : null
   for (let p = 0; p < n; p++) {
     rgb[p * 3] = data[p * 4]; rgb[p * 3 + 1] = data[p * 4 + 1]; rgb[p * 3 + 2] = data[p * 4 + 2]
-    alpha[p] = data[p * 4 + 3]
+    alpha[p] = mask ? mask[p] : data[p * 4 + 3]
     if (alpha[p] !== 255) opaque = false
   }
   const ctx = doc.context
@@ -371,6 +457,15 @@ export async function buildLayeredPdf({
   const ctx = doc.context
   const [page] = doc.getPages()
   for (let i = doc.getPageCount() - 1; i > 0; i--) doc.removePage(i)
+  if (page.getRotation().angle % 360 !== 0) throw new Error('Template PDF page is rotated')
+
+  // The template is placed onto the bleed box the same way the editor shows
+  // its background: stretched per axis to fill it. Today's templates are
+  // already exactly bleed-sized at the origin (identity); a template exported
+  // at another size or with an offset MediaBox would otherwise print shifted.
+  const mb = page.getMediaBox()
+  const fit = [PT_W / mb.width, 0, 0, PT_H / mb.height, -mb.x * (PT_W / mb.width), -mb.y * (PT_H / mb.height)]
+  const identity = Math.abs(fit[0] - 1) < 1e-4 && Math.abs(fit[3] - 1) < 1e-4 && Math.abs(fit[4]) < 1e-3 && Math.abs(fit[5]) < 1e-3
 
   // Page boxes exactly as the flat export (and InDesign): bleed media, A6 trim.
   page.setMediaBox(0, 0, PT_W, PT_H)
@@ -382,8 +477,9 @@ export async function buildLayeredPdf({
 
   // L1 - recolour
   const { map: mapColor, unverified } = makeColorMapper(library, lut)
-  const stats = { ops: 0, images: [] }
+  const stats = { ops: 0, images: [], shadings: 0, unconvertedShadings: 0, shadingSeen: new Set() }
   recolorTree(ctx, pageContentRefs(page), page.node.Resources(), mapColor, new Set(), new Set(), stats)
+  for (let i = 0; i < stats.unconvertedShadings; i++) unverified.add(`shading-${i}`)
   if (mode === 'cmyk') for (const ref of stats.images) await convertImageToCmyk(ctx, ref, lut)
 
   // Shared sRGB profile for L2 images in 'print' mode.
@@ -412,6 +508,7 @@ export async function buildLayeredPdf({
   const resources = page.node.Resources()
   const xobjects = resources.lookup(PDFName.of('XObject')) ?? (() => { const d = ctx.obj({}); resources.set(PDFName.of('XObject'), d); return d })()
   const fontsDict = resources.lookup(PDFName.of('Font')) ?? (() => { const d = ctx.obj({}); resources.set(PDFName.of('Font'), d); return d })()
+  const extGStates = resources.lookup(PDFName.of('ExtGState')) ?? (() => { const d = ctx.obj({}); resources.set(PDFName.of('ExtGState'), d); return d })()
   let seq = 0
   const ops = []
   const usedFonts = new Set()
@@ -419,7 +516,7 @@ export async function buildLayeredPdf({
 
   for (const item of layout.items) {
     if (item.type === 'image' && item.src) {
-      const img = await embedImage(doc, item.src, mode, lut, srgbRef)
+      const img = await embedImage(doc, item.src, mode, lut, srgbRef, item.alpha)
       const key = `WCIm${seq++}`
       xobjects.set(PDFName.of(key), img.ref)
       // Image space is the unit square, top row first: map it onto the
@@ -430,8 +527,17 @@ export async function buildLayeredPdf({
       ops.push(`q ${m.map(num).join(' ')} cm /${key} Do Q`)
     } else if (item.type === 'text') {
       const { file, percentFile } = fontFileFor(item.fontFamily, item.fontWeight)
-      const rgb = hexToRgb(item.fill) ?? { r: 255, g: 255, b: 255 }
-      const { cmyk } = mapColor(rgb.r, rgb.g, rgb.b)
+      const color = parseCssColor(item.fill)
+      const { cmyk } = mapColor(color.r, color.g, color.b)
+      // Colour alpha x object opacity -> a /ca graphics state, like the canvas.
+      const alphaFill = Math.max(0, Math.min(1, color.a * (Number.isFinite(item.opacity) ? item.opacity : 1)))
+      if (alphaFill === 0) continue
+      let gsOp = ''
+      if (alphaFill < 0.999) {
+        const key = `WCGs${Math.round(alphaFill * 1000)}`
+        if (!extGStates.get(PDFName.of(key))) extGStates.set(PDFName.of(key), ctx.obj({ Type: 'ExtGState', ca: alphaFill }))
+        gsOp = `/${key} gs `
+      }
       const tc = ((item.charSpacing || 0) / 1000) * item.fontSize
       for (const line of item.lines) {
         if (!line.text || !line.text.trim()) continue
@@ -462,7 +568,7 @@ export async function buildLayeredPdf({
           }
           body += `/${f.name} ${num(item.fontSize)} Tf [${parts.join(' ')}] TJ `
         }
-        ops.push(`q ${cmyk.map(num).join(' ')} k BT ${num(tc)} Tc ${tm.map(num).join(' ')} Tm ${body}ET Q`)
+        ops.push(`q ${gsOp}${cmyk.map(num).join(' ')} k BT ${num(tc)} Tc ${tm.map(num).join(' ')} Tm ${body}ET Q`)
       }
     }
   }
@@ -472,7 +578,7 @@ export async function buildLayeredPdf({
   const existing = page.node.get(PDFName.of('Contents'))
   const contents = PDFArray.withContext(ctx)
   // Wrap the template content in q/Q so its graphics state can't leak.
-  contents.push(ctx.register(ctx.flateStream(Buffer.from('q\n'))))
+  contents.push(ctx.register(ctx.flateStream(Buffer.from(identity ? 'q\n' : `q ${fit.map(num).join(' ')} cm\n`))))
   for (const ref of pageContentRefs(page)) contents.push(ref)
   contents.push(ctx.register(ctx.flateStream(Buffer.from('\nQ\n'))))
   contents.push(overlayRef)

@@ -129,3 +129,19 @@ test('PRINT_COLORS=off: saved settings are ignored and the API is closed', async
   const r = await exportPdf()
   assert.match(inks(r.data), /0\.75 0 0\.1 0 k/)
 })
+
+test('two admins: a save based on an older page is refused (409), nothing is lost', async () => {
+  const first = await save({ colors: [WOLT], expectedUpdatedAt: null })
+  assert.equal(first.code, 200)
+  const stale = await save({ colors: [{ ...WOLT, cmyk: { c: 60, m: 0, y: 5, k: 0 } }], expectedUpdatedAt: null })
+  assert.equal(stale.code, 409)
+  assert.match(stale.data.error, /saved changes since you opened this page/)
+  const fresh = await save({ colors: [{ ...WOLT, cmyk: { c: 60, m: 0, y: 5, k: 0 } }], expectedUpdatedAt: first.data.updatedAt })
+  assert.equal(fresh.code, 200)
+})
+
+test('duplicate printer ids are refused instead of silently renamed', async () => {
+  const r = await save({ colors: [WOLT], printers: [{ id: 'clarisse', name: 'A' }, { id: 'clarisse', name: 'B' }] })
+  assert.equal(r.code, 400)
+  assert.match(r.data.error, /share the id/)
+})

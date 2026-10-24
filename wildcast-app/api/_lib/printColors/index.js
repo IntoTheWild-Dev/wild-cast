@@ -12,7 +12,7 @@ import { relabelPdf } from './relabel.js'
 export const isEnabled = () => String(process.env.PRINT_COLORS || 'on').toLowerCase() !== 'off'
 
 const cache = new Map()  // brand -> { at, value }
-const CACHE_MS = 30_000
+const CACHE_MS = 10_000  // an admin save reaches every warm instance within 10 s
 export const clearCache = brand => cache.delete(brand)
 
 function fallback(brand) {
