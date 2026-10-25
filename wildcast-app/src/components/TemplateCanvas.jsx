@@ -306,6 +306,68 @@ function applyFontSizeAndCheckFit(obj, fontSize, zone, fitLimit) {
   return obj.height > fitLimit + 2 || overflowsFitWidth(obj, zone)
 }
 
+// Layered print export: a rendered photo (canvas element) -> JPEG colour + PNG
+// alpha mask, ~10x smaller than one PNG. getImageData gives straight (not
+// premultiplied) colour, so semi-transparent shadow pixels keep their true
+// colour. Fully transparent pixels are padded with their visible neighbours'
+// colour first: JPEG blends 8x8 blocks, and black padding would bleed into
+// the soft edges as a dark fringe. The mask hides the padding entirely.
+const PHOTO_JPEG_QUALITY = 0.92
+const PHOTO_PAD_PASSES = 10
+function encodePhoto(el) {
+  const w = el.width, h = el.height
+  const ctx = el.getContext('2d')
+  const img = ctx.getImageData(0, 0, w, h)
+  const d = img.data
+  const n = w * h
+  let transparent = false
+  for (let p = 0; p < n; p++) if (d[p * 4 + 3] < 255) { transparent = true; break }
+  if (!transparent) return { src: el.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY), alpha: null }
+
+  const maskImg = ctx.createImageData(w, h)
+  const filled = new Uint8Array(n)
+  for (let p = 0; p < n; p++) {
+    const a = d[p * 4 + 3]
+    maskImg.data[p * 4] = maskImg.data[p * 4 + 1] = maskImg.data[p * 4 + 2] = a
+    maskImg.data[p * 4 + 3] = 255
+    filled[p] = a > 0 ? 1 : 0
+  }
+  for (let pass = 0; pass < PHOTO_PAD_PASSES; pass++) {
+    const next = filled.slice()
+    let grew = false
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x
+        if (filled[p]) continue
+        let r = 0, g = 0, b = 0, k = 0
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy
+          if (yy < 0 || yy >= h) continue
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx
+            if (xx < 0 || xx >= w) continue
+            const q = yy * w + xx
+            if (!filled[q]) continue
+            r += d[q * 4]; g += d[q * 4 + 1]; b += d[q * 4 + 2]; k++
+          }
+        }
+        if (k) { d[p * 4] = r / k; d[p * 4 + 1] = g / k; d[p * 4 + 2] = b / k; next[p] = 1; grew = true }
+      }
+    }
+    filled.set(next)
+    if (!grew) break
+  }
+  for (let p = 0; p < n; p++) d[p * 4 + 3] = 255
+
+  const out = document.createElement('canvas')
+  out.width = w; out.height = h
+  const octx = out.getContext('2d')
+  octx.putImageData(img, 0, 0)
+  const src = out.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY)
+  octx.putImageData(maskImg, 0, 0)
+  return { src, alpha: out.toDataURL('image/png') }
+}
+
 export default function TemplateCanvas({ config, fields, onFieldChange, exportRef, fontSizes, alignments, imageScales, imagePositions, mode, loadKey, zonePositions, onZoneDragStart, onReady, textPositions, onAutoShrink, restricted, locked, onImageDrop, activeZoneId, templateId, overlay, topRight }) {
   const containerRef = useRef(null)
   const canvasElRef = useRef(null)
@@ -557,7 +619,7 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
               items.push({
                 type: 'text', zoneId: obj._wcZoneId ?? null,
                 fontFamily: obj.fontFamily, fontWeight: obj.fontWeight, fontSize: obj.fontSize,
-                fill: typeof obj.fill === 'string' ? obj.fill : '#000000', charSpacing: obj.charSpacing || 0,
+                fill: typeof obj.fill === 'string' ? obj.fill : '#000000', opacity: obj.opacity ?? 1, charSpacing: obj.charSpacing || 0,
                 matrix: obj.calcTransformMatrix(), lines,
               })
               continue
@@ -577,15 +639,19 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
             objects.forEach(o => { o.visible = o === obj })
             canvas.backgroundImage = null
             canvas.backgroundColor = ''
-            const src = canvas.toDataURL({ format: 'png', multiplier: imageMultiplier, left: x0, top: y0, width: x1 - x0, height: y1 - y0 })
+            const el = canvas.toCanvasElement(imageMultiplier, { left: x0, top: y0, width: x1 - x0, height: y1 - y0 })
             objects.forEach((o, i) => { o.visible = saved[i] })
             canvas.backgroundImage = bg
             canvas.backgroundColor = bgColor
+            // Photos go as JPEG + a separate alpha mask: a PNG photo alone can
+            // pass Vercel's 4.5 MB request limit. Logos, stickers and QR codes
+            // stay PNG (small, and they need crisp edges).
+            const { src, alpha } = obj._wcZoneId === 'photo' ? encodePhoto(el) : { src: el.toDataURL('image/png'), alpha: null }
             // Canvas units per source pixel: the server turns this into the
             // upload's real print resolution (the PNG above is always rendered
             // at ~300 ppi, which would hide an enlarged low-res upload).
             const sourceScale = obj.type === 'image' ? Math.max(Math.abs(obj.scaleX || 1), Math.abs(obj.scaleY || 1)) : null
-            items.push({ type: 'image', zoneId: obj._wcZoneId ?? null, box: [x0, y0, x1 - x0, y1 - y0], src, sourceScale })
+            items.push({ type: 'image', zoneId: obj._wcZoneId ?? null, box: [x0, y0, x1 - x0, y1 - y0], src, alpha, sourceScale })
           }
           canvas.renderAll()
           return { canvasW, canvasH, items }

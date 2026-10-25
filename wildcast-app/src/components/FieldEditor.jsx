@@ -1332,7 +1332,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                   onMouseEnter={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--dark)' }}
                   onMouseLeave={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--border)' }}
                 >
-                  {exporting ? 'Exporting…' : 'Export PDF'}
+                  {exporting === 'print' ? 'Exporting…' : 'Export PDF'}
                 </button>
                 {/* Default export keeps photos RGB like InDesign's PDF/X-4 (the
                     print shop converts them); this is for printers that only
@@ -1343,7 +1343,7 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
                   title="Converts everything to CMYK before download. Use only if your printer asks for CMYK-only files."
                   style={{ background: 'none', border: 'none', padding: '2px 0', fontSize: 12, color: 'var(--light)', textDecoration: 'underline', cursor: exporting ? 'default' : 'pointer' }}
                 >
-                  Printer needs CMYK only? Download CMYK-only PDF
+                  {exporting === 'cmyk' ? 'Preparing CMYK-only PDF…' : 'Printer needs CMYK only? Download CMYK-only PDF'}
                 </button>
               </>
             ) : (
