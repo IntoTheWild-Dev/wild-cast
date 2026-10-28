@@ -5,7 +5,7 @@
 // api/import-figma-plugin.js, which does the actual zone-geometry math
 // (reusing the exact same functions the REST-based import path uses).
 
-const API_BASE = 'https://cast.wildstack.studio'
+const API_BASE = 'https://wild-cast-v2.vercel.app'
 
 // FIGMA_PLUGIN_KEY in Vercel — this plugin is private/internal-only
 // (imported locally via manifest, never published to Community), so baking
@@ -132,7 +132,9 @@ async function handleImport(slotKey, label, cat, format) {
     figma.ui.postMessage({ type: 'status', message: 'Exporting background…' })
     const DPI = 300
     const scale = Math.min(4, DPI / 72) // Figma's export API caps scale at 4x server-side
+    const restoreForBackground = hideZoneContentForBackground(frame)
     const bytes = await frame.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: scale } })
+    restoreForBackground()
     const imageBase64 = bytesToBase64(bytes)
 
     figma.ui.postMessage({ type: 'status', message: 'Uploading to WildCast…' })
@@ -194,7 +196,9 @@ async function handleBackgroundUpdate(slotKey, label) {
 
     figma.ui.postMessage({ type: 'status', message: 'Exporting background…' })
     const scale = Math.min(4, 300 / 72)
+    const restoreForBackground = hideZoneContentForBackground(frame)
     const imageBase64 = bytesToBase64(await frame.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: scale } }))
+    restoreForBackground()
     figma.ui.postMessage({ type: 'status', message: 'Uploading background…' })
     const r = await postJson('/api/import-figma-plugin-background', { slotKey, imageBase64, scale })
     if (!r.ok) throw new Error(why(r))
@@ -234,7 +238,9 @@ const why = r => r.body.error || `HTTP ${r.status}`
 async function uploadPdf(frame, slotKey, saved) {
   try {
     figma.ui.postMessage({ type: 'status', message: 'Exporting PDF…' })
+    const restoreForPdf = hideZoneContentForBackground(frame)
     const pdfBytes = await frame.exportAsync({ format: 'PDF' })
+    restoreForPdf()
     const pdfBase64 = bytesToBase64(pdfBytes)
     if (pdfBase64.length > MAX_PDF_BASE64_CHARS) {
       return ` PDF skipped: ${(pdfBytes.length / 1048576).toFixed(1)} MB is over the upload limit (PNG import is fine).`
@@ -270,6 +276,25 @@ function hasImagery(node) {
 // `image` is generic (the file may have other layers called that), so it only
 // counts if its centre sits inside the zone's box.
 const EXAMPLE_LAYER_NAMES = { photo: ['photo', 'image'], sticker: ['sticker'] }
+
+// Temporarily hides zone markers, zone content layers, and example image
+// layers before background PNG/PDF export so they don't bake in. Returns a
+// restore function to call after exportAsync completes.
+function hideZoneContentForBackground(root) {
+  const nodes = collectAllNodes(root, [])
+  const zoneIds = new Set(nodes.filter(n => n.name && n.name.indexOf('zone:') === 0).map(n => n.name.slice(5)))
+  const exampleNames = new Set([].concat(...Object.values(EXAMPLE_LAYER_NAMES)))
+  const toHide = nodes.filter(n => n !== root && (
+    (n.name && n.name.indexOf('zone:') === 0) ||
+    zoneIds.has(n.name) ||
+    exampleNames.has(n.name)
+  ))
+  const wasVisible = toHide.map(n => n.visible)
+  for (const n of toHide) n.visible = false
+  return function restore() {
+    toHide.forEach((n, i) => { try { n.visible = wasVisible[i] } catch (e) {} })
+  }
+}
 
 function centreInside(node, zone) {
   const b = node.absoluteBoundingBox
