@@ -7,6 +7,6 @@
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["https://cast.wildstack.studio"]
+    "allowedDomains": ["https://wild-cast-v2.vercel.app", "https://cast.wildstack.studio"]
   }
 }
