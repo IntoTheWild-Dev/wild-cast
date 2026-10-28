@@ -25,7 +25,7 @@ const centredStart = (size, total) => Math.round(((total - size) / 2) * 10) / 10
 const snapToCentre = (v, size, total) => (Math.abs(v - (total - size) / 2) <= SNAP_UNITS ? centredStart(size, total) : v)
 const isCentred = (start, size, total) => Math.abs(start + size / 2 - total / 2) < 0.5
 
-const zoneColor = z => (z.type === 'image' ? '#3B82F6' : 'var(--primary)')
+const zoneColor = z => (z.type === 'image' ? '#3B82F6' : '#1E3A8A')
 
 // Draws each zone's actual box on top of the imported background, in the
 // same 316x441 coordinate space the geometry itself is already in - lets a
