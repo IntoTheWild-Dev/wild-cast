@@ -25,7 +25,11 @@ const centredStart = (size, total) => Math.round(((total - size) / 2) * 10) / 10
 const snapToCentre = (v, size, total) => (Math.abs(v - (total - size) / 2) <= SNAP_UNITS ? centredStart(size, total) : v)
 const isCentred = (start, size, total) => Math.abs(start + size / 2 - total / 2) < 0.5
 
-const zoneColor = z => (z.type === 'image' ? '#3B82F6' : '#1E3A8A')
+// Dark blue for every zone: the theme primary (and the lighter blue used for
+// image zones) is too close to the cyan template backgrounds to read.
+const ZONE_COLOR = '#1E3A8A'
+const ZONE_FILL = 'rgba(30,58,138,0.12)'
+const zoneColor = () => ZONE_COLOR
 
 // Draws each zone's actual box on top of the imported background, in the
 // same 316x441 coordinate space the geometry itself is already in - lets a
@@ -49,7 +53,7 @@ function ZoneOverlay({ zones, backgroundUrl }) {
             width: `${(z.width / CANVAS_W) * 100}%`,
             height: `${(z.height / CANVAS_H) * 100}%`,
             border: `1.5px dashed ${zoneColor(z)}`,
-            background: z.type === 'image' ? 'rgba(59,130,246,0.12)' : 'rgba(223,111,109,0.12)',
+            background: ZONE_FILL,
             pointerEvents: 'none',
           }}
         >
