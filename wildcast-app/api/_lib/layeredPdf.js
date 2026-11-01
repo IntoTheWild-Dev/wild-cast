@@ -160,17 +160,74 @@ export function tokenize(src) {
   return tokens
 }
 
+// ── Black (Annika's checklist fix 2, 2026-10-27) ────────────────────────────
+// 100% K black (text, lines, small shapes) overprints, so it prints sharp on
+// one plate with no white gap beside it. A large black area gets rich black
+// (60/40/40/100 = 240% ink, under the 300% cap) and knocks out, so it prints
+// deep instead of a flat grey-black. Overprint is switched off again before
+// any other colour, so only the black overprints.
+export const RICH_BLACK = [0.6, 0.4, 0.4, 1]
+const LARGE_BLACK_PT = (15 / 25.4) * 72  // 15 x 15 mm and up counts as an area
+export const OVERPRINT_GS = {
+  WCopOn: { Type: 'ExtGState', op: true, OPM: 1 },
+  WCopOff: { Type: 'ExtGState', op: false },
+  WCOPOn: { Type: 'ExtGState', OP: true, OPM: 1 },
+  WCOPOff: { Type: 'ExtGState', OP: false },
+}
+const isK100 = c => c[0] === 0 && c[1] === 0 && c[2] === 0 && c[3] === 1
+const PAINT_OPS = new Set(['f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'S', 's', 'n', 'sh'])
+
+// The bounding box of the path painted after token i (re / m / l / c / v / y
+// coordinates up to the next paint operator), in the content's own units.
+function nextPathBox(tokens, i) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  const pts = []
+  for (let j = i + 1; j < tokens.length; j++) {
+    const t = tokens[j]
+    if (t.t === 'num') { pts.push(Number(t.v)); continue }
+    if (t.t !== 'op') { pts.length = 0; continue }
+    if (PAINT_OPS.has(t.v)) break
+    if (t.v === 're' && pts.length >= 4) {
+      const [x, y, w, h] = pts.slice(-4)
+      x0 = Math.min(x0, x, x + w); x1 = Math.max(x1, x, x + w); y0 = Math.min(y0, y, y + h); y1 = Math.max(y1, y, y + h)
+    } else if (['m', 'l', 'c', 'v', 'y'].includes(t.v)) {
+      for (let k = 0; k + 1 < pts.length; k += 2) { x0 = Math.min(x0, pts[k]); x1 = Math.max(x1, pts[k]); y0 = Math.min(y0, pts[k + 1]); y1 = Math.max(y1, pts[k + 1]) }
+    } else if (['BT', 'Tj', 'TJ', 'q', 'Q', 'cm', 'Do'].includes(t.v)) break
+    pts.length = 0
+  }
+  return x1 > x0 ? { w: x1 - x0, h: y1 - y0 } : null
+}
+
 // Rewrites RGB colour operators to CMYK. `rgbSpaces` = colour-space resource
-// names that are 3-component RGB (DeviceRGB or ICCBased N=3).
-export function recolorContent(src, rgbSpaces, mapColor) {
+// names that are 3-component RGB (DeviceRGB or ICCBased N=3). Native CMYK
+// operators pass through unchanged, except the black rules above.
+// `usedGs` collects the overprint graphics states the result refers to.
+export function recolorContent(src, rgbSpaces, mapColor, usedGs = new Set()) {
   const tokens = tokenize(src)
   const out = []
   const operands = []
-  const state = { fill: 'DeviceGray', stroke: 'DeviceGray' }
+  const state = { fill: 'DeviceGray', stroke: 'DeviceGray', opFill: false, opStroke: false }
   const stack = []
   let changed = 0
   const flush = () => { for (const o of operands) out.push(o.v); operands.length = 0 }
-  for (const tok of tokens) {
+  // Emits a CMYK fill or stroke with the black rules applied.
+  const emit = (cmyk, isFill, i) => {
+    let c = cmyk
+    let overprint = false
+    if (isK100(c)) {
+      const box = isFill ? nextPathBox(tokens, i) : null
+      if (box && box.w >= LARGE_BLACK_PT && box.h >= LARGE_BLACK_PT) c = RICH_BLACK
+      else overprint = true
+    }
+    const key = isFill ? 'opFill' : 'opStroke'
+    let gs = ''
+    if (overprint && !state[key]) { gs = isFill ? '/WCopOn gs ' : '/WCOPOn gs '; state[key] = true }
+    else if (!overprint && state[key]) { gs = isFill ? '/WCopOff gs ' : '/WCOPOff gs '; state[key] = false }
+    if (gs) usedGs.add(gs.slice(1, gs.indexOf(' ')))
+    out.push(`${gs}${c.map(num).join(' ')} ${isFill ? 'k' : 'K'}`)
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]
     if (tok.t !== 'op') { operands.push(tok); continue }
     const op = tok.v
     const nums = operands.map(o => (o.t === 'num' ? Number(o.v) : NaN))
@@ -199,8 +256,16 @@ export function recolorContent(src, rgbSpaces, mapColor) {
       const [r, g, b] = nums.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255))
       const { cmyk } = mapColor(r, g, b)
       operands.length = 0
-      out.push(`${cmyk.map(num).join(' ')} ${isFill ? 'k' : 'K'}`)
+      emit(cmyk, isFill, i)
       changed++
+      continue
+    }
+    // Native CMYK (a template exported as CMYK): values kept, black rules applied.
+    if ((op === 'k' || op === 'K') && operands.length === 4 && nums.every(Number.isFinite)) {
+      const cmyk = nums.map(v => Math.min(1, Math.max(0, v)))
+      operands.length = 0
+      emit(cmyk, op === 'k', i)
+      if (isK100(cmyk)) changed++
       continue
     }
     flush()
@@ -287,10 +352,25 @@ function recolorShading(context, shRef, mapColor, stats, done) {
   stats.shadings++
 }
 
+// Adds the overprint graphics states a rewritten stream uses to its resources.
+// A form without its own Resources inherits the page's; it gets a copy of
+// those (so inherited names keep resolving) plus the states.
+function addOverprintStates(context, resources, usedGs, owner, parentResources) {
+  let res = resources
+  if (!(res instanceof PDFDict)) {
+    res = parentResources instanceof PDFDict ? parentResources.clone(context) : context.obj({})
+    if (owner) owner.set(PDFName.of('Resources'), res)
+  }
+  let gs = res.lookup(PDFName.of('ExtGState'))
+  if (!(gs instanceof PDFDict)) { gs = context.obj({}); res.set(PDFName.of('ExtGState'), gs) }
+  for (const name of usedGs) if (!gs.get(PDFName.of(name))) gs.set(PDFName.of(name), context.obj(OVERPRINT_GS[name]))
+  return res
+}
+
 // Walks a content-bearing object (page or Form XObject) and everything it
 // draws. Soft-mask groups (ExtGState /SMask /G) are left alone: their colours
 // define a luminosity mask, not ink.
-function recolorTree(context, contentsRefs, resources, mapColor, seen, skip, stats) {
+function recolorTree(context, contentsRefs, resources, mapColor, seen, skip, stats, owner = null, parentResources = null) {
   const rgb = rgbSpaceNames(context, resources)
   const shadings = resources instanceof PDFDict ? resources.lookup(PDFName.of('Shading')) : null
   if (shadings instanceof PDFDict) for (const [, ref] of shadings.entries()) recolorShading(context, ref, mapColor, stats, stats.shadingSeen)
@@ -308,9 +388,11 @@ function recolorTree(context, contentsRefs, resources, mapColor, seen, skip, sta
     seen.add(ref)
     const bytes = streamBytes(stream)
     if (!bytes) continue
-    const { text, changed } = recolorContent(bytes.toString('latin1'), rgb, mapColor)
+    const usedGs = new Set()
+    const { text, changed } = recolorContent(bytes.toString('latin1'), rgb, mapColor, usedGs)
     stats.ops += changed
     if (changed) setStreamBytes(context, ref, stream, Buffer.from(text, 'latin1'))
+    if (changed && usedGs.size) resources = addOverprintStates(context, resources, usedGs, owner, parentResources)
   }
   if (!(resources instanceof PDFDict)) return
   const gs = resources.lookup(PDFName.of('ExtGState'))
@@ -329,7 +411,7 @@ function recolorTree(context, contentsRefs, resources, mapColor, seen, skip, sta
     const obj = context.lookup(val)
     const sub = obj?.dict?.get(PDFName.of('Subtype'))
     if (String(sub) === '/Form') {
-      recolorTree(context, [val], obj.dict.lookup(PDFName.of('Resources')), mapColor, seen, skip, stats)
+      recolorTree(context, [val], obj.dict.lookup(PDFName.of('Resources')), mapColor, seen, skip, stats, obj.dict, resources)
     } else if (String(sub) === '/Image') {
       stats.images.push(val)
     }
@@ -347,38 +429,119 @@ function pageContentRefs(page) {
   return []
 }
 
-// Template images arrive at Figma's export resolution (up to ~1000 ppi on the
-// A6 page). Above this they are resampled down: the editor's photo layer and
-// InDesign's PDF/X-4 output both sit at 300-360 ppi.
-const MAX_TEMPLATE_IMAGE_PX = 2400
+// Template images arrive at their design tool's export resolution (Figma up
+// to ~1500 ppi, Affinity ~1150 ppi on the A6 page). They are resampled to
+// TARGET_PPI at the size they are actually drawn on the page (Annika's
+// checklist fix 1, 2026-10-27): ~300 ppi is what print needs, and measuring
+// the drawn size keeps a large-format template just as sharp. Never enlarged.
+const TARGET_PPI = 300
 
-// 'cmyk' mode: template images (sRGB JPEG/raw) -> CMYK through the same table.
-async function convertImageToCmyk(context, ref, lut) {
+// Where each image XObject is drawn: the CTM at its `Do`, through forms.
+// Returns Map(String(ref) -> { wPt, hPt }), the largest use of each image.
+function imagePlacements(context, page) {
+  const out = new Map()
+  const seen = new Set()
+  const walk = (content, resources, ctm) => {
+    const xobjects = resources instanceof PDFDict ? resources.lookup(PDFName.of('XObject')) : null
+    const stack = []
+    let m = ctm
+    let operands = []
+    for (const t of tokenize(content)) {
+      if (t.t !== 'op') { operands.push(t); continue }
+      if (t.v === 'q') stack.push(m)
+      else if (t.v === 'Q') m = stack.pop() ?? ctm
+      else if (t.v === 'cm' && operands.length === 6) m = mulMatrix(m, operands.map(o => Number(o.v)))
+      else if (t.v === 'Do' && xobjects instanceof PDFDict) {
+        const ref = xobjects.get(PDFName.of(String(operands[0]?.v ?? '').slice(1)))
+        const obj = ref ? context.lookup(ref) : null
+        const sub = String(obj?.dict?.get(PDFName.of('Subtype')) ?? '')
+        if (sub === '/Image') {
+          const wPt = Math.hypot(m[0], m[1]), hPt = Math.hypot(m[2], m[3])
+          const prev = out.get(String(ref))
+          if (!prev || wPt * hPt > prev.wPt * prev.hPt) out.set(String(ref), { wPt, hPt })
+        } else if (sub === '/Form' && !seen.has(String(ref))) {
+          seen.add(String(ref))
+          const fm = obj.dict.lookup(PDFName.of('Matrix'))
+          const bytes = streamBytes(obj)
+          if (bytes) walk(bytes.toString('latin1'), obj.dict.lookup(PDFName.of('Resources')), mulMatrix(m, fm instanceof PDFArray ? fm.asArray().map(v => v.asNumber()) : [1, 0, 0, 1, 0, 0]))
+        }
+      }
+      operands = []
+    }
+  }
+  let content = ''
+  for (const r of pageContentRefs(page)) {
+    const s = context.lookup(r)
+    const b = s && streamBytes(s)
+    if (b) content += b.toString('latin1') + '\n'
+  }
+  walk(content, page.node.Resources(), [1, 0, 0, 1, 0, 0])
+  return out
+}
+
+const mulMatrix = (m, n) => [
+  m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5],
+]
+
+function channelsOf(context, cs) {
+  const v = context.lookup(cs)
+  if (v instanceof PDFName) return { DeviceRGB: 3, DeviceCMYK: 4, DeviceGray: 1 }[String(v).slice(1)] ?? 0
+  if (v instanceof PDFArray && String(v.get(0)) === '/ICCBased') return context.lookup(v.get(1))?.dict?.get(PDFName.of('N'))?.asNumber?.() ?? 0
+  return 0
+}
+
+// One template image: resample to TARGET_PPI at its drawn size, and in 'cmyk'
+// mode convert RGB to CMYK through the same RelCol + BPC table. CMYK images
+// stay CMYK in both modes. Returns true when the image was rewritten.
+async function processTemplateImage(context, ref, { mode, lut, placement }) {
   const img = context.lookup(ref)
   const filter = String(img.dict.get(PDFName.of('Filter')) ?? '')
-  let w = img.dict.get(PDFName.of('Width')).asNumber()
-  let h = img.dict.get(PDFName.of('Height')).asNumber()
+  const w = img.dict.get(PDFName.of('Width')).asNumber()
+  const h = img.dict.get(PDFName.of('Height')).asNumber()
+  const n = channelsOf(context, img.dict.get(PDFName.of('ColorSpace')))
+  if (n !== 3 && n !== 4) return false
+  const dct = filter.includes('DCTDecode')
+  if (!dct && !filter.includes('FlateDecode')) return false
+  if (dct && n === 4) return false  // Adobe-inverted CMYK JPEG: leave as designed
+
+  const scale = placement
+    ? Math.min(1, Math.max((placement.wPt / 72) * TARGET_PPI / w, (placement.hPt / 72) * TARGET_PPI / h))
+    : 1
+  const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale))
+  const resize = nw < w || nh < h
+  const toCmyk = mode === 'cmyk' && n === 3
+  if (!resize && !toCmyk) return false
+
   const raw = Buffer.from(img.getContents ? img.getContents() : img.contents)
   let pipeline
-  if (filter.includes('DCTDecode')) pipeline = sharp(raw)
-  else if (filter.includes('FlateDecode')) {
+  if (dct) pipeline = sharp(raw)
+  else {
     const flat = inflateSync(raw)
-    if (flat.length !== w * h * 3) return false
-    pipeline = sharp(flat, { raw: { width: w, height: h, channels: 3 } })
-  } else return false
-  const scale = Math.min(1, MAX_TEMPLATE_IMAGE_PX / Math.max(w, h))
-  if (scale < 1) { w = Math.round(w * scale); h = Math.round(h * scale); pipeline = pipeline.resize(w, h) }
-  const rgb = await pipeline.removeAlpha().toColourspace('srgb').raw().toBuffer()
-  if (rgb.length !== w * h * 3) return false
+    if (flat.length !== w * h * n) return false
+    pipeline = sharp(flat, { raw: { width: w, height: h, channels: n } })
+  }
+  if (resize) pipeline = pipeline.resize(nw, nh, { fit: 'fill' })
+  const samples = n === 3 ? await pipeline.removeAlpha().toColourspace('srgb').raw().toBuffer() : await pipeline.raw().toBuffer()
+  if (samples.length !== nw * nh * n) return false
+
   const dict = img.dict.clone(context)
-  dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceCMYK'))
-  dict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'))
+  if (toCmyk) dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceCMYK'))
   dict.set(PDFName.of('BitsPerComponent'), PDFNumber.of(8))
-  dict.set(PDFName.of('Width'), PDFNumber.of(w))
-  dict.set(PDFName.of('Height'), PDFNumber.of(h))
+  dict.set(PDFName.of('Width'), PDFNumber.of(nw))
+  dict.set(PDFName.of('Height'), PDFNumber.of(nh))
   dict.delete(PDFName.of('DecodeParms'))
-  await resampleSoftMask(context, img.dict, w, h)
-  const z = deflateSync(applyLut(rgb, lut))
+  let z
+  if (dct && !toCmyk) {
+    // An RGB JPEG that is only resampled stays a JPEG (small file).
+    z = await sharp(samples, { raw: { width: nw, height: nh, channels: 3 } }).jpeg({ quality: 95, chromaSubsampling: '4:4:4' }).toBuffer()
+    dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'))
+  } else {
+    z = deflateSync(toCmyk ? applyLut(samples, lut) : samples)
+    dict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'))
+  }
+  await resampleSoftMask(context, img.dict, nw, nh)
   dict.set(PDFName.of('Length'), PDFNumber.of(z.length))
   context.assign(ref, PDFRawStream.of(dict, z))
   return true
@@ -480,7 +643,13 @@ export async function buildLayeredPdf({
   const stats = { ops: 0, images: [], shadings: 0, unconvertedShadings: 0, shadingSeen: new Set() }
   recolorTree(ctx, pageContentRefs(page), page.node.Resources(), mapColor, new Set(), new Set(), stats)
   for (let i = 0; i < stats.unconvertedShadings; i++) unverified.add(`shading-${i}`)
-  if (mode === 'cmyk') for (const ref of stats.images) await convertImageToCmyk(ctx, ref, lut)
+  const placements = imagePlacements(ctx, page)
+  for (const ref of stats.images) {
+    const p = placements.get(String(ref))
+    // Placement is in template units; the template is then fitted onto the bleed box.
+    const placement = p && { wPt: p.wPt * fit[0], hPt: p.hPt * fit[3] }
+    await processTemplateImage(ctx, ref, { mode, lut, placement })
+  }
 
   // Shared sRGB profile for L2 images in 'print' mode.
   const srgbRef = ctx.register(ctx.flateStream(srgbIcc, { N: 3 }))
@@ -537,6 +706,10 @@ export async function buildLayeredPdf({
         const key = `WCGs${Math.round(alphaFill * 1000)}`
         if (!extGStates.get(PDFName.of(key))) extGStates.set(PDFName.of(key), ctx.obj({ Type: 'ExtGState', ca: alphaFill }))
         gsOp = `/${key} gs `
+      } else if (isK100(cmyk)) {
+        // Black text: 100% K, overprinting (fix 2). Not with transparency.
+        if (!extGStates.get(PDFName.of('WCopOn'))) extGStates.set(PDFName.of('WCopOn'), ctx.obj(OVERPRINT_GS.WCopOn))
+        gsOp = '/WCopOn gs '
       }
       const tc = ((item.charSpacing || 0) / 1000) * item.fontSize
       for (const line of item.lines) {
@@ -636,5 +809,7 @@ export async function buildLayeredPdf({
     stats: { recoloredOps: stats.ops, templateImages: stats.images.length, items: layout.items.length, fonts: usedFonts.size },
     sourcePpi,
     unverifiedColorCount: unverified.size,
+    // The estimated colours themselves, for the warning before download (fix 3).
+    unverifiedColors: [...unverified].map(k => (typeof k === 'number' ? '#' + k.toString(16).padStart(6, '0').toUpperCase() : 'a gradient')),
   }
 }

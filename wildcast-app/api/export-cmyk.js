@@ -114,8 +114,8 @@ export default async function handler(req, res) {
 
   // [print-colors] brand colours + default printer from the admin setting
   const printSettings = await resolvePrintSettings(brand)
-  const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
-  const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = []) => {
+  const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'print' ? '-digital' : '')
+  const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = [], unverifiedColors = []) => {
     // Print preflight on the finished file (api/_lib/preflight.js): plain-word
     // warnings for the export dialog. Never blocks the download.
     const warnings = []
@@ -141,9 +141,12 @@ export default async function handler(req, res) {
     res.setHeader('Content-Length', pdfBuffer.length)
     // Requirement 3 (brief §5): flag colours with no official print value.
     res.setHeader('X-Unverified-Colors', String(unverifiedColorCount))
+    // Which colours were estimated (not in the brand list): the editor lists
+    // them before the download (Annika's checklist fix 3). At most 12.
+    res.setHeader('X-Unverified-List', JSON.stringify(unverifiedColors.slice(0, 12)))
     // ASCII-safe JSON array of warnings (headers can't carry raw UTF-8).
     res.setHeader('X-Preflight', JSON.stringify(warnings).replace(/[^ -~]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')))
-    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode, X-Export-Kind, X-Preflight')
+    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Unverified-List, X-Export-Mode, X-Export-Kind, X-Preflight')
     return sendPdf(res, pdfBuffer)
   }
 
@@ -153,7 +156,7 @@ export default async function handler(req, res) {
   if (layered) {
     try {
       const templatePdf = await fetchTemplatePdf(backgroundPdfUrl)
-      const { pdf, unverifiedColorCount, sourcePpi } = await buildLayeredPdf({
+      const { pdf, unverifiedColorCount, sourcePpi, unverifiedColors } = await buildLayeredPdf({
         templatePdf, layout, mode,
         library: printSettings.library,  // [print-colors]
         lut: loadLut(join(__dirname, 'icc', profileMeta.lut)),
@@ -163,7 +166,7 @@ export default async function handler(req, res) {
         srgbIcc: readFileSync(join(__dirname, 'icc', SRGB_ICC)),
         page: { PT_W, PT_H, BLEED_PT },
       })
-      return await send(pdf, unverifiedColorCount, 'layered', sourcePpi)
+      return await send(pdf, unverifiedColorCount, 'layered', sourcePpi, unverifiedColors)
     } catch (err) {
       console.error('export-cmyk layered error:', err)
       if (!png) return res.status(500).json({ error: err.message })
@@ -184,7 +187,7 @@ export default async function handler(req, res) {
     // Raw bytes + FlateDecode (below), never JPEG: CMYK JPEG's APP14 "Adobe"
     // marker inverts byte values, causing PDF viewers to render near-black.
     // See renderFlyerImage for the resize/bleed/conversion/brand-lookup details.
-    const { pixels, brandMasks, brandBlend, unverifiedColorCount } = await renderFlyerImage({
+    const { pixels, brandMasks, brandBlend, unverifiedColorCount, unverifiedColors } = await renderFlyerImage({
       pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut),
       library: printSettings.library,  // [print-colors]
     })
@@ -196,7 +199,7 @@ export default async function handler(req, res) {
       brandMasks, brandBlend, iccProfile, profileMeta,
     })
 
-    return await send(pdfBuffer, unverifiedColorCount, 'flat')
+    return await send(pdfBuffer, unverifiedColorCount, 'flat', [], unverifiedColors)
   } catch (err) {
     console.error('export-cmyk error:', err)
     return res.status(500).json({ error: err.message })
@@ -261,9 +264,9 @@ export async function renderFlyerImage({ pngBuffer, brand, mode, lutPath, librar
 
   // Unmatched colors are counted for the warning, including exports without
   // a library (see applyBrandColorLibrary for the visible-area threshold).
-  const { brandMasks, unverifiedColorCount } = applyBrandColorLibrary(rgbBuffer, cmykBuffer, library)
+  const { brandMasks, unverifiedColorCount, unverifiedColors } = applyBrandColorLibrary(rgbBuffer, cmykBuffer, library)
   const brandBlend = blendBrandEdges(rgbBuffer, cmykBuffer, brandMasks, lut)
-  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, brandBlend, unverifiedColorCount }
+  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, brandBlend, unverifiedColorCount, unverifiedColors }
 }
 
 // Warning count (requirement 3): distinct unmatched RGB values that cover at
@@ -314,10 +317,15 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
     const y = Math.floor(px / PX_W)
     color.mask[y * rowBytes + (x >> 3)] |= 128 >> (x & 7)
   }
+  const significant = [...unmatched.entries()].filter(([, count]) => count >= pixelCount * MIN_SIGNIFICANT_FRACTION)
+  // For the warning list: biggest areas first; white and near-black have
+  // fixed print values (0/0/0/0, K100) so they are not "unknown".
+  const isFixed = key => key === 0xFFFFFF || Math.max(key >> 16, (key >> 8) & 255, key & 255) <= 12
   return {
     brandMasks: [...byHex.values()].filter(color => color.mask),
-    unverifiedColorCount: [...unmatched.values()]
-      .filter(count => count >= pixelCount * MIN_SIGNIFICANT_FRACTION).length,
+    unverifiedColorCount: significant.length,
+    unverifiedColors: significant.filter(([key]) => !isFixed(key)).sort((a, b) => b[1] - a[1])
+      .map(([key]) => '#' + key.toString(16).padStart(6, '0').toUpperCase()),
   }
 }
 

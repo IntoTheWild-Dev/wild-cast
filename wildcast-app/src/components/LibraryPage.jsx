@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
+import { srgbIfCmyk } from '../lib/cmykUpload'
 import { createPortal } from 'react-dom'
 import Select from './Select'
 import ChoiceButton from './ChoiceButton'
@@ -73,7 +74,8 @@ const UPLOAD_CONCURRENCY = 3
 // badge - those skip Photoroom, see lib/removeBackground.js).
 async function loadUploadItems(files, checkCutOut) {
   const items = []
-  for (const file of files) {
+  for (const picked of files) {
+    const file = await srgbIfCmyk(picked)  // CMYK JPEG -> sRGB, see lib/cmykUpload.js
     const previewUrl = URL.createObjectURL(file)
     try {
       const size = await imageSize(previewUrl)

@@ -1495,7 +1495,7 @@ const SHOW_MODE_CHOOSER = false
   // mode: 'print' (default - photos stay RGB like InDesign's PDF/X-4, the
   // print shop converts them) or 'cmyk' (CMYK-only file, for printers that
   // require it). Wolt Blue is exact 75/0/10/0 in both - see api/export-cmyk.js.
-  async function handleExport(mode = 'print') {
+  async function handleExport(mode = 'cmyk') {
     // Belt-and-suspenders alongside FieldEditor's own Export PDF button being
     // disabled/hidden for non-Managers - shouldn't normally be reachable, but
     // keeps this correct even if the button state is ever stale.
@@ -1546,10 +1546,22 @@ const SHOW_MODE_CHOOSER = false
       }
 
       const blob = await response.blob()
+
+      // Colours that aren't in the brand list were converted automatically
+      // (Annika's checklist fix 3): say which, before the file is downloaded.
+      let unknown = []
+      try { unknown = JSON.parse(response.headers.get('X-Unverified-List') || '[]') } catch { unknown = [] }
+      if (unknown.length) {
+        const ok = await showConfirm(
+          `These colours aren't in the brand colour list, so their print values were converted automatically: ${unknown.join(', ')}.\n\nBrand colours like Wolt Blue are exact. Download anyway?`,
+          { title: 'Colours converted automatically', confirmLabel: 'Download', cancelLabel: 'Cancel' })
+        if (!ok) return
+      }
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${filename}${mode === 'cmyk' ? '-cmyk' : ''}.pdf`
+      a.download = `${filename}${mode === 'print' ? '-digital' : ''}.pdf`
       a.click()
       URL.revokeObjectURL(url)
 

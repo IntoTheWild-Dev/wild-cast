@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { srgbIfCmyk } from '../lib/cmykUpload'
 import TemplateCanvas from './TemplateCanvas'
 import Select from './Select'
 import { PAGE_PADDING_X, stickyPageBar } from '../lib/layout'
@@ -52,7 +53,8 @@ function imageZoneLabel(zone) {
 // Raw File -> { name, url, warning }. Batch uploads are used as they are (no
 // background-removal prompt per file); a zone that wants a cut-out gets a
 // warning instead, and a QR code gets its quiet zone trimmed like the editor.
-async function prepareFile(zone, file) {
+async function prepareFile(zone, picked) {
+  const file = await srgbIfCmyk(picked)  // CMYK JPEG -> sRGB, see lib/cmykUpload.js
   let url = URL.createObjectURL(file)
   if (zone.id === 'qr') url = await cropToContent(url)
   const mustBeTransparent = zone.hint?.toLowerCase().includes('transparent')

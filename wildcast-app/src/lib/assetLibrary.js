@@ -1,4 +1,5 @@
 import { blobUrlToDataUrl, cropToContent } from './image'
+import { srgbIfCmyk } from './cmykUpload'
 import { removeBackgroundFromFile, shouldRemoveBackground, isAlreadyCutOut, askRemoveBackground } from './removeBackground'
 
 // Shared library, backed by Vercel Blob (not localStorage) - same asset is
@@ -124,6 +125,7 @@ export async function uploadImageForZone(file, { requireTransparent, autoCropCon
 // photo, so that throws; anywhere else the original is kept so the upload
 // isn't blocked by an outage or an exhausted quota.
 export async function removeBackgroundForUpload(file, { folder, requireTransparent, removeBg } = {}) {
+  file = await srgbIfCmyk(file)  // CMYK JPEG -> sRGB on the server, see lib/cmykUpload.js
   if (!shouldRemoveBackground(folder)) return { url: URL.createObjectURL(file), name: file.name }
   if (removeBg === undefined) {
     const previewUrl = URL.createObjectURL(file)
