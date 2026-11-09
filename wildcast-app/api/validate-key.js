@@ -1,3 +1,4 @@
+import { ownerId } from './_lib/ownerIdentity.js'
 // Validates an activation key against the WILDCAST_KEYS environment variable.
 // Set WILDCAST_KEYS in Vercel dashboard as:
 //   WOLT-DE-demo-key|Wolt DE|20,WILD-Demo-KEY|Wild Stack|100|agency
@@ -47,6 +48,7 @@ export default function handler(req, res) {
 
   return res.status(200).json({
     valid: true,
+    owner_id: ownerId(key.trim()),
     client_name: match.client_name,
     total_credits: match.total_credits,
     role: match.role,

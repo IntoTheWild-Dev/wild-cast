@@ -1,3 +1,4 @@
+import { ownerId } from './ownerIdentity.js'
 import { verifySession } from './accounts.js'
 
 // Server-side gate for designer-only API routes. The app's own role check
@@ -122,5 +123,5 @@ export function requirePluginKey(req, res) {
 // Historical owner identity used by folders/notifications. Derive it only
 // after credential verification; never trust a caller-supplied owner header.
 export function callerOwnerId(req, caller) {
-  return caller.kind === 'account' ? caller.id : req.headers['x-activation-key'].trim()
+  return ownerId(caller.kind === 'account' ? caller.id : req.headers['x-activation-key'])
 }

@@ -1,3 +1,4 @@
+import { ownerId, ownerRecord } from './_lib/ownerIdentity.js'
 import { put, list, get } from '@vercel/blob'
 import { requireCaller, callerOwnerId } from './_lib/auth.js'
 import { notifyOwner } from './_lib/notifications.js'
@@ -25,7 +26,7 @@ async function handleList(req, res) {
           // read) for the same reason.
           const result = await get(b.pathname, { access: 'private', useCache: false, token })
           if (!result) return null
-          const project = await new Response(result.stream).json()
+          const project = ownerRecord(await new Response(result.stream).json())
           return {
             id: project.id,
             url: b.url,
@@ -88,7 +89,7 @@ async function handleThumb(req, res) {
   try {
     const result = await get(`projects/${id}.json`, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN })
     if (!result) return res.status(404).end()
-    const project = await new Response(result.stream).json()
+    const project = ownerRecord(await new Response(result.stream).json())
     const match = /^data:([^;]+);base64,(.+)$/.exec(project.preview || project.thumbnail || '')
     if (!match) return res.status(404).end()
     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(match[1])) return res.status(422).end()
@@ -133,7 +134,7 @@ async function handlePatch(req, res) {
     // written BACK, silently reverting whatever the stale read missed.
     const result = await get(`projects/${projectId}.json`, { access: 'private', useCache: false, token })
     if (!result) return res.status(404).json({ error: 'Project not found' })
-    const project = await new Response(result.stream).json()
+    const project = ownerRecord(await new Response(result.stream).json())
     const previousStatus = project.reviewStatus
 
     project.reviewStatus = status
@@ -234,8 +235,8 @@ export default async function handler(req, res) {
 
     const project = {
       ...incoming,
-      ownerEmail: existingProject?.ownerEmail ?? callerOwnerId(req, caller),
-      ownerName: existingProject?.ownerName ?? caller.name,
+      ownerEmail: ownerId(existingProject?.ownerEmail) ?? callerOwnerId(req, caller),
+      ownerName: existingProject ? ownerRecord(existingProject).ownerName ?? caller.name : caller.name,
       reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',
       everRequestedChanges: existingProject?.everRequestedChanges ?? false,
     }

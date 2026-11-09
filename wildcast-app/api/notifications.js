@@ -1,3 +1,4 @@
+import { ownerId as normalizeOwner } from './_lib/ownerIdentity.js'
 // The header bell's feed - see api/_lib/notifications.js for how entries get
 // written. The owner id (activation.key) comes in a header rather than the
 // query string so a raw activation key doesn't land in URL/access logs.
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
   const caller = await requireCaller(req, res)
   if (!caller) return
   const ownerId = callerOwnerId(req, caller)
-  if (req.headers['x-wildcast-owner'] && req.headers['x-wildcast-owner'] !== ownerId) return res.status(403).json({ error: 'Notifications belong to the signed-in user' })
+  if (req.headers['x-wildcast-owner'] && normalizeOwner(req.headers['x-wildcast-owner']) !== ownerId) return res.status(403).json({ error: 'Notifications belong to the signed-in user' })
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
   if (req.method === 'GET') {
