@@ -20,12 +20,9 @@ export const assetPath = {
 
 export const SLOT_KEY_RE = /^[a-z0-9-]+$/
 
-// Looser host-only check for the two private-image proxies
-// (api/list-templates.js and api/library-assets.js, `?url=`): they attach our
-// Blob token to a fetch of a caller-supplied URL, so that URL must be https on
-// Vercel's blob storage domain - otherwise anyone could point it at their own
-// server and read the token. Any path on the store is fine here (the proxies
-// serve backgrounds, tiles, examples and library assets).
+// Structural locator check only. Media proxies also restrict the namespace
+// and read through the SDK by pathname (privateMedia.js); this host check
+// must never authorize arbitrary authenticated HTTP fetches.
 export function isBlobHost(url) {
   if (typeof url !== 'string') return false
   try {

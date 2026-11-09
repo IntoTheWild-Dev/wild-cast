@@ -28,7 +28,7 @@ export default function handler(req, res) {
   }
 
   const raw = process.env.WILDCAST_KEYS || ''
-  const keyMap = {}
+  const keyMap = Object.create(null)
   raw.split(',').forEach(entry => {
     const parts = entry.trim().split('|')
     if (parts.length === 3 || parts.length === 4) {

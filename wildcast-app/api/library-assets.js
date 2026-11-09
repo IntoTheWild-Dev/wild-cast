@@ -1,7 +1,8 @@
 // Merged upload/list/delete-library-asset.js into one route (dispatched by
 // method) to stay under Vercel's per-deployment serverless function count.
 import { put, list, del, copy } from '@vercel/blob'
-import { isBlobHost } from './_lib/templateAssets.js'
+import { mediaPath, serveMedia } from './_lib/privateMedia.js'
+import { requireCaller } from './_lib/auth.js'
 
 const FOLDER_PATTERN = /^[a-z-]+$/
 
@@ -56,22 +57,7 @@ async function handleGet(req, res) {
   // ?url=<blobUrl> — proxy a single private blob's bytes through to the
   // browser (used as the <img src>, since the store only allows private
   // access and a plain <img> can't attach the Authorization header itself).
-  if (req.query.url) {
-    // Never send our Blob token to a host we don't own.
-    if (!isBlobHost(req.query.url)) return res.status(400).end()
-    try {
-      const upstream = await fetch(req.query.url, { headers: { Authorization: `Bearer ${token}` } })
-      if (!upstream.ok) return res.status(upstream.status).end()
-      const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
-      const buffer = Buffer.from(await upstream.arrayBuffer())
-      res.setHeader('Content-Type', contentType)
-      res.setHeader('Cache-Control', 'private, max-age=86400')
-      return res.status(200).send(buffer)
-    } catch (err) {
-      console.error('library-asset image proxy error:', err)
-      return res.status(500).end()
-    }
-  }
+  if (req.query.url) return serveMedia(req, res, 'library')
 
   try {
     const { blobs } = await list({ prefix: 'library/', token })
@@ -157,7 +143,8 @@ async function handlePatch(req, res) {
   if (!url || !newName) return res.status(400).json({ error: 'Missing url or newName' })
 
   try {
-    const oldPath = decodeURIComponent(new URL(url).pathname).replace(/^\//, '')
+    const oldPath = mediaPath(url, 'library')
+    if (!oldPath) return res.status(400).json({ error: 'Invalid library asset' })
     // Merchant-scoped path (current format) first, falling back to the older
     // no-merchant format — renaming an old asset also migrates it into
     // "General" rather than needing a one-off migration script.
@@ -176,13 +163,15 @@ async function handlePatch(req, res) {
     const merchant = newMerchantRaw != null ? await resolveMerchant(newMerchantRaw, token) : oldMerchant
     const newPath = `library/${folder}/${merchant}/${id}__${safeName}.${ext}`
 
-    const copied = await copy(url, newPath, {
+    if (newPath === oldPath) return res.status(200).json({ id, folder, merchant, name: newName, url, uploadedAt: Date.now() })
+
+    const copied = await copy(oldPath, newPath, {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
       token,
     })
-    await del(url, { token })
+    await del(oldPath, { token })
 
     return res.status(200).json({ id, folder, merchant, name: newName, url: copied.url, uploadedAt: Date.now() })
   } catch (err) {
@@ -195,8 +184,11 @@ async function handleDelete(req, res) {
   const { url } = req.query
   if (!url) return res.status(400).json({ error: 'Missing url' })
 
+  const path = mediaPath(url, 'library')
+  if (!path) return res.status(400).json({ error: 'Invalid library asset' })
+
   try {
-    await del(url, { token: process.env.BLOB_READ_WRITE_TOKEN })
+    await del(path, { token: process.env.BLOB_READ_WRITE_TOKEN })
     return res.status(200).json({ ok: true })
   } catch (err) {
     console.error('delete-library-asset error:', err)
@@ -205,6 +197,7 @@ async function handleDelete(req, res) {
 }
 
 export default async function handler(req, res) {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method) && !(await requireCaller(req, res))) return
   if (req.method === 'GET') return handleGet(req, res)
   if (req.method === 'POST') return handlePost(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)

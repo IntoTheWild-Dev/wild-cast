@@ -1,3 +1,4 @@
+import { activationHeaders } from '../lib/activationKey'
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import Select from './Select'
@@ -567,8 +568,13 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
 
   async function handleDelete(id) {
     if (!(await showConfirm('This cannot be undone.', { title: 'Delete this design?', confirmLabel: 'Delete' }))) return
-    setProjects(prev => prev.filter(p => p.id !== id))
-    fetch(`/api/delete-project?id=${id}`, { method: 'DELETE' }).catch(() => {})
+    try {
+      const response = await fetch(`/api/delete-project?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: activationHeaders() })
+      if (!response.ok) throw new Error((await response.json()).error || 'Delete failed')
+      setProjects(prev => prev.filter(p => p.id !== id))
+    } catch (err) {
+      showAlert(err.message, { title: 'Could not delete this design' })
+    }
   }
 
   // Renames right from the card, no need to open the editor - Julia's ask,

@@ -1,3 +1,4 @@
+import { activationHeaders } from './activationKey'
 import { blobUrlToDataUrl, cropToContent } from './image'
 import { srgbIfCmyk } from './cmykUpload'
 import { removeBackgroundFromFile, shouldRemoveBackground, isAlreadyCutOut, askRemoveBackground } from './removeBackground'
@@ -87,7 +88,7 @@ export async function saveAssetToLibrary(folder, name, blobUrl, merchant) {
     const dataUrl = await blobUrlToDataUrl(blobUrl, { maxDim: LIBRARY_MAX_DIM })
     const res = await fetch('/api/library-assets', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ folder, name, dataUrl, merchant }),
     })
     if (!res.ok) throw new Error((await res.json())?.error || 'Upload failed')
@@ -146,7 +147,7 @@ export async function removeBackgroundForUpload(file, { folder, requireTranspare
 
 export async function deleteLibraryAsset(url) {
   try {
-    await fetch(`/api/library-assets?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
+    await fetch(`/api/library-assets?url=${encodeURIComponent(url)}`, { method: 'DELETE', headers: activationHeaders() })
   } catch (err) {
     console.warn('Could not delete library asset:', err)
   }
@@ -161,7 +162,7 @@ export async function renameLibraryAsset(url, newName, merchant) {
   try {
     const res = await fetch('/api/library-assets', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ url, newName, merchant }),
     })
     if (!res.ok) throw new Error((await res.json())?.error || 'Rename failed')

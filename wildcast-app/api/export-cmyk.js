@@ -12,7 +12,7 @@ import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
 import { resolvePrintSettings } from './_lib/printColors/index.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
 import { buildLayeredPdf } from './_lib/layeredPdf.js'
-import { isBlobHost } from './_lib/templateAssets.js'
+import { mediaPath, readMedia } from './_lib/privateMedia.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -208,19 +208,22 @@ export default async function handler(req, res) {
 // that template file on our Blob store is ever fetched with the token.
 // WILDCAST_TEMPLATE_PROXY (local development only, no Blob token) fetches
 // through a deployed app's own proxy instead.
-const TEMPLATE_PDF_PATH = /^\/templates\/[a-z0-9-]+-bg\.pdf$/
 export async function fetchTemplatePdf(link) {
   let blobUrl = String(link)
   if (blobUrl.startsWith('/api/list-templates?')) blobUrl = new URLSearchParams(blobUrl.split('?')[1]).get('url') ?? ''
-  if (!isBlobHost(blobUrl) || !TEMPLATE_PDF_PATH.test(decodeURIComponent(new URL(blobUrl).pathname))) {
-    throw new Error('Not a template background PDF')
+  const path = mediaPath(blobUrl, 'templates')
+  if (!path || !/^templates\/[a-z0-9-]+-bg\.pdf$/.test(path)) throw new Error('Not a template background PDF')
+  let bytes
+  if (!process.env.BLOB_READ_WRITE_TOKEN && process.env.WILDCAST_TEMPLATE_PROXY) {
+    // Explicit local development fallback; never carries storage credentials.
+    const r = await fetch(`${process.env.WILDCAST_TEMPLATE_PROXY}/api/list-templates?url=${encodeURIComponent(blobUrl)}`, { redirect: 'error', signal: AbortSignal.timeout(15_000) })
+    if (!r.ok) throw new Error(`Template PDF not available (${r.status})`)
+    bytes = Buffer.from(await r.arrayBuffer())
+  } else {
+    const media = await readMedia(path)
+    if (!media) throw new Error('Template PDF not available (404)')
+    bytes = media.bytes
   }
-  const token = process.env.BLOB_READ_WRITE_TOKEN
-  const proxy = process.env.WILDCAST_TEMPLATE_PROXY
-  const url = token || !proxy ? `${blobUrl}?_t=${Date.now()}` : `${proxy}/api/list-templates?url=${encodeURIComponent(blobUrl)}`
-  const r = await fetch(url, { ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}), signal: AbortSignal.timeout(15_000) })
-  if (!r.ok) throw new Error(`Template PDF not available (${r.status})`)
-  const bytes = Buffer.from(await r.arrayBuffer())
   if (bytes.toString('latin1', 0, 5) !== '%PDF-') throw new Error('Template background is not a PDF')
   return bytes
 }
