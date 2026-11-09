@@ -518,7 +518,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const [folderRegistry, setFolderRegistry] = useState([]) // [{ ownerEmail, ownerName, folders }]
 
   useEffect(() => {
-    fetch('/api/save-project', { cache: 'no-store' })
+    fetch('/api/save-project', { cache: 'no-store', headers: activationHeaders() })
       .then(r => r.json())
       .then(data => { setProjects(data.projects ?? []); setStatus('ready') })
       .catch(() => setStatus('error'))

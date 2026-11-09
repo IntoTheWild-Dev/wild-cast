@@ -5,6 +5,7 @@
 import { test, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 
+process.env.WILDCAST_KEYS = 'TEST|Test user|10|partner'
 const store = new Map()
 mock.module('@vercel/blob', {
   namedExports: {
@@ -24,7 +25,7 @@ function call(method, body) {
     end() { return this },
     setHeader() { return this },
   }
-  return handler({ method, body, query: {}, headers: {} }, res).then(() => out)
+  return handler({ method, body, query: {}, headers: { 'x-activation-key': 'TEST' } }, res).then(() => out)
 }
 
 const seed = status => store.set('projects/p1.json', JSON.stringify({ id: 'p1', templateId: 't', reviewStatus: status, projectName: 'Old' }))

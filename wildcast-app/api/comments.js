@@ -136,6 +136,9 @@ async function handlePatch(req, res) {
 }
 
 export default async function handler(req, res) {
+  if (!['GET', 'POST', 'PATCH'].includes(req.method)) return res.status(405).end()
+  const projectId = req.method === 'GET' ? req.query.id : req.body?.projectId
+  if (typeof projectId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(projectId)) return res.status(400).json({ error: 'Invalid project id' })
   if (req.method === 'GET') return handleGet(req, res)
   if (req.method === 'POST') return handlePost(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)

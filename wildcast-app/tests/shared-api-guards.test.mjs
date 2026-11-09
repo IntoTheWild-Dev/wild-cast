@@ -17,6 +17,9 @@ globalThis.fetch = async (url, options) => {
   assert.equal(url, 'https://sdk.photoroom.com/v1/segment')
   return new Response(Uint8Array.from([1, 2, 3]), { headers: { 'Content-Type': 'image/webp' } })
 }
+const { default: comments } = await import('../api/comments.js')
+const { default: save } = await import('../api/save-project.js')
+const { default: review } = await import('../api/get-review.js')
 const { default: rename } = await import('../api/rename-project.js')
 const { default: move } = await import('../api/move-project.js')
 const { default: folders } = await import('../api/folders.js')
@@ -39,7 +42,7 @@ beforeEach(() => {
   store.set('projects/shared.json', JSON.stringify({ id: 'shared', projectName: 'Before', ownerEmail: 'OWNER', fields: { headline: 'Exact artwork' } }))
 })
 for (const [name, handler, method] of [
-  ['rename', rename, 'POST'], ['move', move, 'POST'], ['folders list', folders, 'GET'], ['folder create', folders, 'POST'],
+  ['project list', save, 'GET'], ['project save', save, 'POST'], ['rename', rename, 'POST'], ['move', move, 'POST'], ['folders list', folders, 'GET'], ['folder create', folders, 'POST'],
   ['notifications', notifications, 'GET'], ['notification read state', notifications, 'PATCH'], ['PDF export', exportPdf, 'POST'], ['background removal', removeBg, 'POST'],
 ]) test(`${name} rejects anonymous calls before writes or paid requests`, async () => {
   const before = [...store]
@@ -77,4 +80,34 @@ test('valid callers can still export a CMYK PDF', async () => {
 test('valid background-removal callers use the fixed vendor endpoint', async () => {
   const r = await call(removeBg, 'POST', { headers: OWNER, body: Buffer.from([1, 2, 3]) })
   assert.equal(r.code, 200); assert.deepEqual(Buffer.from(r.data), Buffer.from([1, 2, 3])); assert.equal(upstream.length, 1)
+})
+
+test('authenticated partners still see all shared designs; new ownership cannot be forged', async () => {
+  const shared = await call(save, 'GET', { headers: OTHER })
+  assert.equal(shared.code, 200); assert.equal(shared.data.projects[0].id, 'shared')
+  const r = await call(save, 'POST', { headers: OTHER, body: { id: 'new', templateId: 't', ownerEmail: 'TEAM', ownerName: 'Forged', fields: { headline: 'Same artwork' } } })
+  assert.equal(r.code, 200)
+  const stored = JSON.parse(store.get('projects/new.json'))
+  assert.equal(stored.ownerEmail, 'OTHER'); assert.equal(stored.ownerName, 'Other')
+  assert.deepEqual(stored.fields, { headline: 'Same artwork' })
+})
+test('a content save cannot set approval or overwrite approved artwork by repeating approved status', async () => {
+  store.set('projects/shared.json', JSON.stringify({ id: 'shared', templateId: 't', reviewStatus: 'approved', fields: { headline: 'Approved artwork' } }))
+  const r = await call(save, 'POST', { headers: OWNER, body: { id: 'shared', templateId: 't', reviewStatus: 'approved', fields: { headline: 'Changed' } } })
+  assert.equal(r.code, 400)
+  assert.equal(JSON.parse(store.get('projects/shared.json')).fields.headline, 'Approved artwork')
+})
+test('existing review links retain their previews without exposing editing fields or owner identities', async () => {
+  const preview = 'data:image/jpeg;base64,AQID'
+  store.set('projects/shared.json', JSON.stringify({ id: 'shared', templateName: 'Template', previewHd: preview, reviewStatus: 'review', ownerEmail: 'PRIVATE_OWNER', fields: { headline: 'Private editing state' } }))
+  const r = await call(review, 'GET', { query: { id: 'shared' } })
+  assert.equal(r.code, 200); assert.equal(r.data.previewHd, preview); assert.equal(r.data.reviewStatus, 'review')
+  assert.equal('ownerEmail' in r.data, false); assert.equal('fields' in r.data, false)
+})
+
+for (const id of ['../accounts/victim', 'x/../../accounts/victim', ['a', 'b']]) test(`review/comment/status paths reject invalid id ${JSON.stringify(id)}`, async () => {
+  assert.equal((await call(review, 'GET', { query: { id } })).code, 400)
+  assert.equal((await call(comments, 'GET', { query: { id } })).code, 400)
+  assert.equal((await call(comments, 'POST', { body: { projectId: id, name: 'Reviewer', text: 'Note' } })).code, 400)
+  assert.equal((await call(save, 'PATCH', { body: { projectId: id, status: 'approved' } })).code, 400)
 })
