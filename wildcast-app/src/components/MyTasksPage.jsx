@@ -1,3 +1,4 @@
+import { activationHeaders } from '../lib/activationKey'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { PAGE_PADDING_X, APP_HEADER_HEIGHT, stickyPageBar } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'
@@ -113,7 +114,7 @@ export default function MyTasksPage({ onOpenProject, activation, unreadProjectId
   const laneHeaderTop = APP_HEADER_HEIGHT + (isMobile ? 0 : bandHeight)
 
   useEffect(() => {
-    fetch('/api/save-project')
+    fetch('/api/save-project', { headers: activationHeaders() })
       .then(r => r.json())
       .then(d => setProjects(d.projects || []))
       .catch(() => {})

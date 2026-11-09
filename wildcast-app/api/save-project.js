@@ -1,4 +1,5 @@
 import { put, list, get } from '@vercel/blob'
+import { requireCaller, callerOwnerId } from './_lib/auth.js'
 import { notifyOwner } from './_lib/notifications.js'
 
 // Designs used to only be discoverable via a per-browser localStorage
@@ -118,7 +119,7 @@ const VALID_REVIEW_STATUSES = ['design', 'review', 'changes_requested', 'approve
 // `projects/${id}.json` blob POST already writes to.
 async function handlePatch(req, res) {
   const { projectId, status, by } = req.body ?? {}
-  if (!projectId || !VALID_REVIEW_STATUSES.includes(status)) {
+  if (typeof projectId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(projectId) || !VALID_REVIEW_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Missing or invalid projectId/status' })
   }
 
@@ -169,16 +170,24 @@ async function handlePatch(req, res) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET' && req.query.thumb) return handleThumb(req, res)
+  let caller
+  if (req.method === 'GET' || req.method === 'POST') {
+    caller = await requireCaller(req, res)
+    if (!caller) return
+  }
   if (req.method === 'GET') return handleList(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)
   if (req.method !== 'POST') return res.status(405).end()
 
   try {
     const incoming = req.body
-    if (!incoming?.id || !incoming?.templateId) {
+    if (typeof incoming?.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(incoming.id) || typeof incoming.templateId !== 'string' || !incoming.templateId) {
       return res.status(400).json({ error: 'Missing project id or templateId' })
     }
 
+    if (incoming.reviewStatus != null && !['design', 'review'].includes(incoming.reviewStatus)) {
+      return res.status(400).json({ error: 'Review decisions must use the review action, not a content save' })
+    }
     const token = process.env.BLOB_READ_WRITE_TOKEN
 
     // Bug fix, 2026-09-24 (root cause behind the everRequestedChanges fix
@@ -225,6 +234,8 @@ export default async function handler(req, res) {
 
     const project = {
       ...incoming,
+      ownerEmail: existingProject?.ownerEmail ?? callerOwnerId(req, caller),
+      ownerName: existingProject?.ownerName ?? caller.name,
       reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',
       everRequestedChanges: existingProject?.everRequestedChanges ?? false,
     }

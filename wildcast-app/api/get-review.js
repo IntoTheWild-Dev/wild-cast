@@ -3,7 +3,7 @@ import { get } from '@vercel/blob'
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
   const { id } = req.query
-  if (!id) return res.status(400).json({ error: 'Missing id' })
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Invalid project id' })
 
   const token = process.env.BLOB_READ_WRITE_TOKEN
   try {
@@ -18,7 +18,10 @@ export default async function handler(req, res) {
     if (!result) return res.status(404).json({ error: 'Project not found' })
     const project = await new Response(result.stream).json()
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-    return res.status(200).json(project)
+    // Public reviewers need the artwork and its review status, not the
+    // private editing state or owner identifiers. Keep existing links usable.
+    const { id: reviewId, templateName, projectName, previewHd, preview, thumbnail, reviewStatus, everRequestedChanges } = project
+    return res.status(200).json({ id: reviewId, templateName, projectName, previewHd, preview, thumbnail, reviewStatus, everRequestedChanges })
   } catch (err) {
     console.error('get-review error:', err)
     return res.status(500).json({ error: err.message })
