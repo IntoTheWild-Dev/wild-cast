@@ -1,4 +1,5 @@
 import { put, list, get } from '@vercel/blob'
+import { printProfileFor } from '../src/lib/printProfile.js'
 import { notifyOwner } from './_lib/notifications.js'
 
 // Designs used to only be discoverable via a per-browser localStorage
@@ -222,6 +223,8 @@ export default async function handler(req, res) {
 
     const project = {
       ...incoming,
+      // Old tabs omit the setting: retain the stored choice instead of erasing it.
+      iccProfile: printProfileFor(incoming.iccProfile === undefined ? existingProject : incoming),
       reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',
       everRequestedChanges: existingProject?.everRequestedChanges ?? false,
     }

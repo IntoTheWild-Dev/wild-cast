@@ -1,0 +1,56 @@
+import { test, mock, beforeEach } from 'node:test'
+import assert from 'node:assert/strict'
+import { DEFAULT_PRINT_PROFILE, printProfileFor } from '../src/lib/printProfile.js'
+
+const store = new Map()
+mock.module('@vercel/blob', {
+  namedExports: {
+    list: async ({ prefix }) => ({ blobs: store.has(prefix) ? [{ url: `https://storage.invalid/${prefix}` }] : [] }),
+    get: async path => store.has(path) ? { stream: new Response(store.get(path)).body } : null,
+    put: async (path, body) => { store.set(path, body); return { url: `mem://${path}` } },
+  },
+})
+const { default: save } = await import('../api/save-project.js')
+const { default: load } = await import('../api/load-project.js')
+async function call(handler, method, body, query = {}) {
+  const result = {}
+  const res = {
+    status(code) { result.code = code; return this },
+    json(body) { result.body = body; return this },
+    setHeader() {},
+  }
+  await handler({ method, body, query, headers: {} }, res)
+  return result
+}
+beforeEach(() => {
+  store.clear()
+  mock.method(globalThis, 'fetch', async url => {
+    const path = new URL(url).pathname.slice(1)
+    return new Response(store.get(path), { status: store.has(path) ? 200 : 404 })
+  })
+})
+
+test('profile survives save and reopening on another client without altering artwork', async () => {
+  for (const iccProfile of ['fogra39', 'fogra51']) {
+    const project = { id: 'profile-test', templateId: 't', fields: { headline: 'Same artwork' }, iccProfile }
+    assert.equal((await call(save, 'POST', project)).code, 200)
+    const reopened = await call(load, 'GET', null, { id: project.id })
+    assert.equal(reopened.code, 200)
+    assert.equal(printProfileFor(reopened.body), iccProfile)
+    assert.deepEqual(reopened.body.fields, project.fields)
+  }
+})
+test('saving from an older client preserves an existing FOGRA39 choice', async () => {
+  store.set('projects/old.json', JSON.stringify({ id: 'old', iccProfile: 'fogra39' }))
+  await call(save, 'POST', { id: 'old', templateId: 't', fields: { headline: 'Edited' } })
+  assert.equal(JSON.parse(store.get('projects/old.json')).iccProfile, 'fogra39')
+})
+test('explicit profile changes persist and legacy designs use the current default', async () => {
+  store.set('projects/old.json', JSON.stringify({ id: 'old', iccProfile: 'fogra39' }))
+  await call(save, 'POST', { id: 'old', templateId: 't', iccProfile: 'fogra51' })
+  assert.equal(JSON.parse(store.get('projects/old.json')).iccProfile, 'fogra51')
+  await call(save, 'POST', { id: 'legacy', templateId: 't' })
+  assert.equal(JSON.parse(store.get('projects/legacy.json')).iccProfile, DEFAULT_PRINT_PROFILE)
+  assert.equal(printProfileFor({}), DEFAULT_PRINT_PROFILE)
+  assert.equal(printProfileFor({ iccProfile: 'unknown' }), DEFAULT_PRINT_PROFILE)
+})

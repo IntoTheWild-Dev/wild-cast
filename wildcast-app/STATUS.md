@@ -1034,3 +1034,10 @@ Integrated the pending `feat/print-fixes` work with current main: agency print-c
 Additional corrections: Managers can select FOGRA39 or FOGRA51 (51 remains default); failed layered exports report an error instead of silently rasterising the design; CMYK exports reject background images/gradients the converter cannot handle; legacy flat exports include a quality warning. Printer label presets preserve the identity of FOGRA39 output. Repaired package-lock for clean installs.
 
 Validation: clean `npm ci --ignore-scripts --no-audit --no-fund`, all 158 tests passing, production build passing. ESLint reports 133 diagnostics on both main and this branch; existing lint debt remains. Physical colour matching and production deployment are not verified.
+
+
+### 2026-11-09 — Persist each design's print profile (print draft)
+
+The editor now saves and restores its selected ICC profile, includes profile edits in autosave/unsaved-change handling, and resets fresh designs to FOGRA51 instead of inheriting the previous design's selection. Brief candidates explicitly save the default; duplicates retain the original saved setting. Server saves from older clients preserve an existing profile when the field is omitted. Legacy designs without recorded profile metadata use FOGRA51; no historical profile is inferred or bulk rewritten. Approved-design locks remain enforced.
+
+Validation: 161 tests pass, including profile round trips through save/load, older-client preservation, explicit changes and legacy defaults; frontend build passes with the existing bundle-size warning. No physical colour match is claimed: comparison still requires the earliest closest WildCast PDF, reference InDesign PDF, latest incorrect PDF and printer/RIP settings. This change is in the independent draft print PR, not the security branches; no merge or production release performed.

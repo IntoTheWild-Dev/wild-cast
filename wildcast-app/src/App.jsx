@@ -26,6 +26,7 @@ import { mergeCustomTemplates } from './lib/customTemplates'
 import { resolvePartnerName, FORMATS, FORMAT_TEMPLATE_GROUP } from './lib/briefConstants'
 import { fetchMerchantAssets, buildCandidateFields, fitContent } from './lib/briefToCandidates'
 import { logoStartPct } from './lib/logoStartScale'
+import { DEFAULT_PRINT_PROFILE, printProfileFor } from './lib/printProfile'
 import useIsMobile from './lib/useIsMobile'
 import { sortIdsByFieldOrder } from './lib/fieldOrder'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from './lib/layout'
@@ -255,7 +256,7 @@ export default function App() {
   // Which output ICC profile export-cmyk.js should convert to - see
   // ICC_PROFILES in api/export-cmyk.js. FOGRA51 remains the default;
   // Managers can select FOGRA39 to match their printer's requirements.
-  const [iccProfile, setIccProfile] = useState('fogra51')
+  const [iccProfile, setIccProfile] = useState(DEFAULT_PRINT_PROFILE)
   // Lifted out of BriefingForm so it survives a round trip to the editor and
   // back - Julia's ask (2026-08-03): saving a candidate mid-edit should
   // return to the "pick a design" screen (e.g. a merchant wants both A and
@@ -1041,6 +1042,7 @@ const SHOW_MODE_CHOOSER = false
     setZonePositions({})
     setProjectName(template.name)
     setCurrentProjectId(null)
+    setIccProfile(DEFAULT_PRINT_PROFILE)
     pendingNewIdRef.current = null
     setProjectOwner(null)
     setProjectFolder(null)
@@ -1111,6 +1113,7 @@ const SHOW_MODE_CHOOSER = false
     const nameTag = [prefilledFields?.restaurant_name, prefilledFields?.offer].filter(Boolean).join(' – ')
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
     setCurrentProjectId(null)
+    setIccProfile(DEFAULT_PRINT_PROFILE)
     pendingNewIdRef.current = null
     setProjectOwner(null)
     setProjectFolder(null)
@@ -1174,6 +1177,7 @@ const SHOW_MODE_CHOOSER = false
     const nameTag = [prefilledFields.restaurant_name, prefilledFields.offer].filter(Boolean).join(' – ')
     setProjectName(brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name))
     setCurrentProjectId(null)
+    setIccProfile(DEFAULT_PRINT_PROFILE)
     pendingNewIdRef.current = null
     setProjectOwner(null)
     // Prompt Brief's "Save to folder" choice - the editor's first save files it there.
@@ -1634,6 +1638,7 @@ const SHOW_MODE_CHOOSER = false
     const project = {
       id, templateId: selectedTemplate.id, templateName: selectedTemplate.name,
       projectName: name,
+      iccProfile,
       fields: savedFields, fontSizes: fontSizesToSave, alignments, imageScales, imagePositions, zonePositions: currentZonePositions,
       mode: selectedTemplate.mode, savedAt: Date.now(), thumbnail, preview, previewHd,
       ownerEmail, ownerName, folder: projectFolder,
@@ -1758,7 +1763,7 @@ const SHOW_MODE_CHOOSER = false
     const t = setTimeout(() => { autoSave() }, 2500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, fontSizes, alignments, imageScales, imagePositions, projectName, screen, hasUnsavedChanges, saving, isLocked])
+  }, [fields, fontSizes, alignments, imageScales, imagePositions, projectName, iccProfile, screen, hasUnsavedChanges, saving, isLocked])
 
   // Save from the restricted review editor (a brief-generated candidate) -
   // Julia's ask (2026-08-03): persists via the same doSave()/Designs
@@ -1907,6 +1912,7 @@ const SHOW_MODE_CHOOSER = false
     const project = {
       id, templateId: template.id, templateName: template.name,
       projectName: opts.name ?? template.name,
+      iccProfile: DEFAULT_PRINT_PROFILE,
       fields: prefilledFields, fontSizes: {}, alignments: {}, imageScales: opts.imageScales ?? {}, imagePositions: opts.imagePositions ?? {}, zonePositions: {},
       mode: template.mode, savedAt: Date.now(), thumbnail, preview, previewHd,
       ownerEmail: activation?.key ?? null, ownerName: activation?.clientName ?? null, folder: opts.folder ?? null,
@@ -2052,6 +2058,7 @@ const SHOW_MODE_CHOOSER = false
     setZonePositions(project.zonePositions ?? {})
     setProjectName(project.projectName || template.name)
     setCurrentProjectId(project.id)
+    setIccProfile(printProfileFor(project))
     setProjectOwner(project.ownerEmail ? { email: project.ownerEmail, name: project.ownerName } : null)
     setProjectFolder(project.folder ?? null)
     // Absent on any design saved before this shipped, same fallback pattern
@@ -2786,7 +2793,11 @@ const SHOW_MODE_CHOOSER = false
 
           <FieldEditor
             iccProfile={iccProfile}
-            onIccProfileChange={setIccProfile}
+            onIccProfileChange={profile => {
+              if (isLocked || profile === iccProfile) return
+              setIccProfile(printProfileFor({ iccProfile: profile }))
+              setHasUnsavedChanges(true)
+            }}
             fields={fields}
             onChange={handleFieldChange}
             onFocusField={setActiveZoneId}
