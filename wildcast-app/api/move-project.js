@@ -1,3 +1,4 @@
+import { ownerRecord, ownerId } from './_lib/ownerIdentity.js'
 // Files (or un-files) an already-saved design into a personal subfolder -
 // the "Move to folder" action on a Designs card. Deliberately a small
 // dedicated endpoint rather than round-tripping the whole project through
@@ -33,13 +34,13 @@ export default async function handler(req, res) {
     const cacheBustUrl = match.url + (match.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
     const r = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
     if (!r.ok) throw new Error(`Blob fetch failed: ${r.status}`)
-    const project = await r.json()
+    const project = ownerRecord(await r.json())
 
     // folder: a name files it into that subfolder; null/omitted moves it
     // back to the owner's unsorted root.
     project.folder = (folder || '').trim() || null
     if (ownerEmail) {
-      project.ownerEmail = ownerEmail
+      project.ownerEmail = ownerId(ownerEmail)
       project.ownerName = ownerName || ownerEmail
     }
 

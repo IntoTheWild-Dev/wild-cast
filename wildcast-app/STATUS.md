@@ -1112,3 +1112,10 @@ Validation: 193 tests pass, including anonymous denial checks, shared partner re
 Remaining security work: signed external-review capabilities and review/comment permissions, account/invitation/session lifecycle, legacy shared-key owner identifiers, atomic storage updates, dependency upgrades, credential rotation and production configuration review. The application is not yet ready for a full security sign-off. No merge or production deployment performed.
 
 Product access policy confirmed: keep open partner self-registration and shared signed-in design access. This is an intentionally open membership policy, not an invitation-only private workspace.
+
+
+### 2026-11-09 — Opaque owner identities (stacked draft)
+
+Activation credentials are no longer public owner identifiers. Key sign-in returns a stable opaque owner ID; the UI uses that ID for My Tasks/folders/notifications while the original credential remains only in the existing authentication-header storage slot. Shared project/folder responses normalize legacy owners, content and layout fields remain unchanged, and legacy delete ownership still verifies correctly. Legacy/new folder registries merge without losing subfolders; old notification feeds remain readable and newer read-state wins. Old per-tab project caches are retired once to avoid retaining old owner metadata.
+
+Validation: 198 tests pass and frontend build passes. Added regressions for no credential disclosure in shared metadata, matching owner IDs across key sign-in/projects/folders, retained old folders/notification history, rejecting owner IDs as authentication credentials, and one-time cache migration. No stored project data is bulk-rewritten or deleted by this migration. Existing exposure cannot be undone: operational credential rotation remains necessary after rollout. No merge or production release performed.

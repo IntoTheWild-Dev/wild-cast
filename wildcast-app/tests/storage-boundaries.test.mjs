@@ -14,6 +14,7 @@ globalThis.fetch = async url => {
   fetches.push(url); assert.ok(String(url).startsWith(HOST + '/accounts/'), 'only server-resolved account reads may use HTTP')
   return new Response(store.get(pathOf(url)) ?? '{}', { status: store.has(pathOf(url)) ? 200 : 404 })
 }
+const { ownerRecord } = await import('../api/_lib/ownerIdentity.js')
 const { default: save } = await import('../api/save-project.js')
 const { default: load } = await import('../api/load-project.js')
 const { default: remove } = await import('../api/delete-project.js')
@@ -49,7 +50,7 @@ test('project loading rejects anonymous users before storage access', async () =
 })
 test('authenticated project loading preserves every saved field', async () => {
   const r = await call(load, 'GET', { query: { id: 'p1' }, headers: OWNER })
-  assert.equal(r.code, 200); assert.deepEqual(r.data, JSON.parse(store.get('projects/p1.json')))
+  assert.equal(r.code, 200); assert.deepEqual(r.data, ownerRecord(JSON.parse(store.get('projects/p1.json'))))
   assert.deepEqual(reads, ['projects/p1.json']); assert.deepEqual(fetches, [])
 })
 test('valid account sessions can still open shared projects', async () => {

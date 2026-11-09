@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { beforeEach, mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import sharp from 'sharp'
@@ -17,6 +18,8 @@ globalThis.fetch = async (url, options) => {
   assert.equal(url, 'https://sdk.photoroom.com/v1/segment')
   return new Response(Uint8Array.from([1, 2, 3]), { headers: { 'Content-Type': 'image/webp' } })
 }
+const { ownerId } = await import('../api/_lib/ownerIdentity.js')
+const { default: validate } = await import('../api/validate-key.js')
 const { default: comments } = await import('../api/comments.js')
 const { default: save } = await import('../api/save-project.js')
 const { default: review } = await import('../api/get-review.js')
@@ -53,7 +56,7 @@ test('signed-in partners retain shared rename/move access without changing artwo
   assert.equal((await call(rename, 'POST', { headers: OTHER, body: { id: 'shared', projectName: 'After' } })).code, 200)
   assert.equal((await call(move, 'POST', { headers: OTHER, body: { id: 'shared', folder: 'Campaign' } })).code, 200)
   const stored = JSON.parse(store.get('projects/shared.json'))
-  assert.deepEqual(stored.fields, { headline: 'Exact artwork' }); assert.equal(stored.ownerEmail, 'OWNER')
+  assert.deepEqual(stored.fields, { headline: 'Exact artwork' }); assert.equal(stored.ownerEmail, ownerId('OWNER'))
   assert.equal(stored.projectName, 'After'); assert.equal(stored.folder, 'Campaign')
 })
 test('notifications bind to the authenticated identity, not an owner header', async () => {
@@ -67,9 +70,9 @@ test('notifications bind to the authenticated identity, not an owner header', as
 test('personal folder creation derives the name/owner; the folder list stays shared', async () => {
   assert.equal((await call(folders, 'POST', { headers: OTHER, body: { ownerEmail: 'OWNER', folderName: 'Not mine' } })).code, 403)
   const own = await call(folders, 'POST', { headers: OWNER, body: { folderName: 'Campaign', ownerName: 'Spoofed' } })
-  assert.equal(own.code, 200); assert.equal(own.data.ownerEmail, 'OWNER'); assert.equal(own.data.ownerName, 'Owner')
+  assert.equal(own.code, 200); assert.equal(own.data.ownerEmail, ownerId('OWNER')); assert.equal(own.data.ownerName, 'Owner')
   const shared = await call(folders, 'GET', { headers: OTHER })
-  assert.equal(shared.code, 200); assert.equal(shared.data.owners[0].ownerEmail, 'OWNER')
+  assert.equal(shared.code, 200); assert.equal(shared.data.owners[0].ownerEmail, ownerId('OWNER'))
   assert.equal((await call(folders, 'POST', { headers: TEAM, body: { ownerEmail: 'OTHER', ownerName: 'Other', folderName: 'Managed' } })).code, 200)
 })
 test('valid callers can still export a CMYK PDF', async () => {
@@ -88,7 +91,7 @@ test('authenticated partners still see all shared designs; new ownership cannot 
   const r = await call(save, 'POST', { headers: OTHER, body: { id: 'new', templateId: 't', ownerEmail: 'TEAM', ownerName: 'Forged', fields: { headline: 'Same artwork' } } })
   assert.equal(r.code, 200)
   const stored = JSON.parse(store.get('projects/new.json'))
-  assert.equal(stored.ownerEmail, 'OTHER'); assert.equal(stored.ownerName, 'Other')
+  assert.equal(stored.ownerEmail, ownerId('OTHER')); assert.equal(stored.ownerName, 'Other')
   assert.deepEqual(stored.fields, { headline: 'Same artwork' })
 })
 test('a content save cannot set approval or overwrite approved artwork by repeating approved status', async () => {
@@ -110,4 +113,35 @@ for (const id of ['../accounts/victim', 'x/../../accounts/victim', ['a', 'b']]) 
   assert.equal((await call(comments, 'GET', { query: { id } })).code, 400)
   assert.equal((await call(comments, 'POST', { body: { projectId: id, name: 'Reviewer', text: 'Note' } })).code, 400)
   assert.equal((await call(save, 'PATCH', { body: { projectId: id, status: 'approved' } })).code, 400)
+})
+
+test('credentials are not exposed in shared project/folder metadata; key owners still match', async () => {
+  store.set('folders/owner.json', JSON.stringify({ ownerEmail: 'OWNER', ownerName: 'Owner', folders: ['Old campaign'] }))
+  const auth = await call(validate, 'POST', { body: { key: 'OWNER' } })
+  assert.equal(auth.data.owner_id, ownerId('OWNER')); assert.notEqual(auth.data.owner_id, 'OWNER')
+  const projects = await call(save, 'GET', { headers: OTHER })
+  assert.equal(projects.data.projects[0].ownerEmail, auth.data.owner_id)
+  const owners = await call(folders, 'GET', { headers: OTHER })
+  assert.equal(owners.data.owners[0].ownerEmail, auth.data.owner_id)
+  assert.ok(!JSON.stringify(projects.data).includes('"OWNER"')); assert.ok(!JSON.stringify(owners.data).includes('"OWNER"'))
+})
+test('creating a folder with a legacy key preserves old subfolders and deduplicates canonical rows', async () => {
+  store.set('folders/owner.json', JSON.stringify({ ownerEmail: 'OWNER', ownerName: 'Owner', folders: ['Old', 'Campaign'] }))
+  const created = await call(folders, 'POST', { headers: OWNER, body: { ownerEmail: 'OWNER', folderName: 'New' } })
+  assert.equal(created.code, 200); assert.deepEqual(created.data.folders, ['Old', 'Campaign', 'New'])
+  const listed = await call(folders, 'GET', { headers: OWNER })
+  assert.equal(listed.data.owners.length, 1); assert.deepEqual(listed.data.owners[0].folders, ['Old', 'Campaign', 'New'])
+})
+test('legacy notifications remain readable and marked-read state survives the identity transition', async () => {
+  const oldPath = 'notifications/' + createHash('sha256').update('OWNER').digest('hex') + '.json'
+  store.set(oldPath, JSON.stringify([{ id: 'old', text: 'Existing notification', read: false, createdAt: 1 }]))
+  const existing = await call(notifications, 'GET', { headers: OWNER })
+  assert.equal(existing.data.notifications[0].text, 'Existing notification')
+  assert.equal((await call(notifications, 'PATCH', { headers: OWNER, body: { all: true } })).code, 200)
+  assert.equal((await call(notifications, 'GET', { headers: OWNER })).data.notifications[0].read, true)
+})
+test('email owners stay recognizable; opaque identifiers are stable and cannot be used as credentials', async () => {
+  assert.equal(ownerId('Person@Example.test'), 'person@example.test')
+  assert.equal(ownerId(ownerId('OWNER')), ownerId('OWNER'))
+  assert.equal((await call(validate, 'POST', { body: { key: ownerId('OWNER') } })).data.valid, false)
 })

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
 import { WORKFLOW_ROLES } from './lib/workflowRoles'
 import { activationHeaders } from './lib/activationKey'
-import { patchCachedProject } from './lib/projectCache'
+import { patchCachedProject, clearLegacyOwnerCache } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
 import TemplatePicker, { BriefTemplatePicker, LayoutModal } from './components/TemplatePicker'
@@ -491,9 +491,10 @@ const SHOW_MODE_CHOOSER = false
     }
     const savedKey = localStorage.getItem('wildcast_activation_key')
     if (!savedKey) return null
-    return { key: savedKey, clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
+    return { key: localStorage.getItem('wildcast_owner_id'), clientName: '', credits: savedCredits, role: localStorage.getItem('wildcast_role') || 'partner' }
   })
   // Header bell + My Tasks dots - one shared list, see lib/useNotifications.js.
+  useEffect(clearLegacyOwnerCache, [])
   const notifications = useNotifications(activation?.key)
 
   // Workflow role toggle (Julia's ask, 2026-09-22): Designer / Reviewer /
@@ -794,7 +795,8 @@ const SHOW_MODE_CHOOSER = false
           const credits = Number.isFinite(savedCredits) ? savedCredits : data.total_credits
           const role = data.role || 'partner'
           localStorage.setItem('wildcast_role', role)
-          setActivation({ key: savedKey, clientName: data.client_name, credits, role })
+          localStorage.setItem('wildcast_owner_id', data.owner_id)
+          setActivation({ key: data.owner_id, clientName: data.client_name, credits, role })
         } else {
           // Key was revoked/invalid server-side - the optimistic state seeded
           // from localStorage above was wrong, so undo it and drop back to

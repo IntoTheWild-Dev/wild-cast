@@ -1,3 +1,4 @@
+import { ownerId } from './_lib/ownerIdentity.js'
 import { list, get, del } from '@vercel/blob'
 import { requireCaller } from './_lib/auth.js'
 
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
     if (!result) return res.status(200).json({ ok: true, deleted: 0 })
     const project = await new Response(result.stream).json()
     const owner = caller.kind === 'account' ? caller.id : req.headers['x-activation-key'].trim()
-    if (!['designer', 'agency'].includes(caller.role) && project.ownerEmail !== owner) {
+    if (!['designer', 'agency'].includes(caller.role) && ownerId(project.ownerEmail) !== ownerId(owner)) {
       return res.status(403).json({ error: 'You may only delete your own designs' })
     }
     const paths = [`projects/${id}.json`, `comments/${id}.json`]

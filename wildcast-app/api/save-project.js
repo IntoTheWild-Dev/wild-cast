@@ -3,6 +3,7 @@ import process from 'node:process'
 import { updateJson } from './_lib/atomicJson.js'
 import { list, get } from '@vercel/blob'
 import { printProfileFor } from '../src/lib/printProfile.js'
+import { ownerId, ownerRecord } from './_lib/ownerIdentity.js'
 import { requireCaller, callerOwnerId } from './_lib/auth.js'
 import { notifyOwner } from './_lib/notifications.js'
 
@@ -29,7 +30,7 @@ async function handleList(req, res) {
           // read) for the same reason.
           const result = await get(b.pathname, { access: 'private', useCache: false, token })
           if (!result) return null
-          const project = await new Response(result.stream).json()
+          const project = ownerRecord(await new Response(result.stream).json())
           return {
             id: project.id,
             url: b.url,
@@ -92,7 +93,7 @@ async function handleThumb(req, res) {
   try {
     const result = await get(`projects/${id}.json`, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN })
     if (!result) return res.status(404).end()
-    const project = await new Response(result.stream).json()
+    const project = ownerRecord(await new Response(result.stream).json())
     const match = /^data:([^;]+);base64,(.+)$/.exec(project.preview || project.thumbnail || '')
     if (!match) return res.status(404).end()
     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(match[1])) return res.status(422).end()
@@ -137,7 +138,7 @@ async function handlePatch(req, res) {
     // written BACK, silently reverting whatever the stale read missed.
     const { value: project, previous } = await updateJson(`projects/${projectId}.json`, current => {
       if (!current) throw Object.assign(new Error('Project not found'), { status: 404 })
-      return { ...current, reviewStatus: status,
+      return { ...ownerRecord(current), reviewStatus: status,
         everRequestedChanges: current.everRequestedChanges || status === 'changes_requested' }
     }, { token })
     const previousStatus = previous.reviewStatus
@@ -192,8 +193,8 @@ export default async function handler(req, res) {
       }
       return {
         ...incoming,
-        ownerEmail: existingProject?.ownerEmail ?? callerOwnerId(req, caller),
-        ownerName: existingProject?.ownerName ?? caller.name,
+        ownerEmail: ownerId(existingProject?.ownerEmail) ?? callerOwnerId(req, caller),
+        ownerName: existingProject ? ownerRecord(existingProject).ownerName ?? caller.name : caller.name,
         // Old tabs omit the profile; retain the stored choice.
         iccProfile: printProfileFor(incoming.iccProfile === undefined ? existingProject : incoming),
         reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',

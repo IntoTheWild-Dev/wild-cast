@@ -18,3 +18,16 @@ export function patchCachedProject(id, patch) {
     if (cached) sessionStorage.setItem(key, JSON.stringify({ ...JSON.parse(cached), ...patch }))
   } catch { /* storage unavailable or corrupt - the server copy is still right */ }
 }
+
+// Saved server data is authoritative. Retire old per-tab cached owner
+// credentials once; keep unrelated session state and all server records.
+export function clearLegacyOwnerCache() {
+  try {
+    if (sessionStorage.getItem('wildcast_owner_schema') === '2') return
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i)
+      if (key?.startsWith('wildcast_project_')) sessionStorage.removeItem(key)
+    }
+    sessionStorage.setItem('wildcast_owner_schema', '2')
+  } catch { /* unavailable storage: normal uncached server loading still works */ }
+}
