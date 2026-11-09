@@ -145,3 +145,14 @@ test('email owners stay recognizable; opaque identifiers are stable and cannot b
   assert.equal(ownerId(ownerId('OWNER')), ownerId('OWNER'))
   assert.equal((await call(validate, 'POST', { body: { key: ownerId('OWNER') } })).data.valid, false)
 })
+
+test('public owner IDs survive storage-token rotation and cannot be generated without a signing secret', () => {
+  const expected = ownerId('OWNER')
+  const token = process.env.BLOB_READ_WRITE_TOKEN, secret = process.env.OWNER_ID_SECRET
+  try {
+    process.env.BLOB_READ_WRITE_TOKEN = 'rotated-storage-token'
+    assert.equal(ownerId('OWNER'), expected)
+    delete process.env.OWNER_ID_SECRET
+    assert.throws(() => ownerId('OWNER'), /OWNER_ID_SECRET/)
+  } finally { process.env.BLOB_READ_WRITE_TOKEN = token; process.env.OWNER_ID_SECRET = secret }
+})
