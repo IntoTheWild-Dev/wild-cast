@@ -110,6 +110,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
     // is a no-op, so this is simpler and can't drift out of sync with
     // App.jsx's two restore branches if a third auth path is ever added.
     localStorage.removeItem('wildcast_activation_key')
+    localStorage.removeItem('wildcast_owner_id')
     localStorage.removeItem('wildcast_auth_type')
     localStorage.removeItem('wildcast_account_email')
     localStorage.removeItem('wildcast_account_token')

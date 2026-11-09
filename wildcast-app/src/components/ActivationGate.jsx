@@ -61,9 +61,10 @@ export default function ActivationGate({ onActivated }) {
       }
 
       localStorage.setItem('wildcast_activation_key', trimmed)
+      localStorage.setItem('wildcast_owner_id', data.owner_id)
       localStorage.setItem('wildcast_credits', data.total_credits)
       localStorage.setItem('wildcast_role', data.role || 'partner')
-      onActivated({ key: trimmed, clientName: data.client_name, credits: data.total_credits, role: data.role || 'partner' })
+      onActivated({ key: data.owner_id, clientName: data.client_name, credits: data.total_credits, role: data.role || 'partner' })
     } catch {
       setError('Could not connect. Please try again.')
     } finally {

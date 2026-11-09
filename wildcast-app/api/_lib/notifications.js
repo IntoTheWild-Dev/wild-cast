@@ -1,3 +1,4 @@
+import { ownerId as normalizeOwner, legacyKeysFor } from './ownerIdentity.js'
 // In-app notifications for a design's owner (Notion card "Add notifications
 // to the UI so a user knows when an asset has been reviewed, commented,
 // approved by Manager", 2026-09-25). One small JSON list per owner in Blob,
@@ -17,7 +18,7 @@ import { createHash } from 'crypto'
 const MAX_NOTIFICATIONS = 50
 
 export function notificationsPath(ownerId) {
-  const hash = createHash('sha256').update(String(ownerId)).digest('hex')
+  const hash = createHash('sha256').update(String(normalizeOwner(ownerId))).digest('hex')
   return `notifications/${hash}.json`
 }
 
@@ -25,9 +26,15 @@ export function notificationsPath(ownerId) {
 // loadComments(): a read right after a write must see that write, or the
 // next read-modify-write silently drops it.
 export async function loadNotifications(ownerId, token) {
-  const result = await get(notificationsPath(ownerId), { access: 'private', useCache: false, token })
-  if (!result) return []
-  return new Response(result.stream).json()
+  const id = normalizeOwner(ownerId)
+  const oldPaths = legacyKeysFor(id).map(key => `notifications/${createHash('sha256').update(key).digest('hex')}.json`)
+  const paths = [...new Set([...oldPaths, notificationsPath(id)])]
+  const lists = await Promise.all(paths.map(async path => {
+    const result = await get(path, { access: 'private', useCache: false, token })
+    return result ? new Response(result.stream).json() : []
+  }))
+  const unique = new Map(lists.flat().map(n => [n.id, n]))
+  return [...unique.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, MAX_NOTIFICATIONS)
 }
 
 export async function saveNotifications(ownerId, list, token) {

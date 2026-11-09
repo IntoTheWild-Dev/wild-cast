@@ -31,7 +31,7 @@ export default function UserMenu({ activation, roles, workflowRole, onWorkflowRo
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [open])
 
-  // activation.key is the signed-in email for an account, or the raw
+  // activation.key is the signed-in email for an account, or the public owner ID of a shared
   // activation key otherwise - only ever show it when it's an email; a key
   // is effectively a password.
   const isEmail = activation.key?.includes('@')

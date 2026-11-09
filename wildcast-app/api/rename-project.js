@@ -1,3 +1,4 @@
+import { ownerRecord } from './_lib/ownerIdentity.js'
 // Renames an already-saved design straight from the Designs tab, without
 // opening the editor (Julia's ask, 2026-09-15). Same reasoning as
 // move-project.js: Designs' list view only ever holds a lightweight summary,
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
     const cacheBustUrl = match.url + (match.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
     const r = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
     if (!r.ok) throw new Error(`Blob fetch failed: ${r.status}`)
-    const project = await r.json()
+    const project = ownerRecord(await r.json())
 
     project.projectName = trimmed
 
