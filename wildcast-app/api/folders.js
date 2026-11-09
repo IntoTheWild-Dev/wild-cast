@@ -8,6 +8,7 @@
 // owner listing the subfolder names they've created, independent of whether
 // any design currently uses them.
 import { list, put } from '@vercel/blob'
+import { requireCaller, callerOwnerId } from './_lib/auth.js'
 import { folderPath as ownerPath } from './_lib/accounts.js'
 
 async function handleList(req, res) {
@@ -29,12 +30,20 @@ async function handleList(req, res) {
 }
 
 export default async function handler(req, res) {
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).end()
+  const caller = await requireCaller(req, res)
+  if (!caller) return
   if (req.method === 'GET') return handleList(req, res)
   if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    const { ownerEmail, ownerName, folderName } = req.body ?? {}
-    const trimmedFolder = (folderName || '').trim()
+    const { ownerEmail: requestedOwner, ownerName: requestedName, folderName } = req.body ?? {}
+    const ownId = callerOwnerId(req, caller)
+    const ownerEmail = requestedOwner || ownId
+    if (typeof ownerEmail !== 'string' || ownerEmail.length > 256) return res.status(400).json({ error: 'Invalid folder owner' })
+    if (ownerEmail !== ownId && !['agency', 'designer'].includes(caller.role)) return res.status(403).json({ error: 'You may only create your own folders' })
+    const ownerName = ownerEmail === ownId ? caller.name : requestedName
+    const trimmedFolder = typeof folderName === 'string' ? folderName.trim() : ''
     if (!ownerEmail || !trimmedFolder) {
       return res.status(400).json({ error: 'ownerEmail and folderName are required' })
     }

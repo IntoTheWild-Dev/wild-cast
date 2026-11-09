@@ -14,13 +14,15 @@
 // just tag it with a folder name that person's own "Folders" view would
 // never look under. Omit both to just re-file within the current owner.
 import { list, put } from '@vercel/blob'
+import { requireCaller } from './_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await requireCaller(req, res))) return
 
   try {
     const { id, folder, ownerEmail, ownerName } = req.body ?? {}
-    if (!id) return res.status(400).json({ error: 'Missing project id' })
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Missing project id' })
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
     const path = `projects/${id}.json`

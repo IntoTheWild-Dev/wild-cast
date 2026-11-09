@@ -1,4 +1,5 @@
 import { finalizePrintPdf } from './_lib/finalPrintPdf.js'
+import { requireCaller } from './_lib/auth.js'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { randomUUID } from 'node:crypto'
@@ -103,6 +104,7 @@ function sendPdf(res, buf) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await requireCaller(req, res))) return
 
   const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print', layout = null, backgroundPdfUrl = null } = req.body ?? {}
   if (typeof filename !== 'string' || (png != null && typeof png !== 'string')) return res.status(400).json({ error: 'Bad request' })

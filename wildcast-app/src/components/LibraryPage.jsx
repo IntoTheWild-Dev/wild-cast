@@ -1,3 +1,4 @@
+import { showAlert } from '../lib/dialog'
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { srgbIfCmyk } from '../lib/cmykUpload'
 import { createPortal } from 'react-dom'
@@ -799,8 +800,8 @@ export default function LibraryPage({ onBack, onHome }) {
   }
 
   async function handleDelete(asset) {
-    setAssets(prev => prev.filter(a => a.id !== asset.id))
-    await deleteLibraryAsset(asset.url)
+    if (await deleteLibraryAsset(asset.url)) setAssets(prev => prev.filter(a => a.id !== asset.id))
+    else showAlert('The asset was not deleted. Check that you are signed in and try again.', { title: 'Delete failed' })
   }
 
   async function handleRename(asset, newName) {

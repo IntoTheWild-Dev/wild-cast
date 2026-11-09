@@ -1,3 +1,4 @@
+import { activationHeaders } from './activationKey'
 // Every image upload in the app (except QR codes - see shouldRemoveBackground)
 // can have its background removed by Photoroom, via our own /api/remove-bg
 // proxy - same approach as wild-scale. Replaces the old "please upload a
@@ -122,7 +123,7 @@ export async function removeBackgroundFromFile(file) {
     const body = await downscaleToJpeg(originalUrl)
     const res = await fetch('/api/remove-bg', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
+      headers: { 'Content-Type': 'application/octet-stream', ...activationHeaders() },
       body,
     })
     if (!res.ok) {

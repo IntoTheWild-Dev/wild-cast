@@ -1,3 +1,4 @@
+import { activationHeaders } from '../lib/activationKey'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { srgbIfCmyk } from '../lib/cmykUpload'
 import TemplateCanvas from './TemplateCanvas'
@@ -128,7 +129,7 @@ export default function BatchCreator({ template, config, activation, onSaveDesig
   useEffect(() => {
     if (!ownerKey) return
     let cancelled = false
-    fetch('/api/folders', { cache: 'no-store' })
+    fetch('/api/folders', { cache: 'no-store', headers: activationHeaders() })
       .then(r => r.json())
       .then(data => {
         const mine = (data.owners ?? []).find(o => o.ownerEmail === ownerKey)
@@ -147,7 +148,7 @@ export default function BatchCreator({ template, config, activation, onSaveDesig
     if (existing) { setFolder(existing); return }
     try {
       const res = await fetch('/api/folders', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ ownerEmail: ownerKey, ownerName: activation?.clientName, folderName: name }),
       })
       const data = await res.json()
