@@ -1,5 +1,5 @@
 // Ownership is public metadata; authentication credentials must never be IDs.
-import { createHash } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import process from 'node:process'
 
 const configuredKeys = () => (process.env.WILDCAST_KEYS || '').split(',').map(row => row.trim().split('|')[0].trim()).filter(Boolean)
@@ -9,7 +9,9 @@ export function ownerId(value) {
   const credential = configuredKeys().includes(text)
   if (!credential && /^key:[a-f0-9]{64}$/.test(text)) return text
   if (!credential && text.includes('@')) return text.toLowerCase()
-  return 'key:' + createHash('sha256').update(text).digest('hex')
+  const secret = process.env.OWNER_ID_SECRET
+  if (typeof secret !== 'string' || secret.length < 32) throw new Error('OWNER_ID_SECRET must be configured before deploying owner identities')
+  return 'key:' + createHmac('sha256', secret).update('wildcast:owner:v1:' + text).digest('hex')
 }
 export function ownerRecord(record) {
   const ownerEmail = ownerId(record.ownerEmail)
