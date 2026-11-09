@@ -745,7 +745,7 @@ const SHOW_MODE_CHOOSER = false
       if (!savedEmail || !savedToken) return
       fetch('/api/account-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ email: savedEmail, sessionToken: savedToken }),
       })
         .then(r => r.json())
@@ -779,7 +779,7 @@ const SHOW_MODE_CHOOSER = false
     if (!savedKey) return
     fetch('/api/validate-key', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ key: savedKey }),
     })
       .then(r => r.json())
@@ -857,7 +857,7 @@ const SHOW_MODE_CHOOSER = false
     try {
       const res = await fetch('/api/comments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ projectId: currentProjectId, name: activation?.clientName || 'Wild Stack', text, from: commentFrom }),
       })
       if (!res.ok) throw new Error('Failed to post reply')
@@ -877,7 +877,7 @@ const SHOW_MODE_CHOOSER = false
   async function postDesignerComment(extra, text) {
     const res = await fetch('/api/comments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ projectId: currentProjectId, name: activation?.clientName || 'Wild Stack', text, from: commentFrom, ...extra }),
     })
     if (!res.ok) throw new Error('Failed to post comment')
@@ -893,7 +893,7 @@ const SHOW_MODE_CHOOSER = false
     setComments(prev => prev.map(c => c.id === commentId ? { ...c, resolved } : c))
     fetch('/api/comments', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ projectId: currentProjectId, commentId, resolved }),
     }).catch(() => {})
   }
@@ -944,7 +944,7 @@ const SHOW_MODE_CHOOSER = false
     try {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ projectId: currentProjectId, status: 'approved' }),
       })
       if (!res.ok) throw new Error('Failed to approve')
@@ -984,7 +984,7 @@ const SHOW_MODE_CHOOSER = false
     try {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ projectId: currentProjectId, status: 'changes_requested' }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
@@ -1012,7 +1012,7 @@ const SHOW_MODE_CHOOSER = false
     try {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ projectId: currentProjectId, status: 'review' }),
       })
       if (!res.ok) throw new Error('Failed to reopen the design')
@@ -1513,7 +1513,7 @@ const SHOW_MODE_CHOOSER = false
       const common = { filename, profile: iccProfile, brand: 'wolt', mode }
       const post = body => fetch('/api/export-cmyk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ ...common, ...body }),
       })
 
@@ -1631,7 +1631,7 @@ const SHOW_MODE_CHOOSER = false
     }
 
     const response = await fetch('/api/save-project', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify(project),
     })
     if (!response.ok) throw new Error(await response.text())
@@ -1839,7 +1839,7 @@ const SHOW_MODE_CHOOSER = false
         if (unresolved.length > 0) {
           await Promise.all(unresolved.map(c => fetch('/api/comments', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...activationHeaders() },
             body: JSON.stringify({ projectId: currentProjectId, commentId: c.id, resolved: true }),
           })))
           setComments(prev => prev.map(c => ({ ...c, resolved: true })))
@@ -1892,7 +1892,7 @@ const SHOW_MODE_CHOOSER = false
       vertical: opts.vertical ?? briefSubmission?.businessType ?? null,
     }
     const response = await fetch('/api/save-project', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify(project),
     })
     if (!response.ok) throw new Error(await response.text())
@@ -2105,7 +2105,7 @@ const SHOW_MODE_CHOOSER = false
     }
 
     const response = await fetch('/api/save-project', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify(duplicate),
     })
     if (!response.ok) throw new Error('Could not save the duplicate')

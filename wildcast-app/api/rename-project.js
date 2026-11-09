@@ -6,14 +6,16 @@
 // whatever the client has back through save-project.js's POST (which would
 // silently wipe every field the summary doesn't carry).
 import { list, put } from '@vercel/blob'
+import { requireCaller } from './_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await requireCaller(req, res))) return
 
   try {
     const { id, projectName } = req.body ?? {}
     const trimmed = (projectName || '').trim()
-    if (!id || !trimmed) return res.status(400).json({ error: 'Missing project id or name' })
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id) || !trimmed) return res.status(400).json({ error: 'Missing project id or name' })
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
     const path = `projects/${id}.json`

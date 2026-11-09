@@ -1,3 +1,4 @@
+import { activationHeaders } from './activationKey'
 import { useState, useEffect, useCallback } from 'react'
 
 // Shared notification state for the whole app - the header bell (count),
@@ -20,7 +21,7 @@ const TASK_TYPES = new Set(['approved', 'changes_requested'])
 
 async function fetchNotifications(ownerId) {
   try {
-    const res = await fetch('/api/notifications', { headers: { 'x-wildcast-owner': ownerId }, cache: 'no-store' })
+    const res = await fetch('/api/notifications', { headers: { 'x-wildcast-owner': ownerId, ...activationHeaders() }, cache: 'no-store' })
     if (!res.ok) return null
     const data = await res.json()
     return data.notifications || []
@@ -32,7 +33,7 @@ async function fetchNotifications(ownerId) {
 function patchRead(ownerId, body) {
   fetch('/api/notifications', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'x-wildcast-owner': ownerId },
+    headers: { 'Content-Type': 'application/json', 'x-wildcast-owner': ownerId, ...activationHeaders() },
     body: JSON.stringify(body),
   }).catch(() => {})
 }

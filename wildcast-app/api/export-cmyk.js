@@ -1,3 +1,4 @@
+import { requireCaller } from './_lib/auth.js'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { randomUUID } from 'node:crypto'
@@ -85,6 +86,7 @@ const SRGB_ICC = 'sRGB_IEC61966-2-1.icc'  // same profile InDesign embeds
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await requireCaller(req, res))) return
 
   const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print', layout = null, backgroundPdfUrl = null } = req.body
   const layered = Boolean(layout && backgroundPdfUrl)

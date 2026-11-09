@@ -145,9 +145,12 @@ export async function removeBackgroundForUpload(file, { folder, requireTranspare
 
 export async function deleteLibraryAsset(url) {
   try {
-    await fetch(`/api/library-assets?url=${encodeURIComponent(url)}`, { method: 'DELETE', headers: activationHeaders() })
+    const response = await fetch(`/api/library-assets?url=${encodeURIComponent(url)}`, { method: 'DELETE', headers: activationHeaders() })
+    if (!response.ok) throw new Error('Could not delete library asset')
+    return true
   } catch (err) {
     console.warn('Could not delete library asset:', err)
+    return false
   }
 }
 
