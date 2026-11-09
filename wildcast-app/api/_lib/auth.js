@@ -36,7 +36,7 @@ function lookupKey(key) {
   return keyMap[(key || '').trim()]
 }
 
-function resolveKeyRole(key) {
+export function resolveKeyRole(key) {
   return lookupKey(key)?.role
 }
 

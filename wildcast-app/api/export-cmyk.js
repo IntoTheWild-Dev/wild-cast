@@ -7,6 +7,8 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { deflateSync } from 'zlib'
 import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
+// Print colours module (removable, see api/_lib/printColors/README.md)
+import { resolvePrintSettings, finishPdf } from './_lib/printColors/index.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
 import { buildLayeredPdf } from './_lib/layeredPdf.js'
 import { preflightPdf } from './_lib/preflight.js'
@@ -40,7 +42,11 @@ const BLEED_PX  = Math.round(BLEED_MM / MM_PER_INCH * DPI)   // 35
 const TRIM_PX_W = PX_W - BLEED_PX * 2                        // 1241
 const TRIM_PX_H = PX_H - BLEED_PX * 2                         // 1749
 
-// Increase body limit — the 4× canvas PNG can be 3–5 MB as base64
+// Vercel caps request AND buffered response bodies at 4.5 MB (413 / 500
+// FUNCTION_RESPONSE_PAYLOAD_TOO_LARGE). This config is a Next.js option and
+// changes nothing here; kept only for local servers that read it. Requests are
+// kept small on the client (photos as JPEG + mask, size check before sending,
+// src/App.jsx handleExport); the PDF is streamed back (sendPdf), which has no cap.
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 
 // Selectable output intents — both ICC files are the free, redistributable
@@ -82,11 +88,23 @@ const MIN_SOURCE_PPI = 300
 // Same names the editor's field list uses.
 const ZONE_NAMES = { photo: 'Food photo', logo: 'Restaurant logo', qr: 'QR code', sticker: 'Sticker' }
 const SRGB_ICC = 'sRGB_IEC61966-2-1.icc'  // same profile InDesign embeds
+const USER_HIDDEN_CHECKS = new Set(['livetext', 'ppi', 'brand'])
+
+// Streams the PDF in 1 MB chunks. Vercel streams Node responses by default, and
+// a streamed body has no 4.5 MB cap (a CMYK-only export can be 8 MB+).
+const CHUNK = 1 << 20
+function sendPdf(res, buf) {
+  res.status(200)
+  if (typeof res.write !== 'function') return res.send(buf)  // test doubles
+  for (let i = 0; i < buf.length; i += CHUNK) res.write(buf.subarray(i, i + CHUNK))
+  return res.end()
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print', layout = null, backgroundPdfUrl = null } = req.body
+  const { png, filename = 'wildcast-flyer', profile = 'fogra51', brand = null, mode = 'print', layout = null, backgroundPdfUrl = null } = req.body ?? {}
+  if (typeof filename !== 'string' || (png != null && typeof png !== 'string')) return res.status(400).json({ error: 'Bad request' })
   const layered = Boolean(layout && backgroundPdfUrl)
   if (!png && !layered) return res.status(400).json({ error: 'Missing png' })
 
@@ -94,17 +112,24 @@ export default async function handler(req, res) {
   if (!profileMeta) return res.status(400).json({ error: `Unknown profile "${profile}"` })
   if (!EXPORT_MODES.has(mode)) return res.status(400).json({ error: `Unknown mode "${mode}"` })
 
-  const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'cmyk' ? '-cmyk' : '')
-  const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = []) => {
+  // [print-colors] brand colours + default printer from the admin setting
+  const printSettings = await resolvePrintSettings(brand)
+  const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'print' ? '-digital' : '')
+  const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = [], unverifiedColors = []) => {
     // Print preflight on the finished file (api/_lib/preflight.js): plain-word
     // warnings for the export dialog. Never blocks the download.
-    const warnings = []
+    const warnings = exportKind === 'flat' ? ['This template has no vector background. Text and artwork are flattened to 300 ppi.'] : []
     try {
       const pf = await preflightPdf(pdfBuffer, { lut: loadLut(join(__dirname, 'icc', profileMeta.lut)) })
-      for (const c of pf.checks) if (c.status !== 'pass' && c.id !== 'livetext' && c.id !== 'ppi') warnings.push(`${c.label}: ${c.detail}`)
+      // Only problems a designer can act on. Live text, image ppi (reported per
+      // upload below) and brand-op presence (a printer preset may change the
+      // value on purpose) are developer checks, see scripts/preflight-report.mjs.
+      for (const c of pf.checks) if (c.status !== 'pass' && !USER_HIDDEN_CHECKS.has(c.id)) warnings.push(`${c.label}: ${c.detail}`)
     } catch (err) {
       console.error('export-cmyk preflight error:', err)
     }
+    // [print-colors] relabel for the default printer, after preflight checked the content
+    pdfBuffer = await finishPdf(pdfBuffer, printSettings.printer)
     for (const s of sourcePpi) {
       const name = ZONE_NAMES[s.zoneId] ?? 'An image'
       if (s.ppi < MIN_SOURCE_PPI) warnings.push(`${name} is ${s.ppi} ppi at print size (300 needed). Upload a larger file.`)
@@ -116,10 +141,13 @@ export default async function handler(req, res) {
     res.setHeader('Content-Length', pdfBuffer.length)
     // Requirement 3 (brief §5): flag colours with no official print value.
     res.setHeader('X-Unverified-Colors', String(unverifiedColorCount))
+    // Which colours were estimated (not in the brand list): the editor lists
+    // them before the download (Annika's checklist fix 3). At most 12.
+    res.setHeader('X-Unverified-List', JSON.stringify(unverifiedColors.slice(0, 12)))
     // ASCII-safe JSON array of warnings (headers can't carry raw UTF-8).
     res.setHeader('X-Preflight', JSON.stringify(warnings).replace(/[^ -~]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')))
-    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Export-Mode, X-Export-Kind, X-Preflight')
-    return res.status(200).send(pdfBuffer)
+    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Unverified-List, X-Export-Mode, X-Export-Kind, X-Preflight')
+    return sendPdf(res, pdfBuffer)
   }
 
   // ── Layered export (2026-10-06): the template's vector PDF + live text +
@@ -128,9 +156,9 @@ export default async function handler(req, res) {
   if (layered) {
     try {
       const templatePdf = await fetchTemplatePdf(backgroundPdfUrl)
-      const { pdf, unverifiedColorCount, sourcePpi } = await buildLayeredPdf({
+      const { pdf, unverifiedColorCount, sourcePpi, unverifiedColors } = await buildLayeredPdf({
         templatePdf, layout, mode,
-        library: getBrandLibrary(brand),
+        library: printSettings.library,  // [print-colors]
         lut: loadLut(join(__dirname, 'icc', profileMeta.lut)),
         iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)),
         profileMeta,
@@ -138,11 +166,10 @@ export default async function handler(req, res) {
         srgbIcc: readFileSync(join(__dirname, 'icc', SRGB_ICC)),
         page: { PT_W, PT_H, BLEED_PT },
       })
-      return await send(pdf, unverifiedColorCount, 'layered', sourcePpi)
+      return await send(pdf, unverifiedColorCount, 'layered', sourcePpi, unverifiedColors)
     } catch (err) {
       console.error('export-cmyk layered error:', err)
-      if (!png) return res.status(500).json({ error: err.message })
-      // Fall through to the flat export so the user still gets a file.
+      return res.status(422).json({ error: 'The vector print export could not be completed. ' + err.message + ' Please ask the design team to check the background PDF and retry.' })
     }
   }
 
@@ -159,8 +186,9 @@ export default async function handler(req, res) {
     // Raw bytes + FlateDecode (below), never JPEG: CMYK JPEG's APP14 "Adobe"
     // marker inverts byte values, causing PDF viewers to render near-black.
     // See renderFlyerImage for the resize/bleed/conversion/brand-lookup details.
-    const { pixels, brandMasks, brandBlend, unverifiedColorCount } = await renderFlyerImage({
+    const { pixels, brandMasks, brandBlend, unverifiedColorCount, unverifiedColors } = await renderFlyerImage({
       pngBuffer, brand, mode, lutPath: join(__dirname, 'icc', profileMeta.lut),
+      library: printSettings.library,  // [print-colors]
     })
 
     // ── Build PDF/X-4 ────────────────────────────────────────────────────────
@@ -170,7 +198,7 @@ export default async function handler(req, res) {
       brandMasks, brandBlend, iccProfile, profileMeta,
     })
 
-    return await send(pdfBuffer, unverifiedColorCount, 'flat')
+    return await send(pdfBuffer, unverifiedColorCount, 'flat', [], unverifiedColors)
   } catch (err) {
     console.error('export-cmyk error:', err)
     return res.status(500).json({ error: err.message })
@@ -192,7 +220,7 @@ export async function fetchTemplatePdf(link) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
   const proxy = process.env.WILDCAST_TEMPLATE_PROXY
   const url = token || !proxy ? `${blobUrl}?_t=${Date.now()}` : `${proxy}/api/list-templates?url=${encodeURIComponent(blobUrl)}`
-  const r = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
+  const r = await fetch(url, { ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}), signal: AbortSignal.timeout(15_000) })
   if (!r.ok) throw new Error(`Template PDF not available (${r.status})`)
   const bytes = Buffer.from(await r.arrayBuffer())
   if (bytes.toString('latin1', 0, 5) !== '%PDF-') throw new Error('Template background is not a PDF')
@@ -235,9 +263,9 @@ export async function renderFlyerImage({ pngBuffer, brand, mode, lutPath, librar
 
   // Unmatched colors are counted for the warning, including exports without
   // a library (see applyBrandColorLibrary for the visible-area threshold).
-  const { brandMasks, unverifiedColorCount } = applyBrandColorLibrary(rgbBuffer, cmykBuffer, library)
+  const { brandMasks, unverifiedColorCount, unverifiedColors } = applyBrandColorLibrary(rgbBuffer, cmykBuffer, library)
   const brandBlend = blendBrandEdges(rgbBuffer, cmykBuffer, brandMasks, lut)
-  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, brandBlend, unverifiedColorCount }
+  return { pixels: cmykBuffer ?? rgbBuffer, brandMasks, brandBlend, unverifiedColorCount, unverifiedColors }
 }
 
 // Warning count (requirement 3): distinct unmatched RGB values that cover at
@@ -288,10 +316,15 @@ function applyBrandColorLibrary(rgbBuffer, cmykBuffer, library) {
     const y = Math.floor(px / PX_W)
     color.mask[y * rowBytes + (x >> 3)] |= 128 >> (x & 7)
   }
+  const significant = [...unmatched.entries()].filter(([, count]) => count >= pixelCount * MIN_SIGNIFICANT_FRACTION)
+  // For the warning list: biggest areas first; white and near-black have
+  // fixed print values (0/0/0/0, K100) so they are not "unknown".
+  const isFixed = key => key === 0xFFFFFF || Math.max(key >> 16, (key >> 8) & 255, key & 255) <= 12
   return {
     brandMasks: [...byHex.values()].filter(color => color.mask),
-    unverifiedColorCount: [...unmatched.values()]
-      .filter(count => count >= pixelCount * MIN_SIGNIFICANT_FRACTION).length,
+    unverifiedColorCount: significant.length,
+    unverifiedColors: significant.filter(([key]) => !isFixed(key)).sort((a, b) => b[1] - a[1])
+      .map(([key]) => '#' + key.toString(16).padStart(6, '0').toUpperCase()),
   }
 }
 

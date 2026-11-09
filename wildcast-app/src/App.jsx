@@ -13,6 +13,8 @@ import TemplateCanvas from './components/TemplateCanvas'
 import DesignsPage from './components/DesignsPage'
 import MyTasksPage from './components/MyTasksPage'
 import LibraryPage from './components/LibraryPage'
+import PrintColorsPage from './features/printColors/PrintColorsPage'  // [print-colors]
+import { confirmLeavePrintColors } from './features/printColors/leaveGuard'  // [print-colors]
 import ReviewPage from './components/ReviewPage'
 import TemplateImportPage from './components/TemplateImportPage'
 import BatchCreator from './components/BatchCreator'
@@ -251,9 +253,9 @@ export default function App() {
     if (!resolvingDeepLink) prevScreenRef.current = screen
   }, [screen, resolvingDeepLink])
   // Which output ICC profile export-cmyk.js should convert to - see
-  // ICC_PROFILES in api/export-cmyk.js. No longer user-choosable (FOGRA39
-  // removed, Julia's ask, 2026-09-18) - every export uses FOGRA51 now.
-  const iccProfile = 'fogra51'
+  // ICC_PROFILES in api/export-cmyk.js. FOGRA51 remains the default;
+  // Managers can select FOGRA39 to match their printer's requirements.
+  const [iccProfile, setIccProfile] = useState('fogra51')
   // Lifted out of BriefingForm so it survives a round trip to the editor and
   // back - Julia's ask (2026-08-03): saving a candidate mid-edit should
   // return to the "pick a design" screen (e.g. a merchant wants both A and
@@ -1195,12 +1197,14 @@ const SHOW_MODE_CHOOSER = false
   // FloatingNav's Back - straight to the remembered screen (handleNavigate
   // would restart a brief chat), with the same unsaved-import guard.
   async function handlePageBack() {
+    if (screen === 'print-colors' && !(await confirmLeavePrintColors())) return  // [print-colors]
     if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
     if (screen === 'import') setImportDirty(false)
     setScreen(pageBackTargetRef.current)
   }
 
   async function handleNavigate(target) {
+    if (screen === 'print-colors' && target !== 'print-colors' && !(await confirmLeavePrintColors())) return  // [print-colors]
     if (screen === 'editor' && hasUnsavedChanges && !(await confirmLeave(LEAVE_EDITOR))) return
     if (screen === 'import' && importDirty && !(await confirmLeave(LEAVE_IMPORT))) return
     // Confirmed leaving (or wasn't dirty) - clear so a later return trip to
@@ -1247,6 +1251,7 @@ const SHOW_MODE_CHOOSER = false
     else if (target === 'tasks') setScreen('tasks')
     else if (target === 'library') setScreen('library')
     else if (target === 'import' && activation?.role === 'agency') setScreen('import')
+    else if (target === 'print-colors' && activation?.role === 'agency') setScreen('print-colors')
   }
 
   // Returns the fetch's own promise (not just fire-and-forget) so a caller
@@ -1490,7 +1495,7 @@ const SHOW_MODE_CHOOSER = false
   // mode: 'print' (default - photos stay RGB like InDesign's PDF/X-4, the
   // print shop converts them) or 'cmyk' (CMYK-only file, for printers that
   // require it). Wolt Blue is exact 75/0/10/0 in both - see api/export-cmyk.js.
-  async function handleExport(mode = 'print') {
+  async function handleExport(mode = 'cmyk') {
     // Belt-and-suspenders alongside FieldEditor's own Export PDF button being
     // disabled/hidden for non-Managers - shouldn't normally be reachable, but
     // keeps this correct even if the button state is ever stale.
@@ -1502,7 +1507,7 @@ const SHOW_MODE_CHOOSER = false
       showAlert('Please wait a moment and try again.', { title: 'Canvas not ready' })
       return
     }
-    setExporting(true)
+    setExporting(mode)  // which export is running: 'print' or 'cmyk'
     try {
       const filename = (projectName.trim() || selectedTemplate?.name || 'wildcast-flyer')
       // brand: 'wolt' - hardcoded for now since every current WildCast
@@ -1510,34 +1515,53 @@ const SHOW_MODE_CHOOSER = false
       // the print-color fix, 2026-09-25 brief). Once templates for other
       // brands exist, this should come from the template/partner instead.
       const common = { filename, profile: iccProfile, brand: 'wolt', mode }
-      const post = body => fetch('/api/export-cmyk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...common, ...body }),
-      })
+      // Vercel refuses request bodies over 4.5 MB (413) before our code runs,
+      // so measure first and skip a request that can't get through.
+      const MAX_BODY_CHARS = 4_400_000
+      const tooLarge = { ok: false, status: 413 }
+      const post = body => {
+        const json = JSON.stringify({ ...common, ...body })
+        if (json.length > MAX_BODY_CHARS) return Promise.resolve(tooLarge)
+        return fetch('/api/export-cmyk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json })
+      }
 
       // Layered export (vector background + live text + separate images, see
       // api/_lib/layeredPdf.js) whenever the template has a vector PDF from
       // the Figma plugin. The flat PNG is left out of that request to stay
-      // under the upload limit; if the layered build fails, export flat.
+      // under the upload limit; report layered failures without reducing quality.
       let response = null
       const backgroundPdfUrl = templateConfig?.backgroundPdfUrl
       if (backgroundPdfUrl && exportRef.current.getLayoutSnapshot) {
         response = await post({ layout: exportRef.current.getLayoutSnapshot(), backgroundPdfUrl })
-        if (!response.ok) console.warn('Layered export failed, falling back to the flat export', response.status)
+        // Preserve vector quality: a failed layered export must be retried, not flattened silently.
       }
-      if (!response?.ok) response = await post({ png: exportRef.current.getPng() })
+      if (!response) response = await post({ png: exportRef.current.getPng() })
 
+      if (response.status === 413) {
+        throw new Error('This design is too large to send for export (over 4.5 MB). This can happen with very detailed images. Please let the Wild Stack team know which design it was.')
+      }
       if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: response.statusText }))
+        const err = await response.json?.().catch(() => null) ?? { error: response.statusText }
         throw new Error(err.error || 'Export failed')
       }
 
       const blob = await response.blob()
+
+      // Colours that aren't in the brand list were converted automatically
+      // (Annika's checklist fix 3): say which, before the file is downloaded.
+      let unknown = []
+      try { unknown = JSON.parse(response.headers.get('X-Unverified-List') || '[]') } catch { unknown = [] }
+      if (unknown.length) {
+        const ok = await showConfirm(
+          `These colours aren't in the brand colour list, so their print values were converted automatically: ${unknown.join(', ')}.\n\nBrand colours like Wolt Blue are exact. Download anyway?`,
+          { title: 'Colours converted automatically', confirmLabel: 'Download', cancelLabel: 'Cancel' })
+        if (!ok) return
+      }
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${filename}${mode === 'cmyk' ? '-cmyk' : ''}.pdf`
+      a.download = `${filename}${mode === 'print' ? '-digital' : ''}.pdf`
       a.click()
       URL.revokeObjectURL(url)
 
@@ -2363,6 +2387,12 @@ const SHOW_MODE_CHOOSER = false
         </div>
       )}
 
+      {screen === 'print-colors' && activation?.role === 'agency' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <PrintColorsPage onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
+        </div>
+      )}
+
       {screen === 'tasks' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <MyTasksPage onOpenProject={handleOpenProject} activation={activation} unreadProjectIds={notifications.unreadProjectIds} onBack={handlePageBack} onHome={() => handleNavigate('landing')} />
@@ -2755,6 +2785,8 @@ const SHOW_MODE_CHOOSER = false
           </div>
 
           <FieldEditor
+            iccProfile={iccProfile}
+            onIccProfileChange={setIccProfile}
             fields={fields}
             onChange={handleFieldChange}
             onFocusField={setActiveZoneId}

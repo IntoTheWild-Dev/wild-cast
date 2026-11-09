@@ -415,11 +415,6 @@ function StepFieldRow({ step, label, fieldKey, value, onChange, required, option
   )
 }
 
-// Output ICC profile for CMYK export (api/export-cmyk.js has the matching
-// ICC_PROFILES map + bundled .icc files). FOGRA39 was removed as a choice
-// (Julia's ask, 2026-09-18) - FOGRA51 is now the only, fixed profile every
-// export uses (App.jsx's iccProfile default was updated to match).
-const ICC_PROFILE = { label: 'FOGRA51', hint: 'PSO Coated v3 · ISO 12647-2:2013' }
 
 // ── Image upload ─────────────────────────────────────────────────────────────
 // Canvas is 316×441px = A6 105×148mm → canvas PPI ≈ 76.4
@@ -767,7 +762,7 @@ function ApprovedEditBlock({ onEdit, reopening }) {
   )
 }
 
-export default function FieldEditor({ fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
+export default function FieldEditor({ iccProfile = 'fogra51', onIccProfileChange, fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
   const canExport = workflowRole === 'Manager'
   const isMobile = useIsMobile()
   const [expanded, setExpanded] = useState(false)
@@ -1222,14 +1217,13 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dark)', marginBottom: 6 }}>
-            ICC Profile <span style={{ fontWeight: 400, color: 'var(--mid)' }}>(pre-selected, can’t be changed)</span>
+            <label htmlFor="export-icc-profile">Print colour profile</label>
           </div>
-          {/* No longer a choice (FOGRA39 removed, Julia's ask, 2026-09-18) -
-              every export uses FOGRA51, shown here for reference only. */}
-          <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dark)' }}>{ICC_PROFILE.label}</div>
-            <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 2 }}>{ICC_PROFILE.hint}</div>
-          </div>
+          <select id="export-icc-profile" value={iccProfile} onChange={e => onIccProfileChange?.(e.target.value)} disabled={workflowRole !== 'Manager' || Boolean(exporting)} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <option value="fogra51">FOGRA51 — PSO Coated v3</option>
+            <option value="fogra39">FOGRA39 — ISO Coated v2</option>
+          </select>
+          <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 4 }}>Use the profile requested by your printer.</div>
         </div>
 
       </div>
@@ -1326,24 +1320,25 @@ export default function FieldEditor({ fields, onChange, lang, onExport, exportin
             {reviewSent && canExport ? (
               <>
                 <button
-                  onClick={() => onExport('print')}
+                  onClick={() => onExport('cmyk')}
                   disabled={exporting}
                   style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--dark)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: exporting ? 'default' : 'pointer', transition: 'all 0.15s' }}
                   onMouseEnter={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--dark)' }}
                   onMouseLeave={e => { if (!exporting) e.currentTarget.style.borderColor = 'var(--border)' }}
                 >
-                  {exporting ? 'Exporting…' : 'Export PDF'}
+                  {exporting === 'cmyk' ? 'Exporting…' : 'Export PDF'}
                 </button>
-                {/* Default export keeps photos RGB like InDesign's PDF/X-4 (the
-                    print shop converts them); this is for printers that only
-                    accept CMYK files - see EXPORT_MODES in api/export-cmyk.js. */}
+                {/* Export PDF is the print file: every image converted to CMYK
+                    here (PSO Coated v3, RelCol + BPC; Annika's checklist fix 1,
+                    2026-10-27). This one keeps photos RGB for screen/digital
+                    use - see EXPORT_MODES in api/export-cmyk.js. */}
                 <button
-                  onClick={() => onExport('cmyk')}
+                  onClick={() => onExport('print')}
                   disabled={exporting}
-                  title="Converts everything to CMYK before download. Use only if your printer asks for CMYK-only files."
+                  title="Keeps photos in RGB. For screens and digital use, not for the printer."
                   style={{ background: 'none', border: 'none', padding: '2px 0', fontSize: 12, color: 'var(--light)', textDecoration: 'underline', cursor: exporting ? 'default' : 'pointer' }}
                 >
-                  Printer needs CMYK only? Download CMYK-only PDF
+                  {exporting === 'print' ? 'Preparing digital PDF…' : 'For screens? Download digital version (RGB photos)'}
                 </button>
               </>
             ) : (

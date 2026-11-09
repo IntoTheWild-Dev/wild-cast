@@ -29,7 +29,7 @@ async function figmaLikeTemplate() {
     '0 0.760784 0.909804 scn 0 0 314.646 436.535 re f',   // Wolt Blue, full bleed
     '1 1 1 scn 40 40 50 20 re f',                          // white panel
     '0.011765 0.011765 0.015686 scn 40 80 50 4 re f',      // near-black rule -> K100
-    '0.913725 0.294118 0.317647 scn 120 40 30 30 re f',    // partner red -> converted, unverified
+    '0.8 0.2 0.6 scn 120 40 30 30 re f',                   // unlisted purple -> converted, unverified
   ].join('\n')
   const form = ctx.register(ctx.flateStream(Buffer.from(art), {
     Type: 'XObject', Subtype: 'Form', BBox: [0, 0, PAGE.PT_W, PAGE.PT_H],
@@ -93,7 +93,7 @@ for (const mode of ['print', 'cmyk']) {
     assert.match(content, /\b0 0 0 0 k\b/, 'white as 0/0/0/0')
     assert.match(content, /\b0 0 0 1 k\b/, 'near-black as K100 only')
     assert.doesNotMatch(content, /(?:^|\s)(?:[\d.]+\s+){3}(?:rg|RG|scn|SCN|sc|SC)\b/, 'no RGB colour operators left')
-    assert.equal(unverifiedColorCount, 1, 'only the partner red has no official print value')
+    assert.equal(unverifiedColorCount, 1, 'only the unlisted purple has no official print value')
     assert.match(content, /\/WCF\d+ 40 Tf \[<[0-9a-f]{4}>/, 'headline as live text')
     // Fonts embedded, glyphs from the WOLT files.
     const fonts = []
