@@ -90,6 +90,9 @@ async function handleThumb(req, res) {
     const project = await new Response(result.stream).json()
     const match = /^data:([^;]+);base64,(.+)$/.exec(project.preview || project.thumbnail || '')
     if (!match) return res.status(404).end()
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(match[1])) return res.status(422).end()
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'")
     res.setHeader('Content-Type', match[1])
     res.setHeader('Cache-Control', req.query.v
       ? 'public, max-age=31536000, immutable'

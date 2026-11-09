@@ -26,14 +26,14 @@ export function activationKeysEnabled() {
 function lookupKey(key) {
   if (!activationKeysEnabled()) return undefined
   const raw = process.env.WILDCAST_KEYS || ''
-  const keyMap = {}
+  const keyMap = Object.create(null)
   raw.split(',').forEach(entry => {
     const parts = entry.trim().split('|')
     if (parts.length === 3 || parts.length === 4) {
       keyMap[parts[0].trim()] = { name: parts[1].trim(), role: (parts[3]?.trim()) || 'partner' }
     }
   })
-  return keyMap[(key || '').trim()]
+  return typeof key === 'string' ? keyMap[key.trim()] : undefined
 }
 
 function resolveKeyRole(key) {

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Header, { WORKFLOW_ROLES } from './components/Header'
+import { activationHeaders } from './lib/activationKey'
 import { patchCachedProject } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
@@ -675,7 +676,7 @@ const SHOW_MODE_CHOOSER = false
           if (cached) project = JSON.parse(cached)
         } catch { /* corrupted or unavailable - fall through to fetch */ }
         if (!project) {
-          const res = await fetch(`/api/load-project?id=${editId}&_t=${Date.now()}`, { cache: 'no-store' })
+          const res = await fetch(`/api/load-project?id=${encodeURIComponent(editId)}&_t=${Date.now()}`, { cache: 'no-store', headers: activationHeaders() })
           if (!res.ok) throw new Error('Design not found')
           project = await res.json()
         }
@@ -1986,7 +1987,7 @@ const SHOW_MODE_CHOOSER = false
       if (cached) return JSON.parse(cached)
     } catch { /* corrupted or unavailable - fall through to fetch */ }
 
-    const response = await fetch(`/api/load-project?url=${encodeURIComponent(projectMeta.url)}&_t=${Date.now()}`, { cache: 'no-store' })
+    const response = await fetch(`/api/load-project?id=${encodeURIComponent(projectMeta.id)}&_t=${Date.now()}`, { cache: 'no-store', headers: activationHeaders() })
     if (!response.ok) throw new Error('Could not load project')
     return response.json()
   }
@@ -2060,7 +2061,7 @@ const SHOW_MODE_CHOOSER = false
   async function handleOpenProjectById(id) {
     if (screen === 'editor' && hasUnsavedChanges && !(await confirmLeave(LEAVE_EDITOR))) return
     try {
-      const res = await fetch(`/api/load-project?id=${encodeURIComponent(id)}&_t=${Date.now()}`, { cache: 'no-store' })
+      const res = await fetch(`/api/load-project?id=${encodeURIComponent(id)}&_t=${Date.now()}`, { cache: 'no-store', headers: activationHeaders() })
       if (!res.ok) throw new Error('Design not found')
       await openLoadedProject(await res.json())
     } catch (err) {

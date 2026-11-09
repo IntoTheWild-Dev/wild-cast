@@ -1,32 +1,30 @@
-import { list, del } from '@vercel/blob'
+import { list, get, del } from '@vercel/blob'
+import { requireCaller } from './_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'DELETE') return res.status(405).end()
-
+  const caller = await requireCaller(req, res)
+  if (!caller) return
   const { id } = req.query
-  if (!id) return res.status(400).json({ error: 'Missing project id' })
-
-  const token = process.env.BLOB_READ_WRITE_TOKEN
-
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Invalid project id' })
   try {
-    // Find and delete the project blob + any associated comments blob
-    const [projectBlobs, commentBlobs] = await Promise.all([
-      list({ prefix: `projects/${id}`, token }),
-      list({ prefix: `comments/${id}`, token }),
-    ])
-
-    const urlsToDelete = [
-      ...projectBlobs.blobs.map(b => b.url),
-      ...commentBlobs.blobs.map(b => b.url),
-    ]
-
-    if (urlsToDelete.length > 0) {
-      await del(urlsToDelete, { token })
+    const result = await get(`projects/${id}.json`, { access: 'private', useCache: false })
+    if (!result) return res.status(200).json({ ok: true, deleted: 0 })
+    const project = await new Response(result.stream).json()
+    const owner = caller.kind === 'account' ? caller.id : req.headers['x-activation-key'].trim()
+    if (!['designer', 'agency'].includes(caller.role) && project.ownerEmail !== owner) {
+      return res.status(403).json({ error: 'You may only delete your own designs' })
     }
-
-    return res.status(200).json({ ok: true, deleted: urlsToDelete.length })
+    const paths = [`projects/${id}.json`, `comments/${id}.json`]
+    const matches = await Promise.all(paths.map(async path => {
+      const { blobs } = await list({ prefix: path })
+      return blobs.some(b => b.pathname === path) ? path : null
+    }))
+    const exactPaths = matches.filter(Boolean)
+    if (exactPaths.length) await del(exactPaths)
+    return res.status(200).json({ ok: true, deleted: exactPaths.length })
   } catch (err) {
     console.error('delete-project error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(500).json({ error: 'Could not delete this design' })
   }
 }
