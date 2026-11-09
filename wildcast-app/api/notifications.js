@@ -5,11 +5,15 @@
 // GET                       -> { notifications: [...] } newest first
 // PATCH { ids: [...] }      -> marks those read
 // PATCH { all: true }       -> marks everything read
+import { requireCaller, callerOwnerId } from './_lib/auth.js'
 import { loadNotifications, saveNotifications } from './_lib/notifications.js'
 
 export default async function handler(req, res) {
-  const ownerId = req.headers['x-wildcast-owner']
-  if (!ownerId) return res.status(400).json({ error: 'Missing owner' })
+  if (!['GET', 'PATCH'].includes(req.method)) return res.status(405).end()
+  const caller = await requireCaller(req, res)
+  if (!caller) return
+  const ownerId = callerOwnerId(req, caller)
+  if (req.headers['x-wildcast-owner'] && req.headers['x-wildcast-owner'] !== ownerId) return res.status(403).json({ error: 'Notifications belong to the signed-in user' })
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
   if (req.method === 'GET') {

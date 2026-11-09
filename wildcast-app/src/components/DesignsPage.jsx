@@ -518,11 +518,11 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
   const [folderRegistry, setFolderRegistry] = useState([]) // [{ ownerEmail, ownerName, folders }]
 
   useEffect(() => {
-    fetch('/api/save-project', { cache: 'no-store' })
+    fetch('/api/save-project', { cache: 'no-store', headers: activationHeaders() })
       .then(r => r.json())
       .then(data => { setProjects(data.projects ?? []); setStatus('ready') })
       .catch(() => setStatus('error'))
-    fetch('/api/folders', { cache: 'no-store' })
+    fetch('/api/folders', { cache: 'no-store', headers: activationHeaders() })
       .then(r => r.json())
       .then(data => setFolderRegistry(data.owners ?? []))
       .catch(() => {})
@@ -586,7 +586,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     setProjects(prev => prev.map(p => p.id === project.id ? { ...p, projectName: next } : p))
     patchCachedProject(project.id, { projectName: next })
     fetch('/api/rename-project', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ id: project.id, projectName: next }),
     }).catch(() => {})
   }
@@ -654,7 +654,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     // Put it back and say so if the server did not accept the move - it was
     // previously ignored, so a failed move looked like it had worked.
     fetch('/api/move-project', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
       body: JSON.stringify({ id: project.id, folder, ownerEmail, ownerName }),
     }).then(res => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -678,7 +678,7 @@ export default function DesignsPage({ onOpenProject, onDuplicateProject, customC
     if (!name || !activation?.key) return
     try {
       const res = await fetch('/api/folders', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ ownerEmail: activation.key, ownerName: activation.clientName, folderName: name }),
       })
       const data = await res.json()

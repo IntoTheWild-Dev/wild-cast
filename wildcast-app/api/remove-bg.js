@@ -1,3 +1,4 @@
+import { requireCaller } from './_lib/auth.js'
 // Photoroom Remove Background proxy - same approach as wild-scale's
 // functions/api/premium-remove-bg.js, ported to a Vercel function. Keeps
 // PHOTOROOM_API_KEY server-side. The browser sends the raw image bytes as
@@ -28,6 +29,7 @@ async function readBody(req) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await requireCaller(req, res))) return
 
   if (!process.env.PHOTOROOM_API_KEY) {
     return res.status(500).json({ error: 'Background removal is not configured on this deployment' })

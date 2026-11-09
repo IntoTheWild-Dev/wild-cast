@@ -1036,3 +1036,14 @@ Fixed inherited-property activation-key acceptance in both validation and route 
 New acceptance tests cover both denied requests and allowed image/PDF/project operations with unchanged bytes/fields. Full suite: 172 passing; frontend build passes. The pre-existing lockfile mismatch is repaired for clean installs.
 
 This is NOT a complete authorization rollout. Save/list/review/comment/notification routes, signed external review grants, account verification/session lifecycle, atomic writes, dependency upgrades, plugin credential replacement/rotation, and cloud configuration remain separate remediation stages. No secrets were rotated and no production deployment was performed.
+
+
+### 2026-11-09 — Shared-workspace API guards (stacked draft)
+
+Built on the storage/auth repair branch, retaining shared design access for authenticated partners as requested. Rename/move and folder APIs now require valid credentials; personal folder creation binds ordinary callers to their verified identity, while team accounts can manage other folders. Notification reads/read-state updates derive ownership from the verified caller and reject a conflicting owner header. PDF export and Photoroom requests reject anonymous callers before computation/vendor requests. First-party callers now supply their existing authentication headers, and failed library deletes stay visible instead of being removed optimistically.
+
+Validation: 193 tests pass, including anonymous denial checks, shared partner rename/move with unchanged artwork, private notification identity, shared folder listing, and valid PDF/vendor paths. Project save/list now require sign-in, content saves cannot assign approved status, new ownership is derived from the caller, and review responses omit private editing fields/owner identifiers. Review/comment/status IDs are constrained to their project namespace. Frontend build passes. This change is stacked on the storage boundary draft and does not include the independent print work.
+
+Remaining security work: signed external-review capabilities and review/comment permissions, account/invitation/session lifecycle, legacy shared-key owner identifiers, atomic storage updates, dependency upgrades, credential rotation and production configuration review. The application is not yet ready for a full security sign-off. No merge or production deployment performed.
+
+Product access policy confirmed: keep open partner self-registration and shared signed-in design access. This is an intentionally open membership policy, not an invitation-only private workspace.
