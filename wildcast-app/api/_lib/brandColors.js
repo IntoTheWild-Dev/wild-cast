@@ -14,9 +14,11 @@
 // Anything not in the table falls back to the old conversion behavior,
 // unchanged — see requirement 2/3 in the brief.
 //
-// Phase 1 scope is Wolt Blue only (client-confirmed, 2026-09-25). McDonald's
-// and other partner colors are explicitly out of scope — do not add them
-// here without a fresh client sign-off.
+// Phase 1 scope was Wolt Blue only (client-confirmed, 2026-09-25). The four
+// Option E artwork colours below were signed off by Mark Bardi in #cmyk on
+// 2026-10-23 ("lock in the InDesign values"), taken from the CMYK in the
+// InDesign McD flyer export. Do not add other partner colours without a
+// fresh client sign-off.
 export const BRAND_COLOR_LIBRARIES = {
   wolt: [
     {
@@ -26,6 +28,30 @@ export const BRAND_COLOR_LIBRARIES = {
       // 2026-09-25 brief (§5) — do not re-derive this by converting the hex.
       cmyk: { c: 75, m: 0, y: 10, k: 0 },
       label: 'Wolt Blue',
+    },
+    {
+      hex: '#3F96D1',
+      // From the InDesign McD flyer export; signed off 2026-10-23.
+      cmyk: { c: 72, m: 29, y: 1, k: 0 },
+      label: 'Option E blue',
+    },
+    {
+      hex: '#FDDF30',
+      // From the InDesign McD flyer export; signed off 2026-10-23.
+      cmyk: { c: 2, m: 7, y: 85, k: 1 },
+      label: 'Option E yellow',
+    },
+    {
+      hex: '#E94B51',
+      // From the InDesign McD flyer export; signed off 2026-10-23.
+      cmyk: { c: 0, m: 82, y: 61, k: 0 },
+      label: 'Option E red',
+    },
+    {
+      hex: '#60B66D',
+      // From the InDesign McD flyer export; signed off 2026-10-23.
+      cmyk: { c: 64, m: 0, y: 71, k: 0 },
+      label: 'Option E green',
     },
   ],
 }
