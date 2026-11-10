@@ -91,3 +91,31 @@ test('Type3 accessibility text is not mistaken for painted RGB, but coloured gly
     assert.equal(report.checks.find(c => c.id === 'cmyk').status, expected, glyph)
   }
 })
+
+test('isolated over-ink pixels cannot be missed by downsampled validation', async () => {
+  const doc = await PDFDocument.load(await fixture())
+  const ctx = doc.context, page = doc.getPage(0)
+  const samples = Buffer.alloc(1200 * 4)
+  for (let x = 0; x < 1200; x++) samples[x * 4 + 3] = 255
+  samples.fill(255, 0, 4) // One 400% pixel amongst otherwise K-only pixels.
+  const image = ctx.register(ctx.flateStream(samples, { Type: 'XObject', Subtype: 'Image', Width: 1200, Height: 1, BitsPerComponent: 8, ColorSpace: 'DeviceCMYK' }))
+  page.node.Resources().set(PDFName.of('XObject'), ctx.obj({ Ink: image }))
+  page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(Buffer.from('0.75 0 0.1 0 k 0 0 10 10 re f q 288 0 0 0.24 0 0 cm /Ink Do Q'))))
+  const bytes = await doc.save()
+  const report = await preflightPdf(bytes, { lut, requireCmyk: true })
+  assert.equal(report.inkMax, 400)
+  await assert.rejects(finalizePrintPdf(bytes, options), /Total ink/)
+})
+
+test('form resource inheritance cannot hide RGB images from strict validation', async () => {
+  const doc = await PDFDocument.load(await fixture())
+  const ctx = doc.context, page = doc.getPage(0)
+  const rgb = ctx.register(ctx.flateStream(Buffer.from([20, 100, 200]), { Type: 'XObject', Subtype: 'Image', Width: 1, Height: 1, BitsPerComponent: 8, ColorSpace: 'DeviceRGB' }))
+  // A form without its own Resources uses the parent's resources.
+  const form = ctx.register(ctx.flateStream(Buffer.from('q 0.2 0 0 0.2 0 0 cm /Photo Do Q'), { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 10, 10] }))
+  page.node.Resources().set(PDFName.of('XObject'), ctx.obj({ Photo: rgb, Art: form }))
+  page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(Buffer.from('/Art Do'))))
+  await assert.rejects(finalizePrintPdf(await doc.save(), options), /CMYK-only colour content/)
+  page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(Buffer.from('/Missing Do'))))
+  await assert.rejects(finalizePrintPdf(await doc.save(), options), /Page content can be checked/)
+})

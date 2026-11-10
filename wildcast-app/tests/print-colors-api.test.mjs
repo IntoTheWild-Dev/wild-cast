@@ -167,3 +167,25 @@ test('malformed saved settings do not silently reset the printer configuration',
   clearCache('wolt')
   assert.equal((await exportPdf()).code, 503)
 })
+
+test('a missing configured printer does not silently become the standard printer', async () => {
+  store.set('settings/print-colors/wolt.json', JSON.stringify({ colors: [WOLT], printers: [], defaultPrinter: 'missing-printer' }))
+  clearCache('wolt')
+  const result = await exportPdf()
+  assert.equal(result.code, 503)
+  assert.match(result.data.error, /no default colours were substituted/)
+})
+
+test('missing production storage configuration does not substitute default printer settings', async () => {
+  const token = process.env.BLOB_READ_WRITE_TOKEN, vercel = process.env.VERCEL
+  try {
+    process.env.VERCEL = '1'
+    delete process.env.BLOB_READ_WRITE_TOKEN
+    clearCache('wolt')
+    assert.equal((await exportPdf()).code, 503)
+  } finally {
+    process.env.BLOB_READ_WRITE_TOKEN = token
+    if (vercel === undefined) delete process.env.VERCEL
+    else process.env.VERCEL = vercel
+  }
+})

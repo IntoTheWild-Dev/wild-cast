@@ -8,7 +8,8 @@
 // Ink is measured on what will print: vector CMYK operators directly; CMYK
 // images from their samples; sRGB-tagged images through the same Relative
 // Colorimetric + BPC table a RIP uses for PSO Coated v3. Transparent pixels
-// (soft mask < 50%) are ignored. Image resolution comes from the image's
+// (soft mask 0) are ignored in strict mode; partial transparency is checked
+// conservatively at full component ink. Preview estimates ignore alpha <50%. Image resolution comes from the image's
 // size on the page (the CTM where it is drawn), not from its pixel count.
 import { Buffer } from 'node:buffer'
 import { inflateSync } from 'zlib'
@@ -48,13 +49,17 @@ function colorSpaceInfo(context, cs) {
   return { kind: 'unknown', n: 0 }
 }
 
-async function imageInk(context, img, lut) {
+async function imageInk(context, img, lut, fullResolution = false) {
   const cs = colorSpaceInfo(context, img.dict.get(PDFName.of('ColorSpace')))
   const w = img.dict.get(PDFName.of('Width')).asNumber()
   const h = img.dict.get(PDFName.of('Height')).asNumber()
   const dec = decodeStream(img)
-  if (!dec || (cs.n !== 3 && cs.n !== 4)) return null
-  const scale = Math.min(1, 600 / Math.max(w, h))
+  if (!dec || (cs.n !== 3 && cs.n !== 4) || cs.kind.startsWith('Indexed/')) return null
+  if (img.dict.get(PDFName.of('BitsPerComponent'))?.asNumber?.() !== 8 ||
+      img.dict.has(PDFName.of('Decode')) || img.dict.has(PDFName.of('DecodeParms'))) return null
+  // A sampled preview cannot prove an ink limit: strict print checks inspect
+  // every pixel, including isolated dark marks that downsampling could miss.
+  const scale = fullResolution ? 1 : Math.min(1, 600 / Math.max(w, h))
   const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale))
   let samples
   try {
@@ -64,6 +69,7 @@ async function imageInk(context, img, lut) {
     samples = await p.raw().toBuffer()
   } catch { return null }
   const ch = samples.length / (tw * th)
+  if (ch !== cs.n) return null
   let alpha = null
   const smRef = img.dict.get(PDFName.of('SMask'))
   const sm = smRef ? context.lookup(smRef) : null
@@ -84,7 +90,7 @@ async function imageInk(context, img, lut) {
   }
   let max = 0
   for (let p = 0; p < tw * th; p++) {
-    if (alpha && alpha[p] < 128) continue
+    if (alpha && alpha[p] < (fullResolution ? 1 : 128)) continue
     const s = cmyk[p * 4] + cmyk[p * 4 + 1] + cmyk[p * 4 + 2] + cmyk[p * 4 + 3]
     if (s > max) max = s
   }
@@ -197,6 +203,7 @@ export async function preflightPdf(bytes, { lut, inkLimit = 300, minPpi = 300, b
             activeGlyphFonts.delete(textFont)
             break
           }
+          if (!(textFont instanceof PDFDict)) state.uncheckedContent++
           if ([0, 2, 4, 6].includes(textMode)) noteColor(fillCS)
           if ([1, 2, 5, 6].includes(textMode)) noteColor(strokeCS)
           break
@@ -210,7 +217,7 @@ export async function preflightPdf(bytes, { lut, inkLimit = 300, minPpi = 300, b
             const fm = obj.dict.lookup(PDFName.of('Matrix'))
             const fmat = fm instanceof PDFArray ? fm.asArray().map(v => v.asNumber()) : [1, 0, 0, 1, 0, 0]
             const dec = decodeStream(obj)
-            if (dec && !dec.dct) walk(dec.bytes.toString('latin1'), obj.dict.lookup(PDFName.of('Resources')), mul(m, fmat), { fillCS, strokeCS, textMode, textFont })
+            if (dec && !dec.dct) walk(dec.bytes.toString('latin1'), obj.dict.lookup(PDFName.of('Resources')) ?? resources, mul(m, fmat), { fillCS, strokeCS, textMode, textFont })
             else state.uncheckedContent++
             activeForms.delete(ref)
           } else if (sub === '/Form') {
@@ -223,7 +230,9 @@ export async function preflightPdf(bytes, { lut, inkLimit = 300, minPpi = 300, b
             if (cs.kind === 'DeviceRGB') state.deviceRgb++
             if (cs.n !== 1 && cs.n !== 4) state.nonCmyk++
             state.images.push({ ref, name, w, h, ppi: Math.min(w / (ptW / 72), h / (ptH / 72)), widthMm: (ptW / 72) * 25.4, colorSpace: cs.kind + (cs.kind === 'ICCBased' ? `/${cs.n}` : ''), softMask: obj.dict.has(PDFName.of('SMask')) })
-          }
+          } else if (sub === '/Image') {
+            noteColor(fillCS) // An image mask is painted in the active fill colour.
+          } else state.uncheckedContent++
           break
         }
       }
@@ -254,7 +263,7 @@ export async function preflightPdf(bytes, { lut, inkLimit = 300, minPpi = 300, b
   let unmeasuredInk = 0
   const uniqueImages = [...new Map(state.images.map(i => [String(i.ref), i])).values()]
   for (const img of uniqueImages) {
-    img.inkMax = lut ? await imageInk(ctx, ctx.lookup(img.ref), lut) : null
+    img.inkMax = lut ? await imageInk(ctx, ctx.lookup(img.ref), lut, requireCmyk) : null
     if (img.inkMax != null) imageInkMax = Math.max(imageInkMax, img.inkMax)
     else if (img.colorSpace !== 'DeviceGray' && img.colorSpace !== 'ICCBased/1') unmeasuredInk++
   }

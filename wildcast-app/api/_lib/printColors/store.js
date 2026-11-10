@@ -86,7 +86,10 @@ function defaultsFor(brand) {
 
 async function readSaved(brand) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
-  if (!token) return null
+  if (!token) {
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production') throw new Error('Printer settings storage is not configured.')
+    return null
+  }
   const stored = await get(pathFor(brand), { access: 'private', useCache: false, token })
   if (!stored) return null
   const saved = await new Response(stored.stream).json()
@@ -104,7 +107,10 @@ export async function loadSettings(brand) {
   const colors = saved?.colors ? validateColors(saved.colors) : defaultsFor(key)
   const hexes = new Set(colors.map(c => c.hex))
   const printers = saved?.printers ? validatePrinters(saved.printers, hexes) : []
-  const defaultPrinter = printers.some(p => p.id === saved?.defaultPrinter) ? saved.defaultPrinter : 'standard'
+  if (saved?.defaultPrinter && saved.defaultPrinter !== 'standard' && !printers.some(p => p.id === saved.defaultPrinter)) {
+    throw new Error('The saved default printer is missing. Select a valid printer before exporting.')
+  }
+  const defaultPrinter = saved?.defaultPrinter || 'standard'
   return {
     brand: key, colors, printers, defaultPrinter,
     defaults: defaultsFor(key),
