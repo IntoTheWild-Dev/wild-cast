@@ -1,3 +1,4 @@
+import { finalizePrintPdf } from './_lib/finalPrintPdf.js'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { randomUUID } from 'node:crypto'
@@ -8,10 +9,9 @@ import { fileURLToPath } from 'url'
 import { deflateSync } from 'zlib'
 import { getBrandLibrary, hexToRgb, cmykToBytes } from './_lib/brandColors.js'
 // Print colours module (removable, see api/_lib/printColors/README.md)
-import { resolvePrintSettings, finishPdf } from './_lib/printColors/index.js'
+import { resolvePrintSettings } from './_lib/printColors/index.js'
 import { loadLut, applyLut } from './_lib/cmykLut.js'
 import { buildLayeredPdf } from './_lib/layeredPdf.js'
-import { preflightPdf } from './_lib/preflight.js'
 import { isBlobHost } from './_lib/templateAssets.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -113,23 +113,18 @@ export default async function handler(req, res) {
   if (!EXPORT_MODES.has(mode)) return res.status(400).json({ error: `Unknown mode "${mode}"` })
 
   // [print-colors] brand colours + default printer from the admin setting
-  const printSettings = await resolvePrintSettings(brand)
+  let printSettings
+  try { printSettings = await resolvePrintSettings(brand) } catch {
+    return res.status(503).json({ error: 'Saved printer settings could not be loaded. Retry before exporting; no default colours were substituted.' })
+  }
   const safeName = filename.replace(/[^a-z0-9_-]/gi, '-').toLowerCase() + (mode === 'print' ? '-digital' : '')
   const send = async (pdfBuffer, unverifiedColorCount, exportKind, sourcePpi = [], unverifiedColors = []) => {
-    // Print preflight on the finished file (api/_lib/preflight.js): plain-word
-    // warnings for the export dialog. Never blocks the download.
+    // Validate the final printer-labelled bytes. Critical CMYK failures block
+    // the download; other checks remain visible as warnings.
     const warnings = exportKind === 'flat' ? ['This template has no vector background. Text and artwork are flattened to 300 ppi.'] : []
-    try {
-      const pf = await preflightPdf(pdfBuffer, { lut: loadLut(join(__dirname, 'icc', profileMeta.lut)) })
-      // Only problems a designer can act on. Live text, image ppi (reported per
-      // upload below) and brand-op presence (a printer preset may change the
-      // value on purpose) are developer checks, see scripts/preflight-report.mjs.
-      for (const c of pf.checks) if (c.status !== 'pass' && !USER_HIDDEN_CHECKS.has(c.id)) warnings.push(`${c.label}: ${c.detail}`)
-    } catch (err) {
-      console.error('export-cmyk preflight error:', err)
-    }
-    // [print-colors] relabel for the default printer, after preflight checked the content
-    pdfBuffer = await finishPdf(pdfBuffer, printSettings.printer)
+    const final = await finalizePrintPdf(pdfBuffer, { printer: printSettings.printer, mode, lut: loadLut(join(__dirname, 'icc', profileMeta.lut)), iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)) })
+    pdfBuffer = final.pdf
+    for (const c of final.problems) if (!USER_HIDDEN_CHECKS.has(c.id)) warnings.push(`${c.label}: ${c.detail}`)
     for (const s of sourcePpi) {
       const name = ZONE_NAMES[s.zoneId] ?? 'An image'
       if (s.ppi < MIN_SOURCE_PPI) warnings.push(`${name} is ${s.ppi} ppi at print size (300 needed). Upload a larger file.`)
@@ -169,7 +164,8 @@ export default async function handler(req, res) {
       return await send(pdf, unverifiedColorCount, 'layered', sourcePpi, unverifiedColors)
     } catch (err) {
       console.error('export-cmyk layered error:', err)
-      return res.status(422).json({ error: 'The vector print export could not be completed. ' + err.message + ' Please ask the design team to check the background PDF and retry.' })
+      if (err.status) return res.status(err.status).json({ error: err.message })
+      return res.status(err.status || 422).json({ error: 'The vector print export could not be completed. ' + err.message + ' Please ask the design team to check the background PDF and retry.' })
     }
   }
 
@@ -201,7 +197,7 @@ export default async function handler(req, res) {
     return await send(pdfBuffer, unverifiedColorCount, 'flat', [], unverifiedColors)
   } catch (err) {
     console.error('export-cmyk error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(err.status || 500).json({ error: err.message })
   }
 }
 

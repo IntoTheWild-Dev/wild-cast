@@ -8,9 +8,9 @@
 //   defaultPrinter: 'standard' | printer id
 //   history:  [{ at, by, summary }]   newest first, capped
 // The code table in api/_lib/brandColors.js is the fallback whenever nothing
-// is saved, Blob is unreachable, or the module is switched off.
+// is saved or the module is explicitly switched off. Storage errors propagate.
 import process from 'node:process'
-import { list, put } from '@vercel/blob'
+import { get, put } from '@vercel/blob'
 import { getBrandLibrary, hexToRgb } from '../brandColors.js'
 
 const MAX_COLORS = 24
@@ -87,12 +87,13 @@ function defaultsFor(brand) {
 async function readSaved(brand) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
   if (!token) return null
-  const path = pathFor(brand)
-  const { blobs } = await list({ prefix: path, token })
-  const match = blobs.find(b => b.pathname === path)
-  if (!match) return null
-  const r = await fetch(match.url + (match.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`, { headers: { Authorization: `Bearer ${token}` } })
-  return r.ok ? r.json() : null
+  const stored = await get(pathFor(brand), { access: 'private', useCache: false, token })
+  if (!stored) return null
+  const saved = await new Response(stored.stream).json()
+  if (!saved || typeof saved !== 'object' || !Array.isArray(saved.colors) || !Array.isArray(saved.printers)) {
+    throw new Error('Saved printer settings are invalid. Ask the design team to check them before export.')
+  }
+  return saved
 }
 
 // Full settings for the admin screen (and the export, via index.js).

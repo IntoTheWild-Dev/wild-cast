@@ -10,8 +10,13 @@ import { inflateSync } from 'node:zlib'
 import sharp from 'sharp'
 
 const store = new Map()
+let readFailure = null
 mock.module('@vercel/blob', {
   namedExports: {
+    get: async path => {
+      if (readFailure) throw readFailure
+      return store.has(path) ? { stream: new Response(store.get(path)).body } : null
+    },
     list: async ({ prefix }) => ({
       blobs: [...store.keys()].filter(k => k.startsWith(prefix)).map(k => ({ pathname: k, url: `mem://${k}` })),
     }),
@@ -45,7 +50,7 @@ const save = body => call({ body: { action: 'save', brand: 'wolt', ...body } })
 
 const WOLT = { label: 'Wolt Blue', hex: '#00C2E8', cmyk: { c: 75, m: 0, y: 10, k: 0 } }
 
-beforeEach(() => { store.clear(); clearCache('wolt'); delete process.env.PRINT_COLORS })
+beforeEach(() => { readFailure = null; store.clear(); clearCache('wolt'); delete process.env.PRINT_COLORS })
 
 test('only agency callers get in', async () => {
   assert.equal((await call({ method: 'GET', key: 'CLIENT-KEY' })).code, 403)
@@ -144,4 +149,21 @@ test('duplicate printer ids are refused instead of silently renamed', async () =
   const r = await save({ colors: [WOLT], printers: [{ id: 'clarisse', name: 'A' }, { id: 'clarisse', name: 'B' }] })
   assert.equal(r.code, 400)
   assert.match(r.data.error, /share the id/)
+})
+
+test('a failed settings read stops export instead of using built-in colours', async () => {
+  clearCache('wolt')
+  readFailure = new Error('Storage unavailable')
+  const r = await exportPdf()
+  assert.equal(r.code, 503)
+  assert.match(r.data.error, /no default colours were substituted/)
+  readFailure = null
+  const recovered = await exportPdf()
+  assert.equal(recovered.code, 200, 'failed read was not cached as a success')
+})
+
+test('malformed saved settings do not silently reset the printer configuration', async () => {
+  store.set('settings/print-colors/wolt.json', JSON.stringify({ colors: null, printers: [] }))
+  clearCache('wolt')
+  assert.equal((await exportPdf()).code, 503)
 })

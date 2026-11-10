@@ -20,22 +20,17 @@ function fallback(brand) {
 }
 
 // What the export needs for one brand: the colour library (with the default
-// printer's overrides applied) and the printer's file label. Never throws -
-// a Blob hiccup must not change export colours, so it falls back to code.
+// printer's overrides applied) and the printer's file label. Failed reads
+// propagate; only a genuinely absent setting uses the code defaults.
 export async function resolvePrintSettings(brand) {
   if (!brand || !isEnabled()) return fallback(brand)
   const hit = cache.get(brand)
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value
-  let value = fallback(brand)
-  try {
-    const s = await loadSettings(brand)
-    const printer = s.printers.find(p => p.id === s.defaultPrinter) ?? { id: 'standard', label: 'pdfx4', overrides: {} }
-    value = {
-      library: s.colors.map(c => ({ hex: c.hex, label: c.label, cmyk: printer.overrides?.[c.hex] ?? c.cmyk })),
-      printer: { id: printer.id, label: printer.label },
-    }
-  } catch (err) {
-    console.error('printColors: using code defaults', err)
+  const s = await loadSettings(brand)
+  const printer = s.printers.find(p => p.id === s.defaultPrinter) ?? { id: 'standard', label: 'pdfx4', overrides: {} }
+  const value = {
+    library: s.colors.map(c => ({ hex: c.hex, label: c.label, cmyk: printer.overrides?.[c.hex] ?? c.cmyk })),
+    printer: { id: printer.id, label: printer.label },
   }
   cache.set(brand, { at: Date.now(), value })
   return value
@@ -45,12 +40,7 @@ export async function resolvePrintSettings(brand) {
 // printer asks for InDesign-style or plain labelling. Unchanged otherwise.
 export async function finishPdf(pdfBuffer, printer) {
   if (printer?.label !== 'indesign' && printer?.label !== 'plain') return pdfBuffer
-  try {
-    return await relabelPdf(pdfBuffer, printer.label)
-  } catch (err) {
-    console.error('printColors: relabel failed, sending PDF/X-4 file', err)
-    return pdfBuffer
-  }
+  return relabelPdf(pdfBuffer, printer.label)
 }
 
 // Agency-only gate (Wild Stack's own keys or team accounts with role
