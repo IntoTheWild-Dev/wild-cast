@@ -9,7 +9,7 @@ const store = new Map()
 mock.module('@vercel/blob', {
   namedExports: {
     list: async () => ({ blobs: [] }),
-    get: async path => (store.has(path) ? { stream: new Response(store.get(path)).body } : null),
+    get: async path => (store.has(path) ? { stream: new Response(store.get(path)).body, blob: { etag: store.get(path) } } : null),
     put: async (path, body) => { store.set(path, body); return { pathname: path, url: `mem://${path}` } },
   },
 })

@@ -1,4 +1,7 @@
-import { put, list, get } from '@vercel/blob'
+import { Buffer } from 'node:buffer'
+import process from 'node:process'
+import { updateJson } from './_lib/atomicJson.js'
+import { list, get } from '@vercel/blob'
 import { printProfileFor } from '../src/lib/printProfile.js'
 import { notifyOwner } from './_lib/notifications.js'
 
@@ -128,22 +131,12 @@ async function handlePatch(req, res) {
     // handleList above and comments.js's loadComments(). This one matters
     // more: a stale read here doesn't just show a stale status, it gets
     // written BACK, silently reverting whatever the stale read missed.
-    const result = await get(`projects/${projectId}.json`, { access: 'private', useCache: false, token })
-    if (!result) return res.status(404).json({ error: 'Project not found' })
-    const project = await new Response(result.stream).json()
-    const previousStatus = project.reviewStatus
-
-    project.reviewStatus = status
-    // Sticky "second round" flag for My Tasks - see its own note above on
-    // the GET side. Only ever flips on, never off.
-    if (status === 'changes_requested') project.everRequestedChanges = true
-    await put(`projects/${projectId}.json`, JSON.stringify(project), {
-      access: 'private',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: 'application/json',
-      token,
-    })
+    const { value: project, previous } = await updateJson(`projects/${projectId}.json`, current => {
+      if (!current) throw Object.assign(new Error('Project not found'), { status: 404 })
+      return { ...current, reviewStatus: status,
+        everRequestedChanges: current.everRequestedChanges || status === 'changes_requested' }
+    }, { token })
+    const previousStatus = previous.reviewStatus
 
     // Tell the design's owner - only for a reviewer's verdict (the only
     // two statuses ReviewPage.jsx sends), and only when it actually changed,
@@ -161,7 +154,7 @@ async function handlePatch(req, res) {
     return res.status(200).json({ ok: true })
   } catch (err) {
     console.error('review-status patch error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(err.status || 500).json({ error: err.message })
   }
 }
 
@@ -179,67 +172,24 @@ export default async function handler(req, res) {
 
     const token = process.env.BLOB_READ_WRITE_TOKEN
 
-    // Bug fix, 2026-09-24 (root cause behind the everRequestedChanges fix
-    // above, and the wider class it's one instance of): a plain save
-    // (autosave, manual Save) used to write the client's in-memory
-    // reviewStatus/everRequestedChanges straight through, full overwrite,
-    // no matter how stale. Since neither field is ever polled while the
-    // editor's open, a designer typing while a Manager/reviewer PATCHes a
-    // status change elsewhere could have their next autosave silently
-    // revert that change moments later - exactly what happened to
-    // everRequestedChanges specifically, but the same risk applies to
-    // reviewStatus itself. Root fix: these two fields are the review
-    // lifecycle's own state, not ordinary editor content - a plain save
-    // has no business touching either. reviewStatus is only set from the
-    // client when doSave() passes it explicitly (an intentional
-    // transition - Send review link's first-send or resubmit); otherwise
-    // it's preserved from whatever's already stored. everRequestedChanges
-    // is never taken from the client at all - handlePatch above is its
-    // only writer, full stop.
-    // Bug fix, 2026-09-24 (found by review): the `.catch(() => null)` this
-    // line originally had treated a genuine read failure (network blip,
-    // auth issue, transient Blob error) exactly like "project doesn't
-    // exist yet" - get() already resolves null on a real 404 with no
-    // catch needed (same as handlePatch above), so this catch only ever
-    // fired on unexpected errors, silently downgrading an already-
-    // approved/second-round design back to 'design'/false on nothing more
-    // than a one-off read error. Removed - a real error now propagates to
-    // the outer try/catch below and returns a 500, the same way handlePatch
-    // already handles it, instead of corrupting the stored status.
-    const existing = await get(`projects/${incoming.id}.json`, { access: 'private', useCache: false, token })
-    const existingProject = existing ? await new Response(existing.stream).json() : null
-
-    // An approved design is locked (Annika, 2026-10-01: "No more changes
-    // possible" until someone clicks Edit, which PATCHes it back to
-    // 'review' - the approval line - first). Enforced here, not just in the
-    // editor UI, because the editor never re-syncs reviewStatus while a tab
-    // sits open: a designer whose tab loaded before the Manager approved
-    // would otherwise keep autosaving edits into an approved design. A save
-    // that names a reviewStatus is an intentional transition (Send review
-    // link, approving with a pending edit, a duplicate) and goes through.
-    if (existingProject?.reviewStatus === 'approved' && !incoming.reviewStatus) {
-      return res.status(409).json({ error: 'This design is approved and locked. Click Edit to send it back through approval before changing it.' })
-    }
-
-    const project = {
-      ...incoming,
-      // Old tabs omit the setting: retain the stored choice instead of erasing it.
-      iccProfile: printProfileFor(incoming.iccProfile === undefined ? existingProject : incoming),
-      reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',
-      everRequestedChanges: existingProject?.everRequestedChanges ?? false,
-    }
-
-    const blob = await put(`projects/${project.id}.json`, JSON.stringify(project), {
-      access: 'private',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: 'application/json',
-      token,
-    })
+    // Re-read review state on every retry: ordinary content saves preserve
+    // status/sticky flags and cannot overwrite a newly approved design.
+    const { value: project, blob } = await updateJson(`projects/${incoming.id}.json`, existingProject => {
+      if (existingProject?.reviewStatus === 'approved' && !incoming.reviewStatus) {
+        throw Object.assign(new Error('This design is approved and locked. Click Edit to send it back through approval before changing it.'), { status: 409 })
+      }
+      return {
+        ...incoming,
+        // Old tabs omit the profile; retain the stored choice.
+        iccProfile: printProfileFor(incoming.iccProfile === undefined ? existingProject : incoming),
+        reviewStatus: incoming.reviewStatus ?? existingProject?.reviewStatus ?? 'design',
+        everRequestedChanges: existingProject?.everRequestedChanges ?? false,
+      }
+    }, { token })
 
     return res.status(200).json({ id: project.id, url: blob.url })
   } catch (err) {
     console.error('save-project error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(err.status || 500).json({ error: err.message })
   }
 }

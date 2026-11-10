@@ -9,6 +9,7 @@ import { scryptSync } from 'node:crypto'
 const store = new Map()
 mock.module('@vercel/blob', {
   namedExports: {
+    get: async path => store.has(path) ? { stream: new Response(store.get(path)).body, blob: { etag: store.get(path) } } : null,
     list: async ({ prefix }) => ({
       blobs: [...store.keys()].filter(k => k.startsWith(prefix)).map(k => ({ pathname: k, url: `mem://${k}` })),
     }),

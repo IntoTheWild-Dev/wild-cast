@@ -1,3 +1,5 @@
+import process from 'node:process'
+import { readJson, updateJson } from './_lib/atomicJson.js'
 // Merged get-comments.js + add-comment.js into one route (dispatched by method)
 // to stay under Vercel's per-deployment serverless function count — needed
 // headroom for the new library-assets route. Same logic, same behavior.
@@ -9,31 +11,12 @@
 // link, so there's no separate name field to type there; `resolved` is a
 // plain boolean either side can flip, no access control, matching this
 // project's existing trust model (Designs/Library have none either).
-import { put, get } from '@vercel/blob'
+import { get } from '@vercel/blob'
 import { notifyOwner } from './_lib/notifications.js'
 
-async function loadComments(projectId, token) {
-  // Was list() + a hand-rolled `?_t=` cache-bust on the returned URL. That
-  // still went through list()'s own index, which lagged just enough after a
-  // put() that the very next read (i.e. the second comment's read-modify-
-  // write) could see an empty result and silently overwrite the file,
-  // dropping the first comment. get() reads the known pathname directly -
-  // no list-index step - and useCache:false is the documented way to bypass
-  // the CDN for a private blob, replacing the unofficial query-param hack.
-  const result = await get(`comments/${projectId}.json`, { access: 'private', useCache: false, token })
-  if (!result) return []
-  return new Response(result.stream).json()
-}
-
-async function saveComments(projectId, comments, token) {
-  await put(`comments/${projectId}.json`, JSON.stringify(comments), {
-    access: 'private',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json',
-    token,
-  })
-}
+const commentPath = id => `comments/${id}.json`
+const loadComments = async (id, token) => (await readJson(commentPath(id), token)) ?? []
+const missing = message => Object.assign(new Error(message), { status: 404 })
 
 async function handleGet(req, res) {
   const { id } = req.query
@@ -71,32 +54,35 @@ async function handlePost(req, res) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
   try {
-    const comments = await loadComments(projectId, token)
-    // A reply (`parentId`) always hangs off a thread's root comment, never
-    // off another reply, and never carries its own pin - the thread's root
-    // owns the pin. Comments without either stay plain, unpinned top-level
-    // comments, exactly like every comment saved before this.
-    const parent = parentId ? comments.find(c => c.id === parentId) : null
-    if (parentId && !parent) return res.status(404).json({ error: 'Thread not found' })
-    const rootId = parent ? (parent.parentId || parent.id) : null
-    const parsedPin = rootId ? null : parsePin(pin)
     const newId = crypto.randomUUID()
-    comments.push({
-      id: newId,
-      name: name.trim(),
-      text: text.trim(),
-      // Defaults to 'reviewer' - ReviewPage.jsx (the external share-link
-      // page) never sends this. App.jsx's editor sends 'designer' or
-      // 'manager' from the "View as" role (was always 'designer', so a
-      // Manager's editor comments were mislabelled and never notified the
-      // owner - Anang, 2026-09-29).
-      from: from === 'designer' || from === 'manager' ? from : 'reviewer',
-      resolved: false,
-      createdAt: Date.now(),
-      ...(rootId ? { parentId: rootId } : {}),
-      ...(parsedPin ? { pin: parsedPin } : {}),
-    })
-    await saveComments(projectId, comments, token)
+    const createdAt = Date.now()
+    const { value: comments } = await updateJson(commentPath(projectId), current => {
+      const comments = current ?? []
+      // A reply (`parentId`) always hangs off a thread's root comment, never
+      // off another reply, and never carries its own pin - the thread's root
+      // owns the pin. Comments without either stay plain, unpinned top-level
+      // comments, exactly like every comment saved before this.
+      const parent = parentId ? comments.find(c => c.id === parentId) : null
+      if (parentId && !parent) throw missing('Thread not found')
+      const rootId = parent ? (parent.parentId || parent.id) : null
+      const parsedPin = rootId ? null : parsePin(pin)
+      comments.push({
+        id: newId,
+        name: name.trim(),
+        text: text.trim(),
+        // Defaults to 'reviewer' - ReviewPage.jsx (the external share-link
+        // page) never sends this. App.jsx's editor sends 'designer' or
+        // 'manager' from the "View as" role (was always 'designer', so a
+        // Manager's editor comments were mislabelled and never notified the
+        // owner - Anang, 2026-09-29).
+        from: from === 'designer' || from === 'manager' ? from : 'reviewer',
+        resolved: false,
+        createdAt,
+        ...(rootId ? { parentId: rootId } : {}),
+        ...(parsedPin ? { pin: parsedPin } : {}),
+      })
+      return comments
+    }, { token })
 
     // A reviewer's or Manager's comment notifies the design's owner. The
     // designer's own replies (from: 'designer', posted from the editor)
@@ -122,7 +108,7 @@ async function handlePost(req, res) {
     return res.status(200).json({ ok: true, id: newId, count: comments.length })
   } catch (err) {
     console.error('add-comment error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(err.status || 500).json({ error: err.message })
   }
 }
 
@@ -135,15 +121,17 @@ async function handlePatch(req, res) {
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
   try {
-    const comments = await loadComments(projectId, token)
-    const comment = comments.find(c => c.id === commentId)
-    if (!comment) return res.status(404).json({ error: 'Comment not found' })
-    comment.resolved = resolved
-    await saveComments(projectId, comments, token)
+    await updateJson(commentPath(projectId), current => {
+      const comments = current ?? []
+      const comment = comments.find(c => c.id === commentId)
+      if (!comment) throw missing('Comment not found')
+      comment.resolved = resolved
+      return comments
+    }, { token })
     return res.status(200).json({ ok: true })
   } catch (err) {
     console.error('resolve-comment error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(err.status || 500).json({ error: err.message })
   }
 }
 
