@@ -78,3 +78,16 @@ at the start.
     **Update background only** (it writes only `<slot>-bg.png` + PDF + tile) -
     don't tell the designer to redo the import, which resets zone settings made
     on the review screen.
+
+
+## Keep changes small and prove the result
+
+Adapted for WildCast from the [Karpathy-inspired guidelines](https://github.com/multica-ai/andrej-karpathy-skills/blob/main/CLAUDE.md). These complement the project rules above.
+
+- Before a substantive change, state the expected behaviour and how it will be checked. Separate established facts from assumptions; investigate uncertainty and ask only when missing information prevents a reliable next step. Continue independent work while waiting.
+- Implement the smallest clear solution within the requested scope. Add abstractions, dependencies or configuration only when the task needs them. Prefer readable code over a lower line count.
+- Keep print fixes, security changes and optional refactoring in separate, reviewable changes. Preserve unrelated code, comments and formatting; remove unused code introduced by your own changes.
+- For simplification, record the existing behaviour first and verify equivalent outputs and operations afterwards. A shorter implementation is not acceptable if it changes results, access policy, saved data or error handling unintentionally.
+- Reproduce a meaningful bug with a regression check when practical, then verify the fix. Use checks appropriate to the risk; documentation edits and trivial changes do not require artificial tests.
+- Review the final diff against the requested scope. Report what was verified and any remaining limitations. Distinguish local tests, preview deployment, production verification and physical print approval; passing one does not establish the others.
+- Treat the missing evidence as missing. Do not attribute a print difference to a profile, conversion path or deployment without evidence connecting it to the affected file. Do not describe a draft or preview as a live fix.
