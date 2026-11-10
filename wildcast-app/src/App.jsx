@@ -1028,29 +1028,35 @@ const SHOW_MODE_CHOOSER = false
   }
 
 
-  function handleSelectTemplate(template) {
+  // Shared reset for new designs only. Loading an existing design retains its
+  // own restore path; fields, images and brief-specific choices stay in callers.
+  function beginNewDesign(template, folder = null) {
     historyRef.current = []; setCanUndo(false)
-    setRestrictedReview(false)
-    setReachedViaBrief(false) // opened straight from Templates - no brief to offer more formats from
     setSelectedTemplate(template)
-    setFields(DEFAULT_FIELDS)
     setFontSizes({})
     setGeneratedFontSizes({})
     setAlignments({})
-    setImageScales({})
     setTextPositions({})
     setZonePositions({})
-    setProjectName(template.name)
     setCurrentProjectId(null)
     setIccProfile(DEFAULT_PRINT_PROFILE)
     pendingNewIdRef.current = null
     setProjectOwner(null)
-    setProjectFolder(null)
     setReviewStatus('design')
     setSaveStatus(null)
     setHasUnsavedChanges(false)
     setLoadKey(k => k + 1)
     setScreen('editor')
+    setProjectFolder(folder)
+  }
+
+  function handleSelectTemplate(template) {
+    beginNewDesign(template)
+    setRestrictedReview(false)
+    setReachedViaBrief(false) // opened straight from Templates - no brief to offer more formats from
+    setFields(DEFAULT_FIELDS)
+    setImageScales({})
+    setProjectName(template.name)
   }
 
   // Opens a Figma import (draft or live) straight in the real Designer-mode
@@ -1095,16 +1101,10 @@ const SHOW_MODE_CHOOSER = false
       } catch { /* corrupted cache - fall through to fresh generation */ }
     }
 
-    historyRef.current = []; setCanUndo(false)
+    beginNewDesign(template)
     setRestrictedReview(true)
-    setSelectedTemplate(template)
     setFields({ ...DEFAULT_FIELDS, ...prefilledFields })
-    setFontSizes({})
-    setGeneratedFontSizes({})
-    setAlignments({})
     setImageScales({})
-    setTextPositions({})
-    setZonePositions({})
     // Auto-tag the project name with merchant + offer from the brief
     // (Julia's ask, 2026-08-07) instead of the generic template name, so
     // she doesn't have to retype the merchant every time she edits a
@@ -1112,16 +1112,6 @@ const SHOW_MODE_CHOOSER = false
     // the brief left both blank.
     const nameTag = [prefilledFields?.restaurant_name, prefilledFields?.offer].filter(Boolean).join(' – ')
     setProjectName(nameTag ? `${nameTag} – ${template.name}` : template.name)
-    setCurrentProjectId(null)
-    setIccProfile(DEFAULT_PRINT_PROFILE)
-    pendingNewIdRef.current = null
-    setProjectOwner(null)
-    setProjectFolder(null)
-    setReviewStatus('design')
-    setSaveStatus(null)
-    setHasUnsavedChanges(false)
-    setLoadKey(k => k + 1)
-    setScreen('editor')
   }
 
   // Entry point for the new brief → template → mode → editor flow (Julia's
@@ -1152,15 +1142,11 @@ const SHOW_MODE_CHOOSER = false
       zones: (TEMPLATE_ZONES[template?.id] ?? customTemplates.zonesById[template?.id])?.zones,
     })
 
-    historyRef.current = []; setCanUndo(false)
     setRestrictedReview(false)
+    beginNewDesign(template, brief.folder ?? null)
     setReachedViaBrief(true)
     setFormatPromptShown(false)
-    setSelectedTemplate(template)
     setFields({ ...DEFAULT_FIELDS, ...prefilledFields })
-    setFontSizes({})
-    setGeneratedFontSizes({})
-    setAlignments({})
     // Prompt Brief designs carry a starting Scale for a cut-out photo/sticker
     // (fitContentScales) - same as its preview. Every other path starts at 100%.
     // Logo pulled from Assets (or given in the brief) starts at the
@@ -1168,25 +1154,12 @@ const SHOW_MODE_CHOOSER = false
     const logoPct = prefilledFields.logoUrl && !('logo' in (brief.imageScales ?? {})) ? logoStartPct(template?.id) : null
     setImageScales({ ...(brief.imageScales ?? {}), ...(logoPct ? { logo: logoPct } : {}) })
     setImagePositions(brief.imagePositions ?? {})
-    setTextPositions({})
-    setZonePositions({})
     // A name typed into the brief's own "Project name" field (Julia's ask,
     // 2026-09-15) wins outright over the auto-tag - it's an explicit label,
     // not something to second-guess by appending merchant/offer/template
     // name onto it too.
     const nameTag = [prefilledFields.restaurant_name, prefilledFields.offer].filter(Boolean).join(' – ')
     setProjectName(brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name))
-    setCurrentProjectId(null)
-    setIccProfile(DEFAULT_PRINT_PROFILE)
-    pendingNewIdRef.current = null
-    setProjectOwner(null)
-    // Prompt Brief's "Save to folder" choice - the editor's first save files it there.
-    setProjectFolder(brief.folder ?? null)
-    setReviewStatus('design')
-    setSaveStatus(null)
-    setHasUnsavedChanges(false)
-    setLoadKey(k => k + 1)
-    setScreen('editor')
   }
 
   function handleBack() {
@@ -1496,7 +1469,7 @@ const SHOW_MODE_CHOOSER = false
     handleFieldChange(`${zoneId}Url`, url)
   }
 
-  // mode: 'print' (default - photos stay RGB like InDesign's PDF/X-4, the
+  // mode: 'print' (digital alternative - photos stay RGB like InDesign's PDF/X-4, the
   // print shop converts them) or 'cmyk' (CMYK-only file, for printers that
   // require it). Wolt Blue is exact 75/0/10/0 in both - see api/export-cmyk.js.
   async function handleExport(mode = 'cmyk') {
