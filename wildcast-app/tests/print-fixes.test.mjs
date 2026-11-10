@@ -30,14 +30,14 @@ const build = (templatePdf, mode, items = []) => buildLayeredPdf({
 })
 
 // A template with one 2000 px RGB image drawn 72 pt (1 inch) wide.
-async function templateWithImage() {
+async function templateWithImage(widthPt = 72) {
   const doc = await PDFDocument.create()
   const page = doc.addPage([PAGE.PT_W, PAGE.PT_H])
   const ctx = doc.context
   const px = await sharp({ create: { width: 2000, height: 1000, channels: 3, background: { r: 200, g: 80, b: 40 } } }).raw().toBuffer()
   const img = ctx.register(ctx.flateStream(px, { Type: 'XObject', Subtype: 'Image', Width: 2000, Height: 1000, ColorSpace: 'DeviceRGB', BitsPerComponent: 8 }))
   page.node.set(PDFName.of('Resources'), ctx.obj({ XObject: { Im0: img } }))
-  page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(Buffer.from('q 72 0 0 36 50 50 cm /Im0 Do Q'))))
+  page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(Buffer.from(`q ${widthPt} 0 0 ${widthPt / 2} 50 50 cm /Im0 Do Q`))))
   return Buffer.from(await doc.save())
 }
 
@@ -145,5 +145,41 @@ test('printer label presets preserve FOGRA39 identity', async () => {
     const intent = out.catalog.lookup(PDFName.of('OutputIntents')).lookup(0)
     assert.equal(intent.get(PDFName.of('OutputConditionIdentifier')).decodeText(), 'FOGRA39')
     assert.equal(intent.get(PDFName.of('Info')).decodeText(), 'ISO Coated v2')
+  }
+})
+
+
+test('fractional print dimensions do not downsample below 300 ppi', async () => {
+  const widthPt = 72.2
+  const doc = await PDFDocument.load((await build(await templateWithImage(widthPt), 'cmyk')).pdf)
+  const [img] = images(doc)
+  const w = img.dict.get(PDFName.of('Width')).asNumber()
+  const h = img.dict.get(PDFName.of('Height')).asNumber()
+  assert.ok(w / (widthPt / 72) >= 300)
+  assert.ok(h / ((widthPt / 2) / 72) >= 300)
+})
+
+
+test('resampled transparency stays one grayscale byte per pixel in both export modes', async () => {
+  const source = await PDFDocument.load(await templateWithImage())
+  const [image] = images(source)
+  const width = 2000, height = 1000
+  const mask = Buffer.alloc(width * height)
+  for (let y = 0; y < height; y++) mask.fill(255, y * width + width / 2, (y + 1) * width)
+  image.dict.set(PDFName.of('SMask'), source.context.register(source.context.flateStream(mask, {
+    Type: 'XObject', Subtype: 'Image', Width: width, Height: height,
+    ColorSpace: 'DeviceGray', BitsPerComponent: 8,
+  })))
+  const template = Buffer.from(await source.save())
+  for (const mode of ['cmyk', 'print']) {
+    const doc = await PDFDocument.load((await build(template, mode)).pdf)
+    const [img] = images(doc)
+    const sm = doc.context.lookup(img.dict.get(PDFName.of('SMask')))
+    const w = sm.dict.get(PDFName.of('Width')).asNumber()
+    const h = sm.dict.get(PDFName.of('Height')).asNumber()
+    const bytes = inflateSync(sm.getContents())
+    assert.equal(bytes.length, w * h, mode)
+    assert.equal(bytes[Math.floor(h / 2) * w + Math.floor(w / 4)], 0, mode)
+    assert.equal(bytes[Math.floor(h / 2) * w + Math.floor(3 * w / 4)], 255, mode)
   }
 })

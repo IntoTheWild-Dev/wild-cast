@@ -509,7 +509,8 @@ async function processTemplateImage(context, ref, { mode, lut, placement }) {
   const scale = placement
     ? Math.min(1, Math.max((placement.wPt / 72) * TARGET_PPI / w, (placement.hPt / 72) * TARGET_PPI / h))
     : 1
-  const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale))
+  // Round upward so downsampling never creates a sub-300 ppi image.
+  const nw = Math.max(1, Math.ceil(w * scale)), nh = Math.max(1, Math.ceil(h * scale))
   const resize = nw < w || nh < h
   const toCmyk = mode === 'cmyk' && n === 3
   if (!resize && !toCmyk) return false
@@ -558,7 +559,7 @@ async function resampleSoftMask(context, imgDict, w, h) {
   const filter = String(sm.dict.get(PDFName.of('Filter')) ?? '')
   const raw = Buffer.from(sm.getContents ? sm.getContents() : sm.contents)
   let gray
-  if (filter.includes('FlateDecode')) gray = await sharp(inflateSync(raw), { raw: { width: sw, height: sh, channels: 1 } }).resize(w, h).raw().toBuffer()
+  if (filter.includes('FlateDecode')) gray = await sharp(inflateSync(raw), { raw: { width: sw, height: sh, channels: 1 } }).resize(w, h).toColourspace('b-w').raw().toBuffer()
   else if (filter.includes('DCTDecode')) gray = await sharp(raw).resize(w, h).toColourspace('b-w').raw().toBuffer()
   else return
   const dict = sm.dict.clone(context)

@@ -143,3 +143,20 @@ test('tokenizer never hangs on damaged content (unterminated hex string / litera
     assert.ok(Date.now() - t0 < 200, `tokenize(${JSON.stringify(bad)}) returned`)
   }
 })
+
+test('broken vector background returns an error even when a flat preview is available', async t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response('not a PDF'))
+  const res = {
+    status(code) { this.code = code; return this },
+    json(body) { this.body = body; return this },
+    write() { assert.fail('A failed vector export must not stream a flattened PDF') },
+    end() {},
+  }
+  await handler({ method: 'POST', body: {
+    png: 'available-preview', mode: 'cmyk', profile: 'fogra39',
+    layout: { canvasW: 316, canvasH: 441, items: [] },
+    backgroundPdfUrl: 'https://test.public.blob.vercel-storage.com/templates/test-bg.pdf',
+  } }, res)
+  assert.equal(res.code, 422)
+  assert.match(res.body.error, /vector print export could not be completed/)
+})
