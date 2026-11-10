@@ -45,9 +45,9 @@ export function patchByCode(base, code) {
 }
 
 // A4 PDF. Uses the same output intent label as the InDesign reference file
-// (plain PDF, PSO Coated v3) so the printer treats every patch like the
+// (plain diagnostic PDF, with the caller's selected profile) to compare with the
 // InDesign artwork it's being compared against.
-export async function calibrationSheetPdf({ label, hex, cmyk, iccProfile }) {
+export async function calibrationSheetPdf({ label, hex, cmyk, iccProfile, profileMeta = { identifier: 'PSO Coated v3', info: 'PSO Coated v3' } }) {
   const doc = await PDFDocument.create()
   const page = doc.addPage([595.28, 841.89])
   const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -79,12 +79,12 @@ export async function calibrationSheetPdf({ label, hex, cmyk, iccProfile }) {
       text(`${p.code}  ${c}/${m}/${yy}/${k}`, x, y - 9, 6.5, p.code === CURRENT ? bold : font)
     })
   })
-  text(`WildCast · ${new Date().toISOString().slice(0, 10)} · Output intent PSO Coated v3`, 40, 22, 6.5, font, grey)
+  text(`WildCast · ${new Date().toISOString().slice(0, 10)} · Output intent ${profileMeta.info}`, 40, 22, 6.5, font, grey)
 
   const iccRef = doc.context.register(doc.context.flateStream(iccProfile, { N: 4 }))
   doc.catalog.set(PDFName.of('OutputIntents'), doc.context.obj([doc.context.obj({
     Type: 'OutputIntent', S: 'GTS_PDFX',
-    OutputConditionIdentifier: PDFString.of('PSO Coated v3'), Info: PDFString.of('PSO Coated v3'),
+    OutputConditionIdentifier: PDFString.of(profileMeta.identifier), Info: PDFString.of(profileMeta.info),
     RegistryName: PDFString.of('http://www.color.org'), DestOutputProfile: iccRef,
   })]))
   doc.setTitle(`Calibration sheet ${label}`)

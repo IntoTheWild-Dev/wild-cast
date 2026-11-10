@@ -10,7 +10,7 @@ import sys
 from PIL import Image, ImageCms
 
 N = 17
-PROFILES = ['PSOcoated_v3.icc']
+PROFILES = ['PSOcoated_v3.icc', 'ISOcoated_v2_300_eci.icc']
 
 def build(profile_file):
     src = ImageCms.getOpenProfile(f'api/icc/{profile_file}')

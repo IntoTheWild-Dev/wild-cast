@@ -49,15 +49,16 @@ const TRIM_PX_H = PX_H - BLEED_PX * 2                         // 1749
 // src/App.jsx handleExport); the PDF is streamed back (sendPdf), which has no cap.
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } }
 
-// Selectable output intents — both ICC files are the free, redistributable
-// characterisation profiles from eci.org (same source/license as the
-// original FOGRA39 file). FOGRA51 (PSO Coated v3, ISO 12647-2:2013) is now
-// the only user-choosable profile (Julia's ask, 2026-09-18); the fogra39
-// entry stays here so a project saved before this change with
-// iccProfile:'fogra39' still exports correctly, it's just not offered.
-// `lut` is the Relative Colorimetric + BPC table for the CMYK-only mode (see
-// scripts/build-cmyk-lut.py).
+// Selectable ECI output profiles (provenance for the 300% variant is in
+// api/icc/README.md). New designs explicitly select the 300% FOGRA39 variant;
+// existing designs keep their saved choice. LUTs use RelCol + BPC.
 const ICC_PROFILES = {
+  'fogra39-300': {
+    file: 'ISOcoated_v2_300_eci.icc',
+    lut: 'ISOcoated_v2_300_eci.relcol-bpc.lut',
+    identifier: 'FOGRA39',
+    info: 'ISO Coated v2 300% (ECI)',
+  },
   fogra39: {
     file: 'ISOcoated_v2_eci.icc',
     lut: 'ISOcoated_v2_eci.relcol-bpc.lut',
@@ -122,6 +123,7 @@ export default async function handler(req, res) {
     // Validate the final printer-labelled bytes. Critical CMYK failures block
     // the download; other checks remain visible as warnings.
     const warnings = exportKind === 'flat' ? ['This template has no vector background. Text and artwork are flattened to 300 ppi.'] : []
+    if (mode === 'cmyk') warnings.push('Composed-page ink coverage with overprint and transparency requires the separate print QA report before printer approval.')
     const final = await finalizePrintPdf(pdfBuffer, { printer: printSettings.printer, mode, lut: loadLut(join(__dirname, 'icc', profileMeta.lut)), iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)) })
     pdfBuffer = final.pdf
     for (const c of final.problems) if (!USER_HIDDEN_CHECKS.has(c.id)) warnings.push(`${c.label}: ${c.detail}`)

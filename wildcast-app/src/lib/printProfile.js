@@ -1,6 +1,9 @@
-export const DEFAULT_PRINT_PROFILE = 'fogra51'
+// New designs use the requested AffiliPrint conversion; historical records
+// without a profile keep their previous FOGRA51 fallback.
+export const DEFAULT_PRINT_PROFILE = 'fogra39-300'
+export const LEGACY_PRINT_PROFILE = 'fogra51'
+const PROFILES = new Set(['fogra39-300', 'fogra39', 'fogra51'])
 
-// Historical designs have no reliable profile metadata; keep today's default.
 export function printProfileFor(project) {
-  return project?.iccProfile === 'fogra39' ? 'fogra39' : DEFAULT_PRINT_PROFILE
+  return PROFILES.has(project?.iccProfile) ? project.iccProfile : LEGACY_PRINT_PROFILE
 }

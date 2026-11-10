@@ -254,8 +254,8 @@ export default function App() {
     if (!resolvingDeepLink) prevScreenRef.current = screen
   }, [screen, resolvingDeepLink])
   // Which output ICC profile export-cmyk.js should convert to - see
-  // ICC_PROFILES in api/export-cmyk.js. FOGRA51 remains the default;
-  // Managers can select FOGRA39 to match their printer's requirements.
+  // ICC_PROFILES in api/export-cmyk.js. New designs start with the requested
+  // FOGRA39 300% conversion; existing designs restore their own choice.
   const [iccProfile, setIccProfile] = useState(DEFAULT_PRINT_PROFILE)
   // Lifted out of BriefingForm so it survives a round trip to the editor and
   // back - Julia's ask (2026-08-03): saving a candidate mid-edit should

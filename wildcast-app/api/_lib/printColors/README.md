@@ -4,18 +4,18 @@ Lets the Wild Stack team (agency accounts only) get a brand's print colours righ
 
 ## The flow
 
-1. **Brand colours**: one row per brand colour, with the screen colour (HEX/RGB) and the exact CMYK the print PDF uses, like an InDesign swatch. The fields are linked through PSO Coated v3 (Relative Colorimetric + BPC, the export's press profile). A **lock** stops a conversion from overwriting official values.
+1. **Brand colours**: one row per brand colour, with the screen colour (HEX/RGB) and the exact CMYK the print PDF uses, like an InDesign swatch. The fields are linked through ISO Coated v2 300% (FOGRA39, Relative Colorimetric + BPC). A **lock** stops a conversion from overwriting official values. Saves reject brand recipes and printer overrides above 300% total ink; loaded stored values are not silently rescaled.
 2. **Calibration sheet**: an A4 page of patches around the current value. Rows A to F go from lighter to darker; columns 1 to 5 shift the hue. The designer prints it, compares it with the reference and types the matching patch code (for example C4). The current value is always D3.
 3. **Draft, then Approved**: a saved colour applies to the next export straight away as a *draft*. Once a real print confirms it, the designer approves it. Changing an approved CMYK makes it a draft again.
 4. **Approved → code**: the screen shows a snippet for `api/_lib/brandColors.js`. Pasting it in makes the value the permanent built-in default (reviewed in a PR, and kept even if this module is removed).
-5. **Printers**: *Standard* means the brand colours plus PDF/X-4. An optional named printer can carry its own colour adjustments and a file labelling: *Standard PDF/X-4* (profile named FOGRA51), *Like InDesign* (PDF/X-4 with the profile named "PSO Coated v3", checked byte for byte against the InDesign reference export) or *Plain PDF* (not marked PDF/X).
+5. **Printers**: *Standard* means the brand colours plus PDF/X-4. An optional named printer can carry its own colour adjustments and a file labelling: *Standard PDF/X-4* (selected profile), *Like InDesign* (InDesign-style metadata retaining the selected ICC), or *Plain PDF* (not marked PDF/X, and rejected by strict CMYK print validation).
 
 ## Where things live
 
 | Part | File |
 |---|---|
 | Storage, validation, history, code snippet | `api/_lib/printColors/store.js` (Blob: `settings/print-colors/<brand>.json`) |
-| HEX ↔ RGB ↔ CMYK | `api/_lib/printColors/convert.js` + `api/icc/PSOcoated_v3.cmyk-to-srgb.lut` (built by `scripts/build-cmyk-to-rgb-lut.py`) |
+| HEX ↔ RGB ↔ CMYK | `api/_lib/printColors/convert.js` + `api/icc/ISOcoated_v2_300_eci.cmyk-to-srgb.lut` (built by `scripts/build-cmyk-to-rgb-lut.py`) |
 | Calibration sheet | `api/_lib/printColors/calibration.js` |
 | File labelling (Like InDesign / Plain PDF) | `api/_lib/printColors/relabel.js` |
 | What the rest of the app imports | `api/_lib/printColors/index.js` |
@@ -39,3 +39,5 @@ Every hook outside this folder is marked `[print-colors]`:
 6. `api/_lib/auth.js`: `resolveKeyRole` can go back to not being exported.
 
 Before removing it, copy any approved colours into `brandColors.js` using the snippet, so nothing is lost.
+
+Composed-page overprint/transparency checks are a separate local/CI step; see `scripts/PRINT_QA.md`. A successful download does not certify a physical colour match.

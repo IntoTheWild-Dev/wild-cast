@@ -16,7 +16,7 @@ import { getBrandLibrary, hexToRgb } from '../brandColors.js'
 const MAX_COLORS = 24
 const MAX_PRINTERS = 12
 const MAX_HISTORY = 50
-export const STANDARD_PRINTER = { id: 'standard', name: 'Standard (PSO Coated v3, PDF/X-4)', label: 'pdfx4', overrides: {} }
+export const STANDARD_PRINTER = { id: 'standard', name: 'Standard (selected profile, PDF/X-4)', label: 'pdfx4', overrides: {} }
 
 const pathFor = brand => `settings/print-colors/${brand}.json`
 
@@ -31,6 +31,9 @@ function cleanCmyk(raw, where) {
     const v = Number(raw?.[ch])
     if (!Number.isFinite(v) || v < 0 || v > 100) throw new Error(`${where}: ${ch.toUpperCase()} must be 0-100`)
     cmyk[ch] = Math.round(v * 10) / 10
+  }
+  if (Object.values(cmyk).reduce((sum, value) => sum + Math.round(value * 10), 0) > 3000) {
+    throw new Error(`${where}: total C+M+Y+K must not exceed 300%`)
   }
   return cmyk
 }

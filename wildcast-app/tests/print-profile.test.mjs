@@ -1,6 +1,6 @@
 import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_PRINT_PROFILE, printProfileFor } from '../src/lib/printProfile.js'
+import { LEGACY_PRINT_PROFILE, printProfileFor } from '../src/lib/printProfile.js'
 
 const store = new Map()
 mock.module('@vercel/blob', {
@@ -31,7 +31,7 @@ beforeEach(() => {
 })
 
 test('profile survives save and reopening on another client without altering artwork', async () => {
-  for (const iccProfile of ['fogra39', 'fogra51']) {
+  for (const iccProfile of ['fogra39-300', 'fogra39', 'fogra51']) {
     const project = { id: 'profile-test', templateId: 't', fields: { headline: 'Same artwork' }, iccProfile }
     assert.equal((await call(save, 'POST', project)).code, 200)
     const reopened = await call(load, 'GET', null, { id: project.id })
@@ -45,12 +45,12 @@ test('saving from an older client preserves an existing FOGRA39 choice', async (
   await call(save, 'POST', { id: 'old', templateId: 't', fields: { headline: 'Edited' } })
   assert.equal(JSON.parse(store.get('projects/old.json')).iccProfile, 'fogra39')
 })
-test('explicit profile changes persist and legacy designs use the current default', async () => {
+test('explicit profile changes persist and legacy designs retain their historical fallback', async () => {
   store.set('projects/old.json', JSON.stringify({ id: 'old', iccProfile: 'fogra39' }))
   await call(save, 'POST', { id: 'old', templateId: 't', iccProfile: 'fogra51' })
   assert.equal(JSON.parse(store.get('projects/old.json')).iccProfile, 'fogra51')
   await call(save, 'POST', { id: 'legacy', templateId: 't' })
-  assert.equal(JSON.parse(store.get('projects/legacy.json')).iccProfile, DEFAULT_PRINT_PROFILE)
-  assert.equal(printProfileFor({}), DEFAULT_PRINT_PROFILE)
-  assert.equal(printProfileFor({ iccProfile: 'unknown' }), DEFAULT_PRINT_PROFILE)
+  assert.equal(JSON.parse(store.get('projects/legacy.json')).iccProfile, LEGACY_PRINT_PROFILE)
+  assert.equal(printProfileFor({}), LEGACY_PRINT_PROFILE)
+  assert.equal(printProfileFor({ iccProfile: 'unknown' }), LEGACY_PRINT_PROFILE)
 })

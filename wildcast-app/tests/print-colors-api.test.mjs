@@ -189,3 +189,37 @@ test('missing production storage configuration does not substitute default print
     else process.env.VERCEL = vercel
   }
 })
+
+test('brand colours and printer overrides over 300% are rejected without changing saved settings', async () => {
+  assert.equal((await save({ colors: [WOLT] })).code, 200)
+  const before = store.get('settings/print-colors/wolt.json')
+  const tooMuch = { c: 90, m: 80, y: 80, k: 80 }
+  const colour = await save({ colors: [{ ...WOLT, cmyk: tooMuch }] })
+  assert.equal(colour.code, 400)
+  assert.match(colour.data.error, /must not exceed 300/)
+  const override = await save({ colors: [WOLT], printers: [{ name: 'Printer', overrides: { '#00C2E8': tooMuch } }] })
+  assert.equal(override.code, 400)
+  assert.equal(store.get('settings/print-colors/wolt.json'), before)
+})
+
+test('a decimal brand recipe totalling exactly 300% remains valid', async () => {
+  const result = await save({ colors: [{ ...WOLT, cmyk: { c: 80.1, m: 80.2, y: 80.3, k: 59.4 } }] })
+  assert.equal(result.code, 200)
+})
+
+test('admin conversions and calibration sheets use the requested 300% profile', async () => {
+  const { loadLut, applyLut } = await import('../api/_lib/cmykLut.js')
+  const { readFileSync } = await import('node:fs')
+  const { PDFDocument, PDFName } = await import('pdf-lib')
+  const profile = new URL('../api/icc/ISOcoated_v2_300_eci.icc', import.meta.url)
+  const lut = loadLut(new URL('../api/icc/ISOcoated_v2_300_eci.relcol-bpc.lut', import.meta.url))
+  const converted = await call({ body: { action: 'convert', rgb: { r: 12, g: 120, b: 200 } } })
+  assert.equal(converted.code, 200)
+  const expected = [...applyLut(Buffer.from([12, 120, 200]), lut)].map(v => Math.round(v / 255 * 100))
+  assert.deepEqual(Object.values(converted.data.cmyk), expected)
+  const sheet = await call({ body: { action: 'sheet', ...WOLT } })
+  const doc = await PDFDocument.load(sheet.data)
+  const intent = doc.catalog.lookup(PDFName.of('OutputIntents')).lookup(0)
+  assert.equal(intent.get(PDFName.of('OutputConditionIdentifier')).decodeText(), 'FOGRA39')
+  assert.deepEqual(inflateSync(intent.lookup(PDFName.of('DestOutputProfile')).getContents()), readFileSync(profile))
+})

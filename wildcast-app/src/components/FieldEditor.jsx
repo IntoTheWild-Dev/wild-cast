@@ -1,3 +1,4 @@
+import { DEFAULT_PRINT_PROFILE } from '../lib/printProfile'
 import { useState, useEffect, useRef } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
@@ -762,7 +763,7 @@ function ApprovedEditBlock({ onEdit, reopening }) {
   )
 }
 
-export default function FieldEditor({ iccProfile = 'fogra51', onIccProfileChange, fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
+export default function FieldEditor({ iccProfile = DEFAULT_PRINT_PROFILE, onIccProfileChange, fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
   const canExport = workflowRole === 'Manager'
   const isMobile = useIsMobile()
   const [expanded, setExpanded] = useState(false)
@@ -1221,7 +1222,8 @@ export default function FieldEditor({ iccProfile = 'fogra51', onIccProfileChange
           </div>
           <select id="export-icc-profile" value={iccProfile} onChange={e => onIccProfileChange?.(e.target.value)} disabled={workflowRole !== 'Manager' || Boolean(exporting)} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
             <option value="fogra51">FOGRA51 — PSO Coated v3</option>
-            <option value="fogra39">FOGRA39 — ISO Coated v2</option>
+            <option value="fogra39-300">FOGRA39 — ISO Coated v2 300% (AffiliPrint)</option>
+            <option value="fogra39">FOGRA39 — ISO Coated v2 (legacy, higher ink limit)</option>
           </select>
           <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 4 }}>Use the profile requested by your printer.</div>
         </div>

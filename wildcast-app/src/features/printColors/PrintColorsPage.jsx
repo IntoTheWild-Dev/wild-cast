@@ -12,7 +12,7 @@ import { setPrintColorsDirty } from './leaveGuard'
 // Print colours module (agency only, removable - see
 // api/_lib/printColors/README.md). Three tabs:
 //   Colours  - the brand's swatches (screen HEX/RGB <-> print CMYK, linked
-//              through PSO Coated v3, with locks) and a guided Calibrate
+//              through ISO Coated v2 300%, with locks) and a guided Calibrate
 //              panel per colour: sheet -> patch -> approve.
 //   Printers - which printer every export is made for; optional per-printer
 //              colour adjustments and file labelling.
@@ -26,8 +26,8 @@ const adjustments = p => { const n = Object.keys(p.overrides || {}).length; retu
 // File labelling per printer (api/_lib/printColors/relabel.js). Same ink
 // values in every case; only how the file names itself to the printer.
 const LABEL_OPTIONS = [
-  ['pdfx4', 'Standard PDF/X-4', 'The usual print standard. The colour profile is named by its registered condition, FOGRA51.'],
-  ['indesign', 'Like InDesign', 'PDF/X-4 labelled exactly like an InDesign export (profile named "PSO Coated v3"). Same colours.'],
+  ['pdfx4', 'Standard PDF/X-4', 'Uses the selected output profile and its registered printing condition.'],
+  ['indesign', 'Like InDesign', 'Uses InDesign-style PDF/X-4 metadata while retaining the selected ICC profile. Same colour values.'],
   ['plain', 'Plain PDF', "Not marked PDF/X. Only for a printer that converts PDF/X files when it shouldn't."],
 ]
 const LABEL_SHORT = { pdfx4: 'standard PDF/X-4', indesign: 'PDF/X-4 labelled like InDesign', plain: 'plain PDF, not PDF/X' }
@@ -395,7 +395,7 @@ export default function PrintColorsPage({ onBack, onHome }) {
 
   const openId = calibrating?.startsWith('hex:') ? rows.find(r => `hex:${r.hex}` === calibrating)?.id : calibrating
   const approvedCount = rows.filter(r => r.status === 'approved').length
-  const printerOptions = [{ ...(server?.standardPrinter ?? { id: 'standard' }), id: 'standard', name: 'Standard', desc: 'Brand colours, standard PDF/X-4 file. Right for any properly calibrated printer.' },
+  const printerOptions = [{ ...(server?.standardPrinter ?? { id: 'standard' }), id: 'standard', name: 'Standard', desc: 'Brand colours and PDF/X-4 with the selected profile. Use the profile agreed with your printer.' },
     ...printers.map(p => ({ ...p, desc: `${adjustments(p)} · ${LABEL_SHORT[p.label] ?? LABEL_SHORT.pdfx4}` }))]
   const activePrinterName = defaultPrinter !== 'standard' ? printers.find(p => p.id === defaultPrinter)?.name : null
   const tabs = [['colours', 'Colours'], ['printers', 'Printers'], ['history', 'History']]
@@ -407,7 +407,7 @@ export default function PrintColorsPage({ onBack, onHome }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ minWidth: 0, flex: '1 1 320px' }}>
             <h1 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, color: 'var(--dark)' }}>Print colours</h1>
-            <p style={S.hint}>The exact CMYK each brand colour prints with, for every Wolt template.{activePrinterName ? <> Exports are made for <b>{activePrinterName}</b>.</> : null}</p>
+            <p style={S.hint}>The exact CMYK each brand colour prints with, for every Wolt template. Conversion previews use ISO Coated v2 300% (FOGRA39).{activePrinterName ? <> Exports are made for <b>{activePrinterName}</b>.</> : null}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 12, color: dirty ? '#B45309' : 'var(--mid)' }}>

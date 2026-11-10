@@ -12,7 +12,7 @@ import sys
 from PIL import Image, ImageCms
 
 N = 33
-PROFILES = ['PSOcoated_v3.icc', 'ISOcoated_v2_eci.icc']
+PROFILES = ['PSOcoated_v3.icc', 'ISOcoated_v2_eci.icc', 'ISOcoated_v2_300_eci.icc']
 
 def build(profile_file):
     src = ImageCms.createProfile('sRGB')

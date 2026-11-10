@@ -15,8 +15,8 @@ import { calibrationGrid, calibrationSheetPdf } from './_lib/printColors/calibra
 
 const ICC = join(dirname(fileURLToPath(import.meta.url)), 'icc')
 const luts = () => ({
-  lut: loadLut(join(ICC, 'PSOcoated_v3.relcol-bpc.lut')),
-  reverseLut: loadReverseLut(join(ICC, 'PSOcoated_v3.cmyk-to-srgb.lut')),
+  lut: loadLut(join(ICC, 'ISOcoated_v2_300_eci.relcol-bpc.lut')),
+  reverseLut: loadReverseLut(join(ICC, 'ISOcoated_v2_300_eci.cmyk-to-srgb.lut')),
 })
 const cleanCmyk = raw => convertColor({ cmyk: raw }, luts()).cmyk
 const withExtras = s => ({ ...s, standardPrinter: STANDARD_PRINTER, snippet: codeSnippet(s.brand, s.colors) })
@@ -45,7 +45,8 @@ export default async function handler(req, res) {
       case 'sheet': {
         const pdf = await calibrationSheetPdf({
           label: String(body.label || 'Colour').slice(0, 40), hex: String(body.hex || ''), cmyk: cleanCmyk(body.cmyk),
-          iccProfile: readFileSync(join(ICC, 'PSOcoated_v3.icc')),
+          iccProfile: readFileSync(join(ICC, 'ISOcoated_v2_300_eci.icc')),
+          profileMeta: { identifier: 'FOGRA39', info: 'ISO Coated v2 300% (ECI)' },
         })
         res.setHeader('Content-Type', 'application/pdf')
         res.setHeader('Content-Disposition', 'attachment; filename="calibration-sheet.pdf"')

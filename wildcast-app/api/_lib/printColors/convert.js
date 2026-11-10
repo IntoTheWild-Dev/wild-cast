@@ -1,8 +1,7 @@
 // HEX <-> RGB <-> CMYK for the Print colours setting (api/print-colors.js).
-// Both directions go through the same press profile the export uses
-// (PSO Coated v3, Relative Colorimetric + BPC, precomputed with LittleCMS):
-//   sRGB -> CMYK: api/icc/PSOcoated_v3.relcol-bpc.lut   (scripts/build-cmyk-lut.py)
-//   CMYK -> sRGB: api/icc/PSOcoated_v3.cmyk-to-srgb.lut (scripts/build-cmyk-to-rgb-lut.py)
+// Both directions use the supplied press-profile LUTs, generated with
+// LittleCMS Relative Colorimetric + BPC. The admin API supplies ISO Coated
+// v2 300%; legacy callers can explicitly supply their earlier profile.
 // These are suggestions for the linked fields only. A locked value an admin
 // typed (e.g. the brand book's 75/0/10/0) is never replaced by a conversion.
 import { Buffer } from 'node:buffer'
