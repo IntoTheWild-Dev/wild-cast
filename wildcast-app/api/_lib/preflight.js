@@ -5,12 +5,11 @@
 // Used by api/export-cmyk.js on every export (result in X-Preflight) and by
 // scripts/preflight-report.mjs on any PDF (WildCast, InDesign, a proof file).
 //
-// Ink is measured on what will print: vector CMYK operators directly; CMYK
-// images from their samples; sRGB-tagged images through the same Relative
-// Colorimetric + BPC table a RIP uses for PSO Coated v3. Transparent pixels
-// (soft mask 0) are ignored in strict mode; partial transparency is checked
-// conservatively at full component ink. Preview estimates ignore alpha <50%. Image resolution comes from the image's
-// size on the page (the CTM where it is drawn), not from its pixel count.
+// Component-ink check, not a full RIP/compositing simulation: vector CMYK
+// values directly; CMYK images from their samples; RGB preview estimates
+// through the selected profile's Relative Colorimetric + BPC table. Strict
+// checks inspect every pixel, ignoring only fully transparent ones; preview
+// estimates ignore alpha <50%. Image ppi comes from drawn size, not metadata.
 import { Buffer } from 'node:buffer'
 import { inflateSync } from 'zlib'
 import sharp from 'sharp'

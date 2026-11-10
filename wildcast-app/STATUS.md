@@ -1069,3 +1069,12 @@ Branch `fix/print-workflow-validation` builds on the existing print branch. Poin
 7: added .github/workflows/validate.yml for clean install, the complete test suite and build on main pushes, PR events and manual dispatch, with read-only repository permissions. It does not create PRs. This workflow is local and not yet enforced on GitHub.
 
 Validation: npm ci --ignore-scripts --no-audit --no-fund passes (296 packages); 186 tests pass; build passes with the pre-existing bundle-size warning; changed server JS lint passes; App.jsx retains the same pre-existing 3 lint errors and 2 warnings. Workflow YAML syntax/job/permissions were checked. Handler-level editor tests avoid native canvas and do not claim a full browser/canvas test. Actual supplied artwork through the local handler: FOGRA39 returns 422 for ~323% ink and streams no PDF; FOGRA51 returns a layered CMYK PDF with no reported preflight problems. This does not approve FOGRA51 for AffiliPrint. Exact printer-approved ICC/RIP settings, same-artwork InDesign comparison, provider staging concurrency checks and physical print approval remain outstanding.
+
+
+### 2026-11-10 — Focused final review of points 2–4, local only
+
+Reproduced and fixed a false pass in strict ink checks: downsampling a 1200-pixel image missed one 400% ink pixel and reported 100%. CMYK print validation now inspects every decoded pixel, conservatively includes partially transparent pixels, and treats unsupported sample/decode layouts as unmeasured rather than safe. Reused forms inherit parent resources, unresolved XObjects cannot silently pass, and image masks are checked against their active fill colour. These remain component/structure checks, not a full RIP/overprint/compositing simulation.
+
+Saved settings with a missing configured printer now fail instead of selecting Standard. Missing storage credentials in production also fail explicitly; unconfigured local development and explicit PRINT_COLORS=off retain their intentional defaults. No colour values or conversion LUTs changed.
+
+Validation: 190 tests pass; build passes with existing bundle-size warning; focused server lint passes; whitespace check passes. Added reproductions for the isolated ink pixel, inherited-resource RGB image/unresolved object, missing default printer, and missing production storage. Reprocessed sample FOGRA39 remains blocked above 300%; the FOGRA51 control still passes. Exact approved ICC/RIP and physical colour approval remain pending. No push, PR, merge or deployment performed.
