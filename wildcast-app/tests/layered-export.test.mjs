@@ -102,6 +102,14 @@ for (const mode of ['print', 'cmyk']) {
     }
     assert.ok(fonts.length >= 2)
     for (const fd of fonts) assert.ok(fd.has(PDFName.of('FontFile3')) || fd.has(PDFName.of('FontFile2')), 'font program embedded')
+    for (const fd of fonts) {
+      assert.ok(!fd.has(PDFName.of('FontFile2')), 'bundled OpenType-CFF is not labelled TrueType')
+      const program = doc.context.lookup(fd.get(PDFName.of('FontFile3')))
+      assert.equal(String(program.dict.get(PDFName.of('Subtype'))), '/OpenType')
+      const raw = inflateSync(program.getContents())
+      assert.equal(raw.toString('ascii', 0, 4), 'OTTO')
+    }
+
     // Image with soft mask; colour space per mode.
     const images = []
     for (const [, obj] of doc.context.enumerateIndirectObjects()) {

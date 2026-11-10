@@ -21,6 +21,7 @@ import { join } from 'path'
 import { inflateSync, deflateSync } from 'zlib'
 import sharp from 'sharp'
 import fontkit from '@pdf-lib/fontkit'
+import { normalizeOpenTypeFonts } from './pdfFonts.js'
 import {
   PDFDocument, PDFName, PDFArray, PDFDict, PDFRawStream, PDFRef, PDFNumber,
   PDFHexString, PDFString,
@@ -808,6 +809,8 @@ export async function buildLayeredPdf({
   const fileId = PDFHexString.of(documentId.slice(5).replace(/-/g, ''))
   ctx.trailerInfo.ID = ctx.obj([fileId, fileId])
 
+  await doc.flush()
+  normalizeOpenTypeFonts(ctx)
   const bytes = Buffer.from(await doc.save({ useObjectStreams: false, updateFieldAppearances: false }))
   // pdf-lib always writes "%PDF-1.7"; PDF/X-4 is defined on PDF 1.6. Same
   // length, so no offset in the xref table moves.
