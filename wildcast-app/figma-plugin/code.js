@@ -306,10 +306,10 @@ async function exportEvenIfHidden(node) {
     copy = node.clone()
     copy.visible = true
     return await copy.exportAsync(settings)
-  } catch (err) {
+  } catch {
     return await node.exportAsync(settings)
   } finally {
-    if (copy) { try { copy.remove() } catch (e) { /* already gone */ } }
+    if (copy) { try { copy.remove() } catch { /* already gone */ } }
   }
 }
 
@@ -350,7 +350,7 @@ async function exportTile(frame) {
     applyTileVisibility(copy)
     return await copy.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: TILE_SCALE } })
   } finally {
-    if (copy) { try { copy.remove() } catch (e) { /* already gone */ } }
+    if (copy) { try { copy.remove() } catch { /* already gone */ } }
   }
 }
 

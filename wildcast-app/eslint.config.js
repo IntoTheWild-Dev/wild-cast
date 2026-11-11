@@ -18,4 +18,12 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    files: ['api/**/*.js', 'scripts/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['figma-plugin/**/*.js'],
+    languageOptions: { globals: { figma: 'readonly', __html__: 'readonly' } },
+  },
 ])

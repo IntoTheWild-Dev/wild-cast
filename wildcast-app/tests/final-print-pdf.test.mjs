@@ -27,6 +27,23 @@ test('valid CMYK PDF remains downloadable without changing its bytes', async () 
   const bytes = await fixture()
   assert.deepEqual((await finalizePrintPdf(bytes, options)).pdf, bytes)
 })
+
+test('outlined reference text remains vector and needs no font program', async () => {
+  const doc = await PDFDocument.load(await fixture())
+  const ctx = doc.context, page = doc.getPage(0)
+  // An outlined glyph is a path inside a form, not a text object.
+  const outline = ctx.register(ctx.flateStream(Buffer.from('0 0 0 1 k 0 0 m 5 12 l 10 0 l h f'), {
+    Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 10, 12], Resources: {},
+  }))
+  page.node.Resources().set(PDFName.of('XObject'), ctx.obj({ Outline: outline }))
+  page.node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(Buffer.from('0.75 0 0.1 0 k 0 0 314 436 re f q 1 0 0 1 30 30 cm /Outline Do Q'))))
+  const bytes = await doc.save()
+  const result = await finalizePrintPdf(bytes, options)
+  assert.deepEqual(result.pdf, bytes, 'finalization must not rasterize or rewrite outlines')
+  const report = await preflightPdf(result.pdf, { lut, requireCmyk: true })
+  assert.equal(report.checks.find(c => c.id === 'fonts').status, 'pass')
+  assert.equal(report.checks.find(c => c.id === 'cmyk').status, 'pass')
+})
 test('preflight examines the final printer-labelled PDF, not the earlier PDF/X file', async () => {
   const bytes = await fixture()
   await assert.rejects(finalizePrintPdf(bytes, { ...options, printer: { label: 'plain' } }), e => e.status === 422 && /PDF\/X-4/.test(e.message))

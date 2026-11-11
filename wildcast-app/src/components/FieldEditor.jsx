@@ -4,12 +4,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
 import Select from './Select'
 
-function formatDateTime(ts) {
-  return new Date(ts).toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
 import AISuggest, { AISuggestOutOfCreditsModal } from './AISuggest'
 import PresetPicker from './PresetPicker'
 import useIsMobile from '../lib/useIsMobile'

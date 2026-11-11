@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import WordCarousel from './WordCarousel'
 import ChoiceButton from './ChoiceButton'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
 import { liveFormatsFor, entryForGuidedId } from './TemplatePicker'

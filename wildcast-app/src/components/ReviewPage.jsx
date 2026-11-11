@@ -17,7 +17,6 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
-  const [copied, setCopied]         = useState(false)
   const [approving, setApproving]   = useState(false)
   const [requestingChanges, setRequestingChanges] = useState(false)
   // Only a Manager approves / requests changes (Anang's ask, 2026-09-25).
@@ -46,17 +45,20 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   }, [reviewerName])
 
   useEffect(() => {
+    let active = true
     Promise.all([
       fetch(`/api/get-review?id=${projectId}`).then(r => r.json()),
       fetch(`/api/comments?id=${projectId}`).then(r => r.json()),
     ])
       .then(([proj, comm]) => {
+        if (!active) return
         if (proj.error) throw new Error(proj.error)
         setProject(proj)
         setComments(comm.comments || [])
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+      .catch(e => { if (active) setError(e.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [projectId])
 
   async function loadComments() {

@@ -681,25 +681,6 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
         const locked = mode === 'non-designer'
         zoneCfgRef.current = {}
 
-        // Shrink a textbox's fontSize until its rendered height fits within the zone.
-        // Resets to the base size first so it can grow back if text is deleted.
-        // A rotated zone's pre-rotation `height` becomes the visual THICKNESS once
-        // drawn at -90°, so it must fit within zone.width, not zone.height - the
-        // axes are swapped by the rotation.
-        function shrinkToFit(tb, zone) {
-          if (!zone.autoShrink) return
-          const fitLimit = zone.rotate ? zone.width : zone.height
-          const base = fontSizes?.[zone.id] ?? zone.fontSize ?? 24
-          let size = base
-          tb.set('fontSize', size)
-          tb.initDimensions()
-          while (tb.height > fitLimit + 2 && size > 6) {
-            size -= 0.5
-            tb.set('fontSize', size)
-            tb.initDimensions()
-          }
-        }
-
         // Step number shown on each zone's guide chip, matching FieldEditor's
         // "Edit content" panel step numbers exactly - same shared order (see
         // lib/fieldOrder.js) - Julia's ask, 2026-09-18: a plain "1", "2",

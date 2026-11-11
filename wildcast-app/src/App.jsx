@@ -822,13 +822,18 @@ const SHOW_MODE_CHOOSER = false
   // in the thread") - same fix as ReviewPage.jsx's own polling effect.
   useEffect(() => {
     if (!currentProjectId) { setComments([]); return }
-    const load = () => fetch(`/api/comments?id=${currentProjectId}`)
+    let active = true
+    let request = 0
+    const load = () => {
+      const currentRequest = ++request
+      return fetch(`/api/comments?id=${currentProjectId}`)
       .then(r => r.json())
-      .then(d => setComments(d.comments || []))
+      .then(d => { if (active && currentRequest === request) setComments(d.comments || []) })
       .catch(() => {})
+    }
     load()
     const interval = setInterval(load, 5000)
-    return () => clearInterval(interval)
+    return () => { active = false; clearInterval(interval) }
   }, [currentProjectId])
 
   // Canvas pins follow the same rule as the Review panel itself (only once
@@ -2018,7 +2023,7 @@ const SHOW_MODE_CHOOSER = false
       const commRes = await fetch(`/api/comments?id=${project.id}`)
       const commData = await commRes.json()
       freshComments = commData.comments || []
-    } catch {}
+    } catch { /* Keep the empty comment list when comments cannot be fetched. */ }
 
     historyRef.current = []; setCanUndo(false)
     setRestrictedReview(restricted)
