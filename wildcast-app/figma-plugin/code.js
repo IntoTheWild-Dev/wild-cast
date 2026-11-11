@@ -7,12 +7,9 @@
 
 const API_BASE = 'https://cast.wildstack.studio'
 
-// FIGMA_PLUGIN_KEY in Vercel — this plugin is private/internal-only
-// (imported locally via manifest, never published to Community), so baking
-// the shared secret directly into the plugin file is acceptable here the
-// same way the existing Wild CMYK plugin does it. If the Vercel value is
-// ever rotated, update this line to match.
-const PLUGIN_KEY = 'VAyh3H5p-aYlTRNHNT3qfw1sopkq1AFc'
+// Credentials are entered by the user and kept only for this plugin run.
+let pluginSession = null
+const pluginHeaders = () => pluginSession ? { 'x-account-email': pluginSession.email, 'x-account-token': pluginSession.token } : {}
 
 // Mirrors src/components/TemplatePicker.jsx's BASE_TEMPLATES — this plugin
 // runs in a completely separate JS bundle/runtime from the React app and
@@ -58,7 +55,7 @@ function slugify(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
-figma.showUI(__html__, { width: 360, height: 480 })
+figma.showUI(__html__, { width: 360, height: 640 })
 
 async function loadEmptySlots() {
   try {
@@ -84,6 +81,17 @@ async function loadEmptySlots() {
 loadEmptySlots()
 
 figma.ui.onmessage = async msg => {
+  if (msg.type === 'sign-in') {
+    pluginSession = null
+    try {
+      const response = await fetch(`${API_BASE}/api/account-auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: msg.email, password: msg.password }) })
+      const account = await response.json()
+      if (!response.ok || !['agency', 'designer'].includes(account.role) || !account.sessionToken) throw new Error(account.error || 'A designer or agency account is required.')
+      pluginSession = { email: account.email, token: account.sessionToken }
+      figma.ui.postMessage({ type: 'signed-in' })
+    } catch (error) { figma.ui.postMessage({ type: 'error', message: String(error.message || error) }) }
+    return
+  }
   if (msg.type === 'import') {
     await handleImport(msg.slotKey, msg.label, msg.cat, msg.format)
   }
@@ -93,6 +101,7 @@ figma.ui.onmessage = async msg => {
 }
 
 async function handleImport(slotKey, label, cat, format) {
+  if (!pluginSession) { figma.ui.postMessage({ type: 'error', message: 'Sign in with your WildCast designer account first.' }); return }
   try {
     const selection = figma.currentPage.selection
     if (selection.length !== 1) {
@@ -138,7 +147,7 @@ async function handleImport(slotKey, label, cat, format) {
     figma.ui.postMessage({ type: 'status', message: 'Uploading to WildCast…' })
     const res = await fetch(`${API_BASE}/api/import-figma-plugin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
+      headers: { 'Content-Type': 'application/json', ...pluginHeaders() },
       body: JSON.stringify({
         frameBox: frame.absoluteBoundingBox,
         zoneNodes,
@@ -180,6 +189,7 @@ async function handleImport(slotKey, label, cat, format) {
 // artwork was wrong (e.g. a layer that should be hidden was left visible and got
 // baked in) but the zones were fine. Use the same frame as the original import.
 async function handleBackgroundUpdate(slotKey, label) {
+  if (!pluginSession) { figma.ui.postMessage({ type: 'error', message: 'Sign in with your WildCast designer account first.' }); return }
   try {
     const selection = figma.currentPage.selection
     if (selection.length !== 1) {
@@ -220,7 +230,7 @@ const MAX_PDF_BASE64_CHARS = 4.2 * 1024 * 1024
 async function postJson(path, payload) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-plugin-key': PLUGIN_KEY },
+    headers: { 'Content-Type': 'application/json', ...pluginHeaders() },
     body: JSON.stringify(payload),
   })
   const body = await res.json().catch(() => ({}))

@@ -1,3 +1,6 @@
+import './_securityEnv.mjs'
+process.env.WILDCAST_KEYS = 'PRINT-TEST|Print QA|100|agency'
+delete process.env.ACTIVATION_KEYS_END
 import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { conditionalBlob } from './_conditionalBlob.mjs'
@@ -9,7 +12,7 @@ const { recordFailure, checkLock, clearFailures } = await import('../api/_lib/lo
 const { updateJson } = await import('../api/_lib/atomicJson.js')
 async function call(handler, method, body) {
   const result = {}
-  await handler({ method, body, query: {}, headers: {} }, {
+  await handler({ method, body, query: {}, headers: { 'x-activation-key': 'PRINT-TEST' } }, {
     status(code) { result.code = code; return this },
     json(body) { result.body = body; return this }, setHeader() {},
   })

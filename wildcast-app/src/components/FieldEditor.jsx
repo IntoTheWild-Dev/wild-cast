@@ -440,7 +440,13 @@ function ImageUpload({ step, label, required, optional, value, onChange, square,
     setLibraryAssets(assets.filter(a => a.folder === libraryFolder))
   }
 
-  useEffect(() => { refreshLibrary() }, [libraryFolder]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let active = true
+    getLibraryAssets().then(assets => {
+      if (active) setLibraryAssets(assets.filter(a => a.folder === libraryFolder))
+    })
+    return () => { active = false }
+  }, [libraryFolder])
 
   const libraryMerchants = uniqueMerchants(libraryAssets)
 

@@ -9,7 +9,7 @@ import { scryptSync } from 'node:crypto'
 const store = new Map()
 mock.module('@vercel/blob', {
   namedExports: {
-    get: async path => store.has(path) ? { stream: new Response(store.get(path)).body, blob: { etag: store.get(path) } } : null,
+    get: async () => null,
     list: async ({ prefix }) => ({
       blobs: [...store.keys()].filter(k => k.startsWith(prefix)).map(k => ({ pathname: k, url: `mem://${k}` })),
     }),
@@ -79,12 +79,12 @@ test('right invite code makes a team member agency, on both domains', async () =
   }
 })
 
-test('pre-approved email needs no code', async () => {
+test('pre-approved addresses still need the invite; typing a team email cannot grant agency', async () => {
   const first = await call({ email: 'Julia@WildStack.studio', password: PW })
-  assert.equal(first.data.needsInviteCode, false)
-  const r = await call({ email: 'julia@wildstack.studio', password: PW, displayName: 'Julia' })
-  assert.equal(r.code, 200)
-  assert.equal(r.data.role, 'agency')
+  assert.equal(first.data.needsInviteCode, true)
+  assert.equal((await call({ email: 'julia@wildstack.studio', password: PW, displayName: 'Julia' })).code, 403)
+  const r = await call({ email: 'julia@wildstack.studio', password: PW, displayName: 'Julia', inviteCode: 'letmein-2026' })
+  assert.equal(r.code, 200); assert.equal(r.data.role, 'agency')
 })
 
 test('fails closed: with nothing configured, no team address can sign up', async () => {
@@ -110,7 +110,7 @@ test('existing agency logs back in without a code; wrong password still refused'
   assert.equal(bad.code, 401)
 })
 
-test('earlier partner on a team domain is promoted at login only if on the approved list', async () => {
+test('legacy team promotion needs both approval and invitation', async () => {
   // Signed up while @intothewild.hamburg was not yet recognised.
   for (const email of ['anang@intothewild.hamburg', 'stranger@intothewild.hamburg']) {
     const path = `accounts/${email.replace(/[^a-z0-9]/g, '-')}.json`
@@ -120,7 +120,9 @@ test('earlier partner on a team domain is promoted at login only if on the appro
       passwordHash: scryptSync(PW, salt, 64).toString('hex'), role: 'partner', sessionToken: 't',
     }))
   }
-  const approved = await call({ email: 'anang@intothewild.hamburg', password: PW })
+  const noInvite = await call({ email: 'anang@intothewild.hamburg', password: PW })
+  assert.equal(noInvite.code, 403); assert.equal(noInvite.data.needsInviteCode, true)
+  const approved = await call({ email: 'anang@intothewild.hamburg', password: PW, inviteCode: 'letmein-2026' })
   assert.equal(approved.data.role, 'agency')
   const notApproved = await call({ email: 'stranger@intothewild.hamburg', password: PW })
   assert.equal(notApproved.data.role, 'partner')

@@ -6,12 +6,12 @@ import vm from 'node:vm'
 const source = readFileSync(new URL('../src/components/ReviewPage.jsx', import.meta.url), 'utf8')
 const commentLoader = source.match(/  async function loadComments\([\s\S]*?\n  \}/)[0]
 const status = source.match(/  async function refreshReviewStatus\([\s\S]*?\n  \}/)[0]
-const effect = source.match(/useEffect\(\(\) => \{\n    if \(loading \|\| error\)[\s\S]*?\}, \[projectId, loading, error\]\)/)[0]
+const effect = source.match(/useEffect\(\(\) => \{\n    if \(loading \|\| error\)[\s\S]*?\}, \[projectId, reviewToken, loading, error\]\)/)[0]
 function start() {
   const pending = []
   let poll, cleanup, comments = ['saved'], project = { reviewStatus: 'review' }
   vm.runInNewContext(`${commentLoader}\n${status}\n${effect}`, {
-    projectId: 'qa', loading: false, error: null,
+    reviewToken: null, reviewHeaders: () => ({}), projectId: 'qa', loading: false, error: null,
     fetch: url => new Promise((resolve, reject) => pending.push({ url, resolve, reject })),
     setComments: value => { comments = value },
     setProject: fn => { project = fn(project) },

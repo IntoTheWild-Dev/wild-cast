@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 
 mock.module('@vercel/blob', {
   namedExports: {
+    get: async () => null,
     list: async () => ({ blobs: [] }),
     put: async path => ({ pathname: path }),
   },

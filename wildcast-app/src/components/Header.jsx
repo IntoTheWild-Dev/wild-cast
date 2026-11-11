@@ -1,3 +1,4 @@
+import { activationHeaders } from '../lib/activationKey'
 import { useState, useRef, useEffect } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
@@ -104,7 +105,12 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [menuOpen])
   const showNav = !isMobile || menuOpen
-  function handleSignOut() {
+  async function handleSignOut() {
+    if (localStorage.getItem('wildcast_auth_type') === 'account') {
+      try {
+        await fetch('/api/account-session', { method: 'DELETE', headers: activationHeaders(), signal: AbortSignal.timeout(5000) })
+      } catch { /* Local credentials are still cleared if offline. */ }
+    }
     // Clears both possible sign-in paths unconditionally rather than
     // checking wildcast_auth_type first - removing a key that was never set
     // is a no-op, so this is simpler and can't drift out of sync with
@@ -116,6 +122,7 @@ export default function Header({ onLogoClick, screen, onNavigate, activation, on
     localStorage.removeItem('wildcast_account_token')
     localStorage.removeItem('wildcast_credits')
     localStorage.removeItem('wildcast_role')
+    sessionStorage.clear()
     window.location.reload()
   }
 

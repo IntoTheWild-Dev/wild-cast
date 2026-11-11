@@ -1,3 +1,4 @@
+process.env.ALLOW_LEGACY_PLUGIN_KEY = '1' // Explicit legacy-mode regression only.
 // Run with: npm test
 // api/import-figma-plugin-pdf.js with Vercel Blob swapped for an in-memory
 // store: the PDF is saved with its TrimBox on the finished A6 inside the 3mm

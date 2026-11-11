@@ -1,3 +1,6 @@
+import './_securityEnv.mjs'
+process.env.WILDCAST_KEYS = 'PRINT-TEST|Print QA|100|agency'
+delete process.env.ACTIVATION_KEYS_END
 import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { LEGACY_PRINT_PROFILE, printProfileFor } from '../src/lib/printProfile.js'
@@ -19,7 +22,7 @@ async function call(handler, method, body, query = {}) {
     json(body) { result.body = body; return this },
     setHeader() {},
   }
-  await handler({ method, body, query, headers: {} }, res)
+  await handler({ method, body, query, headers: { 'x-activation-key': 'PRINT-TEST' } }, res)
   return result
 }
 beforeEach(() => {

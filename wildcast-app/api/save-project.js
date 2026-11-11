@@ -6,6 +6,7 @@ import { printProfileFor } from '../src/lib/printProfile.js'
 import { ownerId, ownerRecord } from './_lib/ownerIdentity.js'
 import { requireCaller, callerOwnerId } from './_lib/auth.js'
 import { notifyOwner } from './_lib/notifications.js'
+import { issueReviewToken, requireReviewAccess } from './_lib/reviewAccess.js'
 
 // Designs used to only be discoverable via a per-browser localStorage
 // registry — nobody but the person who saved a design could ever see it
@@ -43,6 +44,7 @@ async function handleList(req, res) {
             merchant: (project.fields?.restaurant_name || '').trim() || project.projectName || project.templateName,
             savedAt: project.savedAt,
             thumbnail: project.thumbnail,
+            previewUrl: `/api/save-project?thumb=${encodeURIComponent(project.id)}&access=${encodeURIComponent(issueReviewToken(project.id))}`,
             // Personal-folders feature (Julia's ask, 2026-09-15) - who saved
             // this and which of their subfolders it's filed under. Absent
             // on any design saved before this shipped, hence the ?? null
@@ -90,6 +92,7 @@ const PROJECT_ID_PATTERN = /^[A-Za-z0-9_-]+$/
 async function handleThumb(req, res) {
   const id = String(req.query.thumb)
   if (!PROJECT_ID_PATTERN.test(id)) return res.status(400).end()
+  if (!(await requireReviewAccess(req, res, id))) return
   try {
     const result = await get(`projects/${id}.json`, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN })
     if (!result) return res.status(404).end()
@@ -100,9 +103,7 @@ async function handleThumb(req, res) {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'")
     res.setHeader('Content-Type', match[1])
-    res.setHeader('Cache-Control', req.query.v
-      ? 'public, max-age=31536000, immutable'
-      : 'public, max-age=60')
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return res.status(200).send(Buffer.from(match[2], 'base64'))
   } catch (err) {
     console.error('save-project thumb error:', err)
@@ -127,6 +128,7 @@ async function handlePatch(req, res) {
   if (typeof projectId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(projectId) || !VALID_REVIEW_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Missing or invalid projectId/status' })
   }
+  if (!(await requireReviewAccess(req, res, projectId))) return
 
   const token = process.env.BLOB_READ_WRITE_TOKEN
 
@@ -169,6 +171,15 @@ export default async function handler(req, res) {
   if (req.method === 'GET' || req.method === 'POST') {
     caller = await requireCaller(req, res)
     if (!caller) return
+  }
+  if (req.method === 'GET' && req.query.reviewLink) {
+    const id = req.query.reviewLink
+    if (typeof id !== 'string' || !PROJECT_ID_PATTERN.test(id)) return res.status(400).json({ error: 'Invalid project id' })
+    if (!(await get(`projects/${id}.json`, { access: 'private', useCache: false }))) return res.status(404).json({ error: 'Design not found' })
+    try {
+      res.setHeader('Cache-Control', 'no-store, private')
+      return res.status(200).json({ token: issueReviewToken(id) })
+    } catch { return res.status(503).json({ error: 'Review links are temporarily unavailable' }) }
   }
   if (req.method === 'GET') return handleList(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)

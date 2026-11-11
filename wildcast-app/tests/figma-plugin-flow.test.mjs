@@ -56,6 +56,7 @@ async function runImport(behaviour = {}, action = 'import') {
     calls.push({ path, body })
     const reply = (status, json) => ({ ok: status < 400, status, json: async () => json })
     if (path.startsWith('/api/list-templates')) return reply(200, { templates: [] })
+    if (path === '/api/account-auth') return reply(200, { email: 'designer@example.test', role: 'designer', sessionToken: 'dummy-session' })
     if (path === '/api/import-figma-plugin') return reply(200, { label: 'Option E', needsReview: [], recordUrl: 'https://s.private.blob.vercel-storage.com/templates/t.json' })
     if (behaviour[path]) return behaviour[path](body, reply)
     if (path === '/api/import-figma-plugin-background') return reply(200, { ok: true, url: 'https://s.private.blob.vercel-storage.com/templates/t-bg.png' })
@@ -78,6 +79,8 @@ async function runImport(behaviour = {}, action = 'import') {
   const ctx = { __html__: '', figma, fetch: fakeFetch, console, btoa, setTimeout }
   vm.createContext(ctx)
   vm.runInContext(src, ctx)
+  await figma.ui.onmessage({ type: 'sign-in', email: 'designer@example.test', password: 'dummy-password' })
+  calls.length = 0
 
   // Record, at each export, whether a temporary copy exists and what it shows.
   const watch = n => {

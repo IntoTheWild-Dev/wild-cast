@@ -74,6 +74,13 @@
 </div>
 
 <div class="body">
+  <label for="loginEmail">WildCast designer email</label>
+  <input id="loginEmail" type="email" autocomplete="username" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label for="loginPassword">Password</label>
+  <input id="loginPassword" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <button id="loginBtn">Sign in</button>
+  <p class="hint">Use your existing designer or agency account. Credentials are not saved by this plugin.</p>
+
   <p class="hint">Select one frame in Figma (with <code>zone:&lt;id&gt;</code> layers), pick a target slot, then Import. Lands as a draft — review and publish it from WildCast.</p>
 
   <label for="slot">Target slot</label>
@@ -98,6 +105,16 @@
   const statusEl = document.getElementById('status')
   const existingSelect = document.getElementById('existing')
   const bgBtn = document.getElementById('bgBtn')
+  const loginEmail = document.getElementById('loginEmail')
+  const loginPassword = document.getElementById('loginPassword')
+  const loginBtn = document.getElementById('loginBtn')
+  loginBtn.onclick = () => {
+    const password = loginPassword.value
+    loginPassword.value = ''
+    parent.postMessage({ pluginMessage: { type: 'sign-in', email: loginEmail.value.trim(), password } }, '*')
+    setStatus('Signing in…', 'info')
+  }
+
   let slots = []
   let existing = []
   let armedLive = null // slotKey of a LIVE template waiting for a second click
@@ -111,6 +128,7 @@
   window.onmessage = event => {
     const msg = event.data.pluginMessage
     if (!msg) return
+    if (msg.type === 'signed-in') { loginBtn.textContent = 'Signed in'; setStatus('Signed in. Select a frame to import.', 'info'); return }
 
     if (msg.type === 'slots') {
       // Already-imported templates, for "Update background only" (filled first:

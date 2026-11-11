@@ -1,3 +1,4 @@
+import { reviewHeaders } from '../lib/reviewLinks'
 import { useState, useEffect, useRef } from 'react'
 import { ApproveIcon, RequestChangesIcon } from './ActionIcons'
 import { CommentPinLayer, CommentThreadCard } from './CanvasComments'
@@ -5,14 +6,20 @@ import { buildThreads, hasOpenThread } from '../lib/commentThreads'
 import useIsMobile from '../lib/useIsMobile'
 import { showAlert } from '../lib/dialog'
 
-export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
+export default function ReviewPage({ projectId, reviewerName, workflowRole, reviewToken }) {
   const isMobile = useIsMobile()
   const [project, setProject]       = useState(null)
   const [comments, setComments]     = useState([])
   // Prefilled for a signed-in visitor (Notion card "Partner review link",
   // 2026-09-22: "Account holders get their name prefilled") - still a plain
   // editable field either way, the user can always type over it.
-  const [name, setName]             = useState(reviewerName || '')
+  const [nameState, setNameState] = useState(() => ({ value: reviewerName || '', source: reviewerName }))
+  // Adjust only when the identity prop changes; never replace a typed name.
+  if (nameState.source !== reviewerName) {
+    setNameState({ value: nameState.value || reviewerName || '', source: reviewerName })
+  }
+  const name = nameState.value
+  const setName = value => setNameState(previous => ({ ...previous, value }))
   const [text, setText]             = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading]       = useState(true)
@@ -33,22 +40,11 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   // Pinned thread whose popover is open on the preview (CanvasComments.jsx).
   const [selectedThreadId, setSelectedThreadId] = useState(null)
 
-  // App.jsx's own activation state resolves asynchronously (a re-validation
-  // fetch, not something available on the very first paint - see its own
-  // useState initializer), so reviewerName is reliably still empty at the
-  // moment this component first mounts and the useState above runs. This
-  // fills the field in once it actually arrives, but only while the visitor
-  // hasn't started typing their own name yet (prev || reviewerName) - it
-  // must never clobber a name someone's already entered.
-  useEffect(() => {
-    if (reviewerName) setName(prev => prev || reviewerName)
-  }, [reviewerName])
-
   useEffect(() => {
     let active = true
     Promise.all([
-      fetch(`/api/get-review?id=${projectId}`).then(r => r.json()),
-      fetch(`/api/comments?id=${projectId}`).then(r => r.json()),
+      fetch(`/api/get-review?id=${projectId}`, { headers: reviewHeaders(reviewToken) }).then(r => r.json()),
+      fetch(`/api/comments?id=${projectId}`, { headers: reviewHeaders(reviewToken) }).then(r => r.json()),
     ])
       .then(([proj, comm]) => {
         if (!active) return
@@ -59,10 +55,10 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
       .catch(e => { if (active) setError(e.message) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [projectId])
+  }, [projectId, reviewToken])
 
   async function loadComments(canApply = () => true) {
-    const res = await fetch(`/api/comments?id=${projectId}`)
+    const res = await fetch(`/api/comments?id=${projectId}`, { headers: reviewHeaders(reviewToken) })
     if (!res.ok) return
     const data = await res.json()
     if (canApply()) setComments(data.comments || [])
@@ -79,7 +75,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   // button is clicked, and doesn't re-fetch the preview/thumbnail images
   // every 5s for no reason.
   async function refreshReviewStatus(canApply = () => true) {
-    const res = await fetch(`/api/get-review?id=${projectId}`)
+    const res = await fetch(`/api/get-review?id=${projectId}`, { headers: reviewHeaders(reviewToken) })
     if (!res.ok) return
     const data = await res.json()
     if (canApply()) setProject(prev => prev ? { ...prev, reviewStatus: data.reviewStatus } : prev)
@@ -103,7 +99,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
       return Promise.allSettled([loadComments(canApply), refreshReviewStatus(canApply)])
     }, 5000)
     return () => { active = false; clearInterval(interval) }
-  }, [projectId, loading, error]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId, reviewToken, loading, error]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Optimistic - matches the same pattern used on the designer's side
   // (App.jsx's Feedback sidebar) so the checkbox feels instant either way.
@@ -111,7 +107,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     setComments(prev => prev.map(c => c.id === commentId ? { ...c, resolved } : c))
     fetch('/api/comments', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...reviewHeaders(reviewToken) },
       body: JSON.stringify({ projectId, commentId, resolved }),
     }).catch(() => {})
   }
@@ -127,7 +123,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     try {
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...reviewHeaders(reviewToken) },
         body: JSON.stringify({ projectId, status: 'approved', by: name }),
       })
       if (!res.ok) throw new Error('Failed to approve')
@@ -164,7 +160,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
       setProject(prev => ({ ...prev, reviewStatus: 'changes_requested' }))
       const res = await fetch('/api/save-project', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...reviewHeaders(reviewToken) },
         body: JSON.stringify({ projectId, status: 'changes_requested', by: name }),
       })
       if (!res.ok) throw new Error('Failed to request changes')
@@ -182,7 +178,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   async function postComment(extra, text) {
     const res = await fetch('/api/comments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...reviewHeaders(reviewToken) },
       body: JSON.stringify({ projectId, name: name.trim(), text, ...extra }),
     })
     if (!res.ok) throw new Error('Failed to submit comment')
@@ -197,7 +193,7 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     if (!name.trim() || !text.trim()) return false
     const res = await fetch('/api/comments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...reviewHeaders(reviewToken) },
       body: JSON.stringify({ projectId, name: name.trim(), text: text.trim() }),
     })
     if (!res.ok) throw new Error('Failed to submit comment')

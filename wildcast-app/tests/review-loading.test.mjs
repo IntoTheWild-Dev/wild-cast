@@ -4,13 +4,13 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 
 const source = readFileSync(new URL('../src/components/ReviewPage.jsx', import.meta.url), 'utf8')
-const effect = source.match(/useEffect\(\(\) => \{\n    let active = true[\s\S]*?\}, \[projectId\]\)/)?.[0]
+const effect = source.match(/useEffect\(\(\) => \{\n    let active = true[\s\S]*?\}, \[projectId, reviewToken\]\)/)?.[0]
 assert.ok(effect)
 function start() {
   const requests = [], updates = []
   let cleanup
   vm.runInNewContext(effect, {
-    projectId: 'review',
+    reviewToken: null, reviewHeaders: () => ({}), projectId: 'review',
     useEffect: fn => { cleanup = fn() },
     fetch: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject })),
     setProject: value => updates.push(['project', value]),

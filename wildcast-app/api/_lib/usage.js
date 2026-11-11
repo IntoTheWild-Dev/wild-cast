@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 // Per-person usage counts for AI features (Julia's ask, 2026-09-30: no credit
 // cap for now, but record real numbers so a cap can be decided later).
 // One small JSON blob per person per day: usage/<person>/<YYYY-MM-DD>.json.
@@ -6,7 +7,7 @@
 import { list, put } from '@vercel/blob'
 
 function safe(s) {
-  return String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
+  return createHash('sha256').update(String(s).trim().toLowerCase()).digest('hex')
 }
 
 export async function recordUsage(caller, feature) {

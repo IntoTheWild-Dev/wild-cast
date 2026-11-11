@@ -1,5 +1,6 @@
 import { preflightPdf } from './preflight.js'
 import { finishPdf } from './printColors/index.js'
+import { composedPrintQa } from './composedPrintQa.js'
 
 const REQUIRED_PRINT_CHECKS = new Set(['pdfx', 'profile', 'content', 'boxes', 'fonts', 'cmyk', 'ink', 'ppi'])
 
@@ -23,5 +24,6 @@ export async function finalizePrintPdf(bytes, { printer, mode, lut, iccProfile }
       throw error
     }
   }
-  return { pdf, problems }
+  const composed = mode === 'cmyk' ? await composedPrintQa(pdf, iccProfile) : null
+  return { pdf, problems, composed }
 }

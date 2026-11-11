@@ -234,7 +234,7 @@ function DesignCard({ project, loading, onOpen, onDelete, onRename, canOrganize,
           // tiny inline list thumbnail sits behind it as a placeholder while
           // it loads (it alone was being stretched ~3x on retina - blurry).
           <img
-            src={`/api/save-project?thumb=${encodeURIComponent(project.id)}&v=${project.savedAt ?? ''}`}
+            src={project.previewUrl || project.thumbnail}
             alt={project.templateName}
             loading="lazy"
             decoding="async"

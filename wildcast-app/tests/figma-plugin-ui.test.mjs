@@ -13,7 +13,7 @@ const script = html.match(/<script>([\s\S]*)<\/script>/)[1]
 
 function boot() {
   const els = {}
-  for (const id of ['slot', 'importBtn', 'status', 'existing', 'bgBtn']) els[id] = { id, value: '', innerHTML: '', textContent: '', className: '', disabled: false }
+  for (const id of ['slot', 'importBtn', 'status', 'existing', 'bgBtn', 'loginEmail', 'loginPassword', 'loginBtn']) els[id] = { id, value: '', innerHTML: '', textContent: '', className: '', disabled: false }
   const posted = [] // plain copies: objects made inside the vm have another Object.prototype
   const ctx = {
     document: { getElementById: id => els[id] },
@@ -28,6 +28,15 @@ function boot() {
 }
 const slots = [{ slotKey: 'restaurant-flyer-option-f', label: 'Restaurant Flyer · Option F', category: 'restaurant', format: 'Flyer' }]
 const existing = [{ slotKey: 'restaurant-flyer-option-e', label: 'Restaurant Flyer · Option E', live: false }, { slotKey: 'restaurant-flyer-option-d', label: 'Restaurant Flyer · Option D', live: true }]
+test('plugin sign-in clears the password field after handing credentials to the sandbox', () => {
+  const { els, posted } = boot()
+  els.loginEmail.value = 'designer@example.test'
+  els.loginPassword.value = 'dummy-password'
+  els.loginBtn.onclick()
+  assert.equal(els.loginPassword.value, '')
+  assert.equal(posted[0].type, 'sign-in')
+  assert.equal(posted[0].email, 'designer@example.test')
+})
 
 test('the update section fills from the existing templates and enables its button', () => {
   const { els, send } = boot()

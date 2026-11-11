@@ -1,9 +1,11 @@
 import { get } from '@vercel/blob'
+import { requireReviewAccess } from './_lib/reviewAccess.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
   const { id } = req.query
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Invalid project id' })
+  if (!(await requireReviewAccess(req, res, id))) return
 
   const token = process.env.BLOB_READ_WRITE_TOKEN
   try {

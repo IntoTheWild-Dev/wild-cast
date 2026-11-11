@@ -13,6 +13,7 @@ import { readJson, updateJson } from './_lib/atomicJson.js'
 // project's existing trust model (Designs/Library have none either).
 import { get } from '@vercel/blob'
 import { notifyOwner } from './_lib/notifications.js'
+import { requireReviewAccess } from './_lib/reviewAccess.js'
 
 const commentPath = id => `comments/${id}.json`
 const loadComments = async (id, token) => (await readJson(commentPath(id), token)) ?? []
@@ -139,6 +140,7 @@ export default async function handler(req, res) {
   if (!['GET', 'POST', 'PATCH'].includes(req.method)) return res.status(405).end()
   const projectId = req.method === 'GET' ? req.query.id : req.body?.projectId
   if (typeof projectId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(projectId)) return res.status(400).json({ error: 'Invalid project id' })
+  if (!(await requireReviewAccess(req, res, projectId))) return
   if (req.method === 'GET') return handleGet(req, res)
   if (req.method === 'POST') return handlePost(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)

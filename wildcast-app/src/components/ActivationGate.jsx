@@ -89,6 +89,7 @@ export default function ActivationGate({ onActivated }) {
       const data = await res.json()
 
       if (!res.ok) {
+        if (data.needsInviteCode) setNeedsInviteCode(true)
         // First-ever sign-in for this email needs a name before it can
         // actually create the account - reveal that field instead of just
         // showing a generic error, so it reads as "one more step," not a failure.
@@ -104,6 +105,8 @@ export default function ActivationGate({ onActivated }) {
         return
       }
 
+      localStorage.removeItem('wildcast_activation_key')
+      localStorage.removeItem('wildcast_owner_id')
       localStorage.setItem('wildcast_auth_type', 'account')
       localStorage.setItem('wildcast_account_email', data.email)
       localStorage.setItem('wildcast_account_token', data.sessionToken)

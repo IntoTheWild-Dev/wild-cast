@@ -92,7 +92,7 @@ test('calibration endpoints: grid and sheet', async () => {
 // ── Export integration ──────────────────────────────────────────────────────
 const bluePng = await sharp({ create: { width: 1241, height: 1749, channels: 3, background: { r: 0, g: 194, b: 232 } } }).png().toBuffer()
 const exportPdf = () => new Promise(resolve =>
-  exportHandler({ method: 'POST', body: { png: bluePng.toString('base64'), brand: 'wolt' } }, fakeRes(resolve)))
+  exportHandler({ method: 'POST', headers: { 'x-activation-key': 'AGENCY-KEY' }, body: { png: bluePng.toString('base64'), brand: 'wolt' } }, fakeRes(resolve)))
 const inks = pdf => {
   const raw = pdf.toString('latin1')
   return [...raw.matchAll(/stream\r?\n/g)].map(m => {

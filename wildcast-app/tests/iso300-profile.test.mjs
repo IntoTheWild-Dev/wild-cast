@@ -1,3 +1,6 @@
+import './_securityEnv.mjs'
+process.env.WILDCAST_KEYS = 'PRINT-TEST|Print QA|100|agency'
+delete process.env.ACTIVATION_KEYS_END
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -62,7 +65,7 @@ test('layered photo conversion embeds the same 300% profile and leaves brand blu
 test('actual flat API export accepts the new profile and reports composed QA as separate', async () => {
   const png = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#00c2e8' } }).png().toBuffer()
   const chunks = [], result = { headers: {} }
-  await handler({ method: 'POST', body: { png: png.toString('base64'), brand: 'wolt', mode: 'cmyk', profile: 'fogra39-300' } }, {
+  await handler({ method: 'POST', headers: { 'x-activation-key': 'PRINT-TEST' }, body: { png: png.toString('base64'), brand: 'wolt', mode: 'cmyk', profile: 'fogra39-300' } }, {
     status(code) { result.code = code; return this }, setHeader(k, v) { result.headers[k] = v },
     write(bytes) { chunks.push(bytes) }, end() {}, json(body) { result.body = body; return this },
   })

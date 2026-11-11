@@ -1,4 +1,5 @@
 import { test, beforeEach, mock } from 'node:test'
+import sharp from 'sharp'
 import assert from 'node:assert/strict'
 const HOST = 'https://owned.private.blob.vercel-storage.com'
 const store = new Map(), reads = [], deletes = [], copies = [], fetches = []
@@ -14,6 +15,7 @@ globalThis.fetch = async url => {
   fetches.push(url); assert.ok(String(url).startsWith(HOST + '/accounts/'), 'only server-resolved account reads may use HTTP')
   return new Response(store.get(pathOf(url)) ?? '{}', { status: store.has(pathOf(url)) ? 200 : 404 })
 }
+const { issueSession } = await import('../api/_lib/accounts.js')
 const { ownerRecord } = await import('../api/_lib/ownerIdentity.js')
 const { default: save } = await import('../api/save-project.js')
 const { default: load } = await import('../api/load-project.js')
@@ -54,7 +56,7 @@ test('authenticated project loading preserves every saved field', async () => {
   assert.deepEqual(reads, ['projects/p1.json']); assert.deepEqual(fetches, [])
 })
 test('valid account sessions can still open shared projects', async () => {
-  store.set('accounts/person-example-test.json', JSON.stringify({ email: 'person@example.test', role: 'partner', sessionToken: 'valid' }))
+  store.set('accounts/person-example-test.json', JSON.stringify(issueSession({ email: 'person@example.test', role: 'partner' }, 'valid')))
   assert.equal((await call(load, 'GET', { query: { id: 'p1' }, headers: { 'x-account-email': 'person@example.test', 'x-account-token': 'valid' } })).code, 200)
 })
 test('old URL locators resolve to a local project pathname without HTTP', async () => {
@@ -81,6 +83,25 @@ for (const method of ['POST', 'PATCH', 'DELETE']) test(`anonymous library ${meth
   assert.equal((await call(library, method, { query: { url: HOST + '/accounts/person.json' } })).code, 401)
   assert.deepEqual(deletes, []); assert.deepEqual(copies, [])
 })
+test('library uploads reject SVG and disguised active content before storage', async () => {
+  for (const mime of ['image/svg+xml', 'image/png']) {
+    const before = store.size
+    const dataUrl = `data:${mime};base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString('base64')}`
+    const result = await call(library, 'POST', { headers: OWNER, body: { folder: 'logos', name: 'unsafe', dataUrl } })
+    assert.equal(result.code, 400)
+    assert.equal(store.size, before)
+  }
+})
+test('a valid transparent raster is decoded and stored as a clean PNG', async () => {
+  const input = await sharp({ create: { width: 2, height: 2, channels: 4, background: { r: 20, g: 100, b: 200, alpha: 0.5 } } }).png().toBuffer()
+  const result = await call(library, 'POST', { headers: OWNER, body: { folder: 'logos', name: 'safe', dataUrl: `data:image/png;base64,${input.toString('base64')}` } })
+  assert.equal(result.code, 200)
+  const saved = store.get(new URL(result.data.url).pathname.slice(1))
+  const decoded = await sharp(saved).raw().toBuffer({ resolveWithObject: true })
+  assert.equal(decoded.info.channels, 4)
+  assert.equal(decoded.info.width, 2)
+  assert.equal(decoded.data[3], 128)
+})
 test('signed-in library mutations cannot target accounts', async () => {
   const url = HOST + '/accounts/person.json'
   assert.equal((await call(library, 'DELETE', { query: { url }, headers: OWNER })).code, 400)
@@ -106,12 +127,12 @@ test('vector PDF loading preserves bytes and cannot forward credentials to a URL
 
 for (const type of ['text/html', 'image/svg+xml', 'application/json']) test(`thumbnail refuses active/non-image content ${type}`, async () => {
   store.set('projects/p1.json', JSON.stringify({ preview: `data:${type};base64,${Buffer.from('<script>unsafe</script>').toString('base64')}` }))
-  assert.equal((await call(save, 'GET', { query: { thumb: 'p1' } })).code, 422)
+  assert.equal((await call(save, 'GET', { query: { thumb: 'p1' }, headers: OWNER })).code, 422)
 })
 test('existing raster thumbnail bytes are unchanged and served with defensive headers', async () => {
   const bytes = Buffer.from([1, 2, 3])
   store.set('projects/p1.json', JSON.stringify({ preview: 'data:image/jpeg;base64,' + bytes.toString('base64') }))
-  const r = await call(save, 'GET', { query: { thumb: 'p1' } })
+  const r = await call(save, 'GET', { query: { thumb: 'p1' }, headers: OWNER })
   assert.equal(r.code, 200); assert.deepEqual(r.data, bytes)
   assert.equal(r.headers['Content-Type'], 'image/jpeg'); assert.equal(r.headers['X-Content-Type-Options'], 'nosniff')
 })

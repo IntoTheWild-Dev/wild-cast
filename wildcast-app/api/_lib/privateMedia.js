@@ -15,7 +15,7 @@ export function mediaPath(url, namespace) {
     const u = new URL(url)
     if (u.username || u.password || u.port || u.hash) return null
     const path = decodeURIComponent(u.pathname).slice(1)
-    if (/[\\%\x00-\x1f?#]/.test(path)) return null
+    if (/[\\%?#]/.test(path) || [...path].some(char => char.charCodeAt(0) < 32)) return null
     const valid = namespace === 'templates'
       ? /^templates\/[a-z0-9-]+\.(?:png|jpe?g|webp|gif|avif|pdf)$/.test(path)
       : namespace === 'library' && /^library\/[a-z-]+\/(?:[^/]+\/)?[^/]+\.(?:png|jpe?g|webp|gif|avif)$/.test(path)

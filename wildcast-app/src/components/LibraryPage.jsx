@@ -784,7 +784,13 @@ export default function LibraryPage({ onBack, onHome }) {
     setLoading(false)
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    let active = true
+    getLibraryAssets().then(assets => {
+      if (active) { setAssets(assets); setLoading(false) }
+    })
+    return () => { active = false }
+  }, [])
 
   function handleMerchantChange(next) {
     // Snap to an existing merchant's exact casing when typing a new one that

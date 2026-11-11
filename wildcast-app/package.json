@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/write-release-manifest.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node --import ./tests/_securityEnv.mjs --experimental-test-module-mocks --test tests/*.test.mjs"

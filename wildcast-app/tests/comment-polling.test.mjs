@@ -10,7 +10,7 @@ function start(projectId) {
   const pending = [], updates = []
   let cleanup, poll, stopped = false
   vm.runInNewContext(effect, {
-    currentProjectId: projectId,
+    currentProjectId: projectId, activationHeaders: () => ({}),
     useEffect: fn => { cleanup = fn() },
     fetch: url => new Promise(resolve => pending.push({ url, resolve })),
     setComments: value => updates.push(value),

@@ -1,3 +1,4 @@
+import { createReviewLink } from './lib/reviewLinks'
 import { useState, useRef, useEffect } from 'react'
 import Header from './components/Header'
 import { WORKFLOW_ROLES } from './lib/workflowRoles'
@@ -227,7 +228,7 @@ export default function App() {
   // 'landing' (the new 3-button home screen, Julia's ask 2026-09-11) is the
   // real first thing anyone sees now - 'brief' (the actual picker+form flow)
   // only shows once "Start from scratch" is picked from there.
-  const [screen, setScreen]                   = useState('landing')
+  const [screen, setScreen]                   = useState(() => new URLSearchParams(window.location.search).get('review') ? 'review' : 'landing')
   const [batchTemplate, setBatchTemplate]     = useState(null) // "Create many" (BatchCreator.jsx)
   // Set synchronously (before the deep-link effect even runs) whenever the
   // URL is already /content/<id> on first paint, so that render shows a
@@ -448,7 +449,7 @@ const SHOW_MODE_CHOOSER = false
   // Tasks reads the field straight from the server, which is now always
   // authoritative for it.
   const [reviewItems, setReviewItems]         = useState(null) // share modal: [{ url, label? }] | null
-  const [reviewProjectId, setReviewProjectId] = useState(null) // from ?review= param
+  const [reviewProjectId] = useState(() => new URLSearchParams(window.location.search).get('review')) // from ?review= param
   const [comments, setComments]               = useState([])
   // Approve/Request changes from inside the editor (2026-09-23, Manager
   // role only) - see handleApproveInEditor/handleRequestChangesInEditor.
@@ -653,13 +654,6 @@ const SHOW_MODE_CHOOSER = false
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [screen, hasUnsavedChanges, importDirty])
 
-  // Detect ?review=<id> in URL and switch to review screen
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const rid = params.get('review')
-    if (rid) { setReviewProjectId(rid); setScreen('review') }
-  }, [])
-
   // Detect /content/<id> in the URL (written by the sync effect below) and
   // reopen straight into that design - without this, refreshing or
   // reopening a tab mid-edit always landed back on the landing/home screen,
@@ -754,7 +748,7 @@ const SHOW_MODE_CHOOSER = false
         headers: { 'Content-Type': 'application/json', ...activationHeaders() },
         body: JSON.stringify({ email: savedEmail, sessionToken: savedToken }),
       })
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error('Session verification temporarily unavailable'); return r.json() })
         .then(data => {
           if (data.valid) {
             const savedCredits = parseInt(localStorage.getItem('wildcast_credits'), 10)
@@ -826,12 +820,12 @@ const SHOW_MODE_CHOOSER = false
   // reload (Mark's ask, 2026-09-23: "refresh in real-time so you can see it
   // in the thread") - same fix as ReviewPage.jsx's own polling effect.
   useEffect(() => {
-    if (!currentProjectId) { setComments([]); return }
+    if (!currentProjectId) return
     let active = true
     let request = 0
     const load = () => {
       const currentRequest = ++request
-      return fetch(`/api/comments?id=${currentProjectId}`)
+      return fetch(`/api/comments?id=${currentProjectId}`, { headers: activationHeaders() })
       .then(r => r.json())
       .then(d => { if (active && currentRequest === request) setComments(d.comments || []) })
       .catch(() => {})
@@ -874,7 +868,7 @@ const SHOW_MODE_CHOOSER = false
       })
       if (!res.ok) throw new Error('Failed to post reply')
       setReplyText('')
-      const data = await fetch(`/api/comments?id=${currentProjectId}`).then(r => r.json())
+      const data = await fetch(`/api/comments?id=${currentProjectId}`, { headers: activationHeaders() }).then(r => r.json())
       setComments(data.comments || [])
     } catch (err) {
       showAlert(err.message, { title: 'Could not send reply' })
@@ -894,7 +888,7 @@ const SHOW_MODE_CHOOSER = false
     })
     if (!res.ok) throw new Error('Failed to post comment')
     const { id } = await res.json()
-    const data = await fetch(`/api/comments?id=${currentProjectId}`).then(r => r.json())
+    const data = await fetch(`/api/comments?id=${currentProjectId}`, { headers: activationHeaders() }).then(r => r.json())
     setComments(data.comments || [])
     return id
   }
@@ -1049,6 +1043,7 @@ const SHOW_MODE_CHOOSER = false
     setTextPositions({})
     setZonePositions({})
     setCurrentProjectId(null)
+    setComments([])
     setIccProfile(DEFAULT_PRINT_PROFILE)
     pendingNewIdRef.current = null
     setProjectOwner(null)
@@ -1834,7 +1829,7 @@ const SHOW_MODE_CHOOSER = false
       let currentReviewStatus = reviewStatus
       if (isResubmit && currentProjectId && reviewStatus !== 'approved') {
         try {
-          const res = await fetch(`/api/get-review?id=${currentProjectId}`)
+          const res = await fetch(`/api/get-review?id=${currentProjectId}`, { headers: activationHeaders() })
           if (res.ok) {
             const fresh = await res.json()
             if (fresh.reviewStatus) currentReviewStatus = fresh.reviewStatus
@@ -1867,7 +1862,7 @@ const SHOW_MODE_CHOOSER = false
         // designer and the manager need to see right after this.
         setTimeout(() => setScreen('tasks'), 900)
       } else {
-        setReviewItems([{ url: `${window.location.origin}/?review=${id}` }])
+        setReviewItems([{ url: await createReviewLink(id) }])
         offerMoreFormats()
       }
     } catch (err) {
@@ -1931,7 +1926,7 @@ const SHOW_MODE_CHOOSER = false
     const nameTag = [savedFields.restaurant_name, savedFields.offer].filter(Boolean).join(' – ')
     const name = brief.projectName?.trim() || (nameTag ? `${nameTag} – ${template.name}` : template.name)
     const id = await saveCandidateForReview(template, savedFields, png, { name, vertical: brief.businessType || null, imageScales: brief.imageScales, imagePositions: brief.imagePositions, folder })
-    return { url: `${window.location.origin}/?review=${id}` }
+    return { url: await createReviewLink(id) }
   }
 
   // Prompt Brief's "Save for later" (Julia's ask, 2026-09-29): saves the
@@ -1978,10 +1973,10 @@ const SHOW_MODE_CHOOSER = false
     setSaving(true)
     try {
       const ids = await Promise.all(items.map(it => saveCandidateForReview(it.template, it.fields, it.png)))
-      setReviewItems(ids.map((id, i) => ({
-        url: `${window.location.origin}/?review=${id}`,
+      setReviewItems(await Promise.all(ids.map(async (id, i) => ({
+        url: await createReviewLink(id),
         label: items.length > 1 ? items[i].label : undefined,
-      })))
+      }))))
     } catch (err) {
       console.error('Send candidates for review error:', err)
       showAlert(err.message, { title: 'Send for Review failed' })
@@ -2025,7 +2020,7 @@ const SHOW_MODE_CHOOSER = false
     // project id may not have changed (same project re-opened from Designs)
     let freshComments = []
     try {
-      const commRes = await fetch(`/api/comments?id=${project.id}`)
+      const commRes = await fetch(`/api/comments?id=${project.id}`, { headers: activationHeaders() })
       const commData = await commRes.json()
       freshComments = commData.comments || []
     } catch { /* Keep the empty comment list when comments cannot be fetched. */ }
@@ -2410,7 +2405,7 @@ const SHOW_MODE_CHOOSER = false
               reachable without any activation at all (see the gate above),
               so activation may genuinely be null here; ReviewPage.jsx falls
               back to its normal blank/manual-entry field in that case. */}
-          <ReviewPage projectId={reviewProjectId} reviewerName={activation?.clientName} workflowRole={workflowRole} />
+          <ReviewPage reviewToken={new URLSearchParams(window.location.search).get('access')} projectId={reviewProjectId} reviewerName={activation?.clientName} workflowRole={workflowRole} />
         </div>
       )}
 

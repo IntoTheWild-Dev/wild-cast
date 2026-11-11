@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 // Self-service signup-or-login for individual team members, layered
 // alongside (not replacing) the existing shared WILDCAST_KEYS activation-key
 // system - Julia's ask, 2026-09-15: the Wolt test group (5 seats, exact
@@ -18,20 +19,16 @@
 // 'partner'. Matches Julia's "more global for our team". Team domains are
 // @wildstack.studio and @intothewild.hamburg, but since nothing verifies
 // email ownership yet a NEW team-domain sign-up must also be approved
-// (approved-email list or invite code, api/_lib/accounts.js) - otherwise
+// (private invite code, api/_lib/accounts.js) - otherwise
 // anyone could type a team address and self-grant full access + import.
-import { list, put } from '@vercel/blob'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import {
   SEAT_CAP, countPartnerSeats, ensurePersonFolder,
-  isAgencyDomain, isApprovedAgencyEmail, isAgencyApproved,
+  isAgencyDomain, isApprovedAgencyEmail, isAgencyApproved, isValidInviteCode,
+  loadAccount, saveAccount, issueSession,
 } from './_lib/accounts.js'
 import { checkLock, recordFailure, clearFailures } from './_lib/loginLimit.js'
-
-function accountPath(email) {
-  const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')
-  return `accounts/${safe}.json`
-}
+import { allowAuthAttempt } from './_lib/authRateLimit.js'
 
 function hashPassword(password, salt = randomBytes(16).toString('hex')) {
   const hash = scryptSync(password, salt, 64).toString('hex')
@@ -48,43 +45,22 @@ function verifyPassword(password, salt, hash) {
   return attempt.length === stored.length && timingSafeEqual(attempt, stored)
 }
 
-async function findAccount(email) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN
-  const path = accountPath(email)
-  const { blobs } = await list({ prefix: path, token })
-  const match = blobs.find(b => b.pathname === path)
-  if (!match) return null
-  const cacheBustUrl = match.url + (match.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
-  const r = await fetch(cacheBustUrl, { headers: { Authorization: `Bearer ${token}` } })
-  if (!r.ok) return null
-  return r.json()
-}
-
-async function saveAccount(account) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN
-  await put(accountPath(account.email), JSON.stringify(account), {
-    access: 'private',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json',
-    token,
-  })
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await allowAuthAttempt(req, res))) return
 
   try {
     const { email, password, displayName, inviteCode } = req.body ?? {}
-    const trimmedEmail = (email || '').trim().toLowerCase()
-    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    if (typeof email !== 'string' || typeof password !== 'string' || (displayName != null && typeof displayName !== 'string') || (inviteCode != null && typeof inviteCode !== 'string')) return res.status(400).json({ error: 'Invalid sign-in fields' })
+    const trimmedEmail = email.trim().toLowerCase()
+    if (trimmedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       return res.status(400).json({ error: 'A real email address is required' })
     }
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' })
+    if (password.length < 6 || password.length > 512) {
+      return res.status(400).json({ error: 'Password must be between 6 and 512 characters' })
     }
 
-    const existing = await findAccount(trimmedEmail)
+    const existing = await loadAccount(trimmedEmail)
     const sessionToken = randomBytes(24).toString('hex')
 
     if (!existing) {
@@ -103,7 +79,7 @@ export default async function handler(req, res) {
         return res.status(400).json({
           error: 'Your name is required the first time you sign in',
           isNewAccount: true,
-          needsInviteCode: isTeamAddress && !isApprovedAgencyEmail(trimmedEmail),
+          needsInviteCode: isTeamAddress,
         })
       }
       if (isTeamAddress && !approved) {
@@ -121,7 +97,7 @@ export default async function handler(req, res) {
       // exempt (global/uncapped, per Julia's "more global for our team").
       // Checked only for a brand-new partner signup, never on login, so the
       // 5 people who already signed up keep working after the cap is hit.
-      if (role === 'partner') {
+      if (role === 'partner' && Number.isFinite(SEAT_CAP)) {
         const used = await countPartnerSeats()
         if (used >= SEAT_CAP) {
           return res.status(403).json({ error: `All ${SEAT_CAP} team seats are taken. Contact Wild Stack for access.` })
@@ -135,10 +111,10 @@ export default async function handler(req, res) {
         passwordSalt: salt,
         passwordHash: hash,
         role,
-        sessionToken,
         createdAt: new Date().toISOString(),
       }
-      await saveAccount(account)
+      issueSession(account, sessionToken)
+      await saveAccount(account, { createOnly: true })
       // Creates their main-folder person tile immediately, visible to
       // everyone in Designs' Folders view, without waiting on them to save a
       // design or open their own Folders tab first (Julia's ask, 2026-09-15).
@@ -162,14 +138,16 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Wrong password' })
     }
     await clearFailures(trimmedEmail)
-    existing.sessionToken = sessionToken
     // Someone who signed up on a team address before it was recognised (e.g.
     // @intothewild.hamburg, 2026-09-30) is a 'partner' on file - promote them
     // at login, but only if their exact email is on the approved list. An
-    // invite code is never enough here, and existing agency roles never demote.
+    // approved address alone is not proof of ownership. Existing agency
+    // accounts keep their role after successful password authentication.
     if (existing.role !== 'agency' && isAgencyDomain(existing.email) && isApprovedAgencyEmail(existing.email)) {
+      if (!isValidInviteCode(inviteCode)) return res.status(403).json({ error: 'Enter the Wild Stack invite code to enable team access', needsInviteCode: true })
       existing.role = 'agency'
     }
+    issueSession(existing, sessionToken)
     await saveAccount(existing)
     // Backfills a folder space for anyone who signed up before this existed
     // - no-ops once it's there, see ensurePersonFolder.
@@ -179,6 +157,6 @@ export default async function handler(req, res) {
     })
   } catch (err) {
     console.error('account-auth error:', err)
-    return res.status(500).json({ error: err.message })
+    return res.status(err.status === 409 ? 409 : 500).json({ error: err.status === 409 ? err.message : 'Could not sign in. Please try again.' })
   }
 }

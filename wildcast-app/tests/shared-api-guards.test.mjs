@@ -19,6 +19,7 @@ globalThis.fetch = async (url, options) => {
   return new Response(Uint8Array.from([1, 2, 3]), { headers: { 'Content-Type': 'image/webp' } })
 }
 const { ownerId } = await import('../api/_lib/ownerIdentity.js')
+const { issueReviewToken, verifyReviewToken } = await import('../api/_lib/reviewAccess.js')
 const { default: validate } = await import('../api/validate-key.js')
 const { default: comments } = await import('../api/comments.js')
 const { default: save } = await import('../api/save-project.js')
@@ -100,12 +101,34 @@ test('a content save cannot set approval or overwrite approved artwork by repeat
   assert.equal(r.code, 400)
   assert.equal(JSON.parse(store.get('projects/shared.json')).fields.headline, 'Approved artwork')
 })
-test('existing review links retain their previews without exposing editing fields or owner identities', async () => {
+test('signed review links retain previews without exposing editing fields or owner identities', async () => {
   const preview = 'data:image/jpeg;base64,AQID'
   store.set('projects/shared.json', JSON.stringify({ id: 'shared', templateName: 'Template', previewHd: preview, reviewStatus: 'review', ownerEmail: 'PRIVATE_OWNER', fields: { headline: 'Private editing state' } }))
-  const r = await call(review, 'GET', { query: { id: 'shared' } })
+  const r = await call(review, 'GET', { query: { id: 'shared', access: issueReviewToken('shared') } })
   assert.equal(r.code, 200); assert.equal(r.data.previewHd, preview); assert.equal(r.data.reviewStatus, 'review')
   assert.equal('ownerEmail' in r.data, false); assert.equal('fields' in r.data, false)
+})
+test('a design id alone no longer grants preview, comments or review decisions', async () => {
+  assert.equal((await call(review, 'GET', { query: { id: 'shared' } })).code, 401)
+  assert.equal((await call(comments, 'GET', { query: { id: 'shared' } })).code, 401)
+  assert.equal((await call(comments, 'POST', { body: { projectId: 'shared', name: 'Fake', text: 'Forged' } })).code, 401)
+  assert.equal((await call(save, 'PATCH', { body: { projectId: 'shared', status: 'approved' } })).code, 401)
+  assert.equal(JSON.parse(store.get('projects/shared.json')).reviewStatus, undefined)
+})
+test('review tokens are project-specific, tamper-resistant and expire', () => {
+  const now = 1_794_400_000_000
+  const token = issueReviewToken('shared', now)
+  assert.equal(verifyReviewToken('shared', token, now), true)
+  assert.equal(verifyReviewToken('other', token, now), false)
+  assert.equal(verifyReviewToken('shared', token.slice(0, -1) + (token.endsWith('0') ? '1' : '0'), now), false)
+  assert.equal(verifyReviewToken('shared', token, now + 7 * 24 * 60 * 60 * 1000), false)
+})
+test('current signed-in users can request a scoped link only for an existing design', async () => {
+  assert.equal((await call(save, 'GET', { query: { reviewLink: 'shared' } })).code, 401)
+  const result = await call(save, 'GET', { headers: OWNER, query: { reviewLink: 'shared' } })
+  assert.equal(result.code, 200)
+  assert.equal(verifyReviewToken('shared', result.data.token), true)
+  assert.equal((await call(save, 'GET', { headers: OWNER, query: { reviewLink: 'missing' } })).code, 404)
 })
 
 for (const id of ['../accounts/victim', 'x/../../accounts/victim', ['a', 'b']]) test(`review/comment/status paths reject invalid id ${JSON.stringify(id)}`, async () => {

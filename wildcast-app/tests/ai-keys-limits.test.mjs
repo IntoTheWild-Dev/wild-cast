@@ -2,6 +2,7 @@
 // Step 3 (AI routes check who is calling + usage recording), step 4 (activation
 // key switch-off date) and step 5 (wrong-password lock), against an in-memory
 // stand-in for Vercel Blob.
+import './_securityEnv.mjs'
 import { test, mock, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { scryptSync } from 'node:crypto'
@@ -23,6 +24,7 @@ globalThis.fetch = async url => {
     : { ok: false }
 }
 
+const { issueSession } = await import('../api/_lib/accounts.js')
 const { requireCaller, activationKeysEnabled } = await import('../api/_lib/auth.js')
 const { recordUsage, summariseUsage } = await import('../api/_lib/usage.js')
 const { default: validateKey } = await import('../api/validate-key.js')
@@ -48,10 +50,10 @@ async function callHandler(handler, req) {
 const PW = 'secret123'
 function seedAccount(email, role, sessionToken) {
   const salt = 'aa'
-  store.set(`accounts/${email.replace(/[^a-z0-9]/g, '-')}.json`, JSON.stringify({
-    email, displayName: email.split('@')[0], role, sessionToken,
+  store.set(`accounts/${email.replace(/[^a-z0-9]/g, '-')}.json`, JSON.stringify(issueSession({
+    email, displayName: email.split('@')[0], role,
     passwordSalt: salt, passwordHash: scryptSync(PW, salt, 64).toString('hex'),
-  }))
+  }, sessionToken)))
 }
 
 beforeEach(() => {

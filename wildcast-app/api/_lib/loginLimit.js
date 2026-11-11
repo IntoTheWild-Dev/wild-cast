@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import process from 'node:process'
 // Slows down password guessing: 5 wrong passwords for one email within 15
 // minutes locks sign-in for that email for 15 minutes. A correct password
@@ -11,7 +12,7 @@ export const WINDOW_MS = 15 * 60 * 1000
 export const LOCK_MS = 15 * 60 * 1000
 
 function pathFor(email) {
-  return `login-attempts/${email.trim().toLowerCase().replace(/[^a-z0-9]/g, '-')}.json`
+  return `login-attempts/${createHash('sha256').update(email.trim().toLowerCase()).digest('hex')}.json`
 }
 
 const load = email => readJson(pathFor(email), process.env.BLOB_READ_WRITE_TOKEN)

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 const store = new Map()
 mock.module('@vercel/blob', {
   namedExports: {
+    get: async () => null,
     list: async ({ prefix }) => ({
       blobs: [...store.keys()].filter(k => k.startsWith(prefix)).map(k => ({ pathname: k, url: `mem://${k}` })),
     }),
@@ -20,10 +21,11 @@ globalThis.fetch = async url => {
     : { ok: false }
 }
 
+const { issueSession } = await import('../api/_lib/accounts.js')
 const { requireDesignerKey } = await import('../api/_lib/auth.js')
 
 function seed(email, role, sessionToken) {
-  store.set(`accounts/${email.replace(/[^a-z0-9]/g, '-')}.json`, JSON.stringify({ email, role, sessionToken }))
+  store.set(`accounts/${email.replace(/[^a-z0-9]/g, '-')}.json`, JSON.stringify(issueSession({ email, role }, sessionToken)))
 }
 
 async function check(headers) {

@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-plugin-key')
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).end()
-  if (!requirePluginKey(req, res)) return
+  if (!(await requirePluginKey(req, res))) return
 
   try {
     const { slotKey, imageBase64 } = req.body ?? {}

@@ -3,6 +3,7 @@
 import { put, list, del, copy } from '@vercel/blob'
 import { mediaPath, serveMedia } from './_lib/privateMedia.js'
 import { requireCaller } from './_lib/auth.js'
+import sharp from 'sharp'
 
 const FOLDER_PATTERN = /^[a-z-]+$/
 
@@ -100,11 +101,23 @@ async function handlePost(req, res) {
       return res.status(400).json({ error: 'Invalid folder' })
     }
 
-    const { contentType, buffer } = dataUrlToBuffer(dataUrl)
-    if (!contentType.startsWith('image/')) {
-      return res.status(400).json({ error: 'File is not an image' })
+    const input = dataUrlToBuffer(dataUrl)
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(input.contentType)) {
+      return res.status(400).json({ error: 'Upload a PNG, JPEG, WebP, GIF or AVIF image.' })
     }
-    const ext = contentType === 'image/png' ? 'png' : 'jpg'
+    if (input.buffer.length > 12 * 1024 * 1024) return res.status(413).json({ error: 'Image is too large.' })
+    // MIME labels are untrusted. Decode a supported raster and emit fresh
+    // pixels so disguised SVG/HTML and trailing active content cannot persist.
+    let buffer
+    try {
+      const image = sharp(input.buffer, { limitInputPixels: 40_000_000, failOn: 'error' })
+      const metadata = await image.metadata()
+      if (!['png', 'jpeg', 'webp', 'gif', 'avif', 'heif'].includes(metadata.format)) throw new Error('Unsupported image')
+      buffer = await image.rotate().toColourspace('srgb').png().toBuffer()
+    } catch {
+      return res.status(400).json({ error: 'Image could not be decoded as a supported raster.' })
+    }
+    const contentType = 'image/png', ext = 'png'
     const id = crypto.randomUUID()
     const safeName = sanitizeForPath(name).slice(0, 80)
     const token = process.env.BLOB_READ_WRITE_TOKEN

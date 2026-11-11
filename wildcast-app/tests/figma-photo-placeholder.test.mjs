@@ -1,3 +1,4 @@
+process.env.ALLOW_LEGACY_PLUGIN_KEY = '1' // Explicit legacy-mode regression only.
 // Run with: npm test
 // api/import-figma-plugin-placeholder.js with Vercel Blob swapped for an
 // in-memory store: photo / sticker examples and the catalogue tile are SAVED

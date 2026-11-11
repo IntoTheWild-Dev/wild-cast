@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { fabric } from 'fabric'
 import { sortIdsByFieldOrder } from '../lib/fieldOrder'
 import { TEXT_PLACEHOLDERS, placeholderTextFor, placeholderImageFor } from '../data/placeholders'
@@ -375,23 +375,27 @@ export default function TemplateCanvas({ config, fields, onFieldChange, exportRe
   const zoneObjsRef = useRef({})
   const zoneCfgRef = useRef({})      // zone.id → zone config, for use in sync effects
   const modeRef    = useRef(mode)    // always current, safe to read inside effects
-  modeRef.current  = mode
   const fontSizesRef = useRef(fontSizes) // always current, used in auto-shrink
-  fontSizesRef.current = fontSizes
   const imageScalesRef = useRef(imageScales ?? {}) // always current, applied on image load
-  imageScalesRef.current = imageScales ?? {}
   const imagePositionsRef = useRef(imagePositions ?? {}) // always current, applied on image load
-  imagePositionsRef.current = imagePositions ?? {}
   const alignmentsRef = useRef(alignments ?? {}) // always current, used inside async canvas-init closure
-  alignmentsRef.current = alignments ?? {}
   const zonePositionsRef = useRef(zonePositions ?? {}) // saved drag positions, applied on canvas init
-  zonePositionsRef.current = zonePositions ?? {}
   const onZoneDragStartRef = useRef(onZoneDragStart) // always current, read inside canvas-init closure
-  onZoneDragStartRef.current = onZoneDragStart
   const onReadyRef = useRef(onReady) // always current, read inside canvas-init closure
-  onReadyRef.current = onReady
   const onAutoShrinkRef = useRef(onAutoShrink) // always current, read inside the fields-sync effect
-  onAutoShrinkRef.current = onAutoShrink
+  // Publish current props only after React commits, before canvas effects run.
+  // An abandoned render must not change callbacks or positioning on the live canvas.
+  useLayoutEffect(() => {
+    modeRef.current  = mode
+    fontSizesRef.current = fontSizes
+    imageScalesRef.current = imageScales ?? {}
+    imagePositionsRef.current = imagePositions ?? {}
+    alignmentsRef.current = alignments ?? {}
+    zonePositionsRef.current = zonePositions ?? {}
+    onZoneDragStartRef.current = onZoneDragStart
+    onReadyRef.current = onReady
+    onAutoShrinkRef.current = onAutoShrink
+  }, [mode, fontSizes, imageScales, imagePositions, alignments, zonePositions, onZoneDragStart, onReady, onAutoShrink])
   const syncing = useRef(false)
   const prevFieldsRef = useRef({})       // tracks previous text values for auto-shrink gating
   const [loading, setLoading] = useState(true)

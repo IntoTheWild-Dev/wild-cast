@@ -1,3 +1,4 @@
+process.env.ALLOW_LEGACY_PLUGIN_KEY = '1' // Explicit legacy-mode regression only.
 // Run with: npm test
 // api/import-figma-plugin-background.js: "Update background only" replaces the
 // template's background picture and nothing else - same trim as a full import,

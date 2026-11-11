@@ -125,8 +125,9 @@ export default async function handler(req, res) {
     // Validate the final printer-labelled bytes. Critical CMYK failures block
     // the download; other checks remain visible as warnings.
     const warnings = exportKind === 'flat' ? ['This template has no vector background. Text and artwork are flattened to 300 ppi.'] : []
-    if (mode === 'cmyk') warnings.push('Composed-page ink coverage with overprint and transparency requires the separate print QA report before printer approval.')
     const final = await finalizePrintPdf(pdfBuffer, { printer: printSettings.printer, mode, lut: loadLut(join(__dirname, 'icc', profileMeta.lut)), iccProfile: readFileSync(join(__dirname, 'icc', profileMeta.file)) })
+    if (mode === 'cmyk' && !final.composed) warnings.push('Composed-page ink coverage with overprint and transparency requires the separate print QA report before printer approval.')
+    res.setHeader('X-Composed-Print-QA', final.composed ? 'pass' : 'not_run')
     pdfBuffer = final.pdf
     for (const c of final.problems) if (!USER_HIDDEN_CHECKS.has(c.id)) warnings.push(`${c.label}: ${c.detail}`)
     for (const s of sourcePpi) {
@@ -145,7 +146,7 @@ export default async function handler(req, res) {
     res.setHeader('X-Unverified-List', JSON.stringify(unverifiedColors.slice(0, 12)))
     // ASCII-safe JSON array of warnings (headers can't carry raw UTF-8).
     res.setHeader('X-Preflight', JSON.stringify(warnings).replace(/[^ -~]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')))
-    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Unverified-List, X-Export-Mode, X-Export-Kind, X-Preflight')
+    res.setHeader('Access-Control-Expose-Headers', 'X-Unverified-Colors, X-Unverified-List, X-Export-Mode, X-Export-Kind, X-Preflight, X-Composed-Print-QA')
     return sendPdf(res, pdfBuffer)
   }
 
@@ -201,7 +202,7 @@ export default async function handler(req, res) {
     return await send(pdfBuffer, unverifiedColorCount, 'flat', [], unverifiedColors)
   } catch (err) {
     console.error('export-cmyk error:', err)
-    return res.status(err.status || 500).json({ error: err.message })
+    return res.status(err.status || 500).json({ error: err.message, ...(err.report ? { composedQa: err.report } : {}) })
   }
 }
 

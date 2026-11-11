@@ -1,3 +1,6 @@
+import './_securityEnv.mjs'
+process.env.WILDCAST_KEYS = 'PRINT-TEST|Print QA|100|agency'
+delete process.env.ACTIVATION_KEYS_END
 // Run with: npm test
 // Hardening of the print pipeline (2026-10-24 review): photo JPEG + mask,
 // gradients to CMYK, CSS colour parsing + text opacity, template page
@@ -120,7 +123,7 @@ test('export response is streamed in chunks with the right length', async () => 
       headers: {}, setHeader(k, v) { this.headers[k] = v }, status(c) { this.code = c; return this },
       write(b) { chunks.push(Buffer.from(b)) }, end() { resolve(this) }, json(d) { this.body = d; resolve(this) },
     }
-    handler({ method: 'POST', body: { png: png.toString('base64'), brand: 'wolt' } }, r)
+    handler({ method: 'POST', headers: { 'x-activation-key': 'PRINT-TEST' }, body: { png: png.toString('base64'), brand: 'wolt' } }, r)
   })
   assert.equal(res.code, 200)
   const body = Buffer.concat(chunks)
@@ -129,7 +132,7 @@ test('export response is streamed in chunks with the right length', async () => 
 })
 
 test('export refuses a non-string filename instead of crashing', async () => {
-  const res = await new Promise(resolve => handler({ method: 'POST', body: { png: 'x', filename: 42 } }, {
+  const res = await new Promise(resolve => handler({ method: 'POST', headers: { 'x-activation-key': 'PRINT-TEST' }, body: { png: 'x', filename: 42 } }, {
     status(c) { this.code = c; return this }, json(d) { this.body = d; resolve(this) },
   }))
   assert.equal(res.code, 400)
@@ -152,7 +155,7 @@ test('broken vector background returns an error even when a flat preview is avai
     write() { assert.fail('A failed vector export must not stream a flattened PDF') },
     end() {},
   }
-  await handler({ method: 'POST', body: {
+  await handler({ method: 'POST', headers: { 'x-activation-key': 'PRINT-TEST' }, body: {
     png: 'available-preview', mode: 'cmyk', profile: 'fogra39',
     layout: { canvasW: 316, canvasH: 441, items: [] },
     backgroundPdfUrl: 'https://test.public.blob.vercel-storage.com/templates/test-bg.pdf',
