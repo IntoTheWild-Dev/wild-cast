@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import ChoiceButton from './ChoiceButton'
 import { ADD_NEW, PLACEHOLDER_PARTNERS, OBJECTIVES, FORMATS, FORMAT_TEMPLATE_GROUP, DEFAULT_BRIEF } from '../lib/briefConstants'
-import { liveFormatsFor, entryForGuidedId } from './TemplatePicker'
+import { liveFormatsFor, entryForGuidedId } from '../lib/templateCatalog'
 import TemplatePreviewModal from './TemplatePreviewModal'
 import { PAGE_MAX_WIDTH, PAGE_GUTTER } from '../lib/layout'
 import useIsMobile from '../lib/useIsMobile'

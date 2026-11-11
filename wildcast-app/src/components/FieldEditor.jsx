@@ -757,7 +757,7 @@ function ApprovedEditBlock({ onEdit, reopening }) {
   )
 }
 
-export default function FieldEditor({ iccProfile = DEFAULT_PRINT_PROFILE, onIccProfileChange, fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, imagePositions, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, comments, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
+export default function FieldEditor({ iccProfile = DEFAULT_PRINT_PROFILE, onIccProfileChange, fields, onChange, lang, onExport, exporting, template, templateConfig, fontSizes, onFontSizeChange, alignments, onAlignChange, onResetZone, imageScales, onImageScaleChange, onImageOffsetChange, onTextNudge, restricted, mode, onSave, saving, saveStatus, onSendForReview, currentProjectId, projectName, credits, onCreditUsed, onFocusField, vertical, reviewSent, workflowRole, locked, onEditApproved, reopening }) {
   const canExport = workflowRole === 'Manager'
   const isMobile = useIsMobile()
   const [expanded, setExpanded] = useState(false)

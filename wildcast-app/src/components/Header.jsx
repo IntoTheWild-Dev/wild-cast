@@ -83,7 +83,7 @@ function SignOutConfirmModal({ onConfirm, onClose }) {
 // value forever (the <select> had no matching <option>, and every
 // workflowRole === 'Manager' check just evaluated false with no
 // indication why - see App.jsx's own note where this is imported).
-export const WORKFLOW_ROLES = ['Designer', 'Manager']
+import { WORKFLOW_ROLES } from '../lib/workflowRoles'
 
 export default function Header({ onLogoClick, screen, onNavigate, activation, onHelp, workflowRole, onWorkflowRoleChange, onOpenNotificationProject, notifications }) {
   const [showComingSoon, setShowComingSoon] = useState(false)

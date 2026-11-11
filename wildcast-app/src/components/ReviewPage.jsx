@@ -61,10 +61,11 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
     return () => { active = false }
   }, [projectId])
 
-  async function loadComments() {
+  async function loadComments(canApply = () => true) {
     const res = await fetch(`/api/comments?id=${projectId}`)
+    if (!res.ok) return
     const data = await res.json()
-    setComments(data.comments || [])
+    if (canApply()) setComments(data.comments || [])
   }
 
   // Bug fix, 2026-09-24: this page fetched reviewStatus once on mount and
@@ -77,11 +78,11 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   // update handleApprove/handleRequestChanges make the instant either
   // button is clicked, and doesn't re-fetch the preview/thumbnail images
   // every 5s for no reason.
-  async function refreshReviewStatus() {
+  async function refreshReviewStatus(canApply = () => true) {
     const res = await fetch(`/api/get-review?id=${projectId}`)
     if (!res.ok) return
     const data = await res.json()
-    setProject(prev => prev ? { ...prev, reviewStatus: data.reviewStatus } : prev)
+    if (canApply()) setProject(prev => prev ? { ...prev, reviewStatus: data.reviewStatus } : prev)
   }
 
   // Poll so a reply the designer posts while this reviewer has the page open
@@ -92,8 +93,16 @@ export default function ReviewPage({ projectId, reviewerName, workflowRole }) {
   // never fires before projectId has a real thread to read.
   useEffect(() => {
     if (loading || error) return
-    const interval = setInterval(() => { loadComments(); refreshReviewStatus() }, 5000)
-    return () => clearInterval(interval)
+    let active = true
+    let request = 0
+    const interval = setInterval(() => {
+      const currentRequest = ++request
+      const canApply = () => active && currentRequest === request
+      // A failed background refresh keeps the last good data and retries
+      // on the next tick; neither request may reject without a handler.
+      return Promise.allSettled([loadComments(canApply), refreshReviewStatus(canApply)])
+    }, 5000)
+    return () => { active = false; clearInterval(interval) }
   }, [projectId, loading, error]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Optimistic - matches the same pattern used on the designer's side

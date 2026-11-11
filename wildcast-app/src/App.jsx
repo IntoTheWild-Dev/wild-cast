@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import Header, { WORKFLOW_ROLES } from './components/Header'
+import Header from './components/Header'
+import { WORKFLOW_ROLES } from './lib/workflowRoles'
 import { patchCachedProject } from './lib/projectCache'
 import ActivationGate from './components/ActivationGate'
 import HelpModal from './components/HelpModal'
-import TemplatePicker, { BriefTemplatePicker, LayoutModal, entryForGuidedId, BASE_TEMPLATES, overlayCustomCards } from './components/TemplatePicker'
+import TemplatePicker, { BriefTemplatePicker, LayoutModal } from './components/TemplatePicker'
+import { entryForGuidedId, BASE_TEMPLATES, overlayCustomCards } from './lib/templateCatalog'
 import BriefingForm from './components/BriefingForm'
 import PromptBriefChat from './components/PromptBriefChat'
 import TemplatePreviewModal from './components/TemplatePreviewModal'
@@ -722,7 +724,7 @@ const SHOW_MODE_CHOOSER = false
   // runs with the static built-in templates only - never blocks/breaks the app.
   useEffect(() => {
     refetchCustomTemplates()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Lock body scroll in editor mode so the canvas never scrolls with the page
   useEffect(() => {
@@ -807,7 +809,7 @@ const SHOW_MODE_CHOOSER = false
         // (set synchronously in useState above) already has the app running
         // on cached credits, so there's nothing to do here.
       })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // key here is either a shared activation key OR an account email - both
   // ActivationGate.jsx paths already write the correct wildcast_* localStorage

@@ -1,4 +1,4 @@
-import { BASE_TEMPLATES, overlayCustomCards, deriveGroups } from './TemplatePicker'
+import { BASE_TEMPLATES, overlayCustomCards, deriveGroups } from '../lib/templateCatalog'
 
 // Lets a partner pick which design they want BEFORE filling out the brief -
 // this is now the mandatory first step of the whole flow (Julia's ask,
